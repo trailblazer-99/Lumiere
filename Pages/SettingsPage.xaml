@@ -1,0 +1,1423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentMediaPlayer.Pages.SettingsPage"
+    x:Name="PageRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentMediaPlayer.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+                         Loaded="OnPageLoaded">
+
+    <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="28"
+                    Opacity="1">
+
+            
+            <StackPanel Spacing="6">
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Settings"/>
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}"
+                           Text="Customize every aspect of your media experience."/>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Playback"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE768;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Autoplay on launch"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically start playback when the app starts."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoplayOnLaunch, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE81C;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Resume playback position"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Remember where you left off and resume from that location."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                               OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ResumePlaybackPosition, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xED3D;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Skip forward interval"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="How many seconds to skip when seeking forward."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                  VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SkipForwardIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="5 seconds"/>
+                            <ComboBoxItem Content="10 seconds"/>
+                            <ComboBoxItem Content="15 seconds"/>
+                            <ComboBoxItem Content="30 seconds"/>
+                            <ComboBoxItem Content="45 seconds"/>
+                            <ComboBoxItem Content="60 seconds"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE72B;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Skip backward interval"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="How many seconds to skip when seeking backward."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                   VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SkipBackwardIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="5 seconds"/>
+                            <ComboBoxItem Content="10 seconds"/>
+                            <ComboBoxItem Content="15 seconds"/>
+                            <ComboBoxItem Content="30 seconds"/>
+                            <ComboBoxItem Content="45 seconds"/>
+                            <ComboBoxItem Content="60 seconds"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xEBE6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Default playback speed"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Set the default speed for media playback."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                           VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.DefaultPlaybackSpeedIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="0.25x"/>
+                            <ComboBoxItem Content="0.5x"/>
+                            <ComboBoxItem Content="0.75x"/>
+                            <ComboBoxItem Content="1.0x (Normal)"/>
+                            <ComboBoxItem Content="1.25x"/>
+                            <ComboBoxItem Content="1.5x"/>
+                            <ComboBoxItem Content="2.0x"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE893;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto-advance to next track"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically play the next track when the current one finishes."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                               OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoAdvanceToNextTrack, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8D3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Remember last played track"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Load the last played track on app startup."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.RememberLastPlayedTrack, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid RowSpacing="12" ColumnSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Row="0" Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE71A;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Crossfade between tracks"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Smoothly blend audio when transitioning between tracks."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Row="0" Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.CrossfadeEnabled, Mode=TwoWay}"/>
+                        
+                        
+                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="0,0,0,4">
+                            <TextBlock Text="Duration" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Width="80"/>
+                            <Slider Width="150" Minimum="1" Maximum="12" StepFrequency="1"                                                           VerticalAlignment="Center" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                            <TextBlock                                                              Width="30" TextAlignment="Left" VerticalAlignment="Center" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8B1;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Gapless playback"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Eliminate silence gaps between consecutive tracks in an album."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                        OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.GaplessPlayback, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Audio &amp; Output"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE9F9;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Equalizer preset"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select an equalizer curve for audio playback."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                        VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedEqualizerIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Flat"/>
+                            <ComboBoxItem Content="Pop"/>
+                            <ComboBoxItem Content="Rock"/>
+                            <ComboBoxItem Content="Classical"/>
+                            <ComboBoxItem Content="Bass Boost"/>
+                            <ComboBoxItem Content="Jazz"/>
+                            <ComboBoxItem Content="Hip-Hop"/>
+                            <ComboBoxItem Content="Electronic"/>
+                            <ComboBoxItem Content="Vocal"/>
+                            <ComboBoxItem Content="Custom"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Volume normalization"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Equalize loudness across different tracks (Night Mode)."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.VolumeNormalization, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE995;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Default startup volume"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Volume level set automatically on app launch."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="1"                                                       Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.DefaultVolume, Mode=TwoWay}"/>
+                            <TextBlock                                                          Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F5;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Mono audio"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Mix stereo audio into a single channel (accessibility)."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                  OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.MonoAudio, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE767;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Bass boost level"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enhance low-frequency bass output."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5"                                                        Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.BassBoostLevel, Mode=TwoWay}"/>
+                            <TextBlock                                                      Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE994;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Audio balance"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust left/right audio channel balance."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="L" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Slider Width="120" Minimum="-100" Maximum="100" StepFrequency="5"                                                      Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.AudioBalance, Mode=TwoWay}"/>
+                            <TextBlock Text="R" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock                                                         Width="50" TextAlignment="Right" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Video"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE740;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Default aspect ratio"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose the default aspect ratio for video playback."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                          VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedAspectRatioIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Auto"/>
+                            <ComboBoxItem Content="16:9"/>
+                            <ComboBoxItem Content="4:3"/>
+                            <ComboBoxItem Content="21:9"/>
+                            <ComboBoxItem Content="Fill"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xED1E;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Default subtitle language"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically select subtitles in this language when available."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                               VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedSubtitleLanguageIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="None"/>
+                            <ComboBoxItem Content="English"/>
+                            <ComboBoxItem Content="Hindi"/>
+                            <ComboBoxItem Content="Spanish"/>
+                            <ComboBoxItem Content="French"/>
+                            <ComboBoxItem Content="German"/>
+                            <ComboBoxItem Content="Japanese"/>
+                            <ComboBoxItem Content="Korean"/>
+                            <ComboBoxItem Content="Chinese"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8D2;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Subtitle font size"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the size of subtitle text on screen."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                               VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedSubtitleFontSizeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Small"/>
+                            <ComboBoxItem Content="Medium"/>
+                            <ComboBoxItem Content="Large"/>
+                            <ComboBoxItem Content="Extra Large"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7B3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Subtitle background opacity"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the darkness of the subtitle backdrop."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5"                                                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.SubtitleBackgroundOpacity, Mode=TwoWay}"/>
+                            <TextBlock                                                            Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F4;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Hardware acceleration"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use GPU for video decoding (recommended for better performance)."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                             OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.HardwareAcceleration, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7AD;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto-rotate video"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically rotate video based on embedded metadata."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                        OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoRotateVideo, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <!-- HDR Mode -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7DE;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="HDR mode"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Control when HDR output is engaged. Auto enables HDR only on supported displays."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedHdrModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Auto (recommended)"/>
+                            <ComboBoxItem Content="Always on"/>
+                            <ComboBoxItem Content="Always SDR"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Tone Mapping -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE793;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Tone mapping"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Algorithm used to map HDR highlights. ACES gives a cinematic look; Reinhard is softer."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedToneMappingModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Reinhard"/>
+                            <ComboBoxItem Content="ACES Film"/>
+                            <ComboBoxItem Content="BT.2408 (ITU)"/>
+                            <ComboBoxItem Content="Clip (none)"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Peak Brightness -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Peak brightness (nits)"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Target luminance for HDR highlights. Match to your display's peak brightness."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="140" Minimum="100" Maximum="4000" StepFrequency="100"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    VerticalAlignment="Center"
+                                    Value="{x:Bind ViewModel.PeakBrightnessNits, Mode=TwoWay}"/>
+                            <TextBlock Text="{x:Bind ViewModel.PeakBrightnessText, Mode=OneWay}"
+                                       Width="60" TextAlignment="Right" VerticalAlignment="Center"
+                                       FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Real-time HDR decoding -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xEA6A;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Real-time HDR decoding"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Lower decode latency for HDR content. Recommended for 4K HDR playback."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.HdrRealTimePlayback, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Show HDR badge -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7C1;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show HDR badge on player"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display an HDR10/HLG badge on the video player when HDR content is active."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowHdrBadge, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Appearance &amp; Visuals"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE771;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="App theme"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose your preferred color theme."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                    VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Use system setting"/>
+                            <ComboBoxItem Content="Light"/>
+                            <ComboBoxItem Content="Dark"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7B3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Backdrop type"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Change window backdrop effect (Mica, Acrylic, or Solid)."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                       VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedBackdropIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Mica"/>
+                            <ComboBoxItem Content="Mica Alt"/>
+                            <ComboBoxItem Content="Acrylic"/>
+                            <ComboBoxItem Content="Solid"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE790;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Accent color"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose the primary accent color for the app interface."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                          VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedAccentColorIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="System default"/>
+                            <ComboBoxItem Content="Orange"/>
+                            <ComboBoxItem Content="Purple"/>
+                            <ComboBoxItem Content="Blue"/>
+                            <ComboBoxItem Content="Teal"/>
+                            <ComboBoxItem Content="Red"/>
+                            <ComboBoxItem Content="Pink"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show media card glow"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enable ambient artwork-colored glow effects on media cards."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                          OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowMediaCardGlow, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8A7;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show timeline preview on hover"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display timestamp preview when hovering over the timeline slider."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowTimelinePreview, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE737;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Compact density mode"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Reduce padding and spacing for a denser interface layout."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                           OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.CompactDensityMode, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8D6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show album art in transport bar"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the album artwork thumbnail in the bottom transport bar."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                   OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowAlbumArtInTransportBar, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7B5;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Animated transitions"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enable smooth page and card transition animations."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AnimatedTransitions, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE700;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Always show transport bar"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Keep the transport controls visible (vs. auto-hide in fullscreen)."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                               OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Controls &amp; Interface"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8B1;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show shuffle button"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the shuffle button in the transport controls."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                          OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowShuffleButton, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8EE;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show repeat button"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the repeat button in the transport controls."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowRepeatButton, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xED1E;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show subtitles button"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the subtitles toggle in the transport controls."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowSubtitlesButton, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE740;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show fullscreen button"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the fullscreen toggle in the transport controls."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                             OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowFullscreenButton, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE93A;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show Picture in Picture button"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the PiP mini player button in the transport controls."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                      OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowPipButton, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE14C;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show queue in more menu"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Include the playback queue option in the 3-dot menu."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowQueueInMoreMenu, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xEBE6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show speed controls in more menu"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Include playback speed options in the 3-dot menu."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                            OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowSpeedInMoreMenu, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8B7;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show open files button on home page"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the Open file(s) button in the Home page greeting section."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                                                   OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowOpenFilesOnHome, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Media Library &amp; Files"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                                <FontIcon FontSize="16" Glyph="&#xE8B7;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock FontSize="14" Text="Library folders"/>
+                                <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Folders scanned for audio and video media files."/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Click="OnAddFolderClick" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE710;"/>
+                                    <TextBlock Text="Add folder"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <ListView ItemsSource="{x:Bind ViewModel.LibraryFolders, Mode=OneWay}" SelectionMode="None" Margin="0,4,0,0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Grid Padding="4,8" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Grid.Column="0" FontSize="14" Glyph="&#xE838;" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" FontSize="13" VerticalAlignment="Center" Text="{x:Bind}" TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="2" Click="OnRemoveFolderClick" CommandParameter="{x:Bind}" AutomationProperties.Name="Remove folder" Background="Transparent" BorderThickness="0" CornerRadius="16" Height="32" Padding="8,0" Width="32" ToolTipService.ToolTip="Remove">
+                                            <FontIcon FontSize="12" Glyph="&#xE711;"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE81A;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Automatic library scan on launch"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Scan media folders in the background when the app starts."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                             OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutomaticLibraryScan, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8CB;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Sort library by"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Default sorting order for the media library view."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                               VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedLibrarySortOrderIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Title"/>
+                            <ComboBoxItem Content="Artist"/>
+                            <ComboBoxItem Content="Date Added"/>
+                            <ComboBoxItem Content="Duration"/>
+                            <ComboBoxItem Content="Album"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7B3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Show hidden files"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Include hidden files in the media library scan."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                        OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ShowHiddenFiles, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE896;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto-import new files"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically import new media files added to library folders."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                           OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoImportNewFiles, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Top">
+                            <FontIcon FontSize="16" Glyph="&#xE946;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
+                            <TextBlock FontSize="14" Text="Supported formats"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" TextWrapping="Wrap">
+                                <Run FontWeight="SemiBold" Text="Audio:"/>
+                                <Run Text=" .mp3, .wav, .wma, .m4a, .flac, .ogg"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" TextWrapping="Wrap">
+                                <Run FontWeight="SemiBold" Text="Video:"/>
+                                <Run Text=" .mp4, .mkv, .avi, .mov, .wmv, .webm"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Privacy &amp; History"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE81C;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Remember recently played"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Keep a history of recently played media items."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                               OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.RememberRecentlyPlayed, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8D3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Remember playback position per track"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Store and resume the last playback position for each individual track."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.RememberPlaybackPositionPerTrack, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE74D;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Clear data"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear playback history, search history, or recently opened files."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="Playback history"                                                          VerticalAlignment="Center"/>
+                            <Button Content="Search history"                                                        VerticalAlignment="Center"/>
+                            <Button Content="Recent files"                                                      VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Accessibility"/>
+
+                
+                <TextBlock Text="Vision" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F4;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="High contrast mode"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase contrast between UI elements for better visibility."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.HighContrastMode, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8D2;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Large text mode"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase text size throughout the application."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                      OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.LargeTextMode, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE790;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Color blind mode"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust colors for color vision deficiency."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="160"                                                                             VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedColorBlindModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Off"/>
+                            <ComboBoxItem Content="Protanopia (Red-Green)"/>
+                            <ComboBoxItem Content="Deuteranopia (Green-Red)"/>
+                            <ComboBoxItem Content="Tritanopia (Blue-Yellow)"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F5;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Screen reader optimization"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Optimize UI for screen reader compatibility."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                 OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ScreenReaderOptimization, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7B3;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Focus indicator thickness"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the thickness of focus indicators around controls."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="120" Minimum="1" Maximum="5" StepFrequency="1"                                                                 Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.FocusIndicatorThickness, Mode=TwoWay}"/>
+                            <TextBlock                                                                    Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <TextBlock Text="Hearing" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xED1E;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Captions always on"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically enable captions for all media."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.CaptionsAlwaysOn, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Visual notifications for sound"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Flash visual indicators when audio cues play."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                    OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.VisualNotificationsForSound, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <TextBlock Text="Motor" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE765;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Keyboard navigation highlight"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Show visible focus indicators during keyboard navigation."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                                    OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.KeyboardNavigationHighlight, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8B0;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Larger click targets"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase the size of buttons and interactive elements."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                           OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.LargerClickTargets, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7AD;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Reduce motion"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Minimize animations and transitions throughout the app."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                     OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.ReduceMotion, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                
+                <TextBlock Text="Cognitive" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7F6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto-read controls"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Announce UI control labels when focused."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2"                                                         OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoReadControls, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Keyboard Shortcuts"/>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Top">
+                                <FontIcon FontSize="16" Glyph="&#xE765;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" FontSize="14" Text="Available keyboard shortcuts" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="52,0,0,0" RowSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                                <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Space"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" FontSize="12" Text="Play / Pause"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Ctrl + Right"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Text="Skip forward"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Ctrl + Left"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Text="Skip backward"/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Ctrl + I"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" FontSize="12" Text="Properties"/>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Ctrl + Shift + E"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" FontSize="12" Text="Equaliser"/>
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Ctrl + K"/>
+                            <TextBlock Grid.Row="5" Grid.Column="1" FontSize="12" Text="Cast to device"/>
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="F11"/>
+                            <TextBlock Grid.Row="6" Grid.Column="1" FontSize="12" Text="Fullscreen"/>
+
+                            <TextBlock Grid.Row="7" Grid.Column="0" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Up / Down"/>
+                            <TextBlock Grid.Row="7" Grid.Column="1" FontSize="12" Text="Volume Up / Down"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Reset &amp; About"/>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE7E6;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Reset settings"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear caches or reset all settings to factory defaults."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="Reset history &amp; cache"                                                          VerticalAlignment="Center"/>
+                            <Button Content="Factory reset"                                                  Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="18" BorderThickness="2" VerticalAlignment="Center">
+                            <Border.BorderBrush>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#FFFF7E40" Offset="0.0"/>
+                                    <GradientStop Color="#FFFF2D55" Offset="0.5"/>
+                                    <GradientStop Color="#FF8E52E8" Offset="1.0"/>
+                                </LinearGradientBrush>
+                            </Border.BorderBrush>
+                            <Grid Background="#FF2A2A2D" CornerRadius="17">
+                                <FontIcon FontSize="12" Glyph="&#xE768;" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,0,0,0"/>
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="Fluent Media Player"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}"
+                                       Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 8"/>
+                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                                <HyperlinkButton Content="Send feedback" Padding="0" FontSize="12"/>
+                                <HyperlinkButton Content="Rate this app" Padding="0" FontSize="12"/>
+                                <HyperlinkButton Content="GitHub repository" Padding="0" FontSize="12"/>
+                                <HyperlinkButton Content="Open source licenses" Padding="0" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
+
+

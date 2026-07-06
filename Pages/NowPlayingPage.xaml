@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentMediaPlayer.Pages.NowPlayingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentMediaPlayer.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Loaded="OnPageLoaded">
+
+    <!-- Background gradient overlay — derived from accent color in code-behind -->
+    <Grid x:Name="PageRoot">
+        <Border
+            x:Name="AccentGradientOverlay"
+            Opacity="0.08">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop x:Name="GradientStart" Offset="0.0" />
+                    <GradientStop Color="Transparent" Offset="1.0" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <Grid Margin="{StaticResource PageContentMargin}" x:Name="ContentGrid" Opacity="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Album art — left column -->
+            <Grid
+                Grid.Column="0"
+                Margin="0,0,40,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+
+                <!-- Actual album art with true Fluent Design 2 ThemeShadow -->
+                <Border
+                    x:Name="HeroAlbumArt"
+                    Width="340"
+                    Height="340"
+                    CornerRadius="{StaticResource LargeCornerRadius}"
+                    Translation="0,0,16"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.Shadow>
+                        <ThemeShadow />
+                    </Border.Shadow>
+                    <Grid>
+                        <FontIcon
+                            FontSize="100"
+                            Foreground="White"
+                            Glyph="&#xE8D6;"
+                            HorizontalAlignment="Center"
+                            Opacity="0.85"
+                            VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- Metadata Overlay -->
+                <Border
+                    x:Name="MetadataOverlay"
+                    Width="340"
+                    Height="340"
+                    CornerRadius="{StaticResource LargeCornerRadius}"
+                    Background="{ThemeResource LayerFillColorAltBrush}"
+                    Visibility="Collapsed">
+                    <Border.BackgroundTransition>
+                        <BrushTransition />
+                    </Border.BackgroundTransition>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="InternetMetadataPanel" Padding="20" Spacing="12" />
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <!-- Track info — right column -->
+            <StackPanel
+                Grid.Column="1"
+                x:Name="TrackInfoPanel"
+                Spacing="8"
+                VerticalAlignment="Center">
+
+                <!-- Now playing badge -->
+                <Border
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="{StaticResource SmallCornerRadius}"
+                    HorizontalAlignment="Left"
+                    Padding="10,4">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                        CharacterSpacing="80"
+                        Text="NOW PLAYING" />
+                </Border>
+
+                <!-- Title -->
+                <TextBlock
+                    Style="{StaticResource DisplayTextStyle}"
+                    Margin="0,8,0,0"
+                    Text="{x:Bind ViewModel.Title, Mode=OneWay}" />
+
+                <!-- Artist -->
+                <TextBlock
+                    FontSize="18"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.Artist, Mode=OneWay}" />
+
+                <!-- Album -->
+                <TextBlock
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Margin="0,0,0,8"
+                    Text="{x:Bind ViewModel.Album, Mode=OneWay}" />
+
+                <!-- Lyrics card -->
+                <Border
+                    x:Name="LyricsCard"
+                    Margin="0,16,0,0"
+                    Padding="20"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource CardCornerRadiusFull}">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon
+                                FontSize="14"
+                                Glyph="&#xEA37;"
+                                Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                FontSize="13"
+                                Text="Lyrics" />
+                        </StackPanel>
+                        <TextBlock
+                            FontSize="13"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            LineHeight="22"
+                            Text="Lyrics will appear here when available."
+                            TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

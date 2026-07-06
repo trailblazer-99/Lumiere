@@ -1,0 +1,45 @@
+## Visual Studio / Build Artifacts
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## MSIX & Windows App SDK Packaging
+AppPackages/
+BundleArtifacts/
+_pkg/
+Generated Files/
+_Package/
+*.msix
+*.appx
+*.msixbundle
+*.appxbundle
+*.appxupload
+*.msixupload
+*.cer
+*.pfx
+
+## Configuration / Secrets (DO NOT COMMIT to Git)
+appsettings.json
+
+## Logs & Cache
+*.log
+*.binlog
+*.txt.log
+build_log*.txt
+msbuild.binlog
+
+## Python (used for temporary migration / generation scripts)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+## OS Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

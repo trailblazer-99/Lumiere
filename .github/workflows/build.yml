@@ -1,0 +1,39 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }} - ${{ matrix.configuration }})
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64, arm64]
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Create Config File from Template
+      run: copy appsettings.json.example appsettings.json
+      shell: cmd
+
+    - name: Restore NuGet Packages
+      run: dotnet restore FluentMediaPlayer.csproj
+
+    - name: Build Project
+      run: dotnet build FluentMediaPlayer.csproj --configuration ${{ matrix.configuration }} -p:Platform=${{ matrix.platform }} --no-restore

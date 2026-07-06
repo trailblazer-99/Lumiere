@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentMediaPlayer.Pages.StreamingDetailsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentMediaPlayer.Pages"
+    Loaded="OnPageLoaded">
+
+    <Grid x:Name="PageContent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+
+        <!-- Main Scrollable Details Area -->
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Padding="24,0,24,24" Spacing="24">
+
+                <!-- Top Info Section: Backdrop Overlay & Basic Meta -->
+                <Grid CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <Grid Padding="24" ColumnSpacing="24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Poster Column -->
+                        <StackPanel Grid.Column="0" Spacing="12">
+                            <Border Width="180" Height="270" CornerRadius="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                <Image x:Name="PosterImage" Stretch="UniformToFill" />
+                            </Border>
+                            <Button x:Name="LibraryButton" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}">
+                                <Button.Flyout>
+                                    <MenuFlyout x:Name="LibraryMenuFlyout" Opening="OnLibraryFlyoutOpening">
+                                        <MenuFlyoutItem Text="Watchlist" Click="OnSaveWatchlistClick" Tag="Watchlist" />
+                                        <MenuFlyoutItem Text="Plan to Watch" Click="OnSaveWatchlistClick" Tag="Plan to Watch" />
+                                        <MenuFlyoutItem Text="Watching" Click="OnSaveWatchlistClick" Tag="Watching" />
+                                        <MenuFlyoutItem Text="Completed" Click="OnSaveWatchlistClick" Tag="Completed" />
+                                        <MenuFlyoutItem Text="Favorites" Click="OnSaveWatchlistClick" Tag="Favorites" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem x:Name="RemoveLibraryItem" Text="Remove from Library" Click="OnRemoveFromLibraryClick" Foreground="Red" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="LibraryIcon" Glyph="&#xE710;" FontSize="14"/>
+                                    <TextBlock x:Name="LibraryButtonText" Text="Add to Watchlist" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Details Info Column -->
+                        <StackPanel Grid.Column="1" Spacing="12">
+                            <TextBlock x:Name="TitleText" FontSize="28" FontWeight="Bold" TextWrapping="Wrap"/>
+                            
+                            <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                                <Border Background="{ThemeResource AccentButtonBackground}" CornerRadius="4" Padding="6,2,6,2" x:Name="TypeBadge">
+                                    <TextBlock x:Name="TypeText" FontSize="11" Foreground="White" FontWeight="SemiBold"/>
+                                </Border>
+                                <TextBlock x:Name="YearText" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="RatingText" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="RuntimeText" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="GenresText" FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
+                            <TextBlock x:Name="NetworksText" FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+
+                            <TextBlock x:Name="OverviewText" FontSize="14" TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,8" MaxLines="5" TextTrimming="CharacterEllipsis"/>
+
+                            <Button x:Name="TrailerButton" Click="OnTrailerButtonClick" Visibility="Collapsed" Style="{StaticResource DefaultButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE768;" FontSize="14"/>
+                                    <TextBlock Text="Watch Trailer" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- "Where to Watch" Providers Section -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Where to Watch" Style="{StaticResource BodyLargeTextBlockStyle}" FontWeight="SemiBold"/>
+                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel x:Name="ProvidersContainer" Spacing="16">
+                            <!-- Populated programmatically in code-behind -->
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Pivot for Cast/Crew & Episodes -->
+                <Pivot x:Name="DetailsPivot">
+                    <PivotItem Header="Cast &amp; Crew">
+                        <GridView x:Name="CastGridView" SelectionMode="None" IsItemClickEnabled="False" Margin="0,12,0,0">
+                            <GridView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Width="220" Padding="12" Margin="0,0,12,12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="{Binding FullName}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Role}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Type}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </PivotItem>
+
+                    <PivotItem x:Name="EpisodesPivotItem" Header="Seasons &amp; Episodes">
+                        <TreeView x:Name="EpisodesTreeView" Margin="0,12,0,0">
+                            <TreeView.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Spacing="4" Margin="0,6,0,6">
+                                        <TextBlock Text="{Binding Content.Title}" FontWeight="SemiBold" FontSize="14" />
+                                        <TextBlock Text="{Binding Content.Subtitle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding Content.SubtitleVisibility}" />
+                                        <TextBlock Text="{Binding Content.Description}" FontSize="13" TextWrapping="Wrap" Opacity="0.8" Visibility="{Binding Content.DescriptionVisibility}" Margin="0,2,0,0" LineHeight="18" MaxWidth="700" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </PivotItem>
+                </Pivot>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

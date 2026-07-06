@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentMediaPlayer.Pages.MusicLibraryPage"
+    x:Name="PageRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentMediaPlayer.Pages"
+    xmlns:models="using:FluentMediaPlayer.Models"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Loaded="OnPageLoaded">
+
+    <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" RowSpacing="20" Opacity="1">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header area -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Spacing="6">
+                <TextBlock
+                    Style="{StaticResource PageTitleTextStyle}"
+                    Text="Music library" />
+                <TextBlock
+                    Style="{StaticResource PageSubtitleTextStyle}"
+                    Text="Browse all tracks in your collection." />
+            </StackPanel>
+            <Grid Grid.Column="1" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8" Grid.Column="0">
+                    <Button Command="{x:Bind ViewModel.AddFolderCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                            <TextBlock Text="Add Folder" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{x:Bind ViewModel.AddFilesCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                            <TextBlock Text="Add Files" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{x:Bind ViewModel.PlayTrackCommand}"
+                            CommandParameter="{x:Bind TrackListView.SelectedItem, Mode=OneWay}"
+                            Style="{StaticResource AccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE768;" FontSize="14" />
+                            <TextBlock Text="Play selected" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <AutoSuggestBox Grid.Column="1"
+                                Width="240"
+                                Margin="16,0,0,0"
+                                PlaceholderText="Search collection..."
+                                QueryIcon="Find"
+                                CornerRadius="4" />
+            </Grid>
+        </Grid>
+
+        <!-- Track list -->
+        <Border
+            Grid.Row="1"
+            CornerRadius="{StaticResource CardCornerRadiusFull}"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            Padding="0">
+            <ListView
+                x:Name="TrackListView"
+                DoubleTapped="OnTrackDoubleTapped"
+                IsItemClickEnabled="True"
+                ItemsSource="{x:Bind ViewModel.Tracks, Mode=OneWay}"
+                SelectionMode="Single">
+                <ListView.Header>
+                    <Grid
+                        Padding="16,12"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="80" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource TrackListHeaderTextStyle}" Text="TITLE" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource TrackListHeaderTextStyle}" Text="ARTIST" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource TrackListHeaderTextStyle}" Text="ALBUM" />
+                        <TextBlock
+                            Grid.Column="3"
+                            Style="{StaticResource TrackListHeaderTextStyle}"
+                            HorizontalAlignment="Right"
+                            Text="TIME" />
+                    </Grid>
+                </ListView.Header>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:MediaItem">
+                        <Grid Padding="16,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="80" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon
+                                    FontSize="14"
+                                    Glyph="&#xE8D6;"
+                                    Opacity="0.5"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Text="{x:Bind Title}"
+                                    VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Column="1"
+                                FontSize="13"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind Artist}"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                Grid.Column="2"
+                                FontSize="13"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind Album}"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                Grid.Column="3"
+                                FontSize="13"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                HorizontalAlignment="Right"
+                                Text="{x:Bind DurationText}"
+                                VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+    </Grid>
+</Page>

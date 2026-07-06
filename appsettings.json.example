@@ -1,0 +1,9 @@
+{
+  "TmdbApiKey": "your_tmdb_api_key_here",
+  "WatchmodeApiKey": "your_watchmode_api_key_here",
+  "MotnApiKey": "your_motn_api_key_here",
+  "MusicApiKey": "your_music_api_key_here",
+  "YouTubeApiKey": "your_youtube_api_key_here",
+  "TwitchClientId": "your_twitch_client_id_here",
+  "TwitchClientSecret": "your_twitch_client_secret_here"
+}

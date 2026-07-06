@@ -1,0 +1,50 @@
+<UserControl
+    x:Class="FluentMediaPlayer.Controls.NativeStreamingTray"
+    x:Name="TrayRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:FluentMediaPlayer.ViewModels"
+    mc:Ignorable="d"
+    d:DesignHeight="100"
+    d:DesignWidth="800">
+
+    <Grid>
+        <!-- Horizontal ItemsControl for UI Virtualization -->
+        <ItemsControl ItemsSource="{x:Bind ViewModel.AvailableStreams, Mode=OneWay}"
+                      Margin="0,16,0,16">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsStackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="viewmodels:StreamSourceItem">
+                    <Button Command="{Binding ElementName=TrayRoot, Path=ViewModel.PlayStreamCommand}"
+                            CommandParameter="{x:Bind}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="8"
+                            Margin="0,0,12,0"
+                            CornerRadius="8"
+                            ToolTipService.ToolTip="{x:Bind Name}">
+                        <StackPanel Orientation="Vertical" Spacing="8">
+                            <!-- Graphics Optimization: DecodePixelWidth/Height directly limits GPU VRAM footprint -->
+                            <Image Width="52" Height="52">
+                                <Image.Source>
+                                    <BitmapImage UriSource="{x:Bind LogoUri}" DecodePixelWidth="52" DecodePixelHeight="52" />
+                                </Image.Source>
+                            </Image>
+                            <TextBlock Text="{x:Bind Name}" 
+                                       FontSize="12" 
+                                       HorizontalAlignment="Center" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>
