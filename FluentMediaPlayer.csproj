@@ -72,6 +72,15 @@
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">True</WindowsAppSDKSelfContained>
     <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)' != 'Debug'">False</WindowsAppSdkDeploymentManagerInitialize>
+    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
+    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxBundle>Auto</AppxBundle>
+    <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>
 
   <ItemGroup>
