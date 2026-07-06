@@ -141,7 +141,7 @@ namespace FluentMediaPlayer.Pages
 
             if (LibraryFilterComboBox.SelectedItem is ComboBoxItem selectedItem)
             {
-                string category = selectedItem.Content.ToString();
+                string category = selectedItem.Content?.ToString() ?? "All";
                 if (category != "All")
                 {
                     allItems = System.Linq.Enumerable.Where(allItems, i => i.Watchlist == category);
@@ -156,7 +156,7 @@ namespace FluentMediaPlayer.Pages
             if (sender != e.OriginalSource) return;
             if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
             {
-                string header = pivotItem.Header.ToString();
+                string header = pivotItem.Header?.ToString() ?? string.Empty;
                 if (header == "Library")
                 {
                     RefreshLibraryList();
