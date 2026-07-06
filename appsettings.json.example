@@ -7,6 +7,6 @@
   "TwitchClientId": "your_twitch_client_id_here",
   "TwitchClientSecret": "your_twitch_client_secret_here",
   "UseProxy": true,
-  "ProxyBaseUrl": "your_cloudflare_worker_proxy_url_here",
+  "ProxyBaseUrl": "your_azure_function_proxy_url_here",
   "ProxyAppToken": "your_secret_app_token_here"
 }
