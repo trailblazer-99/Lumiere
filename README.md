@@ -21,7 +21,7 @@ FluentMediaPlayer is a premium, feature-rich media player for Windows, designed 
 ### Prerequisites
 
 - **Windows 10 / 11** (19H1 or newer)
-- **Visual Studio 2022** (v17.4 or newer) with the following workloads:
+- **Visual Studio 2026** with the following workloads:
   - **.NET Desktop Development**
   - **Windows Application Development** (Windows App SDK / WinUI 3 templates)
 - **.NET 8.0 SDK**

@@ -16,7 +16,7 @@ Before you can package the app for the Store, you must reserve your app's name:
 ## Step 2: Associate the Project with the Microsoft Store
 
 Associating the project link-signs your AppxManifest with the developer identity assigned by the Store:
-1. Open the project in **Visual Studio 2022**.
+1. Open the project in **Visual Studio 2026**.
 2. Right-click the **FluentMediaPlayer** project in Solution Explorer.
 3. Select **Publish** > **Associate App with the Store...**
 4. Click **Next** and sign in with the developer Microsoft Account associated with your Partner Center registration.
