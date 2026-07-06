@@ -5,5 +5,8 @@
   "MusicApiKey": "your_music_api_key_here",
   "YouTubeApiKey": "your_youtube_api_key_here",
   "TwitchClientId": "your_twitch_client_id_here",
-  "TwitchClientSecret": "your_twitch_client_secret_here"
+  "TwitchClientSecret": "your_twitch_client_secret_here",
+  "UseProxy": true,
+  "ProxyBaseUrl": "your_cloudflare_worker_proxy_url_here",
+  "ProxyAppToken": "your_secret_app_token_here"
 }
