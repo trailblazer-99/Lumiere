@@ -9,15 +9,15 @@
   IgnorableNamespaces="uap rescap systemai">
 
   <Identity
-    Name="5941bd07-fa0b-477d-bfb4-5e145e2a4d0e"
-    Publisher="CN=sourav"
+    Name="Trailblazer2599.LumireMediaPlayer"
+    Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46"
     Version="1.0.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="5941bd07-fa0b-477d-bfb4-5e145e2a4d0e" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="1f2483f1-225a-4113-aba5-4dbc8c6f42ae" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>FluentMediaPlayer</DisplayName>
-    <PublisherDisplayName>sourav</PublisherDisplayName>
+    <DisplayName>Lumière Media Player</DisplayName>
+    <PublisherDisplayName>Trailblazer2599</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,7 +35,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="FluentMediaPlayer"
+        DisplayName="Lumière Media Player"
         Description="FluentMediaPlayer"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
