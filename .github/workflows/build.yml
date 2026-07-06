@@ -14,7 +14,8 @@ jobs:
     strategy:
       matrix:
         configuration: [Debug, Release]
-        platform: [x64, arm64]
+        # Match MSBuild casing: 'ARM64' instead of 'arm64'
+        platform: [x64, ARM64]
 
     steps:
     - name: Checkout Source Code
@@ -32,8 +33,25 @@ jobs:
       run: copy appsettings.json.example appsettings.json
       shell: cmd
 
+    # MSBuild-native package restore to ensure targets resolve correctly for msbuild.exe
     - name: Restore NuGet Packages
-      run: dotnet restore FluentMediaPlayer.csproj
+      run: msbuild FluentMediaPlayer.csproj -t:restore /p:Platform=${{ matrix.platform }} /p:Configuration=${{ matrix.configuration }}
 
-    - name: Build Project
-      run: dotnet build FluentMediaPlayer.csproj --configuration ${{ matrix.configuration }} -p:Platform=${{ matrix.platform }} --no-restore
+    # Build and package using the full MSBuild engine
+    - name: Build and Package Project
+      run: |
+        msbuild FluentMediaPlayer.csproj `
+          /p:Configuration=${{ matrix.configuration }} `
+          /p:Platform=${{ matrix.platform }} `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages" `
+          /p:UapAppxPackageBuildMode=StoreUpload `
+          /p:AppxBundle=Never
+      shell: powershell
+
+    # Upload the generated MSIX packages as artifacts
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: FluentMediaPlayer-Package-${{ matrix.platform }}-${{ matrix.configuration }}
+        path: AppPackages/
