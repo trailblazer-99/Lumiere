@@ -17,55 +17,60 @@ namespace FluentMediaPlayer.Services.Streaming
         private readonly HttpClient _httpClient = new();
 
         public async Task<List<TmdbGenre>> GetMovieGenresAsync() 
-            => await FetchGenresAsync($"{BaseUrl}/genre/movie/list?api_key={ApiKey}");
+            => await FetchGenresAsync("tmdb/genre/movie/list", $"{BaseUrl}/genre/movie/list?api_key={ApiKey}");
 
         public async Task<List<TmdbGenre>> GetTvGenresAsync() 
-            => await FetchGenresAsync($"{BaseUrl}/genre/tv/list?api_key={ApiKey}");
+            => await FetchGenresAsync("tmdb/genre/tv/list", $"{BaseUrl}/genre/tv/list?api_key={ApiKey}");
 
         public async Task<List<TmdbMedia>> GetPopularMoviesAsync(int page = 1)
         {
+            var servicePath = $"tmdb/movie/popular?page={page}";
             var url = $"{BaseUrl}/movie/popular?api_key={ApiKey}&page={page}";
-            return await FetchMediaListAsync(url);
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<List<TmdbMedia>> GetPopularTvShowsAsync(int page = 1)
         {
+            var servicePath = $"tmdb/tv/popular?page={page}";
             var url = $"{BaseUrl}/tv/popular?api_key={ApiKey}&page={page}";
-            return await FetchMediaListAsync(url);
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<List<TmdbMedia>> DiscoverMoviesAsync(int genreId, string sortBy = "popularity.desc")
         {
-            var url = $"{BaseUrl}/discover/movie?api_key={ApiKey}&sort_by={sortBy}";
-            if (genreId > 0) url += $"&with_genres={genreId}";
-            return await FetchMediaListAsync(url);
+            var servicePath = $"tmdb/discover/movie?sort_by={sortBy}" + (genreId > 0 ? $"&with_genres={genreId}" : "");
+            var url = $"{BaseUrl}/discover/movie?api_key={ApiKey}&sort_by={sortBy}" + (genreId > 0 ? $"&with_genres={genreId}" : "");
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<List<TmdbMedia>> DiscoverTvShowsAsync(int genreId, string sortBy = "popularity.desc")
         {
-            var url = $"{BaseUrl}/discover/tv?api_key={ApiKey}&sort_by={sortBy}";
-            if (genreId > 0) url += $"&with_genres={genreId}";
-            return await FetchMediaListAsync(url);
+            var servicePath = $"tmdb/discover/tv?sort_by={sortBy}" + (genreId > 0 ? $"&with_genres={genreId}" : "");
+            var url = $"{BaseUrl}/discover/tv?api_key={ApiKey}&sort_by={sortBy}" + (genreId > 0 ? $"&with_genres={genreId}" : "");
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<List<TmdbMedia>> SearchMoviesAsync(string query)
         {
+            var servicePath = $"tmdb/search/movie?query={Uri.EscapeDataString(query)}";
             var url = $"{BaseUrl}/search/movie?api_key={ApiKey}&query={Uri.EscapeDataString(query)}";
-            return await FetchMediaListAsync(url);
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<List<TmdbMedia>> SearchTvShowsAsync(string query)
         {
+            var servicePath = $"tmdb/search/tv?query={Uri.EscapeDataString(query)}";
             var url = $"{BaseUrl}/search/tv?api_key={ApiKey}&query={Uri.EscapeDataString(query)}";
-            return await FetchMediaListAsync(url);
+            return await FetchMediaListAsync(servicePath, url);
         }
 
         public async Task<TmdbEpisode?> GetTvEpisodeAsync(int tvId, int seasonNumber, int episodeNumber)
         {
+            var servicePath = $"tmdb/tv/{tvId}/season/{seasonNumber}/episode/{episodeNumber}";
             var url = $"{BaseUrl}/tv/{tvId}/season/{seasonNumber}/episode/{episodeNumber}?api_key={ApiKey}";
             try
             {
-                var response = await _httpClient.GetStringAsync(url);
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
                 return JsonSerializer.Deserialize<TmdbEpisode>(response, _jsonOptions);
             }
             catch (Exception ex)
@@ -85,11 +90,12 @@ namespace FluentMediaPlayer.Services.Streaming
 
         public async Task<TmdbProviderRegion?> GetProvidersAsync(int tmdbId, string type)
         {
+            var servicePath = $"tmdb/{type}/{tmdbId}/watch/providers";
             var url = $"{BaseUrl}/{type}/{tmdbId}/watch/providers?api_key={ApiKey}";
             try
             {
                 var region = await AntiGravityLocationEngine.GetCountryCodeAsync();
-                var response = await _httpClient.GetStringAsync(url);
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
                 var data = JsonSerializer.Deserialize<TmdbProviderResponse>(response, _jsonOptions);
                 
                 if (data?.Results != null)
@@ -110,18 +116,25 @@ namespace FluentMediaPlayer.Services.Streaming
             return null;
         }
 
-        private async Task<List<TmdbGenre>> FetchGenresAsync(string url)
-        {
-            var response = await _httpClient.GetStringAsync(url);
-            var data = JsonSerializer.Deserialize<TmdbGenreResponse>(response, _jsonOptions);
-            return data?.Genres ?? new List<TmdbGenre>();
-        }
-
-        private async Task<List<TmdbMedia>> FetchMediaListAsync(string url)
+        private async Task<List<TmdbGenre>> FetchGenresAsync(string servicePath, string url)
         {
             try
             {
-                var response = await _httpClient.GetStringAsync(url);
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var data = JsonSerializer.Deserialize<TmdbGenreResponse>(response, _jsonOptions);
+                return data?.Genres ?? new List<TmdbGenre>();
+            }
+            catch
+            {
+                return new List<TmdbGenre>();
+            }
+        }
+
+        private async Task<List<TmdbMedia>> FetchMediaListAsync(string servicePath, string url)
+        {
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
                 var data = JsonSerializer.Deserialize<TmdbResponse<TmdbMedia>>(response, _jsonOptions);
                 return data?.Results ?? new List<TmdbMedia>();
             }

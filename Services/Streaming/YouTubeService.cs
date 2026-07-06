@@ -112,8 +112,9 @@ namespace FluentMediaPlayer.Services.Streaming
                 System.Diagnostics.Debug.WriteLine($"[YouTubeService] Cache MISS. Fetching from YouTube API for query '{query}'");
                 
                 // 1. Search Request (Cost: 100 units)
+                var searchServicePath = $"youtube/search?part=snippet&q={Uri.EscapeDataString(query)}&type=video&maxResults=20";
                 var searchUrl = $"{BaseUrl}/search?part=snippet&q={Uri.EscapeDataString(query)}&type=video&maxResults=20&key={ApiKey}";
-                var searchResponseStr = await _httpClient.GetStringAsync(searchUrl, cancellationToken);
+                var searchResponseStr = await HttpHelper.GetStringAsync(searchServicePath, searchUrl, cancellationToken);
                 
                 var searchData = JsonSerializer.Deserialize<YouTubeSearchResponse>(searchResponseStr, StreamingJsonContext.Default.YouTubeSearchResponse);
 
@@ -137,8 +138,9 @@ namespace FluentMediaPlayer.Services.Streaming
                     try
                     {
                         var idsParam = string.Join(",", videoIds);
+                        var detailsServicePath = $"youtube/videos?part=snippet,contentDetails,statistics&id={idsParam}";
                         var detailsUrl = $"{BaseUrl}/videos?part=snippet,contentDetails,statistics&id={idsParam}&key={ApiKey}";
-                        var detailsResponseStr = await _httpClient.GetStringAsync(detailsUrl, cancellationToken);
+                        var detailsResponseStr = await HttpHelper.GetStringAsync(detailsServicePath, detailsUrl, cancellationToken);
                         
                         var detailsData = JsonSerializer.Deserialize<YouTubeVideoListResponse>(detailsResponseStr, StreamingJsonContext.Default.YouTubeVideoListResponse);
                         

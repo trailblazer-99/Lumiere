@@ -27,7 +27,6 @@ namespace FluentMediaPlayer.Services.Streaming
         public MusicApiService()
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
         }
 
         public async Task<List<MusicApiTrack>> SearchTracksAsync(string query, string filter, int limit = 50)
@@ -37,8 +36,6 @@ namespace FluentMediaPlayer.Services.Streaming
             try
             {
                 var encodedQuery = Uri.EscapeDataString(query);
-                var url = $"{BaseUrl}/search?query={encodedQuery}&limit={limit}";
-
                 string musicApiType = filter.ToLower() switch
                 {
                     "songs" => "track",
@@ -47,13 +44,47 @@ namespace FluentMediaPlayer.Services.Streaming
                     "playlists" => "playlist",
                     _ => "track"
                 };
-                url += $"&type={musicApiType}";
-
-                var response = await _httpClient.GetAsync(url);
                 
-                if (response.IsSuccessStatusCode)
+                string servicePath = $"musicapi/search?query={encodedQuery}&limit={limit}&type={musicApiType}";
+                string directUrl = $"{BaseUrl}/search?query={encodedQuery}&limit={limit}&type={musicApiType}";
+                
+                string json = string.Empty;
+                var config = ConfigService.Config;
+                
+                if (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl))
+                 {
+                    try
+                     {
+                        string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
+                        using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                        proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+                        
+                        using var proxyResp = await _httpClient.SendAsync(proxyReq);
+                        if (proxyResp.IsSuccessStatusCode)
+                        {
+                            json = await proxyResp.Content.ReadAsStringAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"MusicApi proxy fetch failed: {ex.Message}");
+                    }
+                }
+                
+                if (string.IsNullOrEmpty(json))
                 {
-                    var json = await response.Content.ReadAsStringAsync();
+                    using var directReq = new HttpRequestMessage(HttpMethod.Get, directUrl);
+                    directReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+                    
+                    using var directResp = await _httpClient.SendAsync(directReq);
+                    if (directResp.IsSuccessStatusCode)
+                    {
+                        json = await directResp.Content.ReadAsStringAsync();
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(json))
+                {
                     var searchResponse = JsonSerializer.Deserialize<MusicApiSearchResponse>(json, _jsonOptions);
                     if (searchResponse?.Results != null)
                     {
