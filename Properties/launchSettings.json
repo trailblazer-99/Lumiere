@@ -1,9 +1,9 @@
 {
   "profiles": {
-    "FluentMediaPlayer (Package)": {
+    "LumiereMediaPlayer (Package)": {
       "commandName": "MsixPackage"
     },
-    "FluentMediaPlayer (Unpackaged)": {
+    "LumiereMediaPlayer (Unpackaged)": {
       "commandName": "Project"
     }
   }

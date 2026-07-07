@@ -1,15 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Services;
-using FluentMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System;
 using System.IO;
 using System.Linq;
 
-namespace FluentMediaPlayer.ViewModels;
+namespace LumiereMediaPlayer.ViewModels;
 
 public partial class MusicLibraryViewModel : ObservableObject
 {

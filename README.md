@@ -1,6 +1,6 @@
-# FluentMediaPlayer
+# LumiereMediaPlayer
 
-FluentMediaPlayer is a premium, feature-rich media player for Windows, designed using modern WinUI 3 controls and Windows App SDK. It delivers a fast, fluid, and immersive audio and video experience.
+LumiereMediaPlayer is a premium, feature-rich media player for Windows, designed using modern WinUI 3 controls and Windows App SDK. It delivers a fast, fluid, and immersive audio and video experience.
 
 ## Features
 
@@ -30,8 +30,8 @@ FluentMediaPlayer is a premium, feature-rich media player for Windows, designed 
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/FluentMediaPlayer.git
-   cd FluentMediaPlayer
+   git clone https://github.com/your-username/LumiereMediaPlayer.git
+   cd LumiereMediaPlayer
    ```
 
 2. **Configure API Keys**
@@ -55,7 +55,7 @@ FluentMediaPlayer is a premium, feature-rich media player for Windows, designed 
      *(Note: The app will fall back to default public keys if this file is not present or keys are empty).*
 
 3. **Build and Run**
-   - Open the solution file `FluentMediaPlayer.slnx` or `FluentMediaPlayer.csproj` in Visual Studio 2022.
+   - Open the solution file `LumiereMediaPlayer.slnx` or `LumiereMediaPlayer.csproj` in Visual Studio 2022.
    - Set the build configuration to `Debug` or `Release` and architecture to `x64` or `ARM64`.
    - Press **F5** to build and run the application.
 

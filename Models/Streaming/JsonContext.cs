@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace FluentMediaPlayer.Models.Streaming
+namespace LumiereMediaPlayer.Models.Streaming
 {
     [JsonSerializable(typeof(TmdbResponse<TmdbMedia>))]
     [JsonSerializable(typeof(TmdbEpisode))]
@@ -17,7 +17,7 @@ namespace FluentMediaPlayer.Models.Streaming
     [JsonSerializable(typeof(TwitchStreamsResponse))]
     [JsonSerializable(typeof(TwitchVideosResponse))]
     [JsonSerializable(typeof(TwitchSearchChannelsResponse))]
-    [JsonSerializable(typeof(FluentMediaPlayer.Models.AppConfig))]
+    [JsonSerializable(typeof(LumiereMediaPlayer.Models.AppConfig))]
     [JsonSourceGenerationOptions(
         WriteIndented = false,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

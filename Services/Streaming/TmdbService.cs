@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models.Streaming;
 using System.Net.Http;
 using System.Text.Json;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public class TmdbService
     {

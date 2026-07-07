@@ -2,7 +2,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 
-namespace FluentMediaPlayer.Helpers
+namespace LumiereMediaPlayer.Helpers
 {
     public class StringToImageSourceConverter : IValueConverter
     {

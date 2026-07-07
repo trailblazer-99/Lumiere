@@ -1,7 +1,7 @@
 using System;
 using Windows.Storage.Pickers;
 
-namespace FluentMediaPlayer.Helpers
+namespace LumiereMediaPlayer.Helpers
 {
     public static class FilePickerHelper
     {

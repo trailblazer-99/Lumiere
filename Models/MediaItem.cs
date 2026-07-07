@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace FluentMediaPlayer.Models;
+namespace LumiereMediaPlayer.Models;
 
 public sealed class MediaItem : INotifyPropertyChanged
 {

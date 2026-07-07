@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Collections.Generic;
 
-namespace FluentMediaPlayer.Models.Streaming
+namespace LumiereMediaPlayer.Models.Streaming
 {
     public class OdesliResponse
     {

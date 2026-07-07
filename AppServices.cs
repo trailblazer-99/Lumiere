@@ -1,8 +1,8 @@
-using FluentMediaPlayer.Services;
-using FluentMediaPlayer.ViewModels;
-using FluentMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.ViewModels;
+using LumiereMediaPlayer.Services.Streaming;
 
-namespace FluentMediaPlayer;
+namespace LumiereMediaPlayer;
 
 public static class AppServices
 {
@@ -17,7 +17,7 @@ public static class AppServices
     /// <summary>Singleton HDR pipeline service. Call Initialize() after the main window is ready.</summary>
     public static HdrPipelineService HdrPipeline { get; } = new();
 
-    public static FluentMediaPlayer.Services.Display.AdvancedColorDisplayManager DisplayManager { get; } = new();
+    public static LumiereMediaPlayer.Services.Display.AdvancedColorDisplayManager DisplayManager { get; } = new();
 
     public static PlaybackSession Playback { get; } = new(SampleMediaLibrary.AudioTracks);
 

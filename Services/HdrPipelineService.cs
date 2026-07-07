@@ -1,11 +1,11 @@
 using System;
 using System.Diagnostics;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 using Windows.Graphics.Display;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 
-namespace FluentMediaPlayer.Services;
+namespace LumiereMediaPlayer.Services;
 
 /// <summary>
 /// Detects display HDR capability, inspects video content metadata for HDR

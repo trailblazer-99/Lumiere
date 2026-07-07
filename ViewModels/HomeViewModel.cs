@@ -1,9 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.ViewModels;
+namespace LumiereMediaPlayer.ViewModels;
 
 public partial class HomeViewModel : ObservableObject
 {

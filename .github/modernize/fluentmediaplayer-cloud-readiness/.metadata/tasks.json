@@ -129,8 +129,8 @@
   ],
   "metadata": {
     "language": "dotnet",
-    "planName": "fluentmediaplayer-cloud-readiness",
-    "projectName": "FluentMediaPlayer",
+    "planName": "lumieremediaplayer-cloud-readiness",
+    "projectName": "LumiereMediaPlayer",
     "createdAt": "2026-07-02T00:00:00Z",
     "version": "1.0"
   }

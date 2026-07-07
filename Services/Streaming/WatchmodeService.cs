@@ -4,10 +4,10 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models.Streaming;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public class WatchmodeService
     {

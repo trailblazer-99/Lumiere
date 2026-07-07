@@ -4,7 +4,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.Graphics.Display;
 
-namespace FluentMediaPlayer.Services.Display;
+namespace LumiereMediaPlayer.Services.Display;
 
 public sealed class AdvancedColorDisplayManager
 {

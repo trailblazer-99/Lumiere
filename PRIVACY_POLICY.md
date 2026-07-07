@@ -1,8 +1,8 @@
-# Privacy Policy for FluentMediaPlayer (Lumiere)
+# Privacy Policy for LumiereMediaPlayer (Lumiere)
 
 **Last Updated: July 6, 2026**
 
-This Privacy Policy describes how FluentMediaPlayer (also referred to as "the Application", "Lumiere", "we", "us", or "our") handles information when you use the software. 
+This Privacy Policy describes how LumiereMediaPlayer (also referred to as "the Application", "Lumiere", "we", "us", or "our") handles information when you use the software. 
 
 We are committed to protecting your privacy. The Application is designed to process your media library locally and query public streaming APIs without collecting, storing, or transmitting your personal data.
 

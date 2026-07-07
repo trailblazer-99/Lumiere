@@ -4,9 +4,9 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public static class TwitchExtractionService
     {

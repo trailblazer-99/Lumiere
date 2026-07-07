@@ -1,4 +1,4 @@
-namespace FluentMediaPlayer.Helpers;
+namespace LumiereMediaPlayer.Helpers;
 
 public static class TimeFormatting
 {

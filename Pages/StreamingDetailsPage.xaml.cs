@@ -7,11 +7,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
-using FluentMediaPlayer.Models.Streaming;
-using FluentMediaPlayer.Services.Streaming;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Pages
+namespace LumiereMediaPlayer.Pages
 {
     public class TreeViewItemContent
     {

@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace FluentMediaPlayer.Models.Streaming
+namespace LumiereMediaPlayer.Models.Streaming
 {
     public class WatchmodeListResponse
     {

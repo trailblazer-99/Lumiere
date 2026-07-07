@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace FluentMediaPlayer.Services
+namespace LumiereMediaPlayer.Services
 {
     public static class HttpHelper
     {

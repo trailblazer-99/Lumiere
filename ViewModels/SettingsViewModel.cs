@@ -1,10 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.ViewModels;
+namespace LumiereMediaPlayer.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {

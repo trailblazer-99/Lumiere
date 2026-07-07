@@ -12,9 +12,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage;
-using FluentMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
 
-namespace FluentMediaPlayer.Pages
+namespace LumiereMediaPlayer.Pages
 {
     public sealed partial class StreamingTwitchPage : Page
     {
@@ -293,7 +293,7 @@ namespace FluentMediaPlayer.Pages
 
                     // Map virtual host name to the LocalFolder path to satisfy origin/parent domains policy
                     _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                        "fluentmediaplayer.local",
+                        "lumieremediaplayer.local",
                         localAppData,
                         CoreWebView2HostResourceAccessKind.Allow);
 
@@ -307,7 +307,7 @@ namespace FluentMediaPlayer.Pages
                 }
 
                 // Construct navigation query parameters
-                string navigateUrl = "https://fluentmediaplayer.local/twitch_player.html";
+                string navigateUrl = "https://lumieremediaplayer.local/twitch_player.html";
                 if (isLive)
                 {
                     navigateUrl += $"?channel={channelLogin}";
@@ -366,7 +366,7 @@ namespace FluentMediaPlayer.Pages
             height: '100%',
             autoplay: true,
             muted: false,
-            parent: ['fluentmediaplayer.local'],
+            parent: ['lumieremediaplayer.local'],
             layout: 'video' // Hides chat panel by default
         };
 

@@ -12,9 +12,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage;
-using FluentMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
 
-namespace FluentMediaPlayer.Pages
+namespace LumiereMediaPlayer.Pages
 {
     public sealed partial class StreamingYouTubePage : Page
     {
@@ -182,7 +182,7 @@ namespace FluentMediaPlayer.Pages
 
                     // Map virtual host name to the LocalFolder path to fix Error 150/153 (Origin referer checks)
                     _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                        "fluentmediaplayer.local",
+                        "lumieremediaplayer.local",
                         localAppData,
                         CoreWebView2HostResourceAccessKind.Allow);
 
@@ -196,7 +196,7 @@ namespace FluentMediaPlayer.Pages
                 }
 
                 // Navigate WebView2 to local server mapped file with video ID query parameter
-                _webView.CoreWebView2.Navigate($"https://fluentmediaplayer.local/youtube_player.html?videoId={result.VideoId}");
+                _webView.CoreWebView2.Navigate($"https://lumieremediaplayer.local/youtube_player.html?videoId={result.VideoId}");
             }
             catch (Exception ex)
             {

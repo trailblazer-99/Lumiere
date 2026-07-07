@@ -1,4 +1,4 @@
-namespace FluentMediaPlayer.Models;
+namespace LumiereMediaPlayer.Models;
 
 /// <summary>
 /// Controls how the app handles HDR content.

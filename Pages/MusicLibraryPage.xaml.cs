@@ -1,12 +1,12 @@
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 
-namespace FluentMediaPlayer.Pages;
+namespace LumiereMediaPlayer.Pages;
 
 public sealed partial class MusicLibraryPage : Page
 {

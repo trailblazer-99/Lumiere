@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 
-namespace FluentMediaPlayer.Services
+namespace LumiereMediaPlayer.Services
 {
     public class HistoryService
     {

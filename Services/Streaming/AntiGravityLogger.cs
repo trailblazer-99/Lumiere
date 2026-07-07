@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public static class AntiGravityLogger
     {
@@ -10,7 +10,7 @@ namespace FluentMediaPlayer.Services.Streaming
         static AntiGravityLogger()
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var logDir = Path.Combine(appData, "FluentMediaPlayer");
+            var logDir = Path.Combine(appData, "LumiereMediaPlayer");
             Directory.CreateDirectory(logDir);
             LogPath = Path.Combine(logDir, "debug.log");
         }

@@ -5,11 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 
-namespace FluentMediaPlayer.ViewModels
+namespace LumiereMediaPlayer.ViewModels
 {
     public partial class StreamSourceItem : ObservableObject
     {

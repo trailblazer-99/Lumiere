@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using FluentMediaPlayer.Controls;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Pages;
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.Controls;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Pages;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -14,7 +14,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Microsoft.UI.Xaml.Media.Animation;
 
-namespace FluentMediaPlayer;
+namespace LumiereMediaPlayer;
 
 public sealed partial class MainWindow : Window
 {
@@ -225,7 +225,7 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureWindow()
     {
-        Title = "Fluent Media Player";
+        Title = "Lumière Media Player";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragRegion);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;

@@ -2,12 +2,12 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Models.Streaming;
-using FluentMediaPlayer.Services.Streaming;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services;
 using System.Linq;
 
-namespace FluentMediaPlayer.ViewModels
+namespace LumiereMediaPlayer.ViewModels
 {
     public partial class StreamingMusicViewModel : ObservableObject
     {

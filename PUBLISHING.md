@@ -1,6 +1,6 @@
 # Microsoft Store Publishing Guide
 
-This guide details the step-by-step process for preparing, packaging, and submitting the FluentMediaPlayer WinUI 3 application to the Microsoft Store.
+This guide details the step-by-step process for preparing, packaging, and submitting the LumiereMediaPlayer WinUI 3 application to the Microsoft Store.
 
 ---
 
@@ -9,7 +9,7 @@ This guide details the step-by-step process for preparing, packaging, and submit
 Before you can package the app for the Store, you must reserve your app's name:
 1. Log in to the [Microsoft Partner Center](https://partner.microsoft.com/dashboard).
 2. Navigate to **Windows & Xbox** and click **Create a new app**.
-3. Enter your desired name (e.g., `FluentMediaPlayer`) and click **Reserve product name**.
+3. Enter your desired name (e.g., `LumiereMediaPlayer`) and click **Reserve product name**.
 
 ---
 
@@ -17,7 +17,7 @@ Before you can package the app for the Store, you must reserve your app's name:
 
 Associating the project link-signs your AppxManifest with the developer identity assigned by the Store:
 1. Open the project in **Visual Studio 2026**.
-2. Right-click the **FluentMediaPlayer** project in Solution Explorer.
+2. Right-click the **LumiereMediaPlayer** project in Solution Explorer.
 3. Select **Publish** > **Associate App with the Store...**
 4. Click **Next** and sign in with the developer Microsoft Account associated with your Partner Center registration.
 5. Select the reserved app name from the list and click **Associate**.
@@ -44,7 +44,7 @@ Double-check the settings in your `Package.appxmanifest`:
 
 ## Step 4: Generate the MSIX Store Upload Package
 
-1. In Visual Studio, right-click the **FluentMediaPlayer** project.
+1. In Visual Studio, right-click the **LumiereMediaPlayer** project.
 2. Select **Publish** > **Create App Packages...**
 3. Choose **Microsoft Store** (using the associated app name) and click **Next**.
 4. Select **Release** as the build configuration.
@@ -54,7 +54,7 @@ Double-check the settings in your `Package.appxmanifest`:
    - *Note: Leave x86 unchecked as modern WinUI 3 targets x64/ARM64.*
 6. Set the version increment logic (e.g., `1.0.1.0`).
 7. Click **Create**.
-8. Once the build completes, click on the output location link. You will find a folder named `AppPackages/` containing a `.msixupload` file (e.g., `FluentMediaPlayer_1.0.1.0_x64_arm64.msixupload`).
+8. Once the build completes, click on the output location link. You will find a folder named `AppPackages/` containing a `.msixupload` file (e.g., `LumiereMediaPlayer_1.0.1.0_x64_arm64.msixupload`).
 
 ---
 

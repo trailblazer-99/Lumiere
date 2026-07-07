@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public class WatchmodeSyncService
     {
