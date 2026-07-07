@@ -2,11 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 using Windows.Storage;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Helpers;
+namespace LumiereMediaPlayer.Helpers;
 
 public static class MediaMetadataScanner
 {

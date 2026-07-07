@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public enum StreamingItemType
     {
@@ -30,7 +30,7 @@ namespace FluentMediaPlayer.Services.Streaming
         public StreamingLibraryService()
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var appFolder = Path.Combine(appDataPath, "FluentMediaPlayer");
+            var appFolder = Path.Combine(appDataPath, "LumiereMediaPlayer");
             Directory.CreateDirectory(appFolder);
             _filePath = Path.Combine(appFolder, "streaming_library.json");
             

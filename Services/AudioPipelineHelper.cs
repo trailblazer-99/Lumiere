@@ -6,7 +6,7 @@ using NVorbis;
 using Concentus.Oggfile;
 using Concentus.Structs;
 
-namespace FluentMediaPlayer.Services;
+namespace LumiereMediaPlayer.Services;
 
 public static class AudioPipelineHelper
 {

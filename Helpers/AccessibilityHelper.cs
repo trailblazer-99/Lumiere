@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Media.Playback;
 using Windows.UI;
 
-namespace FluentMediaPlayer.Helpers;
+namespace LumiereMediaPlayer.Helpers;
 
 public static class AccessibilityHelper
 {

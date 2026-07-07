@@ -1,9 +1,9 @@
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
-namespace FluentMediaPlayer.Helpers;
+namespace LumiereMediaPlayer.Helpers;
 
 public static class ThemeHelper
 {

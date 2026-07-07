@@ -1,4 +1,4 @@
-namespace FluentMediaPlayer.Models;
+namespace LumiereMediaPlayer.Models;
 
 public enum AppThemeOption
 {

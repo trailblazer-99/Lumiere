@@ -1,4 +1,4 @@
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,15 +9,15 @@ using System.Linq;
 using System;
 using System.ComponentModel;
 using System.Collections.Generic;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.Pages;
+namespace LumiereMediaPlayer.Pages;
 
 public sealed partial class VideoPage : Page
 {
     public VideoViewModel ViewModel { get; } = AppServices.VideoViewModel;
-    private readonly FluentMediaPlayer.Services.Streaming.TmdbService _tmdbService = new();
+    private readonly LumiereMediaPlayer.Services.Streaming.TmdbService _tmdbService = new();
     private readonly PropertyChangedEventHandler _viewModelPropertyChangedHandler;
     private readonly PropertyChangedEventHandler _playbackPropertyChangedHandler;
     private bool _eventHandlersDetached;

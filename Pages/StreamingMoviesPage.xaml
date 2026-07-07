@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Page
-    x:Class="FluentMediaPlayer.Pages.StreamingMoviesPage"
+    x:Class="LumiereMediaPlayer.Pages.StreamingMoviesPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:models="using:FluentMediaPlayer.Models.Streaming"
-    xmlns:services="using:FluentMediaPlayer.Services.Streaming"
+    xmlns:models="using:LumiereMediaPlayer.Models.Streaming"
+    xmlns:services="using:LumiereMediaPlayer.Services.Streaming"
     Loaded="OnPageLoaded">
 
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}">

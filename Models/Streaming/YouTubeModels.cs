@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace FluentMediaPlayer.Models.Streaming
+namespace LumiereMediaPlayer.Models.Streaming
 {
     public class YouTubeSearchResponse
     {

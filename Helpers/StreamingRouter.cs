@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace FluentMediaPlayer.Helpers
+namespace LumiereMediaPlayer.Helpers
 {
     public static class StreamingRouter
     {

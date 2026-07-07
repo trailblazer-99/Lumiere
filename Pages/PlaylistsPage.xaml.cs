@@ -1,10 +1,10 @@
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 
-namespace FluentMediaPlayer.Pages;
+namespace LumiereMediaPlayer.Pages;
 
 public sealed partial class PlaylistsPage : Page
 {

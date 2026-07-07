@@ -1,6 +1,6 @@
 using System;
 
-namespace FluentMediaPlayer.Models
+namespace LumiereMediaPlayer.Models
 {
     public class AppConfig
     {

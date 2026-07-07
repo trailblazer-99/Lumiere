@@ -7,10 +7,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
-using FluentMediaPlayer.Models.Streaming;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public class YouTubeSearchResult
     {

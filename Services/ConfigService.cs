@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.Services
+namespace LumiereMediaPlayer.Services
 {
     public static class ConfigService
     {

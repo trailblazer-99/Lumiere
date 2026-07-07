@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel;
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -14,7 +14,7 @@ using Windows.Media.Devices;
 using Windows.Media.Casting;
 using Windows.Media.Playback;
 
-namespace FluentMediaPlayer.Controls;
+namespace LumiereMediaPlayer.Controls;
 
 public sealed partial class TransportBar : UserControl
 {

@@ -1,8 +1,8 @@
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Services;
 using Microsoft.UI.Xaml;
 
-namespace FluentMediaPlayer;
+namespace LumiereMediaPlayer;
 
 public partial class App : Application
 {
@@ -16,7 +16,7 @@ public partial class App : Application
     {
         InitializeComponent();
         var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-        var crashLogDir = System.IO.Path.Combine(appData, "FluentMediaPlayer");
+        var crashLogDir = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
         System.IO.Directory.CreateDirectory(crashLogDir);
         var crashLogPath = System.IO.Path.Combine(crashLogDir, "crash.txt");
 
@@ -42,7 +42,7 @@ public partial class App : Application
         MainDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         
         // Load the persistent media library in the background
-        _ = FluentMediaPlayer.Services.SampleMediaLibrary.LoadLibraryAsync();
+        _ = LumiereMediaPlayer.Services.SampleMediaLibrary.LoadLibraryAsync();
         
         var mainWindow = new MainWindow();
         _window = mainWindow;

@@ -1,10 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 
-namespace FluentMediaPlayer.ViewModels;
+namespace LumiereMediaPlayer.ViewModels;
 
 public partial class QueueViewModel : ObservableObject
 {

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.Services.Streaming
+namespace LumiereMediaPlayer.Services.Streaming
 {
     public class StreamingAvailabilityService
     {

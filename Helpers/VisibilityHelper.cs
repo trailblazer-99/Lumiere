@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 
-namespace FluentMediaPlayer.Helpers;
+namespace LumiereMediaPlayer.Helpers;
 
 public static class VisibilityHelper
 {

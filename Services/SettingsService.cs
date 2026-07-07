@@ -1,8 +1,8 @@
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Models;
 using System.Threading.Tasks;
 using Windows.Storage;
 
-namespace FluentMediaPlayer.Services;
+namespace LumiereMediaPlayer.Services;
 
 public sealed class SettingsService
 {

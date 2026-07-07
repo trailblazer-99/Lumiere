@@ -1,7 +1,7 @@
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Xaml.Controls;
 
-namespace FluentMediaPlayer.Controls
+namespace LumiereMediaPlayer.Controls
 {
     public sealed partial class NativeStreamingTray : UserControl
     {

@@ -3,12 +3,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using System;
-using FluentMediaPlayer.ViewModels;
-using FluentMediaPlayer.Models.Streaming;
-using FluentMediaPlayer.Services.Streaming;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.ViewModels;
+using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Services;
 
-namespace FluentMediaPlayer.Pages
+namespace LumiereMediaPlayer.Pages
 {
     public sealed partial class StreamingMusicPage : Page
     {
@@ -389,7 +389,7 @@ namespace FluentMediaPlayer.Pages
             int col = 0;
             int row = 0;
 
-            var musicApiService = new FluentMediaPlayer.Services.Streaming.MusicApiService();
+            var musicApiService = new LumiereMediaPlayer.Services.Streaming.MusicApiService();
             var streamingLinks = await musicApiService.GetStreamingLinksAsync(track);
             
             if (streamingLinks != null && streamingLinks.Count > 0)
@@ -436,7 +436,7 @@ namespace FluentMediaPlayer.Pages
                     var linkUrl = link.Url;
                     btn.Click += async (s, args) => { 
                         try {
-                            var nativeUri = FluentMediaPlayer.Helpers.StreamingRouter.GetNativeUri(linkUrl);
+                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(linkUrl);
                             var launcherOptions = new Windows.System.LauncherOptions
                             {
                                 FallbackUri = new Uri(linkUrl)
@@ -504,7 +504,7 @@ namespace FluentMediaPlayer.Pages
                         if (!string.IsNullOrEmpty(searchUrl))
                         {
                             try {
-                                var nativeUri = FluentMediaPlayer.Helpers.StreamingRouter.GetNativeUri(searchUrl);
+                                var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(searchUrl);
                                 var launcherOptions = new Windows.System.LauncherOptions
                                 {
                                     FallbackUri = new Uri(searchUrl)

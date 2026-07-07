@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 
-namespace FluentMediaPlayer.Controls
+namespace LumiereMediaPlayer.Controls
 {
     public sealed partial class WinUIStreamPlayer : UserControl
     {

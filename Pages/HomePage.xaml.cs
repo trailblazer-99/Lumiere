@@ -1,4 +1,4 @@
-using FluentMediaPlayer.ViewModels;
+using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -6,7 +6,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media.Animation;
 
-namespace FluentMediaPlayer.Pages;
+namespace LumiereMediaPlayer.Pages;
 
 public sealed partial class HomePage : Page
 {

@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Models;
-using FluentMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Services;
 using Microsoft.UI.Xaml;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
@@ -11,10 +11,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentMediaPlayer.Services.Streaming;
-using FluentMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Models.Streaming;
 
-namespace FluentMediaPlayer.ViewModels;
+namespace LumiereMediaPlayer.ViewModels;
 
 public partial class VideoViewModel : ObservableObject
 {

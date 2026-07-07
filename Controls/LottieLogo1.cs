@@ -3,7 +3,7 @@ using System.Numerics;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml.Controls;
 
-namespace FluentMediaPlayer.Controls;
+namespace LumiereMediaPlayer.Controls;
 
 public sealed class LottieLogo1 : IAnimatedVisualSource
 {

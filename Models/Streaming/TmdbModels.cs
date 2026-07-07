@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace FluentMediaPlayer.Models.Streaming
+namespace LumiereMediaPlayer.Models.Streaming
 {
     public class TmdbResponse<T>
     {

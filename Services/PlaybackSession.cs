@@ -4,10 +4,10 @@ using System.IO;
 using System.Linq;
 using Windows.Media.Core;
 using Windows.Media.Playback;
-using FluentMediaPlayer.Helpers;
-using FluentMediaPlayer.Models;
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
 
-namespace FluentMediaPlayer.Services;
+namespace LumiereMediaPlayer.Services;
 
 public sealed class PlaybackSession
 {
@@ -16,7 +16,7 @@ public sealed class PlaybackSession
         try
         {
             var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-            var logFolder = System.IO.Path.Combine(appData, "FluentMediaPlayer");
+            var logFolder = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
             System.IO.Directory.CreateDirectory(logFolder);
             var logPath = System.IO.Path.Combine(logFolder, "playback_log.txt");
             System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
