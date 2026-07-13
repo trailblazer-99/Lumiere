@@ -72,7 +72,7 @@ jobs:
     - name: Update Manifest Version
       shell: powershell
       run: |
-        [xml]$manifest = Get-Content "Package.appxmanifest"
+        [xml]$manifest = Get-Content "Package.appxmanifest" -Encoding utf8
         $manifest.Package.Identity.Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
         $manifest.Save("Package.appxmanifest")
 
@@ -190,7 +190,7 @@ jobs:
         Copy-Item "Signing\LumiereMediaPlayer.cer" "deploy\LumiereMediaPlayer.cer"
         
         # 4. Generate final index.html from template (pointing direct download link to GitHub Release URL)
-        $html = Get-Content "Signing\index.html" -Raw
+        $html = Get-Content "Signing\index.html" -Raw -Encoding utf8
         $html = $html -replace "APP_INSTALLER_FILENAME", "LumiereMediaPlayer.appinstaller"
         $html = $html -replace "MSIX_BUNDLE_FILENAME", $releaseDownloadUrl
         $html = $html -replace "APP_VERSION", "1.0.1.$env:GITHUB_RUN_NUMBER"
