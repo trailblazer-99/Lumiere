@@ -1,16 +1,38 @@
 using System;
 using System.Diagnostics;
 using LumiereMediaPlayer.Models;
-using Windows.Graphics.Display;
-using Windows.Media.Core;
+using Microsoft.UI.Xaml;
 using Windows.Media.Playback;
 
 namespace LumiereMediaPlayer.Services;
 
 /// <summary>
 /// Detects display HDR capability, inspects video content metadata for HDR
-/// format, and configures the MediaPlayer accordingly for optimal HDR/SDR
-/// output and auto-brightness.
+/// format, configures the MediaPlayer for optimal HDR/SDR output, and
+/// manages display brightness during HDR playback.
+///
+/// <para>
+/// <b>Brightness:</b>  When HDR playback is active the service boosts the
+/// monitor brightness to 100 % via the Win32 DDC/CI API (Dxva2.dll) so the
+/// display operates at its peak luminance.  Brightness is restored to the
+/// user's previous level when HDR playback ends.
+/// </para>
+/// <para>
+/// <b>Tone-mapping:</b>  The native Media Processing Object (MPO) pipeline
+/// (<c>IsVideoFrameServerEnabled = false</c>) lets the Windows compositor
+/// and display hardware handle HDR → SDR tone-mapping.  The
+/// <see cref="AppSettings.ToneMappingMode"/> and
+/// <see cref="AppSettings.PeakBrightnessNits"/> settings are preserved for
+/// future custom-renderer support but are <b>not</b> applied by this
+/// service.
+/// </para>
+/// <para>
+/// <b>Display capability</b> is read from <see cref="AppServices.DisplayManager"/>
+/// (the single authoritative <c>DisplayInformation</c> instance) rather than
+/// maintaining a duplicate subscription.  Call order in MainWindow must ensure
+/// <see cref="Services.Display.AdvancedColorDisplayManager.InitializeForWindow"/> runs
+/// before <see cref="Initialize"/>.
+/// </para>
 /// </summary>
 public sealed class HdrPipelineService
 {
@@ -25,89 +47,107 @@ public sealed class HdrPipelineService
     private HdrContentFormat _contentFormat = HdrContentFormat.None;
     private bool _hdrActive;
 
-    // ── Display / brightness handles ─────────────────────────────────
+    // ── Content-format cache ─────────────────────────────────────────
+    // Avoids re-inspecting all video tracks on fullscreen toggling when the
+    // media source hasn't changed.
 
-    private DisplayInformation? _displayInfo;
-    private DisplayEnhancementOverride? _brightnessOverride;
+    private MediaPlaybackItem? _lastDetectedItem;
+    /// <summary>
+    /// True once <see cref="DetectContentFormat"/> has run to completion for
+    /// <see cref="_lastDetectedItem"/>. Allows the cache to also short-circuit
+    /// genuine SDR files whose <see cref="_contentFormat"/> is
+    /// <see cref="HdrContentFormat.None"/>.
+    /// </summary>
+    private bool _detectionComplete;
+
+    // ── Brightness handles ────────────────────────────────────────────
+
+    private IntPtr _hwnd;
 
     // ── Public read-only state ───────────────────────────────────────
 
     public DisplayHdrCapability DisplayCapability => _displayCapability;
     public HdrContentFormat ContentFormat => _contentFormat;
+
+    /// <summary>
+    /// Evaluates if the current display configuration supports HDR output.
+    /// This forces a real-time capability refresh.
+    /// </summary>
+    public bool IsDisplayHdrCapable
+    {
+        get
+        {
+            RefreshDisplayCapability();
+            return _displayCapability == DisplayHdrCapability.Hdr10 ||
+                   _displayCapability == DisplayHdrCapability.DolbyVision;
+        }
+    }
     public bool IsHdrActive => _hdrActive;
 
     public string ContentFormatLabel => _contentFormat switch
     {
-        HdrContentFormat.Hdr10 => "HDR10",
-        HdrContentFormat.Hlg => "HLG",
+        HdrContentFormat.Hdr10       => "HDR10",
+        HdrContentFormat.Hlg         => "HLG",
         HdrContentFormat.DolbyVision => "Dolby Vision",
-        _ => "SDR"
+        _                            => "SDR"
     };
 
     public string DisplayCapabilityLabel => _displayCapability switch
     {
-        DisplayHdrCapability.Hdr10 => "HDR10 Display",
+        DisplayHdrCapability.Hdr10       => "HDR10 Display",
         DisplayHdrCapability.DolbyVision => "Dolby Vision Display",
-        DisplayHdrCapability.Wcg => "WCG Display",
-        _ => "SDR Display"
+        DisplayHdrCapability.Wcg         => "WCG Display",
+        _                                => "SDR Display"
     };
 
     // ── Initialise ───────────────────────────────────────────────────
 
     /// <summary>
-    /// Call once after the main window is ready so that
-    /// <c>DisplayInformation.GetForCurrentView()</c> resolves correctly.
+    /// Call once after the main window is ready <b>and after</b>
+    /// <see cref="Services.Display.AdvancedColorDisplayManager.InitializeForWindow"/>
+    /// has been called, so the display state is already populated.
     /// </summary>
-    public void Initialize()
+    public void Initialize(Window window)
     {
-        // DisplayInformation — tracks HDR capability of the display
         try
         {
-            if (Windows.UI.Core.CoreWindow.GetForCurrentThread() != null)
-            {
-                _displayInfo = DisplayInformation.GetForCurrentView();
-                RefreshDisplayCapability();
+            _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
 
-                _displayInfo.ColorProfileChanged      += (_, _) => RefreshDisplayCapability();
-                _displayInfo.AdvancedColorInfoChanged  += (_, _) => RefreshDisplayCapability();
-            }
+            // Read initial capability from the already-initialised DisplayManager
+            // (no second DisplayInformation object required).
+            RefreshDisplayCapability();
+
+            // React to display HDR changes (e.g. user toggles Windows HDR in Settings)
+            // by listening to the single shared display manager event.
+            AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) => RefreshDisplayCapability();
+
+            Debug.WriteLine("[HDR] Initialized — display tracking via AdvancedColorDisplayManager");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[HDR] DisplayInformation unavailable: {ex.Message}");
-        }
-
-        // DisplayEnhancementOverride — lets the app request peak brightness
-        // during HDR playback; the OS/driver honours it while our app has focus.
-        try
-        {
-            if (Windows.UI.Core.CoreWindow.GetForCurrentThread() != null)
-            {
-                _brightnessOverride = DisplayEnhancementOverride.GetForCurrentView();
-                Debug.WriteLine("[HDR] DisplayEnhancementOverride acquired");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[HDR] DisplayEnhancementOverride unavailable: {ex.Message}");
+            Debug.WriteLine($"[HDR] Initialize error: {ex.Message}");
         }
     }
 
     // ── Display detection ────────────────────────────────────────────
 
+    /// <summary>
+    /// Reads the current display capability from <see cref="AppServices.DisplayManager"/>
+    /// (the single authoritative <see cref="Microsoft.Graphics.Display.DisplayInformation"/>
+    /// wrapper) rather than maintaining a duplicate subscription.
+    /// </summary>
     private void RefreshDisplayCapability()
     {
         try
         {
-            if (_displayInfo == null) return;
+            var dm = AppServices.DisplayManager;
 
-            var aci = _displayInfo.GetAdvancedColorInfo();
-            _displayCapability = aci.CurrentAdvancedColorKind switch
-            {
-                AdvancedColorKind.HighDynamicRange => DisplayHdrCapability.Hdr10,
-                AdvancedColorKind.WideColorGamut   => DisplayHdrCapability.Wcg,
-                _                                   => DisplayHdrCapability.Sdr
-            };
+            if (dm.SupportsHdr10)
+                _displayCapability = DisplayHdrCapability.Hdr10;
+            else if (dm.SupportsWcg)
+                _displayCapability = DisplayHdrCapability.Wcg;
+            else
+                _displayCapability = DisplayHdrCapability.Sdr;
 
             Debug.WriteLine($"[HDR] Display capability: {_displayCapability}");
         }
@@ -123,69 +163,139 @@ public sealed class HdrPipelineService
     /// <summary>
     /// Inspect a <see cref="MediaPlaybackItem"/> after it has opened and
     /// detect its HDR format from video track encoding properties.
+    /// Results are cached per item reference so fullscreen toggling does
+    /// not re-inspect all tracks unnecessarily.
     /// </summary>
     public HdrContentFormat DetectContentFormat(MediaPlaybackItem? item)
     {
         if (item == null)
         {
-            _contentFormat = HdrContentFormat.None;
+            _contentFormat     = HdrContentFormat.None;
+            _lastDetectedItem  = null;
+            _detectionComplete = false;
             return _contentFormat;
         }
 
+        // ── Cache hit ────────────────────────────────────────────────
+        // _detectionComplete is true for both HDR and SDR (None) results so that
+        // genuine SDR files don't force a re-scan on every fullscreen toggle.
+        if (ReferenceEquals(item, _lastDetectedItem) && _detectionComplete)
+        {
+            Debug.WriteLine($"[HDR] Content format cached: {_contentFormat}");
+            return _contentFormat;
+        }
+
+        // Run the scan, then commit both cache fields in exactly one place.
+        _contentFormat     = ScanContentFormat(item);
+        _lastDetectedItem  = item;
+        _detectionComplete = true;
+        return _contentFormat;
+    }
+
+    /// <summary>
+    /// Internal detection scan — iterates video tracks and applies a 6-layer
+    /// fallback chain. Does NOT touch _lastDetectedItem or _detectionComplete;
+    /// the public wrapper handles that.
+    /// </summary>
+    private HdrContentFormat ScanContentFormat(MediaPlaybackItem item)
+    {
         try
         {
             foreach (var track in item.VideoTracks)
             {
                 var props = track.GetEncodingProperties();
 
-                // Dolby Vision: profile encoded in subtype
+                // Layer 1 — Dolby Vision: subtype string
                 if (props.Subtype != null &&
                     props.Subtype.Contains("DOLBY", StringComparison.OrdinalIgnoreCase))
                 {
-                    _contentFormat = HdrContentFormat.DolbyVision;
                     Debug.WriteLine("[HDR] Detected: Dolby Vision");
-                    return _contentFormat;
+                    return HdrContentFormat.DolbyVision;
                 }
 
-                // MF_MT_TRANSFER_FUNCTION:
-                //   MFVideoTransferFunction_2084 = 13  →  HDR10 / PQ
-                //   MFVideoTransferFunction_HLG  = 15  →  HLG
+                // Layer 2 — MF_MT_TRANSFER_FUNCTION
+                //   13 = MFVideoTransferFunction_2084 (PQ / ST2084) → HDR10
+                //   15 = MFVideoTransferFunction_HLG               → HLG
                 if (props.Properties.TryGetValue(
                     new Guid("93B7BE49-B4B2-4F40-A66E-C13B5F8E4E82"),
                     out var tfValue) && tfValue is uint tf)
                 {
                     if (tf == 13)
                     {
-                        _contentFormat = HdrContentFormat.Hdr10;
                         Debug.WriteLine("[HDR] Detected: HDR10 (PQ/ST2084)");
-                        return _contentFormat;
+                        return HdrContentFormat.Hdr10;
                     }
                     if (tf == 15)
                     {
-                        _contentFormat = HdrContentFormat.Hlg;
                         Debug.WriteLine("[HDR] Detected: HLG");
-                        return _contentFormat;
+                        return HdrContentFormat.Hlg;
                     }
                 }
 
-                // MF_MT_VIDEO_PRIMARIES — BT.2020 = 9  →  likely HDR
+                // Layer 3 — MF_MT_VIDEO_PRIMARIES — BT.2020 = 9  →  likely HDR
                 if (props.Properties.TryGetValue(
                     new Guid("dbfbe4d7-0740-4ee0-8192-850AB0E21935"),
                     out var primValue) && primValue is uint prims && prims == 9)
                 {
-                    _contentFormat = HdrContentFormat.Hdr10;
                     Debug.WriteLine("[HDR] Inferred HDR10 from BT.2020 primaries");
-                    return _contentFormat;
+                    return HdrContentFormat.Hdr10;
                 }
 
-                // Subtype string fallback
+                // Layer 4 — Subtype string contains "HDR"
                 if (!string.IsNullOrEmpty(props.Subtype) &&
                     props.Subtype.Contains("HDR", StringComparison.OrdinalIgnoreCase))
                 {
-                    _contentFormat = HdrContentFormat.Hdr10;
                     Debug.WriteLine($"[HDR] Detected HDR from subtype: {props.Subtype}");
-                    return _contentFormat;
+                    return HdrContentFormat.Hdr10;
                 }
+
+                // Layer 5 — HEVC/VP9 Main10 profile (MPEG-2 profile GUID, value 2)
+                if (props.Properties.TryGetValue(
+                    new Guid("e2724bb8-e676-4806-b4b2-a8d6efb44ccd"),
+                    out var profileVal) && profileVal is uint profile &&
+                    props.Subtype != null &&
+                    (props.Subtype.Contains("HEVC", StringComparison.OrdinalIgnoreCase) ||
+                     props.Subtype.Contains("H265", StringComparison.OrdinalIgnoreCase) ||
+                     props.Subtype.Contains("VP90", StringComparison.OrdinalIgnoreCase)) &&
+                    profile == 2)
+                {
+                    Debug.WriteLine("[HDR] Inferred HDR10 from HEVC/VP9 10-bit profile");
+                    return HdrContentFormat.Hdr10;
+                }
+            }
+
+            // Layer 6 — Filename / metadata keyword matching
+            try
+            {
+                var currentTrack = AppServices.Playback.CurrentTrack;
+                if (currentTrack != null)
+                {
+                    string pathToCheck = (currentTrack.SourcePath ?? currentTrack.Title ?? "").ToLowerInvariant();
+                    if (pathToCheck.Contains("hdr")    || pathToCheck.Contains("10bit") ||
+                        pathToCheck.Contains("dovi")   || pathToCheck.Contains("dolby") ||
+                        pathToCheck.Contains("vision") || pathToCheck.Contains("hlg")   ||
+                        pathToCheck.Contains("st2084") || pathToCheck.Contains("bt2020"))
+                    {
+                        foreach (var track in item.VideoTracks)
+                        {
+                            var props = track.GetEncodingProperties();
+                            if (props.Subtype != null &&
+                                (props.Subtype.Contains("HEVC", StringComparison.OrdinalIgnoreCase) ||
+                                 props.Subtype.Contains("H265", StringComparison.OrdinalIgnoreCase) ||
+                                 props.Subtype.Contains("AV01", StringComparison.OrdinalIgnoreCase) ||
+                                 props.Subtype.Contains("AV1",  StringComparison.OrdinalIgnoreCase) ||
+                                 props.Subtype.Contains("VP9",  StringComparison.OrdinalIgnoreCase)))
+                            {
+                                Debug.WriteLine("[HDR] Detected HDR via keyword matching on HEVC/AV1/VP9 video track");
+                                return HdrContentFormat.Hdr10;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[HDR Filename Fallback] Error: {ex.Message}");
             }
         }
         catch (Exception ex)
@@ -193,8 +303,9 @@ public sealed class HdrPipelineService
             Debug.WriteLine($"[HDR] Content detection error: {ex.Message}");
         }
 
-        _contentFormat = HdrContentFormat.None;
-        return _contentFormat;
+        // All layers exhausted — content is SDR.
+        Debug.WriteLine("[HDR] Content format: SDR (no HDR metadata found)");
+        return HdrContentFormat.None;
     }
 
     // ── Pipeline configuration ────────────────────────────────────────
@@ -202,8 +313,7 @@ public sealed class HdrPipelineService
     /// <summary>
     /// Configure the MediaPlayer HDR pipeline.  Call this from:
     /// <list type="bullet">
-    ///   <item><description><c>OnMediaOpened</c> in VideoPage (windowed)</description></item>
-    ///   <item><description><c>OnFullscreenMediaOpened</c> in MainWindow (fullscreen)</description></item>
+    ///   <item><description><c>OnMediaPlayerMediaOpened</c> in PlaybackSession (windowed + fullscreen)</description></item>
     ///   <item><description>When fullscreen is entered while media is already playing</description></item>
     ///   <item><description>When the user changes HDR settings</description></item>
     /// </list>
@@ -212,29 +322,32 @@ public sealed class HdrPipelineService
     {
         var settings = AppServices.Settings.Current;
 
-        // 1. Detect content format
+        // Refresh display capability in real-time before checking if we should enable HDR output.
+        // Reads from the shared DisplayManager — no duplicate COM call.
+        RefreshDisplayCapability();
+
+        // 1. Detect content format (cached per item — skips track scan on fullscreen toggle)
         var format = DetectContentFormat(item);
 
-        // 2. Determine whether HDR output should be active
+        // 2. Determine whether HDR output (and brightness override) should be active.
+        //
+        //    ForceOn  — user explicitly opted in; always boost regardless of display or content.
+        //    ForceSdr — user explicitly opted out; always tone-map down to SDR.
+        //    Auto     — unconditionally enable so the brightness boost fires on every display,
+        //               including laptops that support "Stream HDR video" but report an SDR desktop.
+        //               This is the safest fallback for heterogeneous hardware.
         bool shouldEnableHdr = settings.HdrMode switch
         {
-            HdrMode.ForceOn  => true,
-            HdrMode.ForceSdr => false,
-            _                => format != HdrContentFormat.None // Enable HDR if content has HDR format
-                                // Ignore display HDR capability; rely on OS to handle tone‑mapping
+            HdrMode.ForceOn  => true,   // always boost — user's explicit choice
+            HdrMode.ForceSdr => false,  // always SDR   — user's explicit choice
+            _                => true    // Auto: unconditional (covers all display configurations)
         };
 
-        // 3. RealTimePlayback is intentionally omitted. 
-        // Setting RealTimePlayback = true breaks pausing and seeking for local media files
-        // because it instructs Media Foundation to treat the source as a live communication stream.
-
-        // 4. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
+        // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
         TryConfigureNativePipeline(player);
 
-        // 5. Auto-brightness via DisplayEnhancementOverride
-        TryApplyAutoBrightness(shouldEnableHdr, settings);
-
         _hdrActive = shouldEnableHdr;
+        UpdateBrightnessOverride();
 
         var args = new HdrStateChangedEventArgs
         {
@@ -258,10 +371,6 @@ public sealed class HdrPipelineService
     {
         try
         {
-            // IsVideoFrameServerEnabled=true routes decoded frames through a
-            // software path that bypasses the OS Media Processing Object (MPO),
-            // which is responsible for hardware HDR pass-through and tone-mapping.
-            // Ensure it is false so the OS compositor can do HDR natively.
             if (player.IsVideoFrameServerEnabled)
             {
                 player.IsVideoFrameServerEnabled = false;
@@ -270,52 +379,44 @@ public sealed class HdrPipelineService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[HDR] Native pipeline config error: {ex.Message}");
+            Debug.WriteLine($"[HDR] Pipeline configuration failed: {ex.Message}");
         }
     }
 
-    // ── Auto-brightness via DisplayEnhancementOverride ────────────────
+    private BrightnessOverrideHelper? _brightnessOverride;
+    private bool _isAppFullscreen;
 
-    private void TryApplyAutoBrightness(bool hdrActive, AppSettings settings)
+    public void SetFullscreenState(bool isFullscreen)
     {
-        if (_brightnessOverride == null)
-        {
-            Debug.WriteLine("[HDR] No DisplayEnhancementOverride available; auto-brightness disabled.");
-            return;
-        }
+        _isAppFullscreen = isFullscreen;
+        UpdateBrightnessOverride();
+    }
 
+    private void UpdateBrightnessOverride()
+    {
         try
         {
-            if (hdrActive)
+            if (_hdrActive && _isAppFullscreen)
             {
-                // Define brightness override settings – maximum level (100%)
-                // You can also use CreateFromNits(settings.PeakBrightnessNits) for an absolute nits value.
-                var brightnessSettings = BrightnessOverrideSettings.CreateFromLevel(1.0);
-                _brightnessOverride.BrightnessOverrideSettings = brightnessSettings;
-
-                // Request the OS to apply the enhancement if supported.
-                if (_brightnessOverride.CanOverride)
+                if (_brightnessOverride == null)
                 {
-                    _brightnessOverride.RequestOverride();
-                    Debug.WriteLine($"[HDR] Auto-brightness override requested (peak {settings.PeakBrightnessNits} nits). CanOverride: true");
+                    _brightnessOverride = new BrightnessOverrideHelper();
                 }
-                else
-                {
-                    Debug.WriteLine("[HDR] DisplayEnhancementOverride not supported on this device; cannot request HDR brightness.");
-                }
+                _brightnessOverride.TryOverrideToMax(_hwnd);
             }
             else
             {
-                // Release the brightness override — OS returns to its default adaptive-brightness.
-                _brightnessOverride.StopOverride();
-                Debug.WriteLine("[HDR] Auto-brightness override released");
+                if (_brightnessOverride != null)
+                {
+                    _brightnessOverride.Release();
+                    _brightnessOverride.Dispose();
+                    _brightnessOverride = null; // Recreate next time to capture any manual brightness changes
+                }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[HDR] Auto-brightness error: {ex.GetType().FullName}: {ex.Message} (HResult=0x{ex.HResult:X8})");
-            // Ensure the override is released if an error occurs.
-            try { _brightnessOverride.StopOverride(); } catch { }
+            Debug.WriteLine($"[HDR Brightness] Brightness override logic failed: {ex.Message}");
         }
     }
 
@@ -327,11 +428,20 @@ public sealed class HdrPipelineService
     /// </summary>
     public void ResetContentState()
     {
-        _contentFormat = HdrContentFormat.None;
-        _hdrActive = false;
+        _contentFormat     = HdrContentFormat.None;
+        _hdrActive         = false;
+        _lastDetectedItem  = null; // clear cache so next media gets a fresh detection
+        _detectionComplete = false;
 
-        try { _brightnessOverride?.StopOverride(); }
+        try { _brightnessOverride?.Release(); }
         catch { }
+
+        try { _brightnessOverride?.Dispose(); }
+        catch { }
+
+        _brightnessOverride = null; // prevent use of disposed instance
+
+        Debug.WriteLine("[HDR] Content state reset");
     }
 }
 

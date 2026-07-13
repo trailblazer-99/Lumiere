@@ -233,12 +233,11 @@
                     
                     <ListView
                         Grid.Row="1"
-                        IsItemClickEnabled="True"
                         ItemsSource="{x:Bind ViewModel.FilteredVideos, Mode=OneWay}"
                         SelectionMode="None">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:MediaItem">
-                                <Grid Padding="12,10" ColumnSpacing="12">
+                                <Grid Padding="12,10" ColumnSpacing="12" Tapped="OnVideoItemTapped" Background="Transparent">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />

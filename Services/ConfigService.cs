@@ -29,9 +29,8 @@ namespace LumiereMediaPlayer.Services
                         if (!string.IsNullOrEmpty(loadedConfig.WatchmodeApiKey)) _config.WatchmodeApiKey = loadedConfig.WatchmodeApiKey;
                         if (!string.IsNullOrEmpty(loadedConfig.MotnApiKey)) _config.MotnApiKey = loadedConfig.MotnApiKey;
                         if (!string.IsNullOrEmpty(loadedConfig.MusicApiKey)) _config.MusicApiKey = loadedConfig.MusicApiKey;
-                        if (!string.IsNullOrEmpty(loadedConfig.YouTubeApiKey)) _config.YouTubeApiKey = loadedConfig.YouTubeApiKey;
-                        if (!string.IsNullOrEmpty(loadedConfig.TwitchClientId)) _config.TwitchClientId = loadedConfig.TwitchClientId;
-                        if (!string.IsNullOrEmpty(loadedConfig.TwitchClientSecret)) _config.TwitchClientSecret = loadedConfig.TwitchClientSecret;
+
+
                     }
                 }
             }

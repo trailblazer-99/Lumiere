@@ -15,6 +15,11 @@ public sealed class AppSettings
 
     public List<string> LibraryFolders { get; set; } = [];
 
+    // ── Window State ──────────────────────────────────────────────────
+    public double WindowWidth { get; set; } = 1200.0;
+    public double WindowHeight { get; set; } = 800.0;
+    public bool WindowIsMaximized { get; set; } = false;
+
     // ── Playback Settings ──────────────────────────────────────────
     public bool AutoplayOnLaunch { get; set; } = true;
     public bool ResumePlaybackPosition { get; set; } = true;

@@ -58,6 +58,11 @@ public sealed class SettingsService
     private const string ShowOpenFilesOnHomeKey = "ShowOpenFilesOnHome";
     private const string OpenFilePositionCornerKey = "OpenFilePositionCorner";
 
+    // Window State
+    private const string WindowWidthKey = "WindowWidth";
+    private const string WindowHeightKey = "WindowHeight";
+    private const string WindowIsMaximizedKey = "WindowIsMaximized";
+
     // Library
     private const string AutomaticLibraryScanKey = "AutomaticLibraryScan";
     private const string LibrarySortOrderKey = "LibrarySortOrder";
@@ -160,6 +165,11 @@ public sealed class SettingsService
             ShowSpeedInMoreMenu = ReadBool(settingsValues, ShowSpeedInMoreMenuKey, true),
             ShowOpenFilesOnHome = ReadBool(settingsValues, ShowOpenFilesOnHomeKey, true),
             OpenFilePositionCorner = ParseEnum(settingsValues, OpenFilePositionCornerKey, OpenFileCorner.TopRight),
+
+            // Window State
+            WindowWidth = ReadDouble(settingsValues, WindowWidthKey, 1200.0),
+            WindowHeight = ReadDouble(settingsValues, WindowHeightKey, 800.0),
+            WindowIsMaximized = ReadBool(settingsValues, WindowIsMaximizedKey, false),
 
             // Library
             AutomaticLibraryScan = ReadBool(settingsValues, AutomaticLibraryScanKey, true),

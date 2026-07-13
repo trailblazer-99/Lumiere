@@ -43,6 +43,14 @@ public static class SampleMediaLibrary
     {
         lock (_lock)
         {
+            if (!string.IsNullOrEmpty(item.SourcePath) && _allTracks.Any(t => t.SourcePath == item.SourcePath))
+            {
+                return null;
+            }
+            if (!string.IsNullOrEmpty(item.Id) && _allTracks.Any(t => t.Id == item.Id))
+            {
+                return null;
+            }
             _allTracks.Add(item);
         }
         LibraryChanged?.Invoke(null, EventArgs.Empty);
@@ -96,13 +104,42 @@ public static class SampleMediaLibrary
                 var loadedTracks = JsonSerializer.Deserialize<List<MediaItem>>(json);
                 if (loadedTracks != null)
                 {
+                    bool wasModified = false;
                     lock (_lock)
                     {
                         var validTracks = loadedTracks.Where(t => !t.IsFolder).ToList();
+                        var uniqueTracks = new List<MediaItem>();
+                        foreach (var track in validTracks)
+                        {
+                            bool isDuplicate = false;
+                            if (!string.IsNullOrEmpty(track.SourcePath))
+                            {
+                                isDuplicate = uniqueTracks.Any(t => t.SourcePath == track.SourcePath);
+                            }
+                            else if (!string.IsNullOrEmpty(track.Id))
+                            {
+                                isDuplicate = uniqueTracks.Any(t => t.Id == track.Id);
+                            }
+
+                            if (!isDuplicate)
+                            {
+                                uniqueTracks.Add(track);
+                            }
+                            else
+                            {
+                                wasModified = true;
+                            }
+                        }
+
                         _allTracks.Clear();
-                        _allTracks.AddRange(validTracks);
+                        _allTracks.AddRange(uniqueTracks);
                     }
                     LibraryChanged?.Invoke(null, EventArgs.Empty);
+
+                    if (wasModified)
+                    {
+                        _ = SaveLibraryAsync();
+                    }
                 }
             }
         }
