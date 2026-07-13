@@ -1,0 +1,421 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LumiÃ¨re Media Player - Sideloading Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0712;
+            --bg-secondary: #130f24;
+            --text-primary: #f3f0fc;
+            --text-secondary: #a9a3c2;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --card-border: rgba(139, 92, 246, 0.15);
+            --card-bg: rgba(25, 20, 48, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.12) 0%, transparent 40%);
+        }
+
+        header {
+            width: 100%;
+            max-width: 1100px;
+            padding: 2.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text-primary) 30%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-dot {
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
+        }
+
+        .version-badge {
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(139, 92, 246, 0.15);
+            color: #c0a9ff;
+            padding: 0.35rem 0.85rem;
+            border-radius: 50px;
+            border: 1px solid rgba(139, 92, 246, 0.25);
+            backdrop-filter: blur(5px);
+        }
+
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            padding: 1.5rem 2rem 4rem 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3rem;
+        }
+
+        .hero {
+            text-align: center;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .hero h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ffffff 10%, #dcd7f2 50%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 2rem auto;
+            line-height: 1.6;
+        }
+
+        .cta-container {
+            display: flex;
+            gap: 1.25rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+            color: white;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 26px rgba(139, 92, 246, 0.45);
+            background: linear-gradient(135deg, #9333ea, var(--accent-purple));
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .install-guide {
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(16px);
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+            animation-delay: 0.1s;
+        }
+
+        .guide-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, #ffffff, #c7bbf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .guide-icon {
+            color: var(--accent-purple);
+            font-size: 1.5rem;
+        }
+
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 2.25rem;
+        }
+
+        .step {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(139, 92, 246, 0.12);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #d1c4ff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.1);
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #ffffff;
+        }
+
+        .step p {
+            color: var(--text-secondary);
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
+
+        .step-details {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 0.93rem;
+        }
+
+        .step-details ol {
+            padding-left: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .step-details li {
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .step-details li strong {
+            color: var(--text-primary);
+        }
+
+        .highlight-box {
+            background: rgba(236, 72, 153, 0.08);
+            border: 1px dashed rgba(236, 72, 153, 0.3);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .highlight-box svg {
+            color: var(--accent-pink);
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .highlight-box p {
+            font-size: 0.93rem;
+            color: #fca5a5;
+            margin: 0;
+        }
+
+        footer {
+            width: 100%;
+            max-width: 1100px;
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            color: rgba(169, 163, 194, 0.5);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: rgba(169, 163, 194, 0.7);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        footer a:hover {
+            color: var(--accent-purple);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            .install-guide {
+                padding: 2rem 1.5rem;
+            }
+            .step {
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-dot"></div>
+            LumiÃ¨re
+        </div>
+        <div class="version-badge">v1.0.1.25</div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>LumiÃ¨re Media Player</h1>
+            <p>Experience ultra-premium local media playback on Windows. Download and sideload directly with automated background updates.</p>
+            <div class="cta-container">
+                <!-- Using MSIX protocol for modern OS if enabled, but referencing static download too -->
+                <a href="LumiereMediaPlayer.appinstaller" class="btn btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Install LumiÃ¨re Player
+                </a>
+                <a href="LumiereMediaPlayer.cer" class="btn btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Download Certificate
+                </a>
+            </div>
+            <!-- Alternates backup download -->
+            <p style="margin-top: 1.5rem; font-size: 0.9rem; color: rgba(169, 163, 194, 0.6);">
+                Having trouble? You can also <a href="https://github.com/trailblazer-99/Lumiere/releases/download/v1.0.1.25/LumiereMediaPlayer_1.0.1..msixbundle" style="color: var(--accent-purple); text-decoration: underline;">download the raw .msixbundle file</a> directly.
+            </p>
+        </section>
+
+        <section class="install-guide">
+            <div class="guide-title">
+                <svg class="guide-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Installation Instructions (One-time Setup)
+            </div>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Download and Trust the Security Certificate</h3>
+                        <p>Because LumiÃ¨re is sideloaded, Windows requires trusting its developer certificate before installation. Click <strong>Download Certificate</strong> above to download <code>LumiereMediaPlayer.cer</code>, then:</p>
+                        <div class="step-details">
+                            <ol>
+                                <li>Double-click the downloaded <strong><code>LumiereMediaPlayer.cer</code></strong> file.</li>
+                                <li>In the Dialog box that opens, click the <strong>Install Certificate...</strong> button.</li>
+                                <li>Select <strong>Local Machine</strong> (requires administrator access) and click <strong>Next</strong>.</li>
+                                <li>Choose <strong>Place all certificates in the following store</strong> and click <strong>Browse...</strong>.</li>
+                                <li>Select the <strong>Trusted People</strong> store and click <strong>OK</strong>.</li>
+                                <li>Click <strong>Next</strong>, then <strong>Finish</strong>. You should see a confirmation saying "The import was successful."</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Run the App Installer</h3>
+                        <p>Click the <strong>Install LumiÃ¨re Player</strong> button to download and run the <code>.appinstaller</code> file. Windows App Installer will launch automatically to download the correct bundle for your system (x64 or ARM64) and install it.</p>
+                        
+                        <div class="highlight-box">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            <p><strong>Note:</strong> If Windows complains about the file or says it cannot open the appinstaller, double-click the raw <code>.msixbundle</code> file downloaded via the backup link to install it directly.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Automated Background Updates</h3>
+                        <p>Once installed using the App Installer, Windows will automatically query the repository's portal on GitHub Pages for updates. Every time changes are pushed to the repository, the app will be built, signed, and updated on your system seamlessly in the background!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 LumiÃ¨re Media Player. Distributed under MIT License. Source code available on <a href="https://github.com/Trailblazer2599/Lumiere" target="_blank">GitHub</a>.</p>
+    </footer>
+</body>
+</html>
+
