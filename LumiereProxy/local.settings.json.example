@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "APP_TOKEN": "YOUR_DESKTOP_APP_TOKEN",
+    "TMDB_API_KEY": "YOUR_TMDB_API_KEY",
+    "WATCHMODE_API_KEY": "YOUR_WATCHMODE_API_KEY",
+    "MOTN_API_KEY": "YOUR_MOTN_API_KEY",
+    "MUSIC_API_KEY": "YOUR_MUSIC_API_KEY"
+  }
+}

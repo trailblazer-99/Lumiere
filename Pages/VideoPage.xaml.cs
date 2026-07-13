@@ -21,6 +21,8 @@ public sealed partial class VideoPage : Page
     private readonly PropertyChangedEventHandler _viewModelPropertyChangedHandler;
     private readonly PropertyChangedEventHandler _playbackPropertyChangedHandler;
     private bool _eventHandlersDetached;
+    private int _videoTapClickCount = 0;
+    private System.Threading.CancellationTokenSource? _videoTapCts;
 
     public VideoPage()
     {
@@ -333,28 +335,49 @@ public sealed partial class VideoPage : Page
         return await System.Threading.Tasks.Task.FromResult<Microsoft.UI.Xaml.Media.ImageSource?>(null);
     }
 
-    private void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
-    {
-        if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
-        {
-            if (AppServices.PlaybackViewModel.IsPlaying)
-            {
-                AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
-            }
-            else
-            {
-                AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
-            }
-            e.Handled = true;
-        }
-    }
-
     private void OnVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         if (ViewModel.HasSource)
         {
-            App.MainWindowInstance?.ToggleFullscreen();
             e.Handled = true;
+            _videoTapClickCount = 0;
+            _videoTapCts?.Cancel();
+            App.MainWindowInstance?.ToggleFullscreen();
+        }
+    }
+
+    private async void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
+        {
+            e.Handled = true;
+            _videoTapClickCount++;
+            
+            if (_videoTapClickCount == 1)
+            {
+                _videoTapCts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                    if (AppServices.PlaybackViewModel.IsPlaying)
+                    {
+                        AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                    }
+                    else
+                    {
+                        AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
+                    }
+                }
+                catch (System.Threading.Tasks.TaskCanceledException)
+                {
+                }
+                finally
+                {
+                    _videoTapClickCount = 0;
+                    _videoTapCts?.Dispose();
+                    _videoTapCts = null;
+                }
+            }
         }
     }
 
@@ -446,6 +469,15 @@ public sealed partial class VideoPage : Page
         LocalVideoPlayer.Width = w;
         LocalVideoPlayer.Height = h;
         LocalVideoPlayer.Stretch = stretch;
+    }
+
+    private void OnVideoItemTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (sender is Grid grid && grid.DataContext is MediaItem video)
+        {
+            ViewModel.PlayVideoCommand.Execute(video);
+            e.Handled = true;
+        }
     }
 }
 

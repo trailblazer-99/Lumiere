@@ -1,0 +1,17 @@
+--- HDR Detection Run at 11-07-2026 20:01:11 ---
+Track Subtype: HEVC
+Track Height: 1606, Width: 3840
+Property GUID: c6376a1e-8d0a-4027-be45-6d9a0ad39bb6, Value: 4294967297 (Type: UInt64)
+Property GUID: 3afd0cee-18f2-4ba5-a110-8bea502e1f92, Value: 1 (Type: UInt32)
+Property GUID: 96f66574-11c5-4015-8666-bff516436da7, Value: 150 (Type: UInt32)
+Property GUID: 48eba18e-f8c9-4687-bf11-0a74c9f96a8f, Value: 73646976-0000-0010-8000-00aa00389b71 (Type: Guid)
+Property GUID: c9173739-5e56-461c-b713-46fb995cb95f, Value: 0 (Type: UInt32)
+Property GUID: 3c036de7-3ad0-4c9e-9216-ee6d6ac21cb3, Value: System.Byte[] (Type: Byte[])
+Property GUID: c459a2e8-3d2c-4e44-b132-fee5156c7bb0, Value: 10307938003174416640 (Type: UInt64)
+Property GUID: 9668dde5-c869-4d6a-b02e-463b7c231b53, Value: V_MPEGH/ISO/HEVC (Type: String)
+Property GUID: 20332624-fb0d-4d9e-bd0d-cbf6786c102e, Value: 0 (Type: UInt32)
+Property GUID: e2724bb8-e676-4806-b4b2-a8d6efb44ccd, Value: 2 (Type: UInt32)
+Property GUID: f7e34c9a-42e8-4714-b74b-cb29d72c35e5, Value: 43564548-0000-0010-8000-00aa00389b71 (Type: Guid)
+Property GUID: ad76a80b-2d5c-4e0b-b375-64e520137036, Value: 2 (Type: UInt32)
+Property GUID: 1652c33d-d6b2-4012-b834-72030849a37d, Value: 16492674418246 (Type: UInt64)
+Property GUID: a7911d53-12a4-4965-ae70-6eadd6ff0551, Value: 1 (Type: UInt32)

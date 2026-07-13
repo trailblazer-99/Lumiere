@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using LumiereMediaPlayer.Helpers;
@@ -13,15 +14,21 @@ public sealed class PlaybackSession
 {
     private static void Log(string message)
     {
-        try
+        // Capture the formatted line immediately on the calling thread; the actual
+        // I/O is offloaded so file latency never blocks Media Foundation callbacks.
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n";
+        _ = Task.Run(() =>
         {
-            var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-            var logFolder = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
-            System.IO.Directory.CreateDirectory(logFolder);
-            var logPath = System.IO.Path.Combine(logFolder, "playback_log.txt");
-            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
-        }
-        catch { }
+            try
+            {
+                var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
+                var logFolder = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
+                System.IO.Directory.CreateDirectory(logFolder);
+                var logPath = System.IO.Path.Combine(logFolder, "playback_log.txt");
+                System.IO.File.AppendAllText(logPath, line);
+            }
+            catch { }
+        });
     }
 
     private readonly List<MediaItem> _queue;
@@ -31,6 +38,7 @@ public sealed class PlaybackSession
     private bool _displayRequestActive;
     private int _playbackRequestVersion;
     private bool _disposed;
+    private bool _isChangingSource;
 
     public PlaybackSession(IEnumerable<MediaItem> initialQueue)
     {
@@ -60,6 +68,7 @@ public sealed class PlaybackSession
         _mediaPlayer.MediaEnded += OnMediaPlayerMediaEnded;
         _mediaPlayer.PlaybackSession.PlaybackStateChanged += OnMediaPlayerStateChanged;
         _mediaPlayer.MediaOpened += OnMediaPlayerMediaOpened;
+        _mediaPlayer.MediaFailed += OnMediaPlayerMediaFailed;
 
         RestoreLastPlayedTrack();
     }
@@ -183,6 +192,23 @@ public sealed class PlaybackSession
         if (source is not null)
         {
             Log("LoadCurrentTrackSourceAsync: Source created successfully. Assigning to MediaPlayer.");
+            
+            // Ensure video frame server mode is disabled before setting the source so the media engine
+            // initializes using the native hardware MPO (Multi-Plane Overlay) pipeline for HDR.
+            try
+            {
+                if (_mediaPlayer.IsVideoFrameServerEnabled)
+                {
+                    _mediaPlayer.IsVideoFrameServerEnabled = false;
+                    Log("LoadCurrentTrackSourceAsync: Disabled VideoFrameServer for native MPO pipeline.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"LoadCurrentTrackSourceAsync: Failed to disable VideoFrameServer: {ex.Message}");
+            }
+
+            _isChangingSource = true;
             _mediaPlayer.Source = source;
 
             var targetPos = GetResumePositionSeconds(track);
@@ -216,32 +242,69 @@ public sealed class PlaybackSession
 
     private void OnMediaPlayerMediaOpened(MediaPlayer sender, object args)
     {
+        Log("OnMediaPlayerMediaOpened triggered.");
+        _isChangingSource = false;
         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
         {
             if (CurrentTrack != null)
             {
                 var naturalDuration = sender.PlaybackSession.NaturalDuration;
+                Log($"OnMediaPlayerMediaOpened: CurrentTrack={CurrentTrack.Title}, naturalDuration={naturalDuration}");
                 if (naturalDuration.TotalSeconds > 0 && CurrentTrack.Duration != naturalDuration)
                 {
                     CurrentTrack.Duration = naturalDuration;
                     StateChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
+
+            // Configure the HDR pipeline for the newly opened media.
+            // This runs for both windowed and fullscreen playback.
+            try
+            {
+                MediaPlaybackItem? item = null;
+                if (sender.Source is MediaPlaybackItem mpi) item = mpi;
+                else if (sender.Source is MediaPlaybackList mpl) item = mpl.CurrentItem;
+                AppServices.HdrPipeline.ConfigurePipeline(sender, item);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HDR] PlaybackSession pipeline config failed: {ex.Message}");
+            }
         });
+    }
+
+    private void OnMediaPlayerMediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
+    {
+        Log($"OnMediaPlayerMediaFailed triggered. Error: {args.Error}, Message: {args.ErrorMessage}, HResult: 0x{args.ExtendedErrorCode.HResult:X}");
+        _isChangingSource = false;
     }
 
     private void OnMediaPlayerMediaEnded(MediaPlayer sender, object args)
     {
+        Log($"OnMediaPlayerMediaEnded triggered. CurrentTrack={CurrentTrack?.Title}");
+        if (_isChangingSource)
+        {
+            Log("OnMediaPlayerMediaEnded: Ignored because _isChangingSource is true.");
+            return;
+        }
         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
         {
+            if (_isChangingSource)
+            {
+                Log("OnMediaPlayerMediaEnded: Ignored inside DispatcherQueue because _isChangingSource is true.");
+                return;
+            }
             UpdateDisplayRequestState();
             AccessibilityHelper.NotifySoundCue();
-            if (AppServices.Settings.Current.AutoAdvanceToNextTrack)
+            AppServices.HdrPipeline.ResetContentState();
+            if (AppServices.Settings.Current.AutoAdvanceToNextTrack && CurrentTrack != null)
             {
+                Log("OnMediaPlayerMediaEnded: AutoAdvanceToNextTrack is true. Calling Next().");
                 Next();
             }
             else
             {
+                Log("OnMediaPlayerMediaEnded: AutoAdvanceToNextTrack is false or CurrentTrack is null. Raising StateChanged.");
                 StateChanged?.Invoke(this, EventArgs.Empty);
             }
         });
@@ -249,6 +312,7 @@ public sealed class PlaybackSession
 
     private void OnMediaPlayerStateChanged(MediaPlaybackSession sender, object args)
     {
+        Log($"OnMediaPlayerStateChanged triggered. State={sender.PlaybackState}");
         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
         {
             UpdateDisplayRequestState();
@@ -599,6 +663,8 @@ public sealed class PlaybackSession
         try
         {
             _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
+            _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
+            _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
             _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
             _mediaPlayer.Source = null;
         }

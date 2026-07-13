@@ -21,9 +21,12 @@ _Package/
 *.msixupload
 *.cer
 *.pfx
+!Signing/LumiereMediaPlayer.pfx
+!Signing/LumiereMediaPlayer.cer
 
 ## Configuration / Secrets (DO NOT COMMIT to Git)
 appsettings.json
+local.settings.json
 
 ## Logs & Cache
 *.log
@@ -43,3 +46,6 @@ __pycache__/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+## GitHub Pages Deployment Staging
+deploy/

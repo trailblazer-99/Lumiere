@@ -404,7 +404,7 @@ public partial class SettingsViewModel : ObservableObject
         TryReapplyHdrPipeline();
     }
 
-    partial void OnHdrRealTimePlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HdrRealTimePlayback = value; _settingsService.Save(); TryReapplyHdrPipeline(); } }
+    partial void OnHdrRealTimePlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HdrRealTimePlayback = value; _settingsService.Save(); } }
     partial void OnShowHdrBadgeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHdrBadge = value; _settingsService.Save(); } }
 
     private static void TryReapplyHdrPipeline()

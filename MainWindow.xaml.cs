@@ -39,16 +39,139 @@ public sealed partial class MainWindow : Window
     private bool _isVideoFrameCaptureInProgress;
     private bool _isCleanedUp;
     private bool _enteredFullscreenForVideo;
+    private int _videoTapClickCount = 0;
+    private System.Threading.CancellationTokenSource? _videoTapCts;
+    private bool _isCursorHidden = false;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int ShowCursor(bool bShow);
+
+    private void SetCursorVisibility(bool visible)
+    {
+        try
+        {
+            if (visible && _isCursorHidden)
+            {
+                ShowCursor(true);
+                _isCursorHidden = false;
+            }
+            else if (!visible && !_isCursorHidden)
+            {
+                ShowCursor(false);
+                _isCursorHidden = true;
+            }
+        }
+        catch { }
+    }
+
+    private void NotifyActivityInFullscreen()
+    {
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        if (isFullScreen)
+        {
+            ShowVideoControls();
+            _videoControlsTimer.Stop();
+            _videoControlsTimer.Start();
+        }
+    }
 
     // ── Win32 / DWM P/Invokes for pitch-black letterbox ──────────────────
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(nint hwnd, uint dwAttribute, ref uint pvAttribute, uint cbAttribute);
 
+    [DllImport("user32.dll", EntryPoint = "SetClassLongPtr")]
+    private static extern IntPtr SetClassLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetClassLong")]
+    private static extern uint SetClassLong32(IntPtr hWnd, int nIndex, uint dwNewLong);
+
+    private static IntPtr SetClassLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
+    {
+        if (IntPtr.Size == 8)
+            return SetClassLongPtr64(hWnd, nIndex, dwNewLong);
+        else
+            return new IntPtr(SetClassLong32(hWnd, nIndex, (uint)dwNewLong.ToInt32()));
+    }
+
+    private const int GCLP_HBRBACKGROUND = -10;
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(uint crColor);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
+
+    private IntPtr _blackBrush = IntPtr.Zero;
+    private IntPtr _originalBrush = IntPtr.Zero;
+
+    private void SetHwndBackgroundBrushBlack()
+    {
+        try
+        {
+            var hwnd = Helpers.WindowHelper.GetWindowHandle(this);
+            if (_blackBrush == IntPtr.Zero)
+            {
+                _blackBrush = CreateSolidBrush(0x00000000); // pure black COLORREF
+            }
+            var old = SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, _blackBrush);
+            if (_originalBrush == IntPtr.Zero && old != _blackBrush)
+            {
+                _originalBrush = old;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Win32 Brush] SetHwndBackgroundBrushBlack failed: {ex.Message}");
+        }
+    }
+
+    private void RestoreHwndBackgroundBrush()
+    {
+        try
+        {
+            if (_originalBrush != IntPtr.Zero)
+            {
+                var hwnd = Helpers.WindowHelper.GetWindowHandle(this);
+                SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, _originalBrush);
+                _originalBrush = IntPtr.Zero;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Win32 Brush] RestoreHwndBackgroundBrush failed: {ex.Message}");
+        }
+    }
+
+    private List<RowDefinition>? _savedRowDefinitions = null;
+
+    private void SaveAndClearRowDefinitions()
+    {
+        if (RootGrid != null && _savedRowDefinitions == null)
+        {
+            _savedRowDefinitions = RootGrid.RowDefinitions.ToList();
+            RootGrid.RowDefinitions.Clear();
+        }
+    }
+
+    private void RestoreRowDefinitions()
+    {
+        if (RootGrid != null && _savedRowDefinitions != null)
+        {
+            RootGrid.RowDefinitions.Clear();
+            foreach (var rd in _savedRowDefinitions)
+            {
+                RootGrid.RowDefinitions.Add(rd);
+            }
+            _savedRowDefinitions = null;
+        }
+    }
+
     // DWM attribute indices
     private const uint DWMWA_SYSTEMBACKDROP_TYPE  = 38; // Windows 11 22H2+
     private const uint DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     private const uint DWMWA_CAPTION_COLOR        = 35;
+    private const uint DWMWA_BORDER_COLOR         = 34;
     // DWMSBT values
     private const uint DWMSBT_NONE = 1;
 
@@ -75,6 +198,11 @@ public sealed partial class MainWindow : Window
             uint black = COLORREF_BLACK;
             DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR,
                 ref black, sizeof(uint));
+
+            // Set the DWM border color to pure black to eliminate any white line/border artifact
+            uint borderBlack = COLORREF_BLACK;
+            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,
+                ref borderBlack, sizeof(uint));
 
             // Force dark mode so the non-client frame chrome is black
             uint dark = 1u;
@@ -112,6 +240,10 @@ public sealed partial class MainWindow : Window
             // Reset caption color to system default (0xFFFFFFFF = DWMWA_COLOR_DEFAULT)
             uint defaultColor = 0xFFFFFFFF;
             DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR,
+                ref defaultColor, sizeof(uint));
+
+            // Reset border color to system default
+            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,
                 ref defaultColor, sizeof(uint));
 
             // Restore title bar to transparent so WinUI/Mica can manage it
@@ -202,11 +334,13 @@ public sealed partial class MainWindow : Window
         UpdateLayoutForPip(AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay);
         ApplyBackdrop(AppServices.Settings.Current.BackdropType);
 
-        // Initialise HDR pipeline — must be called after the window is ready
-        // so DisplayInformation.GetForCurrentView() resolves correctly.
-        AppServices.HdrPipeline.Initialize();
+        // Initialise display manager first — HdrPipelineService reads capability from it.
         AppServices.DisplayManager.InitializeForWindow(this);
         AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged;
+
+        // Initialise HDR pipeline after DisplayManager so the first RefreshDisplayCapability()
+        // call inside Initialize() sees valid display state.
+        AppServices.HdrPipeline.Initialize(this);
 
         if (PlaybackInfoBadge != null)
         {
@@ -235,16 +369,21 @@ public sealed partial class MainWindow : Window
         {
             presenter.IsResizable = true;
             presenter.IsMaximizable = true;
+            try
+            {
+                if (AppServices.Settings.Current.WindowIsMaximized && presenter is not null)
+                {
+                    presenter.Maximize();
+                }
+                else
+                {
+                    int savedWidth = (int)AppServices.Settings.Current.WindowWidth;
+                    int savedHeight = (int)AppServices.Settings.Current.WindowHeight;
+                    AppWindow.Resize(new Windows.Graphics.SizeInt32(savedWidth, savedHeight));
+                }
+            }
+            catch { }
         }
-
-        try
-        {
-            var localSettings = ApplicationData.Current.LocalSettings;
-            int savedWidth = localSettings.Values.ContainsKey("WindowWidth") ? (int)localSettings.Values["WindowWidth"] : 1280;
-            int savedHeight = localSettings.Values.ContainsKey("WindowHeight") ? (int)localSettings.Values["WindowHeight"] : 800;
-            AppWindow.Resize(new Windows.Graphics.SizeInt32(savedWidth, savedHeight));
-        }
-        catch {}
 
         AppWindow.Closing += OnWindowClosing;
         AppWindow.Changed += OnAppWindowChanged;
@@ -364,6 +503,13 @@ public sealed partial class MainWindow : Window
 
             var isFullScreen = sender.Presenter.Kind == AppWindowPresenterKind.FullScreen;
             
+            AppServices.HdrPipeline.SetFullscreenState(isFullScreen);
+            
+            if (!isFullScreen)
+            {
+                SetCursorVisibility(true);
+            }
+            
             // Resolve fullscreen title bar bounds/caption rendering quirks
             // Defer title bar changes to avoid COMException when native window is in the middle of presenter transition
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
@@ -373,7 +519,7 @@ public sealed partial class MainWindow : Window
                     if (isFullScreen)
                     {
                         SetTitleBar(null);
-                        ExtendsContentIntoTitleBar = false;
+                        ExtendsContentIntoTitleBar = true;
                         if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
                         if (AppTitleBar != null)
                         {
@@ -399,7 +545,7 @@ public sealed partial class MainWindow : Window
                 }
             });
 
-            bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+            bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
             if (isVideoMode)
             {
                 if (isFullScreen)
@@ -1160,10 +1306,19 @@ public sealed partial class MainWindow : Window
             if (AppWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen &&
                 AppWindow.Presenter.Kind != AppWindowPresenterKind.CompactOverlay)
             {
-                var size = AppWindow.Size;
-                var localSettings = ApplicationData.Current.LocalSettings;
-                localSettings.Values["WindowWidth"] = size.Width;
-                localSettings.Values["WindowHeight"] = size.Height;
+                var presenter = AppWindow.Presenter as OverlappedPresenter;
+                bool isMaximized = presenter?.State == OverlappedPresenterState.Maximized;
+                
+                AppServices.Settings.Current.WindowIsMaximized = isMaximized;
+                
+                if (!isMaximized)
+                {
+                    var size = AppWindow.Size;
+                    AppServices.Settings.Current.WindowWidth = size.Width;
+                    AppServices.Settings.Current.WindowHeight = size.Height;
+                }
+                
+                AppServices.Settings.Save();
             }
         }
         catch { }
@@ -1186,6 +1341,14 @@ public sealed partial class MainWindow : Window
         }
 
         _isCleanedUp = true;
+        RestoreHwndBackgroundBrush();
+        RestoreRowDefinitions();
+        if (_blackBrush != IntPtr.Zero)
+        {
+            DeleteObject(_blackBrush);
+            _blackBrush = IntPtr.Zero;
+        }
+        SetCursorVisibility(true);
         _positionTimer.Stop();
         _videoControlsTimer.Stop();
         _positionTimer.Tick -= OnPositionTimerTick;
@@ -1265,11 +1428,12 @@ public sealed partial class MainWindow : Window
 
         bool isFullScreen  = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         bool isVideoActive = _playback.CurrentTrack is { IsVideo: true };
-        bool isVideoMode   = isVideoActive && isFullScreen;
+        bool isVideoMode   = isVideoActive && isFullScreen && _playback.IsVideoPlayerActive;
 
         if (isVideoMode)
         {
             _enteredFullscreenForVideo = true;
+            SetHwndBackgroundBrushBlack();
             // ── Step 1: Kill DWM backdrop at Win32 level FIRST ───────────
             // Must happen before SystemBackdrop = null so DWM never renders
             // a single frame of Mica/Acrylic into the letterbox areas.
@@ -1286,8 +1450,10 @@ public sealed partial class MainWindow : Window
             }
 
             if (FullscreenVideoContainer != null)
+            {
                 FullscreenVideoContainer.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                     Windows.UI.Color.FromArgb(255, 0, 0, 0));
+            }
 
             GlobalVideoPlayer.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                 Windows.UI.Color.FromArgb(255, 0, 0, 0));
@@ -1307,9 +1473,8 @@ public sealed partial class MainWindow : Window
                 AppTitleBar.Opacity = 0;
             }
 
-            // Collapse Row 1 so TransportControls takes no space
-            if (RootGrid != null && RootGrid.RowDefinitions.Count > 1)
-                RootGrid.RowDefinitions[1].Height = new GridLength(0);
+            // Clear RowDefinitions to avoid fractional rounding gaps (white line) under DPI scaling
+            SaveAndClearRowDefinitions();
 
             if (TransportControls != null)
                 TransportControls.Visibility = Visibility.Collapsed;
@@ -1331,7 +1496,9 @@ public sealed partial class MainWindow : Window
                     GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
 
                     if (_playback.Session.MediaPlayer != null)
+                    {
                         _playback.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+                    }
                 }
 
                 TryRunHdrPipelineOnFullscreenPlayer();
@@ -1346,9 +1513,10 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            RestoreHwndBackgroundBrush();
             RootGrid.RequestedTheme = ElementTheme.Default;
 
-            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && _enteredFullscreenForVideo && !isVideoActive)
+            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && _enteredFullscreenForVideo && (!isVideoActive || !_playback.IsVideoPlayerActive))
             {
                 _enteredFullscreenForVideo = false;
                 try
@@ -1373,9 +1541,8 @@ public sealed partial class MainWindow : Window
                     vp.SyncMediaPlayer();
             }
 
-            // ── Restore Row 1 and TransportBar ───────────────────────────
-            if (RootGrid != null && RootGrid.RowDefinitions.Count > 1)
-                RootGrid.RowDefinitions[1].Height = GridLength.Auto;
+            // Restore RowDefinitions for normal windowed layout
+            RestoreRowDefinitions();
 
             MoveTransportControlsToNormalLayout();
 
@@ -1542,6 +1709,15 @@ public sealed partial class MainWindow : Window
         {
             _playback.Session.MediaPlayer.Pause();
             _playback.IsVideoPlayerActive = false;
+            
+            if (ContentFrame.CanGoBack)
+            {
+                ContentFrame.GoBack();
+            }
+            else
+            {
+                NavigateTo(typeof(Pages.HomePage));
+            }
         }
     }
 
@@ -1608,6 +1784,7 @@ public sealed partial class MainWindow : Window
             FullscreenControlsOverlay.IsHitTestVisible = true;
             FadeElement(FullscreenControlsOverlay, 1.0);
         }
+        SetCursorVisibility(true);
     }
 
     private void HideVideoControls()
@@ -1617,6 +1794,7 @@ public sealed partial class MainWindow : Window
         {
             FadeElement(FullscreenControlsOverlay, 0.0);
             _videoControlsTimer.Stop();
+            SetCursorVisibility(false);
         }
     }
 
@@ -2010,6 +2188,7 @@ public sealed partial class MainWindow : Window
 
     private void TogglePlayPause()
     {
+        NotifyActivityInFullscreen();
         if (_playback.CurrentTrack is null)
         {
             var firstTrack = Services.SampleMediaLibrary.AudioTracks.FirstOrDefault();
@@ -2026,6 +2205,7 @@ public sealed partial class MainWindow : Window
 
     private void ToggleMute()
     {
+        NotifyActivityInFullscreen();
         if (_isMuted)
         {
             _playback.SetVolume(_previousVolume);
@@ -2041,6 +2221,7 @@ public sealed partial class MainWindow : Window
 
     private void AdjustVolume(double delta)
     {
+        NotifyActivityInFullscreen();
         double currentVolume = _playback.Volume;
         if (_isMuted && delta > 0)
         {
@@ -2057,6 +2238,7 @@ public sealed partial class MainWindow : Window
 
     private void SeekRelative(double seconds)
     {
+        NotifyActivityInFullscreen();
         if (_playback.CurrentTrack is null) return;
         double currentPos = _playback.PositionSeconds;
         double newPos = Math.Clamp(currentPos + seconds, 0, _playback.CurrentTrack.Duration.TotalSeconds);
@@ -2385,10 +2567,12 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.P:
+                NotifyActivityInFullscreen();
                 _playback.PreviousCommand.Execute(null);
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.N:
+                NotifyActivityInFullscreen();
                 _playback.NextCommand.Execute(null);
                 e.Handled = true;
                 break;
@@ -2462,17 +2646,36 @@ public sealed partial class MainWindow : Window
 
     private void OnVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
-        ToggleFullscreen();
         e.Handled = true;
+        _videoTapClickCount = 0;
+        _videoTapCts?.Cancel();
+        ToggleFullscreen();
     }
 
-    private void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private async void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        if (_playback.IsPlaying)
-            _playback.Session.MediaPlayer.Pause();
-        else
-            _playback.Session.MediaPlayer.Play();
         e.Handled = true;
+        NotifyActivityInFullscreen();
+        _videoTapClickCount++;
+        
+        if (_videoTapClickCount == 1)
+        {
+            _videoTapCts = new System.Threading.CancellationTokenSource();
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                TogglePlayPause();
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+            }
+            finally
+            {
+                _videoTapClickCount = 0;
+                _videoTapCts?.Dispose();
+                _videoTapCts = null;
+            }
+        }
     }
 
     private void OnVideoPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -2576,19 +2779,38 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Input Handlers for GlobalVideoPlayer ──────────────────
-    private void OnGlobalVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private async void OnGlobalVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        if (_playback.IsPlaying)
-            _playback.Session.MediaPlayer.Pause();
-        else
-            _playback.Session.MediaPlayer.Play();
         e.Handled = true;
+        NotifyActivityInFullscreen();
+        _videoTapClickCount++;
+        
+        if (_videoTapClickCount == 1)
+        {
+            _videoTapCts = new System.Threading.CancellationTokenSource();
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                TogglePlayPause();
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+            }
+            finally
+            {
+                _videoTapClickCount = 0;
+                _videoTapCts?.Dispose();
+                _videoTapCts = null;
+            }
+        }
     }
 
     private void OnGlobalVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
-        ToggleFullscreen();
         e.Handled = true;
+        _videoTapClickCount = 0;
+        _videoTapCts?.Cancel();
+        ToggleFullscreen();
     }
 
     private void OnGlobalVideoPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)

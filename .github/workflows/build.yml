@@ -1,4 +1,4 @@
-name: CI Build
+name: Lumiere Media Player CI/CD
 
 on:
   push:
@@ -6,23 +6,22 @@ on:
   pull_request:
     branches: [ main, master, dev ]
 
-jobs:
-  build:
-    name: Build (${{ matrix.platform }} - ${{ matrix.configuration }})
-    runs-on: windows-latest
+permissions:
+  contents: write
 
-    strategy:
-      matrix:
-        configuration: [Debug, Release]
-        # Match MSBuild casing: 'ARM64' instead of 'arm64'
-        platform: [x64, ARM64]
+jobs:
+  # Job 1: Build check for Pull Requests and development branch pushes (fast build check)
+  verify-build:
+    name: Verify Build (x64 Release)
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master')
+    runs-on: windows-latest
 
     steps:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
     - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: '8.0.x'
 
@@ -33,25 +32,177 @@ jobs:
       run: copy appsettings.json.example appsettings.json
       shell: cmd
 
-    # MSBuild-native package restore to ensure targets resolve correctly for msbuild.exe
     - name: Restore NuGet Packages
-      run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=${{ matrix.platform }} /p:Configuration=${{ matrix.configuration }}
+      run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
 
-    # Build and package using the full MSBuild engine
-    - name: Build and Package Project
+    - name: Build Verification
       run: |
         msbuild LumiereMediaPlayer.csproj `
-          /p:Configuration=${{ matrix.configuration }} `
-          /p:Platform=${{ matrix.platform }} `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
           /p:GenerateAppxPackageOnBuild=true `
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages" `
-          /p:UapAppxPackageBuildMode=StoreUpload `
+          /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:AppxBundle=Never
       shell: powershell
 
-    # Upload the generated MSIX packages as artifacts
-    - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v4
+  # Job 2: Build, Sign, and Deploy Package to GitHub Pages (runs on push to main or master)
+  deploy-release:
+    name: Build, Sign, and Deploy to GitHub Pages
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v5
       with:
-        name: LumiereMediaPlayer-Package-${{ matrix.platform }}-${{ matrix.configuration }}
-        path: AppPackages/
+        dotnet-version: '8.0.x'
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Create Config File from Template
+      run: copy appsettings.json.example appsettings.json
+      shell: cmd
+
+    # Dynamically update the version in the manifest using GITHUB_RUN_NUMBER
+    - name: Update Manifest Version
+      shell: powershell
+      run: |
+        [xml]$manifest = Get-Content "Package.appxmanifest"
+        $manifest.Package.Identity.Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $manifest.Save("Package.appxmanifest")
+
+    - name: Restore NuGet Packages
+      run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Configuration=Release /p:PublishReadyToRun=true
+
+    # Build x64 package (signing is disabled during compile step)
+    - name: Build and Package App (x64)
+      run: |
+        msbuild LumiereMediaPlayer.csproj /restore `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:AppxBundle=Never `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64" `
+          /p:UapAppxPackageBuildMode=SideLoadOnly `
+          /p:GenerateAppinstallerFile=false `
+          /p:AppxPackageSigningEnabled=false
+      shell: powershell
+
+    # Build ARM64 package (signing is disabled during compile step)
+    - name: Build and Package App (ARM64)
+      run: |
+        msbuild LumiereMediaPlayer.csproj /restore `
+          /p:Configuration=Release `
+          /p:Platform=ARM64 `
+          /p:AppxBundle=Never `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\ARM64" `
+          /p:UapAppxPackageBuildMode=SideLoadOnly `
+          /p:GenerateAppinstallerFile=false `
+          /p:AppxPackageSigningEnabled=false
+      shell: powershell
+
+    # Bundle the individual architecture packages into an MSIXBundle and sign them
+    - name: Bundle and Sign Packages
+      shell: powershell
+      run: |
+        # 1. Locate Windows SDK tools (signtool.exe and makeappx.exe)
+        $sdkBinPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*x64*" } | Select-Object -ExpandProperty DirectoryName -First 1
+        if (-not $sdkBinPath) {
+          $sdkBinPath = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit"
+        }
+        $signtool = Join-Path $sdkBinPath "signtool.exe"
+        $makeappx = Join-Path $sdkBinPath "makeappx.exe"
+        Write-Output "Found SDK Bin Folder: $sdkBinPath"
+
+        # 2. Stage packages for bundling
+        New-Item -ItemType Directory -Force -Path AppPackages\BundleSources
+        
+        # Find and copy all generated MSIX packages recursively (excluding the target BundleSources directory)
+        Get-ChildItem -Path AppPackages\*.msix -Recurse | Where-Object { $_.FullName -notlike "*BundleSources*" } | ForEach-Object {
+          Write-Output "Staging Package: $($_.FullName)"
+          Copy-Item $_.FullName "AppPackages\BundleSources\"
+        }
+
+        # 3. Create MSIXBundle
+        New-Item -ItemType Directory -Force -Path deploy
+        $bundleFilename = "LumiereMediaPlayer_1.0.1.$env:GITHUB_RUN_NUMBER_x64_arm64.msixbundle"
+        Write-Output "Bundling packages to: deploy\$bundleFilename"
+        & $makeappx bundle /d "AppPackages\BundleSources" /p "deploy\$bundleFilename" /o
+
+        # 4. Sign the generated bundle
+        Write-Output "Signing Bundle..."
+        & $signtool sign /fd SHA256 /f "Signing\LumiereMediaPlayer.pfx" /p Lumiere123! "deploy\$bundleFilename"
+
+    # Create a GitHub Release and upload the msixbundle (GitHub Releases allows files > 100MB)
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: deploy/*.msixbundle
+        tag_name: v1.0.1.${{ github.run_number }}
+        name: Lumière Media Player v1.0.1.${{ github.run_number }}
+        body: |
+          Automated Release of Lumière Media Player.
+          
+          ### Installation
+          Download and run the App Installer or sideload using the `.msixbundle` below.
+        draft: false
+        prerelease: false
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Generate .appinstaller, replace placeholders in index.html, and stage web files
+    # We remove the heavy .msixbundle from the deploy folder so it isn't pushed to gh-pages branch
+    - name: Prepare Deployment Website
+      shell: powershell
+      run: |
+        # 1. Parse repository path
+        $repoParts = $env:GITHUB_REPOSITORY -split "/"
+        $owner = $repoParts[0]
+        $repoName = $repoParts[1]
+        
+        $bundleFilename = "LumiereMediaPlayer_1.0.1.$env:GITHUB_RUN_NUMBER_x64_arm64.msixbundle"
+        
+        # 2. Generate dynamic .appinstaller pointing to the GitHub Release asset URL
+        $releaseDownloadUrl = "https://github.com/$owner/$repoName/releases/download/v1.0.1.$env:GITHUB_RUN_NUMBER/$bundleFilename"
+        
+        $appinstallerContent = @"
+        <?xml version="1.0" encoding="utf-8"?>
+        <AppInstaller Uri="https://$owner.github.io/$repoName/LumiereMediaPlayer.appinstaller" Version="1.0.1.$env:GITHUB_RUN_NUMBER" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">
+            <MainBundle 
+                Name="Trailblazer2599.LumireMediaPlayer" 
+                Version="1.0.1.$env:GITHUB_RUN_NUMBER" 
+                Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" 
+                Uri="$releaseDownloadUrl" />
+            <UpdateSettings>
+                <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />
+            </UpdateSettings>
+        </AppInstaller>
+        "@
+        
+        $appinstallerContent | Out-File "deploy\LumiereMediaPlayer.appinstaller" -Encoding utf8
+        
+        # 3. Copy public certificate
+        Copy-Item "Signing\LumiereMediaPlayer.cer" "deploy\LumiereMediaPlayer.cer"
+        
+        # 4. Generate final index.html from template (pointing direct download link to GitHub Release URL)
+        $html = Get-Content "Signing\index.html" -Raw
+        $html = $html -replace "APP_INSTALLER_FILENAME", "LumiereMediaPlayer.appinstaller"
+        $html = $html -replace "MSIX_BUNDLE_FILENAME", $releaseDownloadUrl
+        $html = $html -replace "APP_VERSION", "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $html | Out-File "deploy\index.html" -Encoding utf8
+        
+        # 5. Delete the large msixbundle from deploy folder to prevent git commit limit failures
+        Remove-Item "deploy\$bundleFilename" -Force
+
+    # Deploy the contents of the deploy/ folder to the gh-pages branch
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./deploy
+        publish_branch: gh-pages
