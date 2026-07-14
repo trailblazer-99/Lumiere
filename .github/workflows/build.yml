@@ -90,7 +90,9 @@ jobs:
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
-          /p:AppxPackageSigningEnabled=false
+          /p:AppxPackageSigningEnabled=false `
+          /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
       shell: powershell
 
     # Build ARM64 package (signing is disabled during compile step)
@@ -104,7 +106,9 @@ jobs:
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\ARM64" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
-          /p:AppxPackageSigningEnabled=false
+          /p:AppxPackageSigningEnabled=false `
+          /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
       shell: powershell
 
     # Bundle the individual architecture packages into an MSIXBundle and sign them
