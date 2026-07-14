@@ -170,19 +170,17 @@ jobs:
         # 2. Generate dynamic .appinstaller pointing to the GitHub Release asset URL
         $releaseDownloadUrl = "https://github.com/$owner/$repoName/releases/download/v1.0.1.$env:GITHUB_RUN_NUMBER/$bundleFilename"
         
-        $appinstallerContent = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller Uri="https://$owner.github.io/$repoName/LumiereMediaPlayer.appinstaller" Version="1.0.1.$env:GITHUB_RUN_NUMBER" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">
-  <MainBundle Name="Trailblazer2599.LumireMediaPlayer" Version="1.0.1.$env:GITHUB_RUN_NUMBER" Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" Uri="$releaseDownloadUrl" />
-  <UpdateSettings>
-    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />
-  </UpdateSettings>
-</AppInstaller>
-"@
+        $xml = '<?xml version="1.0" encoding="utf-8"?>'
+        $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
+        $xml += "`n" + '  <MainBundle Name="Trailblazer2599.LumireMediaPlayer" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" Uri="' + $releaseDownloadUrl + '" />'
+        $xml += "`n" + '  <UpdateSettings>'
+        $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />'
+        $xml += "`n" + '  </UpdateSettings>'
+        $xml += "`n" + '</AppInstaller>'
         
         # Write without BOM (Out-File -Encoding utf8 adds a BOM which breaks XML parsing)
         $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-        [System.IO.File]::WriteAllText("$PWD\deploy\LumiereMediaPlayer.appinstaller", $appinstallerContent, $utf8NoBom)
+        [System.IO.File]::WriteAllText("$PWD\deploy\LumiereMediaPlayer.appinstaller", $xml, $utf8NoBom)
         
         # 3. Copy public certificate
         Copy-Item "Signing\LumiereMediaPlayer.cer" "deploy\LumiereMediaPlayer.cer"
