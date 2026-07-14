@@ -94,7 +94,8 @@ jobs:
           /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
-          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
     # Build ARM64 package (signing is disabled during compile step)
@@ -112,7 +113,8 @@ jobs:
           /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
-          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
     # Bundle the individual architecture packages into an MSIXBundle and sign them
