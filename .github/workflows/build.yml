@@ -85,10 +85,23 @@ jobs:
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Configuration=Release /p:PublishReadyToRun=true
 
-    # Build x64 package (signing is disabled during compile step)
+    # Diagnostic: Print manifest and project versions before compiling
+    - name: Diagnostics (Pre-Build)
+      shell: powershell
+      run: |
+        Write-Output "=== Package.appxmanifest ==="
+        [xml]$manifest = Get-Content "Package.appxmanifest" -Encoding utf8
+        Write-Output "Manifest Identity version: $($manifest.Package.Identity.Version)"
+        Write-Output "=== LumiereMediaPlayer.csproj ==="
+        [xml]$csproj = Get-Content "LumiereMediaPlayer.csproj" -Encoding utf8
+        Write-Output "Proj version: $($csproj.Project.PropertyGroup[0].Version)"
+        Write-Output "Proj App version: $($csproj.Project.PropertyGroup[0].ApplicationVersion)"
+        Write-Output "Proj App Display version: $($csproj.Project.PropertyGroup[0].ApplicationDisplayVersion)"
+
+    # Build x64 package (signing is disabled during compile step, /restore is removed to prevent property overrides)
     - name: Build and Package App (x64)
       run: |
-        msbuild LumiereMediaPlayer.csproj /restore `
+        msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=x64 `
           /p:AppxBundle=Never `
@@ -104,10 +117,10 @@ jobs:
           /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
-    # Build ARM64 package (signing is disabled during compile step)
+    # Build ARM64 package (signing is disabled during compile step, /restore is removed to prevent property overrides)
     - name: Build and Package App (ARM64)
       run: |
-        msbuild LumiereMediaPlayer.csproj /restore `
+        msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=ARM64 `
           /p:AppxBundle=Never `
@@ -122,6 +135,33 @@ jobs:
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
+
+    # Diagnostic: Print compiled package files and inspect their manifests
+    - name: Diagnostics (Post-Build)
+      shell: powershell
+      run: |
+        Write-Output "=== List of compiled files ==="
+        Get-ChildItem -Path AppPackages\*.msix -Recurse | ForEach-Object {
+          Write-Output "File: $($_.FullName) (Size: $($_.Length) bytes)"
+        }
+        
+        Write-Output "=== Unpacking and inspecting x64 package manifest ==="
+        $x64Msix = (Get-ChildItem -Path AppPackages\x64\*.msix -Recurse | Select-Object -ExpandProperty FullName -First 1)
+        if ($x64Msix) {
+          # Use Expand-Archive (since msix is a zip file under the hood)
+          New-Item -ItemType Directory -Force -Path temp_unpack
+          Copy-Item $x64Msix temp_unpack\package.zip
+          Expand-Archive -Path temp_unpack\package.zip -DestinationPath temp_unpack\extracted
+          if (Test-Path temp_unpack\extracted\AppxManifest.xml) {
+            [xml]$xml = Get-Content temp_unpack\extracted\AppxManifest.xml -Encoding utf8
+            Write-Output "Extracted AppxManifest Package Identity Version: $($xml.Package.Identity.Version)"
+          } else {
+            Write-Output "AppxManifest.xml not found in unpacked package."
+          }
+          Remove-Item -Path temp_unpack -Recurse -Force
+        } else {
+          Write-Output "x64 msix not found."
+        }
 
     # Bundle the individual architecture packages into an MSIXBundle and sign them
     - name: Bundle and Sign Packages
