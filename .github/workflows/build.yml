@@ -82,9 +82,6 @@ jobs:
         $csproj.Project.PropertyGroup[0].ApplicationDisplayVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
         $csproj.Save("LumiereMediaPlayer.csproj")
 
-    - name: Restore NuGet Packages
-      run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Configuration=Release /p:PublishReadyToRun=true
-
     # Diagnostic: Print manifest and project versions before compiling
     - name: Diagnostics (Pre-Build)
       shell: powershell
@@ -98,9 +95,17 @@ jobs:
         Write-Output "Proj App version: $($csproj.Project.PropertyGroup[0].ApplicationVersion)"
         Write-Output "Proj App Display version: $($csproj.Project.PropertyGroup[0].ApplicationDisplayVersion)"
 
-    # Build x64 package (signing is disabled during compile step, /restore is removed to prevent property overrides)
+    # Build x64 package (run platform restore first, then compile without /restore to keep property overrides)
     - name: Build and Package App (x64)
       run: |
+        msbuild LumiereMediaPlayer.csproj -t:restore `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=x64 `
@@ -117,9 +122,17 @@ jobs:
           /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
-    # Build ARM64 package (signing is disabled during compile step, /restore is removed to prevent property overrides)
+    # Build ARM64 package (run platform restore first, then compile without /restore to keep property overrides)
     - name: Build and Package App (ARM64)
       run: |
+        msbuild LumiereMediaPlayer.csproj -t:restore `
+          /p:Configuration=Release `
+          /p:Platform=ARM64 `
+          /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=ARM64 `
