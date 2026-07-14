@@ -111,7 +111,7 @@ jobs:
           /p:Platform=x64 `
           /p:AppxBundle=Never `
           /p:GenerateAppxPackageOnBuild=true `
-          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64" `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64\" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false `
@@ -138,7 +138,7 @@ jobs:
           /p:Platform=ARM64 `
           /p:AppxBundle=Never `
           /p:GenerateAppxPackageOnBuild=true `
-          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\ARM64" `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\ARM64\" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false `
@@ -159,7 +159,7 @@ jobs:
         }
         
         Write-Output "=== Unpacking and inspecting x64 package manifest ==="
-        $x64Msix = (Get-ChildItem -Path AppPackages\x64\*.msix -Recurse | Select-Object -ExpandProperty FullName -First 1)
+        $x64Msix = (Get-ChildItem -Path AppPackages\*.msix -Recurse | Where-Object { $_.FullName -like "*_x64.msix" } | Select-Object -ExpandProperty FullName -First 1)
         if ($x64Msix) {
           # Use Expand-Archive (since msix is a zip file under the hood)
           New-Item -ItemType Directory -Force -Path temp_unpack
