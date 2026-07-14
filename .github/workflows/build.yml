@@ -91,6 +91,8 @@ jobs:
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false `
+          /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
       shell: powershell
@@ -107,6 +109,8 @@ jobs:
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false `
+          /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
       shell: powershell
