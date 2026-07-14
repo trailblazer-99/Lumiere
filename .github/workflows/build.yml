@@ -68,13 +68,19 @@ jobs:
       run: copy appsettings.json.example appsettings.json
       shell: cmd
 
-    # Dynamically update the version in the manifest using GITHUB_RUN_NUMBER
-    - name: Update Manifest Version
+    # Dynamically update the version in the manifest and csproj using GITHUB_RUN_NUMBER
+    - name: Update Manifest and Project Version
       shell: powershell
       run: |
         [xml]$manifest = Get-Content "Package.appxmanifest" -Encoding utf8
         $manifest.Package.Identity.Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
         $manifest.Save("Package.appxmanifest")
+
+        [xml]$csproj = Get-Content "LumiereMediaPlayer.csproj" -Encoding utf8
+        $csproj.Project.PropertyGroup[0].Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $csproj.Project.PropertyGroup[0].ApplicationVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $csproj.Project.PropertyGroup[0].ApplicationDisplayVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $csproj.Save("LumiereMediaPlayer.csproj")
 
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Configuration=Release /p:PublishReadyToRun=true
