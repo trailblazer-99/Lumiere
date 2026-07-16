@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<AppInstaller Uri="https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller" Version="1.0.1.49" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">
-  <MainBundle Name="Trailblazer2599.LumireMediaPlayer" Version="1.0.1.49" Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" Uri="https://github.com/trailblazer-99/Lumiere/releases/download/v1.0.1.49/LumiereMediaPlayer_1.0.1.49_x64_arm64.msixbundle" />
+<AppInstaller Uri="https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller" Version="1.0.1.50" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">
+  <MainBundle Name="Trailblazer2599.LumireMediaPlayer" Version="1.0.1.50" Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" Uri="https://github.com/trailblazer-99/Lumiere/releases/download/v1.0.1.50/LumiereMediaPlayer_1.0.1.50_x64_arm64.msixbundle" />
   <UpdateSettings>
     <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />
   </UpdateSettings>
