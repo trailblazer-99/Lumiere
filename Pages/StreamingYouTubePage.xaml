@@ -8,7 +8,7 @@
     mc:Ignorable="d"
     Unloaded="OnPageUnloaded">
 
-    <Grid x:Name="PageContent" Margin="0,48,0,0">
+    <Grid x:Name="PageContent" Margin="0,32,0,0">
         <!-- A simple clean full-screen WebView2 pointing to the YouTube home page -->
         <WebView2 x:Name="YouTubeWebView" Source="https://www.youtube.com" CoreWebView2Initialized="OnWebViewInitialized" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>

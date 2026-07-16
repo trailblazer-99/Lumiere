@@ -473,10 +473,20 @@ namespace LumiereMediaPlayer.Pages
                     }
                     else
                     {
-                        // 2. Construct a region-aware Apple TV URL with the title
+                        // 2. Construct a region-aware Apple TV URL with the title using user's physical OS storefront region
                         if (_details != null && !string.IsNullOrEmpty(_details.Title))
                         {
-                            string regionPath = !string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion.ToLowerInvariant() : "us";
+                            string regionPath = "us";
+                            try
+                            {
+                                string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
+                                if (!string.IsNullOrEmpty(osRegion))
+                                {
+                                    regionPath = osRegion;
+                                }
+                            }
+                            catch { }
+
                             string titleSlug = _details.Title.Replace(" ", "-").ToLowerInvariant();
                             string constructed = $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
                             AntiGravityLogger.Log($"Apple TV: constructed deep link: {constructed}");
@@ -487,12 +497,21 @@ namespace LumiereMediaPlayer.Pages
                     }
                 }
 
-                // Rewrite any tv.apple.com URL to be region-aware based on the user's selected region.
+                // Rewrite any tv.apple.com URL to be region-aware based on the user's local OS storefront region.
                 // The Windows Apple TV app defaults to the user's Apple ID region storefront and throws
                 // "content not available" if launched with a mismatched region in the path (e.g. /us/ in India).
                 if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    string targetRegion = !string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion.ToLowerInvariant() : "us";
+                    string targetRegion = "us";
+                    try
+                    {
+                        string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
+                        if (!string.IsNullOrEmpty(osRegion))
+                        {
+                            targetRegion = osRegion;
+                        }
+                    }
+                    catch { }
                     
                     // Match /us/ or other 2-letter country code path (e.g. /in/, /gb/) right after the host
                     var match = System.Text.RegularExpressions.Regex.Match(webUrl, @"tv\.apple\.com/([a-zA-Z]{2})(/|$)");
