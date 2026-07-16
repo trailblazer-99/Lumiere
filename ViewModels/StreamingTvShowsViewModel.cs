@@ -35,6 +35,8 @@ namespace LumiereMediaPlayer.ViewModels
         [ObservableProperty] public partial ObservableCollection<WatchmodeTitle> TvShows { get; set; } = new();
 
         [ObservableProperty] public partial bool IsLoading { get; set; }
+        [ObservableProperty] public partial string ErrorMessage { get; set; } = string.Empty;
+        [ObservableProperty] public partial bool HasError { get; set; }
         [ObservableProperty] public partial string ActiveSearchQuery { get; set; } = string.Empty;
 
         public ObservableCollection<string> SortOptions { get; } = new() { "Popularity", "Release Date" };
@@ -162,6 +164,8 @@ namespace LumiereMediaPlayer.ViewModels
 
             try
             {
+                ErrorMessage = string.Empty;
+                HasError = false;
                 string sourceTypes = SelectedAccessType switch
                 {
                     "Subscription" => "sub",
@@ -187,6 +191,11 @@ namespace LumiereMediaPlayer.ViewModels
             catch (System.Exception ex)
             {
                 AntiGravityLogger.Log($"LoadTvShowsAsync error: {ex.Message}");
+                if (requestVersion == _contentRequestVersion)
+                {
+                    ErrorMessage = ex.Message;
+                    HasError = true;
+                }
             }
             finally
             {
@@ -231,6 +240,8 @@ namespace LumiereMediaPlayer.ViewModels
 
             try
             {
+                ErrorMessage = string.Empty;
+                HasError = false;
                 var response = await _watchmodeService.SearchAsync(query, "tv");
 
                 if (requestVersion == _contentRequestVersion)
@@ -243,6 +254,11 @@ namespace LumiereMediaPlayer.ViewModels
             catch (System.Exception ex)
             {
                 AntiGravityLogger.Log($"PerformSearchAsync error: {ex.Message}");
+                if (requestVersion == _contentRequestVersion)
+                {
+                    ErrorMessage = ex.Message;
+                    HasError = true;
+                }
             }
             finally
             {
