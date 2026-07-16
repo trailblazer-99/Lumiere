@@ -514,7 +514,7 @@ public sealed partial class MainWindow : Window
                     if (isFullScreen)
                     {
                         SetTitleBar(null);
-                        // Keep ExtendsContentIntoTitleBar = true in full screen to prevent system caption buttons from overlaying the player content
+                        ExtendsContentIntoTitleBar = false;
                         if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                         {
                             if (RootNavigationView != null)
@@ -1831,11 +1831,6 @@ public sealed partial class MainWindow : Window
     private void OnVideoBackButtonClick(object sender, RoutedEventArgs e)
     {
         ExitVideoPlayback();
-    }
-
-    private void OnTitleBarFullscreenButtonClick(object sender, RoutedEventArgs e)
-    {
-        ToggleFullscreen();
     }
 
     private void OnRootGridPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
