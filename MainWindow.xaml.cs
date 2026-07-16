@@ -550,10 +550,6 @@ public sealed partial class MainWindow : Window
                     }
                     else
                     {
-                        if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                        {
-                            overlapped.SetBorderAndTitleBar(true, true);
-                        }
                         ExtendsContentIntoTitleBar = true;
                         SetTitleBar(DragRegion);
                         if (RootNavigationView != null)
@@ -1571,10 +1567,6 @@ public sealed partial class MainWindow : Window
                 try
                 {
                     AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
-                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                    {
-                        overlapped.SetBorderAndTitleBar(true, true);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -1843,11 +1835,6 @@ public sealed partial class MainWindow : Window
     private void OnVideoBackButtonClick(object sender, RoutedEventArgs e)
     {
         ExitVideoPlayback();
-    }
-
-    private void OnTitleBarFullscreenButtonClick(object sender, RoutedEventArgs e)
-    {
-        ToggleFullscreen();
     }
 
     private void OnRootGridPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -2378,17 +2365,9 @@ public sealed partial class MainWindow : Window
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
-                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                    {
-                        overlapped.SetBorderAndTitleBar(true, true);
-                    }
                 }
                 else
                 {
-                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                    {
-                        overlapped.SetBorderAndTitleBar(false, false);
-                    }
                     AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
                 }
             }
@@ -2416,19 +2395,11 @@ public sealed partial class MainWindow : Window
         {
             if (isFullScreen)
             {
-                if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                {
-                    overlapped.SetBorderAndTitleBar(false, false);
-                }
                 AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
             }
             else
             {
                 AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
-                if (AppWindow?.Presenter is OverlappedPresenter overlapped)
-                {
-                    overlapped.SetBorderAndTitleBar(true, true);
-                }
             }
         }
         catch (Exception ex)
