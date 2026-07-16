@@ -53,6 +53,14 @@ namespace LumiereMediaPlayer.Helpers
                         return new Uri($"primevideo://watch?gti={match.Groups[1].Value}");
                     }
                 }
+                else if (host.Contains("tv.apple.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(movie|show|episode)/[^/]+/(umc\.cmc\.[a-zA-Z0-9-]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"videos://{match.Groups[1].Value}/{match.Groups[2].Value}");
+                    }
+                }
 
                 return uri;
             }
