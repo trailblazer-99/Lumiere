@@ -9,7 +9,7 @@
     Loaded="OnPageLoaded"
     Unloaded="OnPageUnloaded">
 
-    <Grid x:Name="PageContent" Margin="0,48,0,0">
+    <Grid x:Name="PageContent" Margin="0,32,0,0">
         <!-- Full-screen WebView2 container for Twitch Web Wrapper -->
         <Grid x:Name="WebViewContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
