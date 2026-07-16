@@ -514,7 +514,10 @@ public sealed partial class MainWindow : Window
                     if (isFullScreen)
                     {
                         SetTitleBar(null);
-                        ExtendsContentIntoTitleBar = false;
+                        if (ExtendsContentIntoTitleBar)
+                        {
+                            ExtendsContentIntoTitleBar = false;
+                        }
                         if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                         {
                             if (RootNavigationView != null)
@@ -546,7 +549,10 @@ public sealed partial class MainWindow : Window
                     }
                     else
                     {
-                        ExtendsContentIntoTitleBar = true;
+                        if (!ExtendsContentIntoTitleBar)
+                        {
+                            ExtendsContentIntoTitleBar = true;
+                        }
                         SetTitleBar(DragRegion);
                         if (RootNavigationView != null)
                         {
