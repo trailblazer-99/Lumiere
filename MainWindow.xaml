@@ -176,13 +176,13 @@
                 x:Name="TitleBarFullscreenButton"
                 Grid.Column="2"
                 Width="46"
-                Height="32"
+                Height="48"
                 Padding="0"
                 Background="Transparent"
                 BorderThickness="0"
-                CornerRadius="4"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
+                CornerRadius="0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Stretch"
                 Click="OnTitleBarFullscreenButtonClick"
                 ToolTipService.ToolTip="Toggle Full Screen (F11)">
                 <FontIcon Glyph="&#xE740;" FontSize="11" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
