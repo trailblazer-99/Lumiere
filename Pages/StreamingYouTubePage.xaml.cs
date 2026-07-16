@@ -23,10 +23,22 @@ namespace LumiereMediaPlayer.Pages
             App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
         }
 
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            base.OnNavigatedFrom(e);
+            ExitFullScreen();
+        }
+
         private void OnPageUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            ExitFullScreen();
+        }
+
+        private void ExitFullScreen()
         {
             try
             {
+                App.MainWindowInstance?.SetFullScreenMode(false);
                 if (YouTubeWebView != null && YouTubeWebView.CoreWebView2 != null)
                 {
                     YouTubeWebView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
