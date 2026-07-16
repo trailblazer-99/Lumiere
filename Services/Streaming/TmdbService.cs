@@ -11,7 +11,7 @@ namespace LumiereMediaPlayer.Services.Streaming
 {
     public class TmdbService
     {
-        private static string ApiKey => ConfigService.Config.TmdbApiKey;
+        private static string ApiKey => "";
         private const string BaseUrl = "https://api.tmdb.org/3";
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
         private readonly HttpClient _httpClient = new();

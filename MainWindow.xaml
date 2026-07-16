@@ -171,7 +171,7 @@
         </Grid>
 
         <!-- The Fullscreen Video Container -->
-        <Grid x:Name="FullscreenVideoContainer" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged">
+        <Grid x:Name="FullscreenVideoContainer" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged" SizeChanged="OnFullscreenVideoContainerSizeChanged">
 
 
             <!-- Fullscreen Controls Overlay — sits above video, fades in/out -->

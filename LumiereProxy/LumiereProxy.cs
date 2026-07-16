@@ -29,7 +29,7 @@ namespace Lumiere.Proxy
             // 0. Version endpoint for troubleshooting deployment
             if (service.Equals("version", StringComparison.OrdinalIgnoreCase))
             {
-                return new OkObjectResult(new { Version = "2.0.1", Status = "Connector Fix Live" });
+                return new OkObjectResult(new { Version = "2.0.2", Status = "Proxy Clean Redo Live" });
             }
 
             // 1. Verify Secret App Token (prevents scrapers from abusing your proxy)
@@ -51,7 +51,7 @@ namespace Lumiere.Proxy
                     case "tmdb":
                         string tmdbKey = Environment.GetEnvironmentVariable("TMDB_API_KEY") ?? "";
                         string connector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
-                        targetUrl = $"https://api.tmdb.org/3/{remainder}{query}{connector}api_key={tmdbKey}";
+                        targetUrl = $"https://api.themoviedb.org/3/{remainder}{query}{connector}api_key={tmdbKey}";
                         response = await _httpClient.GetAsync(targetUrl);
                         break;
 
@@ -60,15 +60,6 @@ namespace Lumiere.Proxy
                         string wConnector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
                         targetUrl = $"https://api.watchmode.com/v1/{remainder}{query}{wConnector}apiKey={watchmodeKey}";
                         response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, targetUrl));
-                        break;
-
-                    case "motn":
-                        targetUrl = $"https://api.movieofthenight.com/v4/{remainder}{query}";
-                        using (var motnReq = new HttpRequestMessage(HttpMethod.Get, targetUrl))
-                        {
-                            motnReq.Headers.Add("X-API-Key", Environment.GetEnvironmentVariable("MOTN_API_KEY"));
-                            response = await _httpClient.SendAsync(motnReq);
-                        }
                         break;
 
                     case "musicapi":

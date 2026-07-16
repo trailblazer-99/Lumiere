@@ -25,12 +25,10 @@ namespace LumiereMediaPlayer.Services
                     var loadedConfig = JsonSerializer.Deserialize(json, StreamingJsonContext.Default.AppConfig);
                     if (loadedConfig != null)
                     {
-                        if (!string.IsNullOrEmpty(loadedConfig.TmdbApiKey)) _config.TmdbApiKey = loadedConfig.TmdbApiKey;
-                        if (!string.IsNullOrEmpty(loadedConfig.WatchmodeApiKey)) _config.WatchmodeApiKey = loadedConfig.WatchmodeApiKey;
-                        if (!string.IsNullOrEmpty(loadedConfig.MotnApiKey)) _config.MotnApiKey = loadedConfig.MotnApiKey;
-                        if (!string.IsNullOrEmpty(loadedConfig.MusicApiKey)) _config.MusicApiKey = loadedConfig.MusicApiKey;
-
-
+                        // Proxy settings
+                        _config.UseProxy = loadedConfig.UseProxy;
+                        if (!string.IsNullOrEmpty(loadedConfig.ProxyBaseUrl)) _config.ProxyBaseUrl = loadedConfig.ProxyBaseUrl;
+                        if (!string.IsNullOrEmpty(loadedConfig.ProxyAppToken)) _config.ProxyAppToken = loadedConfig.ProxyAppToken;
                     }
                 }
             }

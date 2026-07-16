@@ -27,6 +27,8 @@ _Package/
 ## Configuration / Secrets (DO NOT COMMIT to Git)
 appsettings.json
 local.settings.json
+private.ec.key
+public.pem
 
 ## Logs & Cache
 *.log

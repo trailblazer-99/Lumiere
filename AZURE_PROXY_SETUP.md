@@ -10,7 +10,7 @@ Azure Functions consumption tier is **free for the first 1,000,000 requests per 
 1. Open Visual Studio 2026 and select **Create a new project**.
 2. Search for **Azure Functions** (C#) and click **Next**.
 3. Name your project (e.g., `LumiereProxy`) and place it in a separate folder.
-4. Select **.NET 8.0 (Long Term Support) - Isolated Worker** or **.NET 9.0**.
+4. Select **.NET 10.0 - Isolated Worker**.
 5. Set the trigger type to **Http trigger**.
 6. Set the **Authorization level** to **Anonymous** (the proxy will verify the custom token in code) and click **Create**.
 
@@ -95,13 +95,6 @@ namespace Lumiere.Proxy
                         }
                         break;
 
-                    case "youtube":
-                        string ytKey = Environment.GetEnvironmentVariable("YOUTUBE_API_KEY") ?? "";
-                        string ytConnector = remainder.Contains("?") ? "&" : "?";
-                        targetUrl = $"https://www.googleapis.com/youtube/v3/{remainder}{query}{ytConnector}key={ytKey}";
-                        response = await _httpClient.GetAsync(targetUrl);
-                        break;
-
                     default:
                         return new NotFoundObjectResult("Service Route Not Found");
                 }
@@ -128,7 +121,7 @@ namespace Lumiere.Proxy
 > Ensure you add the HTTP Client Factory dependency in `Program.cs`:
 > ```csharp
 > var host = new HostBuilder()
->     .ConfigureFunctionsWorkerDefaults()
+>     .ConfigureFunctionsWebApplication()
 >     .ConfigureServices(services => {
 >         services.AddHttpClient();
 >     })
@@ -154,7 +147,9 @@ Open the [Azure Portal](https://portal.azure.com/), find your Function App, and 
 * `WATCHMODE_API_KEY`: *Your Key*
 * `MOTN_API_KEY`: *Your Key*
 * `MUSIC_API_KEY`: *Your Key*
-* `YOUTUBE_API_KEY`: *Your Key*
+
+> [!NOTE]
+> YouTube is not proxied — its API key is used directly from the client app via `appsettings.json`.
 
 ---
 

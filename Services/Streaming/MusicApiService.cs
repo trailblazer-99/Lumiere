@@ -18,7 +18,6 @@ namespace LumiereMediaPlayer.Services.Streaming
 
     public class MusicApiService
     {
-        private static string ApiKey => ConfigService.Config.MusicApiKey;
         private const string BaseUrl = "https://api.musicapi.com/public";
         
         private readonly HttpClient _httpClient;
@@ -46,41 +45,33 @@ namespace LumiereMediaPlayer.Services.Streaming
                 };
                 
                 string servicePath = $"musicapi/search?query={encodedQuery}&limit={limit}&type={musicApiType}";
-                string directUrl = $"{BaseUrl}/search?query={encodedQuery}&limit={limit}&type={musicApiType}";
                 
                 string json = string.Empty;
                 var config = ConfigService.Config;
-                
-                if (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl))
-                 {
-                    try
-                     {
-                        string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
-                        using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                        proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
-                        
-                        using var proxyResp = await _httpClient.SendAsync(proxyReq);
-                        if (proxyResp.IsSuccessStatusCode)
-                        {
-                            json = await proxyResp.Content.ReadAsStringAsync();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"MusicApi proxy fetch failed: {ex.Message}");
-                    }
+                if (!config.UseProxy || string.IsNullOrEmpty(config.ProxyBaseUrl))
+                {
+                    throw new InvalidOperationException("Azure Proxy is not configured or disabled. Direct calls are not permitted.");
                 }
                 
-                if (string.IsNullOrEmpty(json))
+                try
                 {
-                    using var directReq = new HttpRequestMessage(HttpMethod.Get, directUrl);
-                    directReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+                    string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
+                    using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                    proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
                     
-                    using var directResp = await _httpClient.SendAsync(directReq);
-                    if (directResp.IsSuccessStatusCode)
+                    using var proxyResp = await _httpClient.SendAsync(proxyReq);
+                    if (proxyResp.IsSuccessStatusCode)
                     {
-                        json = await directResp.Content.ReadAsStringAsync();
+                        json = await proxyResp.Content.ReadAsStringAsync();
                     }
+                    else
+                    {
+                        throw new HttpRequestException($"MusicApi proxy fetch failed with status: {proxyResp.StatusCode}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"MusicApi proxy fetch failed: {ex.Message}");
                 }
                 
                 if (!string.IsNullOrEmpty(json))

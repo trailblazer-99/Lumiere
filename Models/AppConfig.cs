@@ -4,13 +4,6 @@ namespace LumiereMediaPlayer.Models
 {
     public class AppConfig
     {
-        public string TmdbApiKey { get; set; } = "e29eb15903d9c157efd7d3e343461286";
-        public string WatchmodeApiKey { get; set; } = "JeAJJri95hxAAty4UhAW3DdlI2OGaBUIACqorQd7";
-        public string MotnApiKey { get; set; } = "motn-key-v4-ouYrYivvXnUOLjwr329XSERAyoAWbgEi";
-        public string MusicApiKey { get; set; } = "854bbb61-3516-46e7-b10f-933e52498856";
-
-
-
         // Serverless Proxy Configurations
         public bool UseProxy { get; set; } = true;
         public string ProxyBaseUrl { get; set; } = "";

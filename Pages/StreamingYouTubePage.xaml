@@ -1,16 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LumiereMediaPlayer.Pages.StreamingYouTubePage"
-    x:Name="PageRoot"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Loaded="OnPageLoaded"
     Unloaded="OnPageUnloaded">
 
-    <Grid x:Name="PageContent">
-        <!-- Full-screen WebView2 container for YouTube Web Wrapper -->
-        <Grid x:Name="WebViewContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+    <Grid>
+        <!-- A simple clean full-screen WebView2 pointing to the YouTube home page -->
+        <WebView2 x:Name="YouTubeWebView" Source="https://www.youtube.com" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>
