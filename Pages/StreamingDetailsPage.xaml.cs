@@ -395,12 +395,32 @@ namespace LumiereMediaPlayer.Pages
                     {
                         try
                         {
-                            AntiGravityLogger.Log($"Launching provider URI: {url}");
-                            await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(url);
+                            var launcherOptions = new Windows.System.LauncherOptions
+                            {
+                                FallbackUri = new Uri(url)
+                            };
+                            AntiGravityLogger.Log($"Launching provider URI (Native): {nativeUri}, Fallback: {url}");
+                            if (nativeUri != null)
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
+                            }
+                            else
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                            }
                         }
                         catch (Exception ex)
                         {
                             AntiGravityLogger.Log($"Failed to launch URI: {ex.Message}");
+                            try
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                            }
+                            catch (Exception fallbackEx)
+                            {
+                                AntiGravityLogger.Log($"Failed fallback launch URI: {fallbackEx.Message}");
+                            }
                         }
                     }
                 };
