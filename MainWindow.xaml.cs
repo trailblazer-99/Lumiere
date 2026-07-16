@@ -550,6 +550,10 @@ public sealed partial class MainWindow : Window
                     }
                     else
                     {
+                        if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                        {
+                            overlapped.SetBorderAndTitleBar(true, true);
+                        }
                         ExtendsContentIntoTitleBar = true;
                         SetTitleBar(DragRegion);
                         if (RootNavigationView != null)
@@ -1839,6 +1843,11 @@ public sealed partial class MainWindow : Window
     private void OnVideoBackButtonClick(object sender, RoutedEventArgs e)
     {
         ExitVideoPlayback();
+    }
+
+    private void OnTitleBarFullscreenButtonClick(object sender, RoutedEventArgs e)
+    {
+        ToggleFullscreen();
     }
 
     private void OnRootGridPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
