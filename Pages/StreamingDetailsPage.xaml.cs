@@ -681,6 +681,13 @@ namespace LumiereMediaPlayer.Pages
                 if (newRegion != _selectedRegion)
                 {
                     _selectedRegion = newRegion;
+                    
+                    // Propagate selection back to global view models to sync state across views
+                    if (AppServices.StreamingMoviesViewModel != null)
+                        AppServices.StreamingMoviesViewModel.SelectedRegion = newRegion;
+                    if (AppServices.StreamingTvShowsViewModel != null)
+                        AppServices.StreamingTvShowsViewModel.SelectedRegion = newRegion;
+
                     ProvidersContainer.Children.Clear();
                     
                     var progressRing = new ProgressRing 

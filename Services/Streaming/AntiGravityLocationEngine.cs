@@ -55,6 +55,19 @@ namespace LumiereMediaPlayer.Services.Streaming
                 }
             }
 
+            // Try OS-level culture fallback if network calls fail
+            try
+            {
+                string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToUpperInvariant();
+                if (!string.IsNullOrEmpty(osRegion))
+                {
+                    Volatile.Write(ref _cachedCountryCode, osRegion);
+                    Interlocked.Exchange(ref _cacheExpirationTicks, DateTime.UtcNow.AddMinutes(10).Ticks);
+                    return osRegion;
+                }
+            }
+            catch { }
+
             return "US"; // Fallback
         }
 
