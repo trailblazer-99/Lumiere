@@ -469,21 +469,49 @@ namespace LumiereMediaPlayer.Pages
                     // 1. Try ios_url — the API may provide a real Apple TV deep link there
                     if (!string.IsNullOrEmpty(source.IosUrl) && source.IosUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
                     {
-                        AntiGravityLogger.Log($"Apple TV: using ios_url deep link: {source.IosUrl}");
-                        return source.IosUrl;
+                        webUrl = source.IosUrl;
                     }
-
-                    // 2. Construct a region-aware Apple TV URL with the title
-                    if (_details != null && !string.IsNullOrEmpty(_details.Title))
+                    else
                     {
-                        string regionPath = !string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion.ToLowerInvariant() : "us";
-                        string titleSlug = _details.Title.Replace(" ", "-").ToLowerInvariant();
-                        string constructed = $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
-                        AntiGravityLogger.Log($"Apple TV: constructed deep link: {constructed}");
-                        return constructed;
-                    }
+                        // 2. Construct a region-aware Apple TV URL with the title
+                        if (_details != null && !string.IsNullOrEmpty(_details.Title))
+                        {
+                            string regionPath = !string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion.ToLowerInvariant() : "us";
+                            string titleSlug = _details.Title.Replace(" ", "-").ToLowerInvariant();
+                            string constructed = $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
+                            AntiGravityLogger.Log($"Apple TV: constructed deep link: {constructed}");
+                            return constructed;
+                        }
 
-                    return "https://tv.apple.com/";
+                        webUrl = "https://tv.apple.com/";
+                    }
+                }
+
+                // Rewrite any tv.apple.com URL to be region-aware based on the user's selected region.
+                // The Windows Apple TV app defaults to the user's Apple ID region storefront and throws
+                // "content not available" if launched with a mismatched region in the path (e.g. /us/ in India).
+                if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    string targetRegion = !string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion.ToLowerInvariant() : "us";
+                    
+                    // Match /us/ or other 2-letter country code path (e.g. /in/, /gb/) right after the host
+                    var match = System.Text.RegularExpressions.Regex.Match(webUrl, @"tv\.apple\.com/([a-zA-Z]{2})(/|$)");
+                    if (match.Success)
+                    {
+                        string foundRegion = match.Groups[1].Value;
+                        if (!foundRegion.Equals(targetRegion, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Replace the first occurrence of tv.apple.com/{foundRegion} with tv.apple.com/{targetRegion}
+                            webUrl = System.Text.RegularExpressions.Regex.Replace(webUrl, @"(tv\.apple\.com/)[a-zA-Z]{2}(/|$)", $"$1{targetRegion}$2");
+                            AntiGravityLogger.Log($"Apple TV: Rewrote URL region from '{foundRegion}' to '{targetRegion}'. Result: {webUrl}");
+                        }
+                    }
+                    else
+                    {
+                        // If no region code path is present, insert the target region
+                        webUrl = webUrl.Replace("tv.apple.com/", $"tv.apple.com/{targetRegion}/");
+                        AntiGravityLogger.Log($"Apple TV: Inserted region '{targetRegion}'. Result: {webUrl}");
+                    }
                 }
             }
 
