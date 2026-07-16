@@ -53,6 +53,15 @@ namespace LumiereMediaPlayer.Helpers
                         return new Uri($"primevideo://watch?gti={match.Groups[1].Value}");
                     }
                 }
+                else if (host.Contains("tv.apple.com"))
+                {
+                    // The Windows Apple TV app often fails to route correctly (falling back to a generic page)
+                    // if the deep link contains query parameters. We strip them to ensure a clean path.
+                    if (!string.IsNullOrEmpty(uri.Query))
+                    {
+                        return new Uri(uri.GetLeftPart(UriPartial.Path));
+                    }
+                }
 
                 return uri;
             }
