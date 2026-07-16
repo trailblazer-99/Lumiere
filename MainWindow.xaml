@@ -125,8 +125,6 @@
                 <ColumnDefinition Width="48" />
                 <!-- Window drag region -->
                 <ColumnDefinition Width="*" />
-                <!-- Custom Fullscreen Button -->
-                <ColumnDefinition Width="Auto" />
                 <!-- Right padding for system window caption buttons -->
                 <ColumnDefinition Width="140" />
             </Grid.ColumnDefinitions>
@@ -170,23 +168,6 @@
                         VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
-
-            <!-- Custom Fullscreen Button next to caption buttons (styled to match native size) -->
-            <Button
-                x:Name="TitleBarFullscreenButton"
-                Grid.Column="2"
-                Width="46"
-                Height="48"
-                Padding="0"
-                Background="Transparent"
-                BorderThickness="0"
-                CornerRadius="0"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Stretch"
-                Click="OnTitleBarFullscreenButtonClick"
-                ToolTipService.ToolTip="Toggle Full Screen (F11)">
-                <FontIcon Glyph="&#xE740;" FontSize="11" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-            </Button>
         </Grid>
 
         <!-- The Fullscreen Video Container -->
