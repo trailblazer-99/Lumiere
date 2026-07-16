@@ -250,7 +250,24 @@ namespace LumiereMediaPlayer.Pages
             {
                 ProvidersContainer.Children.Add(new TextBlock 
                 { 
-                    Text = "No streaming options found in this region.", 
+                    Text = "No streaming options found.", 
+                    FontStyle = Windows.UI.Text.FontStyle.Italic,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                });
+                return;
+            }
+
+            // Filter sources by the selected region first to avoid displaying options from other regions
+            string targetRegion = (!string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion : "US").ToUpperInvariant();
+            var regionalSources = sources
+                .Where(s => string.Equals(s.Region, targetRegion, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (regionalSources.Count == 0)
+            {
+                ProvidersContainer.Children.Add(new TextBlock 
+                { 
+                    Text = $"No streaming options found in {targetRegion}.", 
                     FontStyle = Windows.UI.Text.FontStyle.Italic,
                     Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
                 });
@@ -258,7 +275,7 @@ namespace LumiereMediaPlayer.Pages
             }
 
             // Deduplicate: group by (Name, Type) and keep the best quality (4K > HD > SD)
-            var deduped = sources
+            var deduped = regionalSources
                 .GroupBy(s => (s.Name?.ToLowerInvariant() ?? "", s.Type?.ToLowerInvariant() ?? ""))
                 .Select(g => g.OrderByDescending(s => GetFormatPriority(s.Format)).First())
                 .ToList();
