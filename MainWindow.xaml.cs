@@ -519,7 +519,7 @@ public sealed partial class MainWindow : Window
                     {
                         SetTitleBar(null);
                         ExtendsContentIntoTitleBar = false;
-                        if (ContentFrame?.Content is StreamingYouTubePage)
+                        if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                         {
                             if (RootNavigationView != null)
                             {
@@ -557,6 +557,10 @@ public sealed partial class MainWindow : Window
                             RootNavigationView.Visibility = Visibility.Visible;
                             RootNavigationView.IsPaneVisible = true;
                             RootNavigationView.IsPaneToggleButtonVisible = true;
+                            
+                            // Force WinUI 3 to re-evaluate title bar padding to avoid alignment overlaps
+                            RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
+                            RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
                         }
                         if (AppTitleBar != null)
                         {
@@ -1592,7 +1596,7 @@ public sealed partial class MainWindow : Window
             if (RootNavigationView != null)
             {
                 RootNavigationView.Visibility = Visibility.Visible;
-                if (ContentFrame?.Content is StreamingYouTubePage && AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                if ((ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage) && AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     RootNavigationView.IsPaneVisible = false;
                     RootNavigationView.IsPaneToggleButtonVisible = false;
@@ -1610,6 +1614,10 @@ public sealed partial class MainWindow : Window
                     {
                         TransportControls.Visibility = Visibility.Visible;
                     }
+
+                    // Force WinUI 3 to re-evaluate title bar padding to avoid alignment overlaps
+                    RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
+                    RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
                 }
                 RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
                 RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
