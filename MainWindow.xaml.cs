@@ -142,27 +142,23 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private List<RowDefinition>? _savedRowDefinitions = null;
+
 
     private void SaveAndClearRowDefinitions()
     {
-        if (RootGrid != null && _savedRowDefinitions == null)
+        if (RootGrid != null && RootGrid.RowDefinitions.Count > 1)
         {
-            _savedRowDefinitions = RootGrid.RowDefinitions.ToList();
-            RootGrid.RowDefinitions.Clear();
+            RootGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
+            RootGrid.RowDefinitions[1].Height = new GridLength(0, GridUnitType.Pixel);
         }
     }
 
     private void RestoreRowDefinitions()
     {
-        if (RootGrid != null && _savedRowDefinitions != null)
+        if (RootGrid != null && RootGrid.RowDefinitions.Count > 1)
         {
-            RootGrid.RowDefinitions.Clear();
-            foreach (var rd in _savedRowDefinitions)
-            {
-                RootGrid.RowDefinitions.Add(rd);
-            }
-            _savedRowDefinitions = null;
+            RootGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
+            RootGrid.RowDefinitions[1].Height = GridLength.Auto;
         }
     }
 
@@ -1835,6 +1831,11 @@ public sealed partial class MainWindow : Window
     private void OnVideoBackButtonClick(object sender, RoutedEventArgs e)
     {
         ExitVideoPlayback();
+    }
+
+    private void OnTitleBarFullscreenButtonClick(object sender, RoutedEventArgs e)
+    {
+        ToggleFullscreen();
     }
 
     private void OnRootGridPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
