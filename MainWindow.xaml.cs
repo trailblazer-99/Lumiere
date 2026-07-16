@@ -1256,6 +1256,11 @@ public sealed partial class MainWindow : Window
         UpdateTitleBarLayout();
         RestoreWindowBounds();
 
+        if (AppSearchBox != null && RootNavigationView != null)
+        {
+            AppSearchBox.Visibility = RootNavigationView.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         if (AppServices.Settings.Current.AutomaticLibraryScan)
         {
             _ = Services.SampleMediaLibrary.ScanAllLibraryFoldersAsync();
@@ -2425,11 +2430,13 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigationPaneOpened(NavigationView sender, object args)
     {
+        if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Visible;
         UpdateTitleBarLayout();
     }
 
     private void OnNavigationPaneClosed(NavigationView sender, object args)
     {
+        if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Collapsed;
         UpdateTitleBarLayout();
     }
 
@@ -2473,11 +2480,6 @@ public sealed partial class MainWindow : Window
             // Toggle title bar auto padding to correct top offsets
             RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
             RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
-
-            // Toggle IsPaneOpen to force visual state recalculation for AutoSuggestBox and menu items
-            bool originalIsPaneOpen = RootNavigationView.IsPaneOpen;
-            RootNavigationView.IsPaneOpen = !originalIsPaneOpen;
-            RootNavigationView.IsPaneOpen = originalIsPaneOpen;
         }
         catch (Exception ex)
         {

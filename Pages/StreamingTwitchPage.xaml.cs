@@ -53,19 +53,8 @@ namespace LumiereMediaPlayer.Pages
                     
                     await _webView.EnsureCoreWebView2Async(env);
 
-                    // Spoof modern user agent to prevent embedded blocks
-                    _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0";
-
-                    try
-                    {
-                        // Delete window.chrome.webview to look identical to a standard desktop Microsoft Edge browser
-                        await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                            "try { delete window.chrome.webview; } catch(e) {} try { window.chrome.webview = undefined; } catch(e) {}");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[TwitchPage] Failed to register login bypass script: {ex.Message}");
-                    }
+                    // Spoof Safari on macOS User-Agent to bypass Twitch and Google Account sign-in blocks on embedded browsers.
+                    _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
                     
                     // Enable full screen support from within the Twitch web player
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
