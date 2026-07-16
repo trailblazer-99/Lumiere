@@ -514,7 +514,7 @@ public sealed partial class MainWindow : Window
                     if (isFullScreen)
                     {
                         SetTitleBar(null);
-                        ExtendsContentIntoTitleBar = false;
+                        // Keep ExtendsContentIntoTitleBar = true in full screen to prevent system caption buttons from overlaying the player content
                         if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                         {
                             if (RootNavigationView != null)
