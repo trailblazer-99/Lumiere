@@ -38,7 +38,6 @@ public sealed partial class MainWindow : Window
     private DateTime _lastVideoFrameCaptureTime = DateTime.MinValue;
     private bool _isVideoFrameCaptureInProgress;
     private bool _isCleanedUp;
-    private bool _enteredFullscreenForVideo;
     private int _videoTapClickCount = 0;
     private System.Threading.CancellationTokenSource? _videoTapCts;
     private bool _isCursorHidden = false;
@@ -1470,7 +1469,6 @@ public sealed partial class MainWindow : Window
 
         if (isVideoMode)
         {
-            _enteredFullscreenForVideo = true;
             SetHwndBackgroundBrushBlack();
             // ── Step 1: Kill DWM backdrop at Win32 level FIRST ───────────
             // Must happen before SystemBackdrop = null so DWM never renders
@@ -1554,12 +1552,14 @@ public sealed partial class MainWindow : Window
             RestoreHwndBackgroundBrush();
             RootGrid.RequestedTheme = ElementTheme.Default;
 
-            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && _enteredFullscreenForVideo && (!isVideoActive || !_playback.IsVideoPlayerActive))
+            bool isWebViewFullScreen = isFullScreen 
+                                      && (ContentFrame?.Content is StreamingTwitchPage || ContentFrame?.Content is StreamingYouTubePage);
+
+            if (isFullScreen && !isWebViewFullScreen && (!isVideoActive || !_playback.IsVideoPlayerActive))
             {
-                _enteredFullscreenForVideo = false;
                 try
                 {
-                    AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
                     if (AppWindow?.Presenter is OverlappedPresenter overlapped)
                     {
                         overlapped.SetBorderAndTitleBar(true, true);
