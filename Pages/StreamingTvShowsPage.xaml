@@ -28,8 +28,8 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
@@ -40,7 +40,14 @@
                         <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="120" VerticalAlignment="Bottom" />
                     </StackPanel>
 
-                    <Grid Grid.Row="1">
+                    <InfoBar Grid.Row="1"
+                             Severity="Error"
+                             Title="Connection Failed"
+                             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                             IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                             Margin="0,0,0,16" />
+
+                    <Grid Grid.Row="2">
                         <GridView x:Name="TvShowsGridView" ItemsSource="{x:Bind ViewModel.TvShows, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="OnTvShowClicked" SelectionMode="None">
                             <GridView.ItemContainerStyle>
                                 <Style TargetType="GridViewItem">
