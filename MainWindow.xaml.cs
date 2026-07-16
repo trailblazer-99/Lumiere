@@ -519,24 +519,56 @@ public sealed partial class MainWindow : Window
                     if (isFullScreen)
                     {
                         SetTitleBar(null);
-                        ExtendsContentIntoTitleBar = true;
-                        if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
-                        if (AppTitleBar != null)
+                        ExtendsContentIntoTitleBar = false;
+                        if (ContentFrame?.Content is StreamingYouTubePage)
                         {
-                            AppTitleBar.Visibility = Visibility.Collapsed;
-                            AppTitleBar.Opacity = 0;
+                            if (RootNavigationView != null)
+                            {
+                                RootNavigationView.Visibility = Visibility.Visible;
+                                RootNavigationView.IsPaneVisible = false;
+                                RootNavigationView.IsPaneToggleButtonVisible = false;
+                            }
+                            if (AppTitleBar != null)
+                            {
+                                AppTitleBar.Visibility = Visibility.Collapsed;
+                                AppTitleBar.Opacity = 0;
+                            }
+                            if (TransportControls != null)
+                            {
+                                TransportControls.Visibility = Visibility.Collapsed;
+                            }
                         }
+                        else
+                        {
+                            if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
+                            if (AppTitleBar != null)
+                            {
+                                AppTitleBar.Visibility = Visibility.Collapsed;
+                                AppTitleBar.Opacity = 0;
+                            }
+                        }
+                        SetHwndBackgroundBlack();
                     }
                     else
                     {
                         ExtendsContentIntoTitleBar = true;
                         SetTitleBar(DragRegion);
-                        if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Visible;
+                        if (RootNavigationView != null)
+                        {
+                            RootNavigationView.Visibility = Visibility.Visible;
+                            RootNavigationView.IsPaneVisible = true;
+                            RootNavigationView.IsPaneToggleButtonVisible = true;
+                        }
                         if (AppTitleBar != null)
                         {
                             AppTitleBar.Visibility = Visibility.Visible;
                             AppTitleBar.Opacity = 1.0;
                         }
+                        if (TransportControls != null)
+                        {
+                            TransportControls.Visibility = Visibility.Visible;
+                        }
+                        RestoreHwndBackground();
                     }
                 }
                 catch (Exception ex)
@@ -1154,6 +1186,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+
+
         if (ContentFrame.CanGoBack)
         {
             ContentFrame.GoBack();
@@ -1199,6 +1233,10 @@ public sealed partial class MainWindow : Window
         else if (ContentFrame.Content is StreamingTvShowsPage)
         {
             RootNavigationView.SelectedItem = FindNavItem("streamTvShows");
+        }
+        else if (ContentFrame.Content is StreamingYouTubePage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("streamYouTube");
         }
 
         bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
@@ -1522,6 +1560,10 @@ public sealed partial class MainWindow : Window
                 try
                 {
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                    {
+                        overlapped.SetBorderAndTitleBar(true, true);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1550,9 +1592,25 @@ public sealed partial class MainWindow : Window
             if (RootNavigationView != null)
             {
                 RootNavigationView.Visibility = Visibility.Visible;
-                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-                RootNavigationView.IsPaneToggleButtonVisible = true;
-                RootNavigationView.IsPaneVisible = true;
+                if (ContentFrame?.Content is StreamingYouTubePage && AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                {
+                    RootNavigationView.IsPaneVisible = false;
+                    RootNavigationView.IsPaneToggleButtonVisible = false;
+                    if (TransportControls != null)
+                    {
+                        TransportControls.Visibility = Visibility.Collapsed;
+                    }
+                }
+                else
+                {
+                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                    RootNavigationView.IsPaneToggleButtonVisible = true;
+                    RootNavigationView.IsPaneVisible = true;
+                    if (TransportControls != null)
+                    {
+                        TransportControls.Visibility = Visibility.Visible;
+                    }
+                }
                 RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
                 RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
                 RootNavigationView.ClearValue(Control.BackgroundProperty);
@@ -1585,7 +1643,14 @@ public sealed partial class MainWindow : Window
             ApplyBackdrop(AppServices.Settings.Current.BackdropType);
 
             // Restore the HWND background so Mica/Acrylic can show through again
-            RestoreHwndBackground();
+            if (!isFullScreen)
+            {
+                RestoreHwndBackground();
+            }
+            else
+            {
+                SetHwndBackgroundBlack();
+            }
 
             // RootGrid.Background is restored by UpdateRootGridBackground above.
 
@@ -1629,18 +1694,59 @@ public sealed partial class MainWindow : Window
 
     private void UpdateFullscreenPlayerLayout()
     {
-        if (GlobalVideoPlayer == null)
+        if (GlobalVideoPlayer == null || FullscreenVideoContainer == null)
         {
             return;
         }
 
-        GlobalVideoPlayer.Width = double.NaN;
-        GlobalVideoPlayer.Height = double.NaN;
-        GlobalVideoPlayer.HorizontalAlignment = HorizontalAlignment.Stretch;
-        GlobalVideoPlayer.VerticalAlignment = VerticalAlignment.Stretch;
-        GlobalVideoPlayer.Stretch = _playback.SelectedAspectRatio == AspectRatioOption.Fill
-            ? Microsoft.UI.Xaml.Media.Stretch.Fill
-            : _playback.VideoStretch;
+        double containerWidth = FullscreenVideoContainer.ActualWidth;
+        double containerHeight = FullscreenVideoContainer.ActualHeight;
+
+        var ratio = _playback.SelectedAspectRatio;
+        var stretch = _playback.VideoStretch;
+
+        if (ratio == AspectRatioOption.Auto || containerWidth <= 0 || containerHeight <= 0)
+        {
+            GlobalVideoPlayer.Width = double.NaN;
+            GlobalVideoPlayer.Height = double.NaN;
+            GlobalVideoPlayer.HorizontalAlignment = HorizontalAlignment.Stretch;
+            GlobalVideoPlayer.VerticalAlignment = VerticalAlignment.Stretch;
+            GlobalVideoPlayer.Stretch = stretch;
+            return;
+        }
+
+        if (ratio == AspectRatioOption.Fill)
+        {
+            GlobalVideoPlayer.Width = double.NaN;
+            GlobalVideoPlayer.Height = double.NaN;
+            GlobalVideoPlayer.HorizontalAlignment = HorizontalAlignment.Stretch;
+            GlobalVideoPlayer.VerticalAlignment = VerticalAlignment.Stretch;
+            GlobalVideoPlayer.Stretch = Microsoft.UI.Xaml.Media.Stretch.Fill;
+            return;
+        }
+
+        double targetRatio = 16.0 / 9.0;
+        switch (ratio)
+        {
+            case AspectRatioOption.Ratio16x9: targetRatio = 16.0 / 9.0; break;
+            case AspectRatioOption.Ratio4x3: targetRatio = 4.0 / 3.0; break;
+            case AspectRatioOption.Ratio21x9: targetRatio = 21.0 / 9.0; break;
+        }
+
+        // Fit targetRatio into containerWidth x containerHeight
+        double w = containerWidth;
+        double h = containerWidth / targetRatio;
+        if (h > containerHeight)
+        {
+            h = containerHeight;
+            w = containerHeight * targetRatio;
+        }
+
+        GlobalVideoPlayer.Width = w;
+        GlobalVideoPlayer.Height = h;
+        GlobalVideoPlayer.HorizontalAlignment = HorizontalAlignment.Center;
+        GlobalVideoPlayer.VerticalAlignment = VerticalAlignment.Center;
+        GlobalVideoPlayer.Stretch = stretch;
     }
 
     private void MoveTransportControlsToNormalLayout()
@@ -2254,9 +2360,17 @@ public sealed partial class MainWindow : Window
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                    {
+                        overlapped.SetBorderAndTitleBar(true, true);
+                    }
                 }
                 else
                 {
+                    if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                    {
+                        overlapped.SetBorderAndTitleBar(false, false);
+                    }
                     AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
                 }
             }
@@ -2284,11 +2398,19 @@ public sealed partial class MainWindow : Window
         {
             if (isFullScreen)
             {
+                if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                {
+                    overlapped.SetBorderAndTitleBar(false, false);
+                }
                 AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
             }
             else
             {
                 AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                if (AppWindow?.Presenter is OverlappedPresenter overlapped)
+                {
+                    overlapped.SetBorderAndTitleBar(true, true);
+                }
             }
         }
         catch (Exception ex)
@@ -2743,9 +2865,12 @@ public sealed partial class MainWindow : Window
         
         if (Math.Abs(deltaX) > 100)
         {
-            if (deltaX > 0 && ContentFrame.CanGoBack)
+            if (deltaX > 0)
             {
-                ContentFrame.GoBack();
+                if (ContentFrame.CanGoBack)
+                {
+                    ContentFrame.GoBack();
+                }
             }
             else if (deltaX < 0 && ContentFrame.CanGoForward)
             {
@@ -2822,7 +2947,12 @@ public sealed partial class MainWindow : Window
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Placeholder for size change handling
+        UpdateFullscreenPlayerLayout();
+    }
+
+    private void OnFullscreenVideoContainerSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateFullscreenPlayerLayout();
     }
 
     private void OnMainWindowKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)

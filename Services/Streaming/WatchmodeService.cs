@@ -11,14 +11,13 @@ namespace LumiereMediaPlayer.Services.Streaming
 {
     public class WatchmodeService
     {
-        private static string ApiKey => ConfigService.Config.WatchmodeApiKey;
+        private static string ApiKey => "";
         private const string BaseUrl = "https://api.watchmode.com/v1";
         
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
         private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
 
         private static readonly Dictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
-        private static readonly Dictionary<int, MotnShow> ShowCache = new();
 
         private static int? GetCleanTmdbId(string? tmdbIdStr)
         {
@@ -48,17 +47,17 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var results = await FetchTitleListAsync(servicePath, url);
-                if (results != null && results.Count > 0)
+                if (results != null)
                 {
                     return results;
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode ListMovies failed, falling back to MOTN: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Watchmode ListMovies failed: {ex.Message}");
             }
 
-            return await FetchMotnTitleListAsync("movie", page, region, genres);
+            return new List<WatchmodeTitle>();
         }
 
         public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "")
@@ -74,17 +73,17 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var results = await FetchTitleListAsync(servicePath, url);
-                if (results != null && results.Count > 0)
+                if (results != null)
                 {
                     return results;
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode ListTvShows failed, falling back to MOTN: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Watchmode ListTvShows failed: {ex.Message}");
             }
 
-            return await FetchMotnTitleListAsync("series", page, region, genres);
+            return new List<WatchmodeTitle>();
         }
 
         public async Task<WatchmodeDetails?> GetDetailsAsync(int watchmodeId)
@@ -99,26 +98,6 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetDetails Error: {ex.Message}");
-                
-                if (ShowCache.TryGetValue(watchmodeId, out var cachedShow))
-                {
-                    return cachedShow.ToWatchmodeDetails(watchmodeId);
-                }
-
-                if (IdMap.TryGetValue(watchmodeId, out var ids))
-                {
-                    string? lookupId = ids.ImdbId ?? ids.TmdbId;
-                    if (!string.IsNullOrEmpty(lookupId))
-                    {
-                        var show = await QueryMotnAsync<MotnShow>($"shows/{lookupId}?series_granularity=episode");
-                        if (show != null)
-                        {
-                            ShowCache[watchmodeId] = show;
-                            IdMap[watchmodeId] = (show.ImdbId, GetCleanTmdbId(show.TmdbId)?.ToString(), show.ShowType);
-                            return show.ToWatchmodeDetails(watchmodeId);
-                        }
-                    }
-                }
                 return null;
             }
         }
@@ -146,28 +125,6 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetSources Error: {ex.Message}");
-                
-                if (int.TryParse(titleId, out int watchmodeId))
-                {
-                    if (ShowCache.TryGetValue(watchmodeId, out var cachedShow))
-                    {
-                        return cachedShow.MapToWatchmodeSources(region);
-                    }
-                    
-                    if (IdMap.TryGetValue(watchmodeId, out var ids))
-                    {
-                        string? lookupId = ids.ImdbId ?? ids.TmdbId;
-                        if (!string.IsNullOrEmpty(lookupId))
-                        {
-                            var show = await QueryMotnAsync<MotnShow>($"shows/{lookupId}?series_granularity=episode");
-                            if (show != null)
-                            {
-                                ShowCache[watchmodeId] = show;
-                                return show.MapToWatchmodeSources(region);
-                            }
-                        }
-                    }
-                }
                 return new List<WatchmodeSource>();
             }
         }
@@ -328,33 +285,10 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode Search failed, falling back to MOTN: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Watchmode Search failed: {ex.Message}");
             }
 
-            string region = await AntiGravityLocationEngine.GetCountryCodeAsync();
-            if (string.IsNullOrEmpty(region)) region = "us";
-
-            string showType = type == "tv_series" || type == "tv" ? "series" : "movie";
-            var searchUrl = $"shows/search/title?title={Uri.EscapeDataString(query)}&country={region.ToLowerInvariant()}";
-            if (!string.IsNullOrEmpty(type))
-            {
-                searchUrl += $"&show_type={showType}";
-            }
-
-            var motnShows = await QueryMotnAsync<List<MotnShow>>(searchUrl);
-            var resultsFallback = new List<WatchmodeTitle>();
-            if (motnShows != null)
-            {
-                foreach (var show in motnShows)
-                {
-                    var title = show.ToWatchmodeTitle();
-                    resultsFallback.Add(title);
-                    
-                    IdMap[title.Id] = (show.ImdbId, title.TmdbId?.ToString(), showType);
-                    ShowCache[title.Id] = show;
-                }
-            }
-            return resultsFallback;
+            return new List<WatchmodeTitle>();
         }
 
         private async Task<List<WatchmodeTitle>> FetchTitleListAsync(string servicePath, string url)
@@ -369,56 +303,12 @@ namespace LumiereMediaPlayer.Services.Streaming
             return list;
         }
 
-        private async Task<T?> QueryMotnAsync<T>(string endpoint)
-        {
-            var config = ConfigService.Config;
-            var requestUrl = $"https://api.movieofthenight.com/v4/{endpoint}";
-            
-            try
-            {
-                string json = string.Empty;
-                if (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl))
-                {
-                    try
-                    {
-                        string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/motn/" + endpoint.TrimStart('/');
-                        using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                        proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
-                        
-                        using var proxyResp = await _httpClient.SendAsync(proxyReq);
-                        if (proxyResp.IsSuccessStatusCode)
-                        {
-                            json = await proxyResp.Content.ReadAsStringAsync();
-                        }
-                    }
-                    catch { }
-                }
-                
-                if (string.IsNullOrEmpty(json))
-                {
-                    using var directReq = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-                    directReq.Headers.Add("X-API-Key", config.MotnApiKey);
-                    
-                    using var directResp = await _httpClient.SendAsync(directReq);
-                    directResp.EnsureSuccessStatusCode();
-                    json = await directResp.Content.ReadAsStringAsync();
-                }
-
-                return JsonSerializer.Deserialize<T>(json, _jsonOptions);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Streaming Availability API Error: {ex.Message}");
-                return default;
-            }
-        }
-
         private async Task<T?> QueryTmdbAsync<T>(string endpoint)
         {
             string servicePath = $"tmdb/{endpoint}";
             string url = $"https://api.tmdb.org/3/{endpoint}";
-            if (url.Contains("?")) url += $"&api_key={ConfigService.Config.TmdbApiKey}";
-            else url += $"?api_key={ConfigService.Config.TmdbApiKey}";
+            if (url.Contains("?")) url += "&api_key=";
+            else url += "?api_key=";
 
             try
             {
@@ -430,69 +320,6 @@ namespace LumiereMediaPlayer.Services.Streaming
                 System.Diagnostics.Debug.WriteLine($"TMDB API Fallback Error: {ex.Message}");
                 return default;
             }
-        }
-
-        private async Task<List<WatchmodeTitle>> FetchMotnTitleListAsync(string showType, int page, string region, string watchmodeGenres)
-        {
-            if (string.IsNullOrEmpty(region))
-            {
-                region = await AntiGravityLocationEngine.GetCountryCodeAsync();
-            }
-            if (string.IsNullOrEmpty(region))
-            {
-                region = "us";
-            }
-
-            string motnGenres = GetMotnGenreString(watchmodeGenres);
-            var query = $"country={region.ToLowerInvariant()}&show_type={showType}&page={page}";
-            if (!string.IsNullOrEmpty(motnGenres))
-            {
-                query += $"&genres={motnGenres}";
-            }
-
-            var response = await QueryMotnAsync<MotnSearchResponse>($"shows/search/filters?{query}");
-            var results = new List<WatchmodeTitle>();
-            if (response?.Shows != null)
-            {
-                foreach (var show in response.Shows)
-                {
-                    var title = show.ToWatchmodeTitle();
-                    results.Add(title);
-                    
-                    IdMap[title.Id] = (show.ImdbId, title.TmdbId?.ToString(), showType);
-                    ShowCache[title.Id] = show;
-                }
-            }
-            return results;
-        }
-
-        private string GetMotnGenreString(string watchmodeGenres)
-        {
-            if (string.IsNullOrEmpty(watchmodeGenres)) return "";
-            var parts = watchmodeGenres.Split(',');
-            var motn = new List<string>();
-            foreach (var p in parts)
-            {
-                if (p == "1") motn.Add("action");
-                else if (p == "2") motn.Add("adventure");
-                else if (p == "3") motn.Add("animation");
-                else if (p == "4") motn.Add("comedy");
-                else if (p == "5") motn.Add("crime");
-                else if (p == "6") motn.Add("documentary");
-                else if (p == "7") motn.Add("drama");
-                else if (p == "8") motn.Add("family");
-                else if (p == "9") motn.Add("fantasy");
-                else if (p == "10") motn.Add("history");
-                else if (p == "11") motn.Add("horror");
-                else if (p == "12") motn.Add("music");
-                else if (p == "13") motn.Add("mystery");
-                else if (p == "14") motn.Add("romance");
-                else if (p == "15") motn.Add("sci-fi");
-                else if (p == "17") motn.Add("thriller");
-                else if (p == "18") motn.Add("war");
-                else if (p == "19") motn.Add("western");
-            }
-            return string.Join(",", motn);
         }
     }
 }

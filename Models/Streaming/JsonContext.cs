@@ -10,6 +10,10 @@ namespace LumiereMediaPlayer.Models.Streaming
     [JsonSerializable(typeof(ITunesResponse))]
     [JsonSerializable(typeof(StreamingAvailabilityResponse))]
     [JsonSerializable(typeof(MusicApiSearchResponse))]
+    [JsonSerializable(typeof(YouTubeSearchResponse))]
+    [JsonSerializable(typeof(YouTubeVideoListResponse))]
+    [JsonSerializable(typeof(YouTubeChannelListResponse))]
+    [JsonSerializable(typeof(YouTubeCommentThreadsResponse))]
 
     [JsonSerializable(typeof(LumiereMediaPlayer.Models.AppConfig))]
     [JsonSourceGenerationOptions(
