@@ -2475,16 +2475,23 @@ public sealed partial class MainWindow : Window
     {
         if (RootNavigationView == null) return;
         
-        try
+        // Defer property changes to the next UI tick to avoid layout re-entry COMExceptions (Unspecified Error)
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
-            // Toggle title bar auto padding to correct top offsets
-            RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
-            RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ForceRefreshNavigationViewLayout] Failed: {ex.Message}");
-        }
+            try
+            {
+                if (RootNavigationView != null)
+                {
+                    // Toggle title bar auto padding to correct top offsets
+                    RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
+                    RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ForceRefreshNavigationViewLayout] Defer failed: {ex.Message}");
+            }
+        });
     }
 
     private void UpdateTitleBarLayout()
