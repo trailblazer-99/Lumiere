@@ -11,9 +11,23 @@ namespace LumiereMediaPlayer.Pages
             this.InitializeComponent();
         }
 
-        private void OnWebViewInitialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
+        private async void OnWebViewInitialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
         {
             YouTubeWebView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
+
+            // Spoof modern user agent to prevent Google embedded block
+            YouTubeWebView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0";
+
+            try
+            {
+                // Delete window.chrome.webview to look identical to a standard desktop Microsoft Edge browser
+                await YouTubeWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                    "try { delete window.chrome.webview; } catch(e) {} try { window.chrome.webview = undefined; } catch(e) {}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[YouTubePage] Failed to register login bypass script: {ex.Message}");
+            }
         }
 
         private void OnWebViewContainsFullScreenElementChanged(Microsoft.Web.WebView2.Core.CoreWebView2 sender, object args)

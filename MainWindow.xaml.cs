@@ -558,9 +558,7 @@ public sealed partial class MainWindow : Window
                             RootNavigationView.IsPaneVisible = true;
                             RootNavigationView.IsPaneToggleButtonVisible = true;
                             
-                            // Force WinUI 3 to re-evaluate title bar padding to avoid alignment overlaps
-                            RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
-                            RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
+                            ForceRefreshNavigationViewLayout();
                         }
                         if (AppTitleBar != null)
                         {
@@ -1615,9 +1613,7 @@ public sealed partial class MainWindow : Window
                         TransportControls.Visibility = Visibility.Visible;
                     }
 
-                    // Force WinUI 3 to re-evaluate title bar padding to avoid alignment overlaps
-                    RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
-                    RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
+                    ForceRefreshNavigationViewLayout();
                 }
                 RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
                 RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
@@ -2466,6 +2462,27 @@ public sealed partial class MainWindow : Window
     private void OnNavigationDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
     {
         UpdateTitleBarLayout();
+    }
+
+    private void ForceRefreshNavigationViewLayout()
+    {
+        if (RootNavigationView == null) return;
+        
+        try
+        {
+            // Toggle title bar auto padding to correct top offsets
+            RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
+            RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
+
+            // Toggle IsPaneOpen to force visual state recalculation for AutoSuggestBox and menu items
+            bool originalIsPaneOpen = RootNavigationView.IsPaneOpen;
+            RootNavigationView.IsPaneOpen = !originalIsPaneOpen;
+            RootNavigationView.IsPaneOpen = originalIsPaneOpen;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ForceRefreshNavigationViewLayout] Failed: {ex.Message}");
+        }
     }
 
     private void UpdateTitleBarLayout()
