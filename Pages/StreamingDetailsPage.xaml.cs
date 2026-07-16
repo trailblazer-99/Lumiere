@@ -127,6 +127,10 @@ namespace LumiereMediaPlayer.Pages
             // Build Where to Watch section
             BuildProvidersSection(sources);
 
+            // Initialize Region Detail Dropdown
+            RegionDetailComboBox.ItemsSource = RegionHelper.GetAllRegions();
+            RegionDetailComboBox.SelectedValue = _selectedRegion;
+
             // Bind cast
             CastGridView.ItemsSource = cast.OrderBy(c => c.Order ?? 999).Take(30).ToList();
 
@@ -623,6 +627,43 @@ namespace LumiereMediaPlayer.Pages
             visual.StartAnimation("Offset", slideAnim);
         }
 
+        private async void RegionDetailComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (RegionDetailComboBox.SelectedValue is string newRegion && !string.IsNullOrEmpty(newRegion))
+            {
+                if (newRegion != _selectedRegion)
+                {
+                    _selectedRegion = newRegion;
+                    ProvidersContainer.Children.Clear();
+                    
+                    var progressRing = new ProgressRing 
+                    { 
+                        IsActive = true, 
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Width = 32,
+                        Height = 32,
+                        Margin = new Thickness(0, 16, 0, 16)
+                    };
+                    ProvidersContainer.Children.Add(progressRing);
 
+                    try
+                    {
+                        var sources = await _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
+                        BuildProvidersSection(sources);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to reload sources: {ex.Message}");
+                        ProvidersContainer.Children.Clear();
+                        ProvidersContainer.Children.Add(new TextBlock 
+                        { 
+                            Text = "Error loading streaming sources.",
+                            FontStyle = Windows.UI.Text.FontStyle.Italic,
+                            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                        });
+                    }
+                }
+            }
+        }
     }
 }
