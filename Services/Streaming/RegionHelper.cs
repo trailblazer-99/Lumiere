@@ -28,6 +28,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             if (!string.IsNullOrEmpty(_cachedRegion))
                 return _cachedRegion;
 
+            string detected = "";
             try
             {
                 var response = await HttpClient.GetStringAsync("https://ipinfo.io/json");
@@ -35,11 +36,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 
                 if (doc.RootElement.TryGetProperty("country", out var ccElement))
                 {
-                    _cachedRegion = ccElement.GetString()?.ToUpperInvariant();
-                    if (!string.IsNullOrEmpty(_cachedRegion))
-                    {
-                        return _cachedRegion;
-                    }
+                    detected = ccElement.GetString()?.ToUpperInvariant() ?? "";
                 }
             }
             catch (Exception ex)
@@ -47,42 +44,38 @@ namespace LumiereMediaPlayer.Services.Streaming
                 System.Diagnostics.Debug.WriteLine($"Failed to get region from IP: {ex.Message}");
             }
 
-            // Fallback to OS Region
-            _cachedRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToUpperInvariant();
+            if (string.IsNullOrEmpty(detected))
+            {
+                try
+                {
+                    detected = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToUpperInvariant();
+                }
+                catch
+                {
+                    detected = "US";
+                }
+            }
+
+            if (detected == "IN" || detected == "US" || detected == "GB")
+            {
+                _cachedRegion = detected;
+            }
+            else
+            {
+                _cachedRegion = "US";
+            }
+
             return _cachedRegion;
         }
 
         public static List<RegionItem> GetAllRegions()
         {
-            try
+            return new List<RegionItem>
             {
-                return System.Globalization.CultureInfo.GetCultures(System.Globalization.CultureTypes.SpecificCultures)
-                    .Select(c => 
-                    {
-                        try { return new System.Globalization.RegionInfo(c.Name); }
-                        catch { return null; }
-                    })
-                    .Where(r => r != null)
-                    .Select(r => new RegionItem { Code = r!.TwoLetterISORegionName.ToUpperInvariant(), Name = r.EnglishName })
-                    .GroupBy(r => r.Code)
-                    .Select(g => g.First())
-                    .OrderBy(r => r.Name)
-                    .ToList();
-            }
-            catch
-            {
-                return new List<RegionItem>
-                {
-                    new() { Code = "US", Name = "United States" },
-                    new() { Code = "CA", Name = "Canada" },
-                    new() { Code = "GB", Name = "United Kingdom" },
-                    new() { Code = "AU", Name = "Australia" },
-                    new() { Code = "IN", Name = "India" },
-                    new() { Code = "DE", Name = "Germany" },
-                    new() { Code = "FR", Name = "France" },
-                    new() { Code = "JP", Name = "Japan" }
-                };
-            }
+                new() { Code = "IN", Name = "India" },
+                new() { Code = "US", Name = "United States" },
+                new() { Code = "GB", Name = "United Kingdom" }
+            };
         }
     }
 }

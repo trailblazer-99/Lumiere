@@ -83,7 +83,23 @@
 
                 <!-- "Where to Watch" Providers Section -->
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Where to Watch" Style="{StaticResource BodyLargeTextBlockStyle}" FontWeight="SemiBold"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Where to Watch" Style="{StaticResource BodyLargeTextBlockStyle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="Country:" VerticalAlignment="Center" FontSize="12" Opacity="0.8"/>
+                            <ComboBox x:Name="RegionDetailComboBox" Width="140" SelectedValuePath="Code" SelectionChanged="RegionDetailComboBox_SelectionChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
                     <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
                         <StackPanel x:Name="ProvidersContainer" Spacing="16">
                             <!-- Populated programmatically in code-behind -->
