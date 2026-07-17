@@ -180,6 +180,17 @@ jobs:
     - name: Bundle and Sign Packages
       shell: powershell
       run: |
+        # Keep the App Installer metadata tied to the package manifest. The
+        # identity is Store-linked, so do not duplicate or rename it here.
+        [xml]$sourceManifest = Get-Content "Package.appxmanifest" -Encoding utf8
+        $packageIdentityName = [string]$sourceManifest.Package.Identity.Name
+        $packagePublisher = [string]$sourceManifest.Package.Identity.Publisher
+        if ([string]::IsNullOrWhiteSpace($packageIdentityName) -or [string]::IsNullOrWhiteSpace($packagePublisher)) {
+          throw "Package.appxmanifest must define Identity Name and Publisher."
+        }
+        Write-Output "Expected package identity: $packageIdentityName"
+        Write-Output "Expected package publisher: $packagePublisher"
+
         # 1. Locate Windows SDK tools (signtool.exe and makeappx.exe)
         $sdkBinPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*x64*" } | Select-Object -ExpandProperty DirectoryName -First 1
         if (-not $sdkBinPath) {
@@ -196,6 +207,35 @@ jobs:
         Get-ChildItem -Path AppPackages\*.msix -Recurse | Where-Object { $_.FullName -notlike "*BundleSources*" } | ForEach-Object {
           Write-Output "Staging Package: $($_.FullName)"
           Copy-Item $_.FullName "AppPackages\BundleSources\"
+        }
+
+        # Verify every architecture package before bundling. App Installer
+        # requires these values to match exactly.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        Get-ChildItem -Path "AppPackages\BundleSources\*.msix" | ForEach-Object {
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($_.FullName)
+          try {
+            $manifestEntry = $archive.GetEntry("AppxManifest.xml")
+            if (-not $manifestEntry) {
+              throw "AppxManifest.xml is missing from $($_.Name)."
+            }
+
+            $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+            try {
+              [xml]$packageManifest = $reader.ReadToEnd()
+            } finally {
+              $reader.Dispose()
+            }
+
+            $actualIdentityName = [string]$packageManifest.Package.Identity.Name
+            $actualPublisher = [string]$packageManifest.Package.Identity.Publisher
+            if ($actualIdentityName -ne $packageIdentityName -or $actualPublisher -ne $packagePublisher) {
+              throw "Package identity mismatch in $($_.Name): found '$actualIdentityName' / '$actualPublisher', expected '$packageIdentityName' / '$packagePublisher'."
+            }
+            Write-Output "Validated package identity: $($_.Name)"
+          } finally {
+            $archive.Dispose()
+          }
         }
 
         # 3. Create MSIXBundle
@@ -235,13 +275,20 @@ jobs:
         $repoName = $repoParts[1]
         
         $bundleFilename = "LumiereMediaPlayer_1.0.1.$($env:GITHUB_RUN_NUMBER)_x64_arm64.msixbundle"
+
+        [xml]$sourceManifest = Get-Content "Package.appxmanifest" -Encoding utf8
+        $packageIdentityName = [string]$sourceManifest.Package.Identity.Name
+        $packagePublisher = [string]$sourceManifest.Package.Identity.Publisher
+        if ([string]::IsNullOrWhiteSpace($packageIdentityName) -or [string]::IsNullOrWhiteSpace($packagePublisher)) {
+          throw "Package.appxmanifest must define Identity Name and Publisher."
+        }
         
         # 2. Generate dynamic .appinstaller pointing to the GitHub Release asset URL
         $releaseDownloadUrl = "https://github.com/$owner/$repoName/releases/download/v1.0.1.$env:GITHUB_RUN_NUMBER/$bundleFilename"
         
         $xml = '<?xml version="1.0" encoding="utf-8"?>'
         $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
-        $xml += "`n" + '  <MainBundle Name="Trailblazer2599.LumireMediaPlayer" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" Publisher="CN=8A51582D-3E61-4F13-B66C-AA92D4FA0D46" Uri="' + $releaseDownloadUrl + '" />'
+        $xml += "`n" + '  <MainBundle Name="' + $packageIdentityName + '" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" Publisher="' + $packagePublisher + '" Uri="' + $releaseDownloadUrl + '" />'
         $xml += "`n" + '  <UpdateSettings>'
         $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />'
         $xml += "`n" + '  </UpdateSettings>'
