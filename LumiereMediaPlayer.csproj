@@ -71,8 +71,7 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <PublishReadyToRun>False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">False</PublishTrimmed>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
@@ -84,6 +83,8 @@
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
     <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+    <MsPdbCmfExeFullpath Condition="'$(MsPdbCmfExeFullpath)' == '' and '$(AppxSymbolPackageEnabled)' == 'False'">$(MSBuildProjectDirectory)\__symbols_disabled__.exe</MsPdbCmfExeFullpath>
     <AppxBundle>Auto</AppxBundle>
     <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
