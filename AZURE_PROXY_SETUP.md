@@ -137,11 +137,15 @@ namespace Lumiere.Proxy
 4. Sign in to your Azure account and select/create a free-tier App Service Plan.
 5. Click **Publish**.
 
+> [!IMPORTANT]
+> The Function App must use **.NET 10 isolated worker** on **Functions runtime 4.x**. For a Windows Function App, set the stack version to `.NET 10` (equivalent site setting: `netFrameworkVersion=v10.0`) before publishing. Linux Consumption does not support .NET 10; use Windows or a Flex Consumption plan instead.
+
 ---
 
 ## Step 4: Configure App Settings on Azure Portal
 Open the [Azure Portal](https://portal.azure.com/), find your Function App, and go to **Settings** $\rightarrow$ **Configuration** $\rightarrow$ **Application Settings**. Add the following key-value pairs:
 
+* `FUNCTIONS_WORKER_RUNTIME`: `dotnet-isolated`
 * `APP_TOKEN`: `Lumiere-Desktop-App-Token-2026`
 * `TMDB_API_KEY`: *Your Key*
 * `WATCHMODE_API_KEY`: *Your Key*

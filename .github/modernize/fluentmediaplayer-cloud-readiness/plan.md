@@ -5,7 +5,7 @@ Address the cloud-readiness findings from the assessment report by modernizing t
 
 ## Scope
 - Project: LumiereMediaPlayer
-- Target framework: net8.0-windows10.0.19041.0
+- Target framework: net10.0-windows10.0.19041.0
 - Source report: .github/modernize/assessment/reports/report-20260702114805/report.json
 
 ## Planned Work

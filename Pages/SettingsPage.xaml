@@ -1394,7 +1394,7 @@
                         <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
                             <TextBlock FontSize="14" FontWeight="SemiBold" Text="Lumière Media Player"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}"
-                                       Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 8"/>
+                                       Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 10"/>
                             <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
                                 <HyperlinkButton Content="Send feedback" Padding="0" FontSize="12"/>
                                 <HyperlinkButton Content="Rate this app" Padding="0" FontSize="12"/>
