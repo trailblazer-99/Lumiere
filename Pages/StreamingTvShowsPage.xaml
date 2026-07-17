@@ -30,6 +30,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
@@ -70,7 +71,7 @@
                                         </Border.Shadow>
                                         <Grid>
                                             <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
-                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
+                                            <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="#00000000" Offset="0.0"/>
@@ -82,8 +83,8 @@
                                                         <FontIcon FontSize="20" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                     </Border>
                                                 </Grid>
-                                             </Border>
-                                             <Border VerticalAlignment="Bottom" Height="100">
+                                            </Border>
+                                            <Border VerticalAlignment="Bottom" Height="100">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
@@ -106,7 +107,7 @@
                     </Grid>
 
                     <!-- Pagination Controls -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24" Margin="0,16,0,16">
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24" Margin="0,16,0,16">
                         <Button Content="Previous Page" Command="{x:Bind ViewModel.PreviousPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoPrevious, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}"/>
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
