@@ -127,7 +127,7 @@ The public certificate used by the project is in `Signing/LumiereMediaPlayer.cer
 
 ## Optional API proxy
 
-`LumiereProxy/` is a separate .NET 8 isolated Azure Functions project. It keeps service credentials on the server and exposes the routes used by the desktop client for:
+`LumiereProxy/` is a separate .NET 10 isolated Azure Functions project. It keeps service credentials on the server and exposes the routes used by the desktop client for:
 
 - TMDB metadata.
 - Watchmode catalog, provider, season, and episode data.
