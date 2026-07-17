@@ -30,6 +30,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
@@ -106,7 +107,7 @@
                     </Grid>
 
                     <!-- Pagination Controls -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24" Margin="0,16,0,16">
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24" Margin="0,16,0,16">
                         <Button Content="Previous Page" Command="{x:Bind ViewModel.PreviousPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoPrevious, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}"/>
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
