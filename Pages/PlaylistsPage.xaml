@@ -40,6 +40,11 @@
                             Style="{StaticResource CardButtonStyle}"
                             Command="{Binding ElementName=PageRoot, Path=ViewModel.PlayPlaylistCommand}"
                             CommandParameter="{Binding}">
+                            <Button.Transitions>
+                                <TransitionCollection>
+                                    <EntranceThemeTransition FromHorizontalOffset="0" FromVerticalOffset="24" IsStaggeringEnabled="True" />
+                                </TransitionCollection>
+                            </Button.Transitions>
                             <Border
                                 Style="{StaticResource MediaCardStyle}"
                                 Padding="16">

@@ -14,6 +14,7 @@ namespace LumiereMediaPlayer.ViewModels;
 public partial class MusicLibraryViewModel : ObservableObject
 {
     private readonly PlaybackViewModel _playback;
+    private readonly LumiereMediaPlayer.Services.Streaming.MusicStreamingService _musicService = new();
 
     [ObservableProperty]
     public partial ObservableCollection<MediaItem> Tracks { get; set; } = new();
@@ -25,7 +26,74 @@ public partial class MusicLibraryViewModel : ObservableObject
         SampleMediaLibrary.LibraryChanged += (s, e) =>
         {
             SyncTracks();
+            _ = PopulateMusicMetadataAsync();
         };
+        _ = PopulateMusicMetadataAsync();
+    }
+
+    private async Task PopulateMusicMetadataAsync()
+    {
+        var audioTracks = SampleMediaLibrary.AudioTracks;
+        bool changed = false;
+
+        foreach (var track in audioTracks)
+        {
+            if (track.IsFolder) continue;
+            if (!string.IsNullOrEmpty(track.PosterUrl)) continue;
+
+            try
+            {
+                string query = track.Title;
+                if (!string.IsNullOrEmpty(track.Artist) && track.Artist != "Unknown Artist")
+                {
+                    query += $" {track.Artist}";
+                }
+
+                var results = await _musicService.SearchTracksAsync(query, limit: 5);
+                if (results != null && results.Count > 0)
+                {
+                    var bestMatch = results.FirstOrDefault(t => 
+                        (!string.IsNullOrEmpty(t.TrackName) && t.TrackName.Contains(track.Title, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(track.Title) && track.Title.Contains(t.TrackName, StringComparison.OrdinalIgnoreCase)));
+
+                    if (bestMatch == null)
+                    {
+                        bestMatch = results[0];
+                    }
+
+                    if (bestMatch != null)
+                    {
+                        string? posterUrl = bestMatch.HighResArtworkUrl;
+                        string? releaseYear = !string.IsNullOrEmpty(bestMatch.ReleaseDate) && bestMatch.ReleaseDate.Length >= 4 ? bestMatch.ReleaseDate.Substring(0, 4) : null;
+                        string? genre = bestMatch.PrimaryGenreName;
+
+                        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            if (string.IsNullOrEmpty(track.PosterUrl) && !string.IsNullOrEmpty(posterUrl))
+                                track.PosterUrl = posterUrl;
+                            if (string.IsNullOrEmpty(track.ReleaseYear) && !string.IsNullOrEmpty(releaseYear))
+                                track.ReleaseYear = releaseYear;
+                            if (string.IsNullOrEmpty(track.Genre) && !string.IsNullOrEmpty(genre))
+                                track.Genre = genre;
+                        });
+
+                        changed = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] Metadata query failed for '{track.Title}': {ex.Message}");
+            }
+        }
+
+        if (changed)
+        {
+            // Give enqueued dispatcher property changes a tiny bit of time to settle, then save library cache
+            await Task.Delay(500);
+            await SampleMediaLibrary.SaveLibraryAsync();
+            SyncTracks();
+        }
     }
 
     private void SyncTracks()

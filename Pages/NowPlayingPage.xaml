@@ -6,11 +6,55 @@
     xmlns:local="using:LumiereMediaPlayer.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers"
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
+    <Page.Resources>
+        <Storyboard x:Key="AmbientAnimation" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation
+                Storyboard.TargetName="AmbientRotation"
+                Storyboard.TargetProperty="Angle"
+                From="-12" To="12" Duration="0:1:10" />
+            <DoubleAnimation
+                Storyboard.TargetName="AmbientScale"
+                Storyboard.TargetProperty="ScaleX"
+                From="1.3" To="1.6" Duration="0:0:55" />
+            <DoubleAnimation
+                Storyboard.TargetName="AmbientScale"
+                Storyboard.TargetProperty="ScaleY"
+                From="1.3" To="1.6" Duration="0:0:55" />
+        </Storyboard>
+    </Page.Resources>
+
     <!-- Background gradient overlay — derived from accent color in code-behind -->
     <Grid x:Name="PageRoot">
+        <!-- Ambient "Glow" Backdrop -->
+        <Grid x:Name="AmbientArtworkHost" Opacity="0.14">
+            <Image
+                x:Name="AmbientArtworkImage"
+                Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(ViewModel.PosterUrl), Mode=OneWay}"
+                Stretch="UniformToFill"
+                RenderTransformOrigin="0.5,0.5">
+                <Image.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="AmbientScale" ScaleX="1.4" ScaleY="1.4" />
+                        <RotateTransform x:Name="AmbientRotation" Angle="0" />
+                    </TransformGroup>
+                </Image.RenderTransform>
+            </Image>
+            
+            <!-- Radial overlay to blend edges with solid dark theme background -->
+            <Border>
+                <Border.Background>
+                    <RadialGradientBrush Center="0.5,0.5" RadiusX="0.75" RadiusY="0.75">
+                        <GradientStop Color="#00000000" Offset="0.0"/>
+                        <GradientStop Color="{ThemeResource SolidBackgroundFillColorBase}" Offset="1.0"/>
+                    </RadialGradientBrush>
+                </Border.Background>
+            </Border>
+        </Grid>
+
         <Border
             x:Name="AccentGradientOverlay"
             Opacity="0.08">
@@ -29,50 +73,93 @@
             </Grid.ColumnDefinitions>
 
             <!-- Album art — left column -->
-            <Grid
+            <StackPanel
                 Grid.Column="0"
                 Margin="0,0,40,0"
+                Spacing="24"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
 
-                <!-- Actual album art with true Fluent Design 2 ThemeShadow -->
-                <Border
-                    x:Name="HeroAlbumArt"
-                    Width="340"
-                    Height="340"
-                    CornerRadius="{StaticResource LargeCornerRadius}"
-                    Translation="0,0,16"
-                    RenderTransformOrigin="0.5,0.5">
-                    <Border.Shadow>
-                        <ThemeShadow />
-                    </Border.Shadow>
-                    <Grid>
-                        <FontIcon
-                            FontSize="100"
-                            Foreground="White"
-                            Glyph="&#xE8D6;"
-                            HorizontalAlignment="Center"
-                            Opacity="0.85"
-                            VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
+                <Grid Width="340" Height="340">
+                    <!-- Actual album art with true Fluent Design 2 ThemeShadow -->
+                    <Border
+                        x:Name="HeroAlbumArt"
+                        Width="340"
+                        Height="340"
+                        CornerRadius="{StaticResource LargeCornerRadius}"
+                        Translation="0,0,16"
+                        RenderTransformOrigin="0.5,0.5">
+                        <Border.Shadow>
+                            <ThemeShadow />
+                        </Border.Shadow>
+                        <Grid CornerRadius="{StaticResource LargeCornerRadius}">
+                            <FontIcon
+                                FontSize="100"
+                                Foreground="White"
+                                Glyph="&#xE8D6;"
+                                HorizontalAlignment="Center"
+                                Opacity="0.85"
+                                VerticalAlignment="Center" />
+                            <Image
+                                x:Name="AlbumArtImage"
+                                Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(ViewModel.PosterUrl), Mode=OneWay}"
+                                Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
 
-                <!-- Metadata Overlay -->
-                <Border
-                    x:Name="MetadataOverlay"
-                    Width="340"
-                    Height="340"
-                    CornerRadius="{StaticResource LargeCornerRadius}"
-                    Background="{ThemeResource LayerFillColorAltBrush}"
-                    Visibility="Collapsed">
-                    <Border.BackgroundTransition>
-                        <BrushTransition />
-                    </Border.BackgroundTransition>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="InternetMetadataPanel" Padding="20" Spacing="12" />
-                    </ScrollViewer>
-                </Border>
-            </Grid>
+                    <!-- Metadata Overlay -->
+                    <Border
+                        x:Name="MetadataOverlay"
+                        Width="340"
+                        Height="340"
+                        CornerRadius="{StaticResource LargeCornerRadius}"
+                        Background="{ThemeResource LayerFillColorAltBrush}"
+                        Visibility="Collapsed">
+                        <Border.BackgroundTransition>
+                            <BrushTransition />
+                        </Border.BackgroundTransition>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="InternetMetadataPanel" Padding="20" Spacing="12" />
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- Audio Visualizer Panel -->
+                <StackPanel
+                    x:Name="VisualizerContainer"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Height="64"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom">
+                    <StackPanel.Resources>
+                        <Style TargetType="Rectangle">
+                            <Setter Property="Width" Value="8" />
+                            <Setter Property="Height" Value="6" />
+                            <Setter Property="Fill" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                            <Setter Property="RadiusX" Value="4" />
+                            <Setter Property="RadiusY" Value="4" />
+                            <Setter Property="VerticalAlignment" Value="Bottom" />
+                        </Style>
+                    </StackPanel.Resources>
+                    <Rectangle x:Name="Bar0" />
+                    <Rectangle x:Name="Bar1" />
+                    <Rectangle x:Name="Bar2" />
+                    <Rectangle x:Name="Bar3" />
+                    <Rectangle x:Name="Bar4" />
+                    <Rectangle x:Name="Bar5" />
+                    <Rectangle x:Name="Bar6" />
+                    <Rectangle x:Name="Bar7" />
+                    <Rectangle x:Name="Bar8" />
+                    <Rectangle x:Name="Bar9" />
+                    <Rectangle x:Name="Bar10" />
+                    <Rectangle x:Name="Bar11" />
+                    <Rectangle x:Name="Bar12" />
+                    <Rectangle x:Name="Bar13" />
+                    <Rectangle x:Name="Bar14" />
+                    <Rectangle x:Name="Bar15" />
+                </StackPanel>
+            </StackPanel>
 
             <!-- Track info — right column -->
             <StackPanel
@@ -118,13 +205,20 @@
                 <Border
                     x:Name="LyricsCard"
                     Margin="0,16,0,0"
-                    Padding="20"
+                    Padding="16"
+                    Height="240"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     CornerRadius="{StaticResource CardCornerRadiusFull}">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,10">
                             <FontIcon
                                 FontSize="14"
                                 Glyph="&#xEA37;"
@@ -134,13 +228,53 @@
                                 FontSize="13"
                                 Text="Lyrics" />
                         </StackPanel>
+
+                        <!-- Placeholder when no lyrics -->
                         <TextBlock
+                            x:Name="NoLyricsPlaceholder"
+                            Grid.Row="1"
                             FontSize="13"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             LineHeight="22"
-                            Text="Lyrics will appear here when available."
-                            TextWrapping="WrapWholeWords" />
-                    </StackPanel>
+                            Text="Lyrics will appear here when available (.lrc file next to audio)."
+                            TextWrapping="WrapWholeWords"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            TextAlignment="Center" />
+
+                        <!-- Synced Lyrics ListView -->
+                        <ListView
+                            x:Name="LyricsListView"
+                            Grid.Row="1"
+                            SelectionMode="None"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnLyricsLineClick"
+                            ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                            Visibility="Collapsed">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0,4" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4">
+                                        <TextBlock
+                                            x:Name="LyricText"
+                                            Text="{Binding Text}"
+                                            FontSize="14"
+                                            FontWeight="SemiBold"
+                                            TextWrapping="Wrap"
+                                            TextAlignment="Center"
+                                            HorizontalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
                 </Border>
             </StackPanel>
         </Grid>

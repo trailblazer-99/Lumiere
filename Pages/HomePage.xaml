@@ -19,14 +19,42 @@
             <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="36" Opacity="1">
 
                 <!-- Header Grid containing Brand/Greeting and Open file(s) button -->
-                <Grid Margin="0,0,0,12">
+                <Grid x:Name="HeaderGrid" Margin="0,0,0,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="HeaderRow0" Height="Auto" />
+                        <RowDefinition x:Name="HeaderRow1" Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="HeaderCol0" Width="*" />
+                        <ColumnDefinition x:Name="HeaderCol1" Width="Auto" />
                     </Grid.ColumnDefinitions>
 
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="HeaderLayoutStates">
+                            <VisualState x:Name="WideHeader">
+                                <VisualState.StateTriggers>
+                                    <AdaptiveTrigger MinWindowWidth="800" />
+                                </VisualState.StateTriggers>
+                            </VisualState>
+                            <VisualState x:Name="NarrowHeader">
+                                <VisualState.StateTriggers>
+                                    <AdaptiveTrigger MinWindowWidth="0" />
+                                </VisualState.StateTriggers>
+                                <VisualState.Setters>
+                                    <Setter Target="HeaderCol0.Width" Value="*" />
+                                    <Setter Target="HeaderCol1.Width" Value="*" />
+                                    <Setter Target="OpenFileButton.(Grid.Row)" Value="1" />
+                                    <Setter Target="OpenFileButton.(Grid.Column)" Value="0" />
+                                    <Setter Target="OpenFileButton.HorizontalAlignment" Value="Left" />
+                                    <Setter Target="OpenFileButton.Margin" Value="0,16,0,0" />
+                                    <Setter Target="GreetingPanel.(Grid.ColumnSpan)" Value="2" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+
                     <!-- App Logo & Greeting Brand Section -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <StackPanel x:Name="GreetingPanel" Grid.Column="0" Grid.Row="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                         <Image Width="64" Height="64" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
                         <StackPanel Spacing="2" VerticalAlignment="Center">
                             <TextBlock
@@ -43,6 +71,7 @@
                     <SplitButton
                         x:Name="OpenFileButton"
                         Grid.Column="1"
+                        Grid.Row="0"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
                         Click="OnOpenFileClick">
@@ -75,7 +104,12 @@
                     </Grid>
                     <ItemsRepeater ItemsSource="{Binding ViewModel.RecentlyPlayed, ElementName=PageRoot}">
                         <ItemsRepeater.Layout>
-                            <StackLayout Orientation="Horizontal" Spacing="16" />
+                            <UniformGridLayout
+                                MinColumnSpacing="16"
+                                MinItemHeight="225"
+                                MinItemWidth="150"
+                                MinRowSpacing="16"
+                                Orientation="Horizontal" />
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate>
@@ -83,6 +117,11 @@
                                     Style="{StaticResource CardButtonStyle}"
                                     Command="{Binding ElementName=PageRoot, Path=ViewModel.PlayTrackCommand}"
                                     CommandParameter="{Binding}">
+                                    <Button.Transitions>
+                                        <TransitionCollection>
+                                            <EntranceThemeTransition FromHorizontalOffset="0" FromVerticalOffset="28" IsStaggeringEnabled="True" />
+                                        </TransitionCollection>
+                                    </Button.Transitions>
                                     <controls:MediaCard
                                         CardWidth="150"
                                         CardHeight="225"
