@@ -103,6 +103,15 @@ public sealed partial class VideoPage : Page
     {
         try
         {
+            if (this.Resources["AmbientAnimation"] is Microsoft.UI.Xaml.Media.Animation.Storyboard ambientStory)
+            {
+                ambientStory.Begin();
+            }
+        }
+        catch { }
+
+        try
+        {
             if (AppServices.Settings.Current.ReduceMotion)
             {
                 PageContent.Opacity = 1.0;

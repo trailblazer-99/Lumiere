@@ -76,7 +76,10 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
-                    _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
+                    if (_webView.CoreWebView2 != null)
+                    {
+                        _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
+                    }
                     _webView.Close();
                 }
                 catch (Exception ex)
@@ -93,7 +96,7 @@ namespace LumiereMediaPlayer.Pages
         private void OnWebViewContainsFullScreenElementChanged(CoreWebView2 sender, object args)
         {
             var isFullScreen = sender.ContainsFullScreenElement;
-            PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 32, 0, 0);
+            PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
             App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
         }
     }

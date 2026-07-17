@@ -244,10 +244,25 @@ public partial class VideoViewModel : ObservableObject
         return new EpisodeLookup(seriesTitle, season, episode);
     }
 
-    private static TmdbMedia? SelectBestMatch(IEnumerable<TmdbMedia> results, string query)
+    private static TmdbMedia? SelectBestMatch(IEnumerable<TmdbMedia> results, string query, string? year = null)
     {
         var normalizedQuery = NormalizeLookupText(query);
-        return results
+        var matches = results;
+
+        if (!string.IsNullOrEmpty(year))
+        {
+            var yearMatches = matches.Where(result =>
+                (!string.IsNullOrEmpty(result.ReleaseDate) && result.ReleaseDate.StartsWith(year)) ||
+                (!string.IsNullOrEmpty(result.FirstAirDate) && result.FirstAirDate.StartsWith(year))
+            ).ToList();
+
+            if (yearMatches.Count > 0)
+            {
+                matches = yearMatches;
+            }
+        }
+
+        return matches
             .OrderByDescending(result => string.Equals(NormalizeLookupText(result.DisplayTitle), normalizedQuery, StringComparison.OrdinalIgnoreCase))
             .ThenByDescending(result => result.VoteAverage)
             .FirstOrDefault();
@@ -256,11 +271,35 @@ public partial class VideoViewModel : ObservableObject
     private async Task PopulateTmdbDataAsync(MediaItem item)
     {
         if (item.IsFolder) return;
+
+        string? year = null;
+        var yearRegex = new Regex(@"\b((?:19|20)\d{2})\b");
+        if (!string.IsNullOrEmpty(item.SourcePath))
+        {
+            var match = yearRegex.Match(Path.GetFileName(item.SourcePath));
+            if (match.Success) year = match.Groups[1].Value;
+        }
+        if (string.IsNullOrEmpty(year) && !string.IsNullOrEmpty(item.Title))
+        {
+            var match = yearRegex.Match(item.Title);
+            if (match.Success) year = match.Groups[1].Value;
+        }
+
         var episodeLookup = TryCreateEpisodeLookup(item);
-        if (!string.IsNullOrEmpty(item.PosterUrl) && episodeLookup == null) return;
+        if (!string.IsNullOrEmpty(item.PosterUrl) && episodeLookup == null)
+        {
+            if (!string.IsNullOrEmpty(year) && !string.IsNullOrEmpty(item.ReleaseYear) && item.ReleaseYear.Length == 4 && item.ReleaseYear != year)
+            {
+                // Bypassed early return to correct incorrect metadata match
+            }
+            else
+            {
+                return;
+            }
+        }
         
         // Default fallback to show file format
-        if (string.IsNullOrEmpty(item.ReleaseYear))
+        if (string.IsNullOrEmpty(item.ReleaseYear) || item.ReleaseYear.Length != 4)
         {
             item.ReleaseYear = !string.IsNullOrEmpty(item.FileExtension) ? item.FileExtension.TrimStart('.').ToUpper() : "VIDEO";
         }
@@ -270,7 +309,7 @@ public partial class VideoViewModel : ObservableObject
             if (episodeLookup != null)
             {
                 var tvResults = await _tmdbService.SearchTvShowsAsync(episodeLookup.SeriesTitle);
-                var show = SelectBestMatch(tvResults, episodeLookup.SeriesTitle);
+                var show = SelectBestMatch(tvResults, episodeLookup.SeriesTitle, year);
                 if (show == null) return;
 
                 var episode = await _tmdbService.GetTvEpisodeAsync(show.Id, episodeLookup.SeasonNumber, episodeLookup.EpisodeNumber);
@@ -304,7 +343,7 @@ public partial class VideoViewModel : ObservableObject
 
             var results = await _tmdbService.SearchMoviesAsync(cleanTitle);
             
-            var bestMatch = SelectBestMatch(results, cleanTitle);
+            var bestMatch = SelectBestMatch(results, cleanTitle, year);
             if (bestMatch != null)
             {
                 if (!string.IsNullOrEmpty(bestMatch.PosterPath))
@@ -465,6 +504,8 @@ public partial class VideoViewModel : ObservableObject
         });
     }
 
+    public string? CurrentPosterUrl => CurrentVideo?.PosterUrl;
+
     private void SyncFromPlayback()
     {
         if (_playback.CurrentTrack is { IsVideo: true } track && _playback.IsVideoPlayerActive)
@@ -477,6 +518,7 @@ public partial class VideoViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSource));
             OnPropertyChanged(nameof(OverlayVisibility));
             OnPropertyChanged(nameof(PlayerVisibility));
+            OnPropertyChanged(nameof(CurrentPosterUrl));
             return;
         }
 
@@ -491,6 +533,7 @@ public partial class VideoViewModel : ObservableObject
         OnPropertyChanged(nameof(OverlayVisibility));
         OnPropertyChanged(nameof(PlayerVisibility));
         OnPropertyChanged(nameof(HdrBadgeVisibility));
+        OnPropertyChanged(nameof(CurrentPosterUrl));
     }
 
     private sealed record EpisodeLookup(string SeriesTitle, int SeasonNumber, int EpisodeNumber);

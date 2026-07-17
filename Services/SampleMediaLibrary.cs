@@ -13,6 +13,7 @@ public static class SampleMediaLibrary
     private static List<MediaItem> _allTracks = new();
     private static List<Playlist> _playlists = new();
     private static readonly object _lock = new();
+    private static readonly System.Threading.SemaphoreSlim _saveSemaphore = new(1, 1);
 
     public static event EventHandler? LibraryChanged;
 
@@ -71,6 +72,7 @@ public static class SampleMediaLibrary
 
     public static async Task SaveLibraryAsync()
     {
+        await _saveSemaphore.WaitAsync();
         try
         {
             var folder = Windows.Storage.ApplicationData.Current.LocalFolder;
@@ -88,6 +90,10 @@ public static class SampleMediaLibrary
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save library: {ex.Message}");
+        }
+        finally
+        {
+            _saveSemaphore.Release();
         }
     }
 

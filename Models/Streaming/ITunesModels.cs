@@ -35,6 +35,12 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("collectionViewUrl")]
         public string? CollectionViewUrl { get; set; }
 
+        [JsonPropertyName("releaseDate")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("primaryGenreName")]
+        public string? PrimaryGenreName { get; set; }
+
         public string? HighResArtworkUrl => !string.IsNullOrEmpty(ArtworkUrl100) ? ArtworkUrl100.Replace("100x100bb", "600x600bb") : null;
     }
 }

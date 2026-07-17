@@ -168,9 +168,17 @@ public sealed class PlaybackSession
         bool startPlayback,
         bool saveLastPlayed)
     {
+        _isChangingSource = true;
+        try
+        {
+            _mediaPlayer.Source = null;
+        }
+        catch { }
+
         var track = CurrentTrack;
         if (track is null)
         {
+            _isChangingSource = false;
             StateChanged?.Invoke(this, EventArgs.Empty);
             return;
         }
@@ -186,6 +194,7 @@ public sealed class PlaybackSession
         if (!IsCurrentPlaybackRequest(requestVersion) || CurrentTrack?.Id != track.Id)
         {
             Log("LoadCurrentTrackSourceAsync: Request version changed or track changed. Aborting.");
+            _isChangingSource = false;
             return;
         }
 
@@ -208,7 +217,6 @@ public sealed class PlaybackSession
                 Log($"LoadCurrentTrackSourceAsync: Failed to disable VideoFrameServer: {ex.Message}");
             }
 
-            _isChangingSource = true;
             _mediaPlayer.Source = source;
 
             var targetPos = GetResumePositionSeconds(track);
@@ -234,6 +242,7 @@ public sealed class PlaybackSession
         else
         {
             Log("LoadCurrentTrackSourceAsync: CreatePlaybackSourceAsync returned null!");
+            _isChangingSource = false;
         }
 
         UpdateDisplayRequestState();

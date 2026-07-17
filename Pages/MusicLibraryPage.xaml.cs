@@ -17,6 +17,8 @@ public sealed partial class MusicLibraryPage : Page
         InitializeComponent();
     }
 
+
+
     private void OnTrackDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (TrackListView.SelectedItem is MediaItem track)

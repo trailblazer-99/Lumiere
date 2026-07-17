@@ -523,7 +523,8 @@ public sealed partial class MainWindow : Window
                             if (RootNavigationView != null)
                             {
                                 RootNavigationView.Visibility = Visibility.Visible;
-                                RootNavigationView.IsPaneVisible = false;
+                                RootNavigationView.IsPaneOpen = false;
+                                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
                                 RootNavigationView.IsPaneToggleButtonVisible = false;
                             }
                             if (AppTitleBar != null)
@@ -1599,7 +1600,8 @@ public sealed partial class MainWindow : Window
                 RootNavigationView.Visibility = Visibility.Visible;
                 if ((ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage) && AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
-                    RootNavigationView.IsPaneVisible = false;
+                    RootNavigationView.IsPaneOpen = false;
+                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
                     RootNavigationView.IsPaneToggleButtonVisible = false;
                     if (TransportControls != null)
                     {
@@ -2467,6 +2469,11 @@ public sealed partial class MainWindow : Window
                     // Toggle title bar auto padding to correct top offsets
                     RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
                     RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
+
+                    if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
+                    {
+                        RootNavigationView.IsPaneOpen = false;
+                    }
                 }
             }
             catch (Exception ex)

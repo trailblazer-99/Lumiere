@@ -15,6 +15,7 @@ public partial class NowPlayingViewModel : ObservableObject
     [ObservableProperty] public partial string Album { get; set; } = string.Empty;
 
     [ObservableProperty] public partial string AccentColor { get; set; } = "#0078D4";
+    [ObservableProperty] public partial string? PosterUrl { get; set; }
 
     public NowPlayingViewModel(PlaybackViewModel playback)
     {
@@ -31,6 +32,7 @@ public partial class NowPlayingViewModel : ObservableObject
             Artist = "Select a track to begin";
             Album = string.Empty;
             AccentColor = "#0078D4";
+            PosterUrl = null;
             return;
         }
 
@@ -38,5 +40,6 @@ public partial class NowPlayingViewModel : ObservableObject
         Artist = track.Artist;
         Album = track.Album;
         AccentColor = track.AccentColor;
+        PosterUrl = track.PosterUrl;
     }
 }
