@@ -30,7 +30,20 @@ public sealed class MediaItem : INotifyPropertyChanged
     public string? SourcePath { get; init; }
     
     // New Advanced Properties
-    public long FileSize { get; init; }
+    private long _fileSize;
+    public long FileSize
+    {
+        get => _fileSize;
+        set
+        {
+            if (_fileSize != value)
+            {
+                _fileSize = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FileSizeText));
+            }
+        }
+    }
     public DateTime DateAdded { get; init; }
     public DateTime DateCreated { get; init; }
     public bool IsFolder { get; init; }

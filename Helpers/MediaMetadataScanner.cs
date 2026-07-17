@@ -38,6 +38,14 @@ public static class MediaMetadataScanner
             string resolution = $"{videoProps.Width}x{videoProps.Height}";
             uint bitrate = videoProps.Bitrate;
 
+            long fileSize = 0;
+            try
+            {
+                var basicProps = await storageFile.GetBasicPropertiesAsync();
+                fileSize = (long)basicProps.Size;
+            }
+            catch { }
+
             // Query extra properties like FrameRate and FourCC
             string codec = "Unknown";
             double frameRate = 0;
@@ -56,20 +64,35 @@ public static class MediaMetadataScanner
             }
             catch { }
 
-            // Fallback for codec using TagLib
-            if (codec == "Unknown" || string.IsNullOrEmpty(codec))
+            // Fallback for resolution and codec using TagLib with shared read-write stream to avoid locks
+            if (codec == "Unknown" || string.IsNullOrEmpty(codec) || resolution == "0x0" || string.IsNullOrEmpty(resolution))
             {
                 try
                 {
-                    using var tagFile = TagLib.File.Create(playablePath);
-                    var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
-                    if (!string.IsNullOrEmpty(videoCodec))
+                    using var stream = new FileStream(playablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream));
+                    
+                    if (codec == "Unknown" || string.IsNullOrEmpty(codec))
                     {
-                        codec = videoCodec;
+                        var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
+                        if (!string.IsNullOrEmpty(videoCodec))
+                        {
+                            codec = videoCodec;
+                        }
+                        else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
+                        {
+                            codec = tagFile.Properties.Description;
+                        }
                     }
-                    else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
+
+                    if (resolution == "0x0" || string.IsNullOrEmpty(resolution))
                     {
-                        codec = tagFile.Properties.Description;
+                        int w = tagFile.Properties.VideoWidth;
+                        int h = tagFile.Properties.VideoHeight;
+                        if (w > 0 && h > 0)
+                        {
+                            resolution = $"{w}x{h}";
+                        }
                     }
                 }
                 catch { }
@@ -94,6 +117,10 @@ public static class MediaMetadataScanner
                 {
                     item.FrameRate = frameRate;
                 }
+                if (item.FileSize == 0)
+                {
+                    item.FileSize = fileSize;
+                }
 
                 // Auto save changes back to cache json
                 await Services.SampleMediaLibrary.SaveLibraryAsync();
@@ -103,5 +130,24 @@ public static class MediaMetadataScanner
         {
             System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] Error scanning: {ex.Message}");
         }
+    }
+}
+
+public class StreamFileAbstraction : TagLib.File.IFileAbstraction
+{
+    public StreamFileAbstraction(string name, Stream stream)
+    {
+        Name = name;
+        ReadStream = stream;
+        WriteStream = stream;
+    }
+
+    public string Name { get; }
+    public Stream ReadStream { get; }
+    public Stream WriteStream { get; }
+
+    public void CloseStream(Stream stream)
+    {
+        // Handled by calling method using blocks
     }
 }

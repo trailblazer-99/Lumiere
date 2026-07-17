@@ -144,6 +144,16 @@
                     ToolTipService.ToolTip="Previous">
                     <FontIcon FontSize="16" Glyph="&#xE892;" />
                 </Button>
+                <Button
+                    AutomationProperties.Name="Replay from beginning"
+                    Click="OnReplayClick"
+                    Style="{StaticResource TransportIconButtonStyle}"
+                    ToolTipService.ToolTip="Replay from beginning">
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="R" Modifiers="Control" />
+                    </Button.KeyboardAccelerators>
+                </Button>
 
                 <!-- Play/Pause Button -->
                 <Button
@@ -174,6 +184,21 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center" />
                     </Grid>
+                </Button>
+
+                <Button
+                    x:Name="StopButton"
+                    AutomationProperties.Name="Stop"
+                    Click="OnStopClick"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    Background="#D92D20"
+                    BorderThickness="0"
+                    CornerRadius="6"
+                    ToolTipService.ToolTip="Stop"
+                    VerticalAlignment="Center">
+                    <FontIcon FontSize="10" Glyph="&#xE15B;" Foreground="White" />
                 </Button>
 
                 <Button
@@ -220,20 +245,6 @@
                     </Button.Flyout>
                 </Button>
 
-                <Button
-                    x:Name="StopButton"
-                    AutomationProperties.Name="Stop"
-                    Click="OnStopClick"
-                    Width="28"
-                    Height="28"
-                    Padding="0"
-                    Background="#D92D20"
-                    BorderThickness="0"
-                    CornerRadius="6"
-                    ToolTipService.ToolTip="Stop">
-                    <FontIcon FontSize="10" Glyph="&#xE15B;" Foreground="White" />
-                </Button>
-                
                 <Button
                     AutomationProperties.Name="Subtitles"
                     Style="{StaticResource TransportIconButtonStyle}"

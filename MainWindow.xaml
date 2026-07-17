@@ -247,23 +247,51 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Playback.CurrentTrack.Resolution, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Codec" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Playback.CurrentTrack.Codec, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Bitrate" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Playback.CurrentTrack.BitrateText, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Framerate" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Playback.CurrentTrack.FrameRateText, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="File Size" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Playback.CurrentTrack.FileSizeText, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Playback.CurrentTrack.SourcePath, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="White" />
                     </Grid>
+
+                    <!-- Divider between File Information and Internet Match -->
+                    <MenuFlyoutSeparator Margin="0,8,0,4" Background="#33FFFFFF" x:Name="FullscreenMetadataDivider" x:FieldModifier="public" Visibility="Collapsed" />
+
+                    <!-- Internet Metadata Match (syncs with normal mode's metadata side panel) -->
+                    <StackPanel x:Name="FullscreenInternetMetadataPanel" x:FieldModifier="public" Spacing="12" Visibility="Collapsed" Width="260">
+                        <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
+                        <ProgressRing x:Name="FullscreenInternetMetadataProgress" x:FieldModifier="public" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="White" />
+                        
+                        <Grid x:Name="FullscreenInternetMetadataContent" x:FieldModifier="public" ColumnSpacing="12" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" CornerRadius="6" VerticalAlignment="Top">
+                                <Image x:Name="FullscreenInternetMetadataPoster" x:FieldModifier="public" Stretch="UniformToFill" MaxHeight="130" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="8">
+                                <TextBlock x:Name="FullscreenInternetMetadataTitle" x:FieldModifier="public" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" FontSize="14" />
+                                <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#A0A0A0" LineHeight="15" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel x:Name="FullscreenInternetMetadataProvidersPanel" x:FieldModifier="public" Spacing="8" Visibility="Collapsed">
+                            <TextBlock Text="Available on:" FontWeight="SemiBold" FontSize="13" Foreground="White"/>
+                            <Grid x:Name="FullscreenInternetMetadataProvidersGrid" x:FieldModifier="public" ColumnSpacing="6" RowSpacing="6"/>
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>
@@ -414,7 +442,7 @@
             <!-- Center Control Area -->
             <Grid Grid.Row="1">
                 <!-- Video Player (Video mode) -->
-                <MediaPlayerElement x:Name="MiniVideoPlayer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" />
+                <MediaPlayerElement x:Name="MiniVideoPlayer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" AutoPlay="False" />
                 
                 <!-- Album Art (Audio mode) -->
                 <Image x:Name="MiniAudioArt" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="UniformToFill" Opacity="0.3" Visibility="Collapsed" />
