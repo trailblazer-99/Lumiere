@@ -329,6 +329,7 @@ public sealed partial class TransportBar : UserControl
 
     private void OnTrackClick(object sender, RoutedEventArgs e) => OnTrackInfoClick(sender, e);
     private void OnInfoClick(object sender, RoutedEventArgs e) => OnInfoButtonClick(sender, e);
+    private void OnReplayClick(object sender, RoutedEventArgs e) => PositionChanged?.Invoke(this, 0d);
     
     private void OnVolumeClick(object sender, RoutedEventArgs e) { }
     private void OnVolumeValueChanged(object sender, RangeBaseValueChangedEventArgs e) => OnVolumeSliderValueChanged(sender, e);

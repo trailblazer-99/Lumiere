@@ -259,25 +259,66 @@ public sealed partial class NowPlayingPage : Page
             var encodedTitle = Uri.EscapeDataString(trackName);
             var encodedArtist = Uri.EscapeDataString(artistName);
             var q = Uri.EscapeDataString(trackName + " " + artistName);
-            Uri? searchUri = null;
+            string searchWebUrl = "";
+            string deepLinkUrl = "";
+
             switch (p.Name.ToLower())
             {
-                case "spotify": searchUri = new Uri($"spotify:search:{q}"); break;
-                case "apple music": searchUri = new Uri($"https://music.apple.com/search?term={q}"); break;
-                case "youtube music": searchUri = new Uri($"https://music.youtube.com/search?q={q}"); break;
-                case "amazon music": searchUri = new Uri($"https://music.amazon.com/search/{q}"); break;
-                case "soundcloud": searchUri = new Uri($"https://soundcloud.com/search/sounds?q={q}"); break;
-                case "tidal": searchUri = new Uri($"https://listen.tidal.com/search?q={q}"); break;
-                case "deezer": searchUri = new Uri($"https://www.deezer.com/search/{q}"); break;
-                case "pandora": searchUri = new Uri($"https://www.pandora.com/search/{q}/all"); break;
+                case "spotify":
+                    deepLinkUrl = $"spotify:search:{q}";
+                    searchWebUrl = $"https://open.spotify.com/search/{q}";
+                    break;
+                case "apple music":
+                    deepLinkUrl = $"applemusic://search?term={q}";
+                    searchWebUrl = $"https://music.apple.com/search?term={q}";
+                    break;
+                case "youtube music":
+                    searchWebUrl = $"https://music.youtube.com/search?q={q}";
+                    break;
+                case "amazon music":
+                    deepLinkUrl = $"amznmp3://search?q={q}";
+                    searchWebUrl = $"https://music.amazon.com/search/{q}";
+                    break;
+                case "soundcloud":
+                    searchWebUrl = $"https://soundcloud.com/search/sounds?q={q}";
+                    break;
+                case "tidal":
+                    deepLinkUrl = $"tidal://search?q={q}";
+                    searchWebUrl = $"https://listen.tidal.com/search?q={q}";
+                    break;
+                case "deezer":
+                    deepLinkUrl = $"deezer://search/{q}";
+                    searchWebUrl = $"https://www.deezer.com/search/{q}";
+                    break;
+                case "pandora":
+                    searchWebUrl = $"https://www.pandora.com/search/{q}/all";
+                    break;
                 default: 
                     string cleanName = p.Name.ToLower().Replace(" ", "");
-                    searchUri = new Uri($"https://{cleanName}.com/search?q={q}"); 
+                    searchWebUrl = $"https://{cleanName}.com/search?q={q}"; 
                     break;
             }
-            var url = searchUri.ToString();
             
-            btn.Click += async (s, args) => { await Windows.System.Launcher.LaunchUriAsync(new Uri(url)); };
+            btn.Click += async (s, args) => 
+            { 
+                bool launched = false;
+                if (!string.IsNullOrEmpty(deepLinkUrl))
+                {
+                    try
+                    {
+                        launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
+                    }
+                    catch { }
+                }
+                if (!launched && !string.IsNullOrEmpty(searchWebUrl))
+                {
+                    try
+                    {
+                        await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
+                    }
+                    catch { }
+                }
+            };
 
             Grid.SetColumn(btn, col);
             Grid.SetRow(btn, row);

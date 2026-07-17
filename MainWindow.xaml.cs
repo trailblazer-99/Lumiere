@@ -267,7 +267,8 @@ public sealed partial class MainWindow : Window
             AreTransportControlsEnabled = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
-            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+            AutoPlay = false
         };
         GlobalVideoPlayer.Tapped += OnGlobalVideoTapped;
         GlobalVideoPlayer.DoubleTapped += OnGlobalVideoDoubleTapped;
@@ -602,6 +603,7 @@ public sealed partial class MainWindow : Window
     private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         SyncTransportBar();
+        this.Bindings.Update();
 
         if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying))
         {
@@ -1084,6 +1086,14 @@ public sealed partial class MainWindow : Window
             duration = TimeSpan.FromMinutes(3); // fallback
         }
 
+        long fileSize = 0;
+        try
+        {
+            var basicProps = await file.GetBasicPropertiesAsync();
+            fileSize = (long)basicProps.Size;
+        }
+        catch { }
+
         var item = new MediaItem
         {
             Id = Guid.NewGuid().ToString(),
@@ -1093,7 +1103,8 @@ public sealed partial class MainWindow : Window
             Duration = duration,
             AccentColor = "#FFF76B1C",
             Kind = kind,
-            SourcePath = file.Path
+            SourcePath = file.Path,
+            FileSize = fileSize
         };
 
         await Services.SampleMediaLibrary.AddTrackAsync(item);
@@ -2781,6 +2792,7 @@ public sealed partial class MainWindow : Window
                 if (sender.Source is Windows.Media.Playback.MediaPlaybackItem mpi) item = mpi;
                 else if (sender.Source is Windows.Media.Playback.MediaPlaybackList mpl) item = mpl.CurrentItem;
                 AppServices.HdrPipeline.ConfigurePipeline(sender, item);
+                this.Bindings.Update();
             }
             catch (Exception ex)
             {

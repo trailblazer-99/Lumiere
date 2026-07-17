@@ -196,6 +196,8 @@ public sealed partial class VideoPage : Page
     {
         if (string.IsNullOrWhiteSpace(title) || InternetMetadataProvidersGrid == null) return;
         
+        var mainWin = App.MainWindowInstance;
+
         InternetMetadataProgress.Visibility = Visibility.Visible;
         InternetMetadataProgress.IsActive = true;
         InternetMetadataPanel.Visibility = Visibility.Collapsed;
@@ -203,6 +205,26 @@ public sealed partial class VideoPage : Page
         InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
         InternetMetadataProvidersGrid.Children.Clear();
         InternetMetadataProvidersGrid.RowDefinitions.Clear();
+        InternetMetadataProvidersGrid.ColumnDefinitions.Clear();
+        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        if (mainWin != null)
+        {
+            mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Visible;
+            mainWin.FullscreenInternetMetadataProgress.IsActive = true;
+            mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
+            mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
+            mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+            mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
+            mainWin.FullscreenInternetMetadataProvidersGrid.Children.Clear();
+            mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Clear();
+            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Clear();
+            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
 
         try
         {
@@ -244,14 +266,35 @@ public sealed partial class VideoPage : Page
                 InternetMetadataProgress.IsActive = false;
                 InternetMetadataProgress.Visibility = Visibility.Collapsed;
 
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataTitle.Text = bestMatch.DisplayTitle;
+                    mainWin.FullscreenInternetMetadataOverview.Text = bestMatch.Overview;
+                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Visible;
+                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                }
+
                 if (!string.IsNullOrEmpty(bestMatch.PosterPath))
                 {
-                    InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}"));
+                    var posterUri = new Uri($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}");
+                    InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri);
                     InternetMetadataPoster.Visibility = Visibility.Visible;
+                    if (mainWin != null)
+                    {
+                        mainWin.FullscreenInternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri);
+                        mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Visible;
+                    }
                 }
                 else
                 {
                     InternetMetadataPoster.Visibility = Visibility.Collapsed;
+                    if (mainWin != null)
+                    {
+                        mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Collapsed;
+                    }
                 }
 
                 var providers = await _tmdbService.GetProvidersAsync(bestMatch.Id, isTvShow ? "tv" : "movie");
@@ -267,6 +310,13 @@ public sealed partial class VideoPage : Page
                     {
                         InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
                         InternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                        
+                        if (mainWin != null)
+                        {
+                            mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+                            mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                        }
+
                         int row = 0;
                         int col = 0;
                         
@@ -280,43 +330,151 @@ public sealed partial class VideoPage : Page
                             };
 
                             var q = Uri.EscapeDataString(bestMatch.DisplayTitle);
-                            Uri searchUri;
+                            string searchWebUrl = "";
+                            string deepLinkUrl = "";
 
                             switch (provider.ProviderName.ToLower())
                             {
-                                case "netflix": searchUri = new Uri($"https://www.netflix.com/search?q={q}"); break;
-                                case "amazon prime video": searchUri = new Uri($"https://www.amazon.com/s?k={q}&i=instant-video"); break;
-                                case "disney plus": searchUri = new Uri($"https://www.disneyplus.com/search?q={q}"); break;
-                                case "apple tv plus": searchUri = new Uri($"https://tv.apple.com/search?term={q}"); break;
-                                case "hulu": searchUri = new Uri($"https://www.hulu.com/search?q={q}"); break;
-                                case "max": searchUri = new Uri($"https://play.max.com/search?q={q}"); break;
-                                case "paramount plus": searchUri = new Uri($"https://www.paramountplus.com/search/?q={q}"); break;
-                                case "peacock": searchUri = new Uri($"https://www.peacocktv.com/watch/search?q={q}"); break;
-                                case "crunchyroll": searchUri = new Uri($"https://www.crunchyroll.com/search?q={q}"); break;
-                                case "youtube": searchUri = new Uri($"https://www.youtube.com/results?search_query={q}"); break;
+                                case "netflix":
+                                    deepLinkUrl = $"netflix:search?q={q}";
+                                    searchWebUrl = $"https://www.netflix.com/search?q={q}";
+                                    break;
+                                case "amazon prime video":
+                                    deepLinkUrl = $"primevideo://search?q={q}";
+                                    searchWebUrl = $"https://www.amazon.com/s?k={q}&i=instant-video";
+                                    break;
+                                case "disney plus":
+                                    deepLinkUrl = $"disneyplus://search?q={q}";
+                                    searchWebUrl = $"https://www.disneyplus.com/search?q={q}";
+                                    break;
+                                case "apple tv plus":
+                                case "apple tv":
+                                case "apple tv store":
+                                    deepLinkUrl = $"appletv://search?term={q}";
+                                    searchWebUrl = $"https://tv.apple.com/search?term={q}";
+                                    break;
+                                case "itunes":
+                                case "apple itunes":
+                                    deepLinkUrl = $"itms://itunes.apple.com/search?term={q}";
+                                    searchWebUrl = $"https://itunes.apple.com/WebObjects/MZStore.woa/wa/search?term={q}";
+                                    break;
+                                case "hulu":
+                                    deepLinkUrl = $"hulu://search?q={q}";
+                                    searchWebUrl = $"https://www.hulu.com/search?q={q}";
+                                    break;
+                                case "max":
+                                    deepLinkUrl = $"max://search?q={q}";
+                                    searchWebUrl = $"https://play.max.com/search?q={q}";
+                                    break;
+                                case "paramount plus":
+                                    deepLinkUrl = $"paramountplus://search/?q={q}";
+                                    searchWebUrl = $"https://www.paramountplus.com/search/?q={q}";
+                                    break;
+                                case "peacock":
+                                    deepLinkUrl = $"peacock://search?q={q}";
+                                    searchWebUrl = $"https://www.peacocktv.com/watch/search?q={q}";
+                                    break;
+                                case "crunchyroll":
+                                    deepLinkUrl = $"crunchyroll://search?q={q}";
+                                    searchWebUrl = $"https://www.crunchyroll.com/search?q={q}";
+                                    break;
+                                case "youtube":
+                                    deepLinkUrl = $"youtube://results?search_query={q}";
+                                    searchWebUrl = $"https://www.youtube.com/results?search_query={q}";
+                                    break;
                                 default:
                                     string cleanName = provider.ProviderName.ToLower().Replace(" ", "");
-                                    searchUri = new Uri($"https://{cleanName}.com/search?q={q}");
+                                    searchWebUrl = $"https://{cleanName}.com/search?q={q}";
                                     break;
                             }
-                            btn.Click += async (s, args) => { await Windows.System.Launcher.LaunchUriAsync(searchUri); };
+
+                            btn.Click += async (s, args) =>
+                            {
+                                bool launched = false;
+                                if (!string.IsNullOrEmpty(deepLinkUrl))
+                                {
+                                    try
+                                    {
+                                        launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
+                                    }
+                                    catch { }
+                                }
+                                if (!launched && !string.IsNullOrEmpty(searchWebUrl))
+                                {
+                                    try
+                                    {
+                                        await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
+                                    }
+                                    catch { }
+                                }
+                            };
 
                             Grid.SetColumn(btn, col);
                             Grid.SetRow(btn, row);
                             InternetMetadataProvidersGrid.Children.Add(btn);
 
+                            if (mainWin != null)
+                            {
+                                var fsBtn = new Button
+                                {
+                                    Content = provider.ProviderName,
+                                    Margin = new Thickness(0, 0, 6, 6),
+                                    Style = (Style)Application.Current.Resources["DefaultButtonStyle"]
+                                };
+                                fsBtn.Click += async (s, args) =>
+                                {
+                                    bool launched = false;
+                                    if (!string.IsNullOrEmpty(deepLinkUrl))
+                                    {
+                                        try
+                                        {
+                                            launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
+                                        }
+                                        catch { }
+                                    }
+                                    if (!launched && !string.IsNullOrEmpty(searchWebUrl))
+                                    {
+                                        try
+                                        {
+                                            await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
+                                        }
+                                        catch { }
+                                    }
+                                };
+                                Grid.SetColumn(fsBtn, col);
+                                Grid.SetRow(fsBtn, row);
+                                mainWin.FullscreenInternetMetadataProvidersGrid.Children.Add(fsBtn);
+                            }
+
                             col++;
-                            if (col > 2) { col = 0; row++; InternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); }
+                            if (col > 2)
+                            {
+                                col = 0;
+                                row++;
+                                InternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                                if (mainWin != null)
+                                {
+                                    mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                                }
+                            }
                         }
                     }
                     else
                     {
                         InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                        if (mainWin != null)
+                        {
+                            mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                        }
                     }
                 }
                 else
                 {
                     InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                    if (mainWin != null)
+                    {
+                        mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                    }
                 }
             }
             else
@@ -326,6 +484,16 @@ public sealed partial class VideoPage : Page
                 InternetMetadataPanel.Visibility = Visibility.Collapsed;
                 InternetMetadataContent.Visibility = Visibility.Collapsed;
                 InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
+                }
             }
         }
         catch
@@ -335,6 +503,16 @@ public sealed partial class VideoPage : Page
             InternetMetadataPanel.Visibility = Visibility.Collapsed;
             InternetMetadataContent.Visibility = Visibility.Collapsed;
             InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+
+            if (mainWin != null)
+            {
+                mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
+                mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
+                mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
+            }
         }
     }
 

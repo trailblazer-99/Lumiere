@@ -49,7 +49,8 @@ public sealed class PlaybackSession
         
         _mediaPlayer = new MediaPlayer
         {
-            AudioCategory = MediaPlayerAudioCategory.Media
+            AudioCategory = MediaPlayerAudioCategory.Media,
+            AutoPlay = false
         };
 
         // Initialize volume
@@ -257,11 +258,32 @@ public sealed class PlaybackSession
         {
             if (CurrentTrack != null)
             {
+                bool trackChanged = false;
                 var naturalDuration = sender.PlaybackSession.NaturalDuration;
                 Log($"OnMediaPlayerMediaOpened: CurrentTrack={CurrentTrack.Title}, naturalDuration={naturalDuration}");
                 if (naturalDuration.TotalSeconds > 0 && CurrentTrack.Duration != naturalDuration)
                 {
                     CurrentTrack.Duration = naturalDuration;
+                    trackChanged = true;
+                }
+
+                if (CurrentTrack.IsVideo)
+                {
+                    var w = sender.PlaybackSession.NaturalVideoWidth;
+                    var h = sender.PlaybackSession.NaturalVideoHeight;
+                    if (w > 0 && h > 0)
+                    {
+                        var resStr = $"{w}x{h}";
+                        if (CurrentTrack.Resolution != resStr)
+                        {
+                            CurrentTrack.Resolution = resStr;
+                            trackChanged = true;
+                        }
+                    }
+                }
+
+                if (trackChanged)
+                {
                     StateChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
