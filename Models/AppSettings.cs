@@ -103,5 +103,20 @@ public sealed class AppSettings
     public bool AutoReadControls { get; set; } = false;
     public bool LargerClickTargets { get; set; } = false;
     public ColorBlindMode ColorBlindMode { get; set; } = ColorBlindMode.Off;
+
+    // ── AI Features Settings ───────────────────────────────────────
+    public bool AiLyricsTranslationEnabled { get; set; } = false;
+    public string AiTranslationTargetLanguage { get; set; } = "Hindi";
+    public bool AiSemanticSearchEnabled { get; set; } = false;
+    public string GeminiApiKey { get; set; } = "";
+    public bool AiEqualizerMatcherEnabled { get; set; } = false;
+    public bool VoiceClarityEnabled { get; set; } = false;
+    public bool NightModeEnabled { get; set; } = false;
+
+    // ── Premium General Features ───────────────────────────────────
+    public int SleepTimerMinutes { get; set; } = 0;
+    public bool SleepAtEndOfTrack { get; set; } = false;
+    public string CustomEqualizerGains { get; set; } = "0,0,0,0,0,0,0,0,0,0";
+    public string SelectedReverbPreset { get; set; } = "None";
 }
 

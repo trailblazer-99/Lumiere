@@ -13,6 +13,12 @@ public sealed partial class PlaylistsPage : Page
     public PlaylistsPage()
     {
         InitializeComponent();
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.Opacity = 0f;
+        }
+        catch { }
     }
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -21,6 +27,12 @@ public sealed partial class PlaylistsPage : Page
         {
             if (AppServices.Settings.Current.ReduceMotion)
             {
+                try
+                {
+                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
+                    v.Opacity = 1f;
+                }
+                catch { }
                 PageContent.Opacity = 1.0;
                 return;
             }

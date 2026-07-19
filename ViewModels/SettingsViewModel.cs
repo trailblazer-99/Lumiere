@@ -92,6 +92,15 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool LargerClickTargets { get; set; }
     [ObservableProperty] public partial ColorBlindMode SelectedColorBlindMode { get; set; }
 
+    // ── AI Features Settings ───────────────────────────────────────
+    [ObservableProperty] public partial bool AiLyricsTranslationEnabled { get; set; }
+    [ObservableProperty] public partial string AiTranslationTargetLanguage { get; set; } = "Hindi";
+    [ObservableProperty] public partial bool AiSemanticSearchEnabled { get; set; }
+    [ObservableProperty] public partial string GeminiApiKey { get; set; } = "";
+    [ObservableProperty] public partial bool AiEqualizerMatcherEnabled { get; set; }
+    [ObservableProperty] public partial bool VoiceClarityEnabled { get; set; }
+    [ObservableProperty] public partial bool NightModeEnabled { get; set; }
+
     // ── Folders ────────────────────────────────────────────────────
     [ObservableProperty] public partial IReadOnlyList<string> LibraryFolders { get; set; } = [];
 
@@ -203,6 +212,37 @@ public partial class SettingsViewModel : ObservableObject
     {
         get => (int)SelectedColorBlindMode;
         set { if (SelectedColorBlindMode != (ColorBlindMode)value) SelectedColorBlindMode = (ColorBlindMode)value; }
+    }
+
+    public int SelectedAiTranslationLanguageIndex
+    {
+        get => AiTranslationTargetLanguage switch
+        {
+            "Hindi" => 0,
+            "Spanish" => 1,
+            "French" => 2,
+            "German" => 3,
+            "Japanese" => 4,
+            "Chinese" => 5,
+            "Russian" => 6,
+            "Italian" => 7,
+            _ => 0,
+        };
+        set
+        {
+            AiTranslationTargetLanguage = value switch
+            {
+                0 => "Hindi",
+                1 => "Spanish",
+                2 => "French",
+                3 => "German",
+                4 => "Japanese",
+                5 => "Chinese",
+                6 => "Russian",
+                7 => "Italian",
+                _ => "Hindi",
+            };
+        }
     }
 
     private static readonly int[] SkipIntervals = [5, 10, 15, 30, 45, 60];
@@ -512,6 +552,31 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedColorBlindModeIndex));
     }
 
+    // ── AI Features Settings Change Handlers ───────────────────────
+    partial void OnAiLyricsTranslationEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiLyricsTranslationEnabled = value; _settingsService.Save(); } }
+    partial void OnAiTranslationTargetLanguageChanged(string value) { if (!_isSyncing) { _settingsService.Current.AiTranslationTargetLanguage = value; _settingsService.Save(); OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex)); } }
+    partial void OnAiSemanticSearchEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiSemanticSearchEnabled = value; _settingsService.Save(); } }
+    partial void OnGeminiApiKeyChanged(string value) { if (!_isSyncing) { _settingsService.Current.GeminiApiKey = value; _settingsService.Save(); } }
+    partial void OnAiEqualizerMatcherEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiEqualizerMatcherEnabled = value; _settingsService.Save(); } }
+    partial void OnVoiceClarityEnabledChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.VoiceClarityEnabled = value;
+            _settingsService.Save();
+            AppServices.PlaybackViewModel.Session.ApplyVoiceClarity(value);
+        }
+    }
+    partial void OnNightModeEnabledChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.NightModeEnabled = value;
+            _settingsService.Save();
+            AppServices.PlaybackViewModel.Session.ApplyNightMode(value);
+        }
+    }
+
     private void SaveAndApplyAccessibility()
     {
         _settingsService.Save();
@@ -675,6 +740,14 @@ public partial class SettingsViewModel : ObservableObject
 
         LibraryFolders = c.LibraryFolders.ToList();
 
+        AiLyricsTranslationEnabled = c.AiLyricsTranslationEnabled;
+        AiTranslationTargetLanguage = c.AiTranslationTargetLanguage;
+        AiSemanticSearchEnabled = c.AiSemanticSearchEnabled;
+        GeminiApiKey = c.GeminiApiKey;
+        AiEqualizerMatcherEnabled = c.AiEqualizerMatcherEnabled;
+        VoiceClarityEnabled = c.VoiceClarityEnabled;
+        NightModeEnabled = c.NightModeEnabled;
+
         _isSyncing = false;
 
         // Notify all index properties
@@ -700,6 +773,7 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedHdrModeIndex));
         OnPropertyChanged(nameof(SelectedToneMappingModeIndex));
         OnPropertyChanged(nameof(PeakBrightnessText));
+        OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex));
         AccessibilityHelper.Apply(c);
     }
 }

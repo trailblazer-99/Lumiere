@@ -72,6 +72,25 @@ namespace Lumiere.Proxy
                         }
                         break;
 
+                    case "gemini":
+                        string geminiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+                        string gConnector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
+                        targetUrl = $"https://generativelanguage.googleapis.com/{remainder}{query}{gConnector}key={geminiKey}";
+                        if (req.Method.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                        {
+                            using (var reader = new StreamReader(req.Body))
+                            {
+                                string requestBody = await reader.ReadToEndAsync();
+                                var postContent = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
+                                response = await _httpClient.PostAsync(targetUrl, postContent);
+                            }
+                        }
+                        else
+                        {
+                            response = await _httpClient.GetAsync(targetUrl);
+                        }
+                        break;
+
                     default:
                         _logger.LogWarning($"Route '{service}' not recognized.");
                         return new NotFoundObjectResult("Service Route Not Found");

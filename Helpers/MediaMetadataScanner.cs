@@ -29,69 +29,138 @@ public static class MediaMetadataScanner
             string? playablePath = await AudioPipelineHelper.GetPlayableFileAsync(path);
             if (string.IsNullOrEmpty(playablePath)) playablePath = path;
 
-            if (!File.Exists(playablePath)) return;
+            StorageFile? storageFile = null;
 
-            var storageFile = await StorageFile.GetFileFromPathAsync(playablePath);
-            
-            // Query video properties via Windows Storage APIs
-            var videoProps = await storageFile.Properties.GetVideoPropertiesAsync();
-            string resolution = $"{videoProps.Width}x{videoProps.Height}";
-            uint bitrate = videoProps.Bitrate;
-
-            long fileSize = 0;
+            // Try to resolve from FutureAccessList first (most secure & always works for picked files)
             try
             {
-                var basicProps = await storageFile.GetBasicPropertiesAsync();
-                fileSize = (long)basicProps.Size;
-            }
-            catch { }
-
-            // Query extra properties like FrameRate and FourCC
-            string codec = "Unknown";
-            double frameRate = 0;
-
-            try
-            {
-                var extraProps = await storageFile.Properties.RetrievePropertiesAsync(new[] { "System.Video.FourCC", "System.Video.FrameRate" });
-                if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr)
+                if (Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.ContainsItem(item.Id))
                 {
-                    codec = fourCcStr;
-                }
-                if (extraProps.TryGetValue("System.Video.FrameRate", out var frVal) && frVal is uint frUint)
-                {
-                    frameRate = frUint / 1000.0;
+                    storageFile = await Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.GetFileAsync(item.Id);
                 }
             }
             catch { }
 
-            // Fallback for resolution and codec using TagLib with shared read-write stream to avoid locks
-            if (codec == "Unknown" || string.IsNullOrEmpty(codec) || resolution == "0x0" || string.IsNullOrEmpty(resolution))
+            // If not in FutureAccessList, try getting by path
+            if (storageFile == null)
             {
                 try
                 {
-                    using var stream = new FileStream(playablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    using var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream));
-                    
-                    if (codec == "Unknown" || string.IsNullOrEmpty(codec))
+                    if (File.Exists(playablePath))
                     {
-                        var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
-                        if (!string.IsNullOrEmpty(videoCodec))
+                        storageFile = await StorageFile.GetFileFromPathAsync(playablePath);
+                    }
+                }
+                catch { }
+            }
+
+            long fileSize = 0;
+            if (storageFile != null)
+            {
+                try
+                {
+                    var basicProps = await storageFile.GetBasicPropertiesAsync();
+                    fileSize = (long)basicProps.Size;
+                }
+                catch { }
+            }
+
+            if (fileSize == 0 && File.Exists(playablePath))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(playablePath);
+                    fileSize = fileInfo.Length;
+                }
+                catch { }
+            }
+
+            string resolution = "Unknown";
+            string codec = "Unknown";
+            uint bitrate = 0;
+            double frameRate = 0;
+
+            // Attempt to query via UWP Storage APIs
+            if (storageFile != null)
+            {
+                try
+                {
+                    var videoProps = await storageFile.Properties.GetVideoPropertiesAsync();
+                    if (videoProps.Width > 0 && videoProps.Height > 0)
+                    {
+                        resolution = $"{videoProps.Width}x{videoProps.Height}";
+                    }
+                    bitrate = videoProps.Bitrate;
+
+                    var extraProps = await storageFile.Properties.RetrievePropertiesAsync(new[] { "System.Video.FourCC", "System.Video.FrameRate" });
+                    if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr)
+                    {
+                        codec = fourCcStr;
+                    }
+                    if (extraProps.TryGetValue("System.Video.FrameRate", out var frVal) && frVal is uint frUint)
+                    {
+                        frameRate = frUint / 1000.0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] Sandbox UWP storage properties failed: {ex.Message}");
+                }
+            }
+
+            // Fallback for resolution and codec using TagLib with authorization streams to avoid locks & permissions block
+            if (codec == "Unknown" || string.IsNullOrEmpty(codec) || resolution == "Unknown" || resolution == "0x0" || string.IsNullOrEmpty(resolution))
+            {
+                try
+                {
+                    Stream? stream = null;
+                    if (storageFile != null)
+                    {
+                        try
                         {
-                            codec = videoCodec;
+                            var randomAccessStream = await storageFile.OpenAsync(FileAccessMode.Read);
+                            stream = randomAccessStream.AsStreamForRead();
                         }
-                        else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
-                        {
-                            codec = tagFile.Properties.Description;
-                        }
+                        catch { }
                     }
 
-                    if (resolution == "0x0" || string.IsNullOrEmpty(resolution))
+                    // Fallback to direct Win32 FileStream if storageFile stream failed
+                    if (stream == null && File.Exists(playablePath))
                     {
-                        int w = tagFile.Properties.VideoWidth;
-                        int h = tagFile.Properties.VideoHeight;
-                        if (w > 0 && h > 0)
+                        try
                         {
-                            resolution = $"{w}x{h}";
+                            stream = new FileStream(playablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        }
+                        catch { }
+                    }
+
+                    if (stream != null)
+                    {
+                        using (stream)
+                        using (var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream)))
+                        {
+                            if (codec == "Unknown" || string.IsNullOrEmpty(codec))
+                            {
+                                var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
+                                if (!string.IsNullOrEmpty(videoCodec))
+                                {
+                                    codec = videoCodec;
+                                }
+                                else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
+                                {
+                                    codec = tagFile.Properties.Description;
+                                }
+                            }
+
+                            if (resolution == "Unknown" || resolution == "0x0" || string.IsNullOrEmpty(resolution))
+                            {
+                                int w = tagFile.Properties.VideoWidth;
+                                int wHeight = tagFile.Properties.VideoHeight;
+                                if (w > 0 && wHeight > 0)
+                                {
+                                    resolution = $"{w}x{wHeight}";
+                                }
+                            }
                         }
                     }
                 }

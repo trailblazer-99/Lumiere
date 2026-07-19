@@ -104,14 +104,24 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
-                <AutoSuggestBox x:Name="SearchBox"
-                                Grid.Column="1"
-                                Grid.Row="0"
-                                Width="240"
-                                Margin="16,0,0,0"
-                                PlaceholderText="Search collection..."
-                                QueryIcon="Find"
-                                CornerRadius="4" />
+                <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <AutoSuggestBox x:Name="SearchBox"
+                                    Width="240"
+                                    PlaceholderText="Search collection..."
+                                    QueryIcon="Find"
+                                    TextChanged="OnSearchBoxTextChanged"
+                                    QuerySubmitted="OnSearchBoxQuerySubmitted"
+                                    CornerRadius="4" />
+                    <ToggleButton x:Name="AiSearchToggle" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center">
+                        <FontIcon FontSize="13" Glyph="&#xE75E;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </ToggleButton>
+                    <Button x:Name="SaveAiPlaylistButton" Click="OnSaveAiPlaylistClick" ToolTipService.ToolTip="Save Search Results as AI Playlist" Height="32" Visibility="Collapsed" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="12" Glyph="&#xE8F4;"/>
+                            <TextBlock Text="Save Playlist" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
         </Grid>
 

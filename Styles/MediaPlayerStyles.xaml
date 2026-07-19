@@ -238,7 +238,10 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="RootGrid" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            <TranslateTransform x:Name="ButtonTranslation" Y="0"/>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ButtonScale" ScaleX="1.0" ScaleY="1.0" />
+                                <TranslateTransform x:Name="ButtonTranslation" Y="0"/>
+                            </TransformGroup>
                         </Grid.RenderTransform>
 
                         <!-- Subtle Quadrilateral Shadow (semi-transparent border, slightly offset) -->
@@ -273,8 +276,18 @@
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.1" />
-                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.15" />
+                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.15" />
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContentBackground" Storyboard.TargetProperty="Background">
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="Transparent" />
                                         </ObjectAnimationUsingKeyFrames>
@@ -282,8 +295,18 @@
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.1" />
-                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.1" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.08" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.08" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.15" />
+                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.08" Duration="0:0:0.15" />
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContentBackground" Storyboard.TargetProperty="Background">
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
@@ -291,8 +314,18 @@
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="1.5" Duration="0:0:0.05" />
-                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.15" Duration="0:0:0.05" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="0.92" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="0.92" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="1.0" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.15" Duration="0:0:0.08" />
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContentBackground" Storyboard.TargetProperty="Background">
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
