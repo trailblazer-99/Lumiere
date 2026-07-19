@@ -230,6 +230,7 @@ namespace LumiereMediaPlayer.Pages
         {
             if (_details == null) return;
             AppServices.StreamingLibrary.RemoveItem(_watchmodeId.ToString(), _details.Type == "movie" ? StreamingItemType.Movie : StreamingItemType.TvShow);
+            AppServices.StreamingLibrary.Save();
             UpdateLibraryButtonStatus();
         }
 
