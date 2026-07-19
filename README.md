@@ -172,7 +172,7 @@ Windows can block a packaged build when an unpackaged development copy is alread
 
 GitHub Actions runs on pushes and pull requests targeting `main`, `master`, or `dev`. The workflow restores dependencies, builds x64 and ARM64 packages, creates release artifacts, and publishes the deployment website for release builds.
 
-Release builds require these repository secrets so the packaged app can reach the proxy-backed Movie and TV APIs: `LUMIERE_PROXY_BASE_URL` and `LUMIERE_PROXY_APP_TOKEN`.
+Release builds require these repository secrets so the packaged app can reach the proxy-backed Movie and TV APIs: `LUMIERE_PROXY_BASE_URL` and `LUMIERE_PROXY_APP_TOKEN`. Set `LUMIERE_PROXY_BASE_URL` to the Azure Functions base route, for example `https://your-function-app.azurewebsites.net/api`.
 
 ## License
 

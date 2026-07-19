@@ -77,9 +77,18 @@ jobs:
           throw "GitHub secret LUMIERE_PROXY_APP_TOKEN is required for release builds."
         }
 
+        $proxyBaseUrl = $env:LUMIERE_PROXY_BASE_URL.Trim()
+        if ($proxyBaseUrl -notmatch '^https?://') {
+          $proxyBaseUrl = "https://$proxyBaseUrl"
+        }
+        $proxyBaseUrl = $proxyBaseUrl.TrimEnd('/')
+        if ($proxyBaseUrl -notmatch '/api$') {
+          $proxyBaseUrl = "$proxyBaseUrl/api"
+        }
+
         $config = [ordered]@{
           UseProxy = $true
-          ProxyBaseUrl = $env:LUMIERE_PROXY_BASE_URL
+          ProxyBaseUrl = $proxyBaseUrl
           ProxyAppToken = $env:LUMIERE_PROXY_APP_TOKEN
         }
         $json = $config | ConvertTo-Json -Depth 3
