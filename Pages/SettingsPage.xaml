@@ -190,8 +190,8 @@
                         
                         <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="0,0,0,4">
                             <TextBlock Text="Duration" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Width="80"/>
-                            <Slider Width="150" Minimum="1" Maximum="12" StepFrequency="1"                                                           VerticalAlignment="Center" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
-                            <TextBlock                                                              Width="30" TextAlignment="Left" VerticalAlignment="Center" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Slider Width="150" Minimum="1" Maximum="12" StepFrequency="1" VerticalAlignment="Center" Foreground="{ThemeResource AccentFillColorDefaultBrush}" Value="{x:Bind ViewModel.CrossfadeDuration, Mode=TwoWay}"/>
+                            <TextBlock Width="30" TextAlignment="Left" VerticalAlignment="Center" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind ViewModel.CrossfadeDurationText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -277,8 +277,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Volume level set automatically on app launch."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="1"                                                       Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.DefaultVolume, Mode=TwoWay}"/>
-                            <TextBlock                                                          Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="1" Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.DefaultVolume, Mode=TwoWay}"/>
+                            <TextBlock Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" Text="{x:Bind ViewModel.DefaultVolumeText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -314,8 +314,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enhance low-frequency bass output."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5"                                                        Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.BassBoostLevel, Mode=TwoWay}"/>
-                            <TextBlock                                                      Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5" Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.BassBoostLevel, Mode=TwoWay}"/>
+                            <TextBlock Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" Text="{x:Bind ViewModel.BassBoostText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -335,9 +335,9 @@
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                             <TextBlock Text="L" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <Slider Width="120" Minimum="-100" Maximum="100" StepFrequency="5"                                                      Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.AudioBalance, Mode=TwoWay}"/>
+                            <Slider Width="120" Minimum="-100" Maximum="100" StepFrequency="5" Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.AudioBalance, Mode=TwoWay}"/>
                             <TextBlock Text="R" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock                                                         Width="50" TextAlignment="Right" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBlock Width="50" TextAlignment="Right" VerticalAlignment="Center" FontSize="12" Text="{x:Bind ViewModel.AudioBalanceText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -433,8 +433,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the darkness of the subtitle backdrop."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5"                                                                   Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.SubtitleBackgroundOpacity, Mode=TwoWay}"/>
-                            <TextBlock                                                            Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                            <Slider Width="120" Minimum="0" Maximum="100" StepFrequency="5" Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.SubtitleBackgroundOpacity, Mode=TwoWay}"/>
+                            <TextBlock Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" Text="{x:Bind ViewModel.SubtitleOpacityText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1202,9 +1202,9 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear playback history, search history, or recently opened files."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Button Content="Playback history"                                                          VerticalAlignment="Center"/>
-                            <Button Content="Search history"                                                        VerticalAlignment="Center"/>
-                            <Button Content="Recent files"                                                      VerticalAlignment="Center"/>
+                            <Button Content="Playback history" Command="{x:Bind ViewModel.ClearPlaybackHistoryCommand}" VerticalAlignment="Center"/>
+                            <Button Content="Search history" Command="{x:Bind ViewModel.ClearSearchHistoryCommand}" VerticalAlignment="Center"/>
+                            <Button Content="Recent files" Command="{x:Bind ViewModel.ClearRecentFilesCommand}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1304,8 +1304,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the thickness of focus indicators around controls."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="120" Minimum="1" Maximum="5" StepFrequency="1"                                                                 Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.FocusIndicatorThickness, Mode=TwoWay}"/>
-                            <TextBlock                                                                    Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13"/>
+                            <Slider Width="120" Minimum="1" Maximum="5" StepFrequency="1" Foreground="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" Value="{x:Bind ViewModel.FocusIndicatorThickness, Mode=TwoWay}"/>
+                            <TextBlock Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" Text="{x:Bind ViewModel.FocusIndicatorThicknessText, Mode=OneWay}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1493,8 +1493,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear caches or reset all settings to factory defaults."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Button Content="Reset history &amp; cache"                                                          VerticalAlignment="Center"/>
-                            <Button Content="Factory reset"                                                  Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center"/>
+                            <Button Content="Reset history &amp; cache" Command="{x:Bind ViewModel.ResetHistoryAndCacheCommand}" VerticalAlignment="Center"/>
+                            <Button Content="Factory reset" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind ViewModel.FactoryResetCommand}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1511,10 +1511,10 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}"
                                        Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 10"/>
                             <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
-                                <HyperlinkButton Content="Send feedback" Padding="0" FontSize="12"/>
-                                <HyperlinkButton Content="Rate this app" Padding="0" FontSize="12"/>
-                                <HyperlinkButton Content="GitHub repository" Padding="0" FontSize="12"/>
-                                <HyperlinkButton Content="Open source licenses" Padding="0" FontSize="12"/>
+                                <HyperlinkButton Content="Send feedback" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/issues"/>
+                                <HyperlinkButton Content="Rate this app" Padding="0" FontSize="12" NavigateUri="ms-windows-store://review/?ProductId=LumiereMediaPlayer"/>
+                                <HyperlinkButton Content="GitHub repository" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere"/>
+                                <HyperlinkButton Content="Open source licenses" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/blob/main/LICENSE"/>
                             </StackPanel>
                         </StackPanel>
                     </Grid>
