@@ -64,9 +64,27 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v3
 
-    - name: Create Config File from Template
-      run: copy appsettings.json.example appsettings.json
-      shell: cmd
+    - name: Create Release Config File
+      shell: powershell
+      env:
+        LUMIERE_PROXY_BASE_URL: ${{ secrets.LUMIERE_PROXY_BASE_URL }}
+        LUMIERE_PROXY_APP_TOKEN: ${{ secrets.LUMIERE_PROXY_APP_TOKEN }}
+      run: |
+        if ([string]::IsNullOrWhiteSpace($env:LUMIERE_PROXY_BASE_URL)) {
+          throw "GitHub secret LUMIERE_PROXY_BASE_URL is required for release builds."
+        }
+        if ([string]::IsNullOrWhiteSpace($env:LUMIERE_PROXY_APP_TOKEN)) {
+          throw "GitHub secret LUMIERE_PROXY_APP_TOKEN is required for release builds."
+        }
+
+        $config = [ordered]@{
+          UseProxy = $true
+          ProxyBaseUrl = $env:LUMIERE_PROXY_BASE_URL
+          ProxyAppToken = $env:LUMIERE_PROXY_APP_TOKEN
+        }
+        $json = $config | ConvertTo-Json -Depth 3
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText("$PWD\appsettings.json", $json, $utf8NoBom)
 
     # Dynamically update the version in the manifest and csproj using GITHUB_RUN_NUMBER
     - name: Update Manifest and Project Version
