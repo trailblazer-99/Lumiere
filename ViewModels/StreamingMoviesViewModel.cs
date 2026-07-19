@@ -30,6 +30,7 @@ namespace LumiereMediaPlayer.ViewModels
             SelectedGenre = "All Genres";
             SelectedAccessType = "All Access Types";
             SelectedSortOrder = "Popularity";
+            Movies?.Clear();
         }
 
         [ObservableProperty] public partial ObservableCollection<WatchmodeTitle> Movies { get; set; } = new();

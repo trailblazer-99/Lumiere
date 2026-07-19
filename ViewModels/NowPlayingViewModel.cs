@@ -1,10 +1,11 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class NowPlayingViewModel : ObservableObject
+public partial class NowPlayingViewModel : ObservableObject, IDisposable
 {
     private readonly PlaybackViewModel _playback;
 
@@ -20,8 +21,15 @@ public partial class NowPlayingViewModel : ObservableObject
     public NowPlayingViewModel(PlaybackViewModel playback)
     {
         _playback = playback;
-        _playback.Session.StateChanged += (_, _) => SyncFromPlayback();
+        _playback.Session.StateChanged += OnStateChanged;
         SyncFromPlayback();
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e) => SyncFromPlayback();
+
+    public void Dispose()
+    {
+        _playback.Session.StateChanged -= OnStateChanged;
     }
 
     private void SyncFromPlayback()
