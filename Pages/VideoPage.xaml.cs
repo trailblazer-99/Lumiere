@@ -27,6 +27,12 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.Opacity = 0f;
+        }
+        catch { }
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
 
@@ -55,6 +61,11 @@ public sealed partial class VideoPage : Page
         {
             LocalVideoPlayer.SetMediaPlayer(null);
         }
+
+        // Force GC collection immediately to release visual tree, page components, and decoder allocations
+        System.GC.Collect();
+        System.GC.WaitForPendingFinalizers();
+        System.GC.Collect();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -78,11 +89,29 @@ public sealed partial class VideoPage : Page
         {
             DispatcherQueue.TryEnqueue(UpdatePlayerLayout);
         }
+        else if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack))
+        {
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                SyncMediaPlayer();
+                if (ViewModel.CurrentVideo != null)
+                {
+                    bool isFsVisible = App.MainWindowInstance != null && App.MainWindowInstance.FullscreenMetadataOverlay.Visibility == Visibility.Visible;
+                    bool isNormalVisible = MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible;
+                    if (isFsVisible || isNormalVisible)
+                    {
+                        await FetchInternetMetadataAsync(ViewModel.CurrentVideo.Title);
+                    }
+                }
+            });
+        }
     }
 
     public void SyncMediaPlayer()
     {
-        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive)
+        bool isPip = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay;
+
+        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive && !isPip)
         {
             if (LocalVideoPlayer.MediaPlayer == null)
             {
@@ -114,6 +143,12 @@ public sealed partial class VideoPage : Page
         {
             if (AppServices.Settings.Current.ReduceMotion)
             {
+                try
+                {
+                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
+                    v.Opacity = 1f;
+                }
+                catch { }
                 PageContent.Opacity = 1.0;
                 return;
             }
@@ -192,7 +227,7 @@ public sealed partial class VideoPage : Page
         return title;
     }
 
-    private async System.Threading.Tasks.Task FetchInternetMetadataAsync(string title)
+    internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(string title)
     {
         if (string.IsNullOrWhiteSpace(title) || InternetMetadataProvidersGrid == null) return;
         
@@ -208,7 +243,6 @@ public sealed partial class VideoPage : Page
         InternetMetadataProvidersGrid.ColumnDefinitions.Clear();
         InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         if (mainWin != null)
         {
@@ -221,7 +255,6 @@ public sealed partial class VideoPage : Page
             mainWin.FullscreenInternetMetadataProvidersGrid.Children.Clear();
             mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Clear();
             mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Clear();
-            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         }
@@ -326,6 +359,7 @@ public sealed partial class VideoPage : Page
                             {
                                 Content = provider.ProviderName,
                                 Margin = new Thickness(0, 0, 8, 8),
+                                HorizontalAlignment = HorizontalAlignment.Stretch,
                                 Style = (Style)Application.Current.Resources["DefaultButtonStyle"]
                             };
 
@@ -340,12 +374,27 @@ public sealed partial class VideoPage : Page
                                     searchWebUrl = $"https://www.netflix.com/search?q={q}";
                                     break;
                                 case "amazon prime video":
+                                case "amazon prime":
+                                case "amazon":
                                     deepLinkUrl = $"primevideo://search?q={q}";
                                     searchWebUrl = $"https://www.amazon.com/s?k={q}&i=instant-video";
                                     break;
                                 case "disney plus":
+                                case "disney+":
                                     deepLinkUrl = $"disneyplus://search?q={q}";
                                     searchWebUrl = $"https://www.disneyplus.com/search?q={q}";
+                                    break;
+                                case "jiohotstar":
+                                case "hotstar":
+                                case "disney+ hotstar":
+                                case "disney plus hotstar":
+                                    deepLinkUrl = $"hotstar://search?q={q}";
+                                    searchWebUrl = $"https://www.hotstar.com/in/explore?search_query={q}";
+                                    break;
+                                case "jiocinema":
+                                case "jio cinema":
+                                    deepLinkUrl = $"jiocinema://search?q={q}";
+                                    searchWebUrl = $"https://www.jiocinema.com/search/{q}";
                                     break;
                                 case "apple tv plus":
                                 case "apple tv":
@@ -379,31 +428,34 @@ public sealed partial class VideoPage : Page
                                     searchWebUrl = $"https://www.crunchyroll.com/search?q={q}";
                                     break;
                                 case "youtube":
-                                    deepLinkUrl = $"youtube://results?search_query={q}";
+                                    deepLinkUrl = $"vnd.youtube://search?q={q}";
                                     searchWebUrl = $"https://www.youtube.com/results?search_query={q}";
                                     break;
                                 default:
-                                    string cleanName = provider.ProviderName.ToLower().Replace(" ", "");
-                                    searchWebUrl = $"https://{cleanName}.com/search?q={q}";
+                                    searchWebUrl = $"https://www.google.com/search?q={Uri.EscapeDataString(bestMatch.DisplayTitle + " watch on " + provider.ProviderName)}";
                                     break;
                             }
 
                             btn.Click += async (s, args) =>
                             {
                                 bool launched = false;
-                                if (!string.IsNullOrEmpty(deepLinkUrl))
+                                if (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri))
                                 {
                                     try
-                                    {
-                                        launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
-                                    }
-                                    catch { }
+                                     {
+                                         var support = await Windows.System.Launcher.QueryUriSupportAsync(uri, Windows.System.LaunchQuerySupportType.Uri);
+                                         if (support == Windows.System.LaunchQuerySupportStatus.Available)
+                                         {
+                                             launched = await Windows.System.Launcher.LaunchUriAsync(uri);
+                                         }
+                                     }
+                                     catch { }
                                 }
-                                if (!launched && !string.IsNullOrEmpty(searchWebUrl))
+                                if (!launched && !string.IsNullOrEmpty(searchWebUrl) && Uri.TryCreate(searchWebUrl, UriKind.Absolute, out var webUri))
                                 {
                                     try
                                     {
-                                        await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
+                                        await Windows.System.Launcher.LaunchUriAsync(webUri);
                                     }
                                     catch { }
                                 }
@@ -419,24 +471,29 @@ public sealed partial class VideoPage : Page
                                 {
                                     Content = provider.ProviderName,
                                     Margin = new Thickness(0, 0, 6, 6),
+                                    HorizontalAlignment = HorizontalAlignment.Stretch,
                                     Style = (Style)Application.Current.Resources["DefaultButtonStyle"]
                                 };
                                 fsBtn.Click += async (s, args) =>
                                 {
                                     bool launched = false;
-                                    if (!string.IsNullOrEmpty(deepLinkUrl))
+                                    if (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri))
                                     {
                                         try
-                                        {
-                                            launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
-                                        }
-                                        catch { }
+                                         {
+                                             var support = await Windows.System.Launcher.QueryUriSupportAsync(uri, Windows.System.LaunchQuerySupportType.Uri);
+                                             if (support == Windows.System.LaunchQuerySupportStatus.Available)
+                                             {
+                                                 launched = await Windows.System.Launcher.LaunchUriAsync(uri);
+                                             }
+                                         }
+                                         catch { }
                                     }
-                                    if (!launched && !string.IsNullOrEmpty(searchWebUrl))
+                                    if (!launched && !string.IsNullOrEmpty(searchWebUrl) && Uri.TryCreate(searchWebUrl, UriKind.Absolute, out var webUri))
                                     {
                                         try
                                         {
-                                            await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
+                                            await Windows.System.Launcher.LaunchUriAsync(webUri);
                                         }
                                         catch { }
                                     }
@@ -447,7 +504,7 @@ public sealed partial class VideoPage : Page
                             }
 
                             col++;
-                            if (col > 2)
+                            if (col > 1)
                             {
                                 col = 0;
                                 row++;

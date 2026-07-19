@@ -1,5 +1,9 @@
 using System;
 using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Media.Editing;
+using Microsoft.UI.Xaml.Media.Imaging;
 using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
@@ -213,7 +217,11 @@ public sealed partial class TransportBar : UserControl
 
     private void OnProgressSliderPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        // Ignore hover exit
+        if (HoverPreviewPopup != null)
+        {
+            HoverPreviewPopup.IsOpen = false;
+        }
+        _exactThumbnailCts?.Cancel();
     }
     
     private void OnProgressPointerCapture(object sender, PointerRoutedEventArgs e)
@@ -371,18 +379,141 @@ public sealed partial class TransportBar : UserControl
     private async void OnEqualiserClick(object sender, RoutedEventArgs e)
     {
         var settings = AppServices.Settings.Current;
-        var combo = new ComboBox
+        
+        var stack = new StackPanel { Spacing = 16, Width = 520 };
+
+        var presetRow = new Grid();
+        presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        presetRow.ColumnSpacing = 16;
+
+        var presetPanel = new StackPanel { Spacing = 4 };
+        presetPanel.Children.Add(new TextBlock { Text = "Equaliser Preset", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
+        var presetCombo = new ComboBox
         {
             ItemsSource = Enum.GetValues(typeof(EqualizerPreset)),
             SelectedItem = settings.Equalizer,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 16, 0, 0)
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        presetPanel.Children.Add(presetCombo);
+        Grid.SetColumn(presetPanel, 0);
+        presetRow.Children.Add(presetPanel);
+
+        var reverbPanel = new StackPanel { Spacing = 4 };
+        reverbPanel.Children.Add(new TextBlock { Text = "Reverb Environment", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
+        var reverbCombo = new ComboBox
+        {
+            ItemsSource = new string[] { "None", "Small Room", "Medium Room", "Large Room", "Concert Hall", "Cave", "Auditorium" },
+            SelectedItem = settings.SelectedReverbPreset,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        reverbPanel.Children.Add(reverbCombo);
+        Grid.SetColumn(reverbPanel, 1);
+        presetRow.Children.Add(reverbPanel);
+
+        stack.Children.Add(presetRow);
+
+        var sliderGrid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
+        for (int i = 0; i < 10; i++)
+        {
+            sliderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+
+        string[] freqLabels = { "32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k" };
+        var sliders = new Slider[10];
+        var valueTexts = new TextBlock[10];
+
+        float[] gains = new float[10];
+        try
+        {
+            var parts = settings.CustomEqualizerGains.Split(',');
+            for (int i = 0; i < 10; i++)
+            {
+                if (i < parts.Length && float.TryParse(parts[i], out float g)) gains[i] = g;
+            }
+        }
+        catch { }
+
+        for (int i = 0; i < 10; i++)
+        {
+            int index = i;
+            var cell = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+            
+            valueTexts[i] = new TextBlock 
+            { 
+                Text = $"{(int)gains[i]}dB", 
+                FontSize = 10, 
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            };
+            cell.Children.Add(valueTexts[i]);
+
+            sliders[i] = new Slider
+            {
+                Orientation = Orientation.Vertical,
+                Height = 150,
+                Minimum = -12,
+                Maximum = 12,
+                Value = gains[i],
+                StepFrequency = 1,
+                TickFrequency = 3,
+                TickPlacement = TickPlacement.Outside,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            
+            sliders[i].ValueChanged += (s, ev) =>
+            {
+                valueTexts[index].Text = $"{(int)ev.NewValue}dB";
+                if (presetCombo.SelectedItem?.ToString() != "Custom")
+                {
+                    presetCombo.SelectedItem = EqualizerPreset.Custom;
+                }
+            };
+            cell.Children.Add(sliders[i]);
+
+            cell.Children.Add(new TextBlock 
+            { 
+                Text = freqLabels[i], 
+                FontSize = 11, 
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center 
+            });
+
+            Grid.SetColumn(cell, i);
+            sliderGrid.Children.Add(cell);
+        }
+
+        stack.Children.Add(sliderGrid);
+
+        presetCombo.SelectionChanged += (s, ev) =>
+        {
+            if (presetCombo.SelectedItem is EqualizerPreset p && p != EqualizerPreset.Custom)
+            {
+                float[] presetGains = p switch
+                {
+                    EqualizerPreset.Pop => new float[] { -2, -1, 0, 2, 4, 4, 2, 0, -1, -2 },
+                    EqualizerPreset.Rock => new float[] { 4, 3, -1, -2, -1, 1, 3, 4, 4, 4 },
+                    EqualizerPreset.Classical => new float[] { 3, 2, 2, 2, -1, -1, -2, 0, 2, 3 },
+                    EqualizerPreset.BassBoost => new float[] { 6, 5, 4, 2, 0, 0, 0, 0, 0, 0 },
+                    EqualizerPreset.Jazz => new float[] { 3, 2, 1, 2, -1, -1, 0, 1, 2, 3 },
+                    EqualizerPreset.HipHop => new float[] { 5, 4, 2, 3, -1, -1, 1, 0, 2, 3 },
+                    EqualizerPreset.Electronic => new float[] { 4, 4, 2, 0, -2, 2, 1, 2, 4, 5 },
+                    EqualizerPreset.Vocal => new float[] { -2, -3, -3, 1, 4, 4, 4, 2, 1, -1 },
+                    _ => new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+                };
+
+                for (int i = 0; i < 10; i++)
+                {
+                    sliders[i].Value = presetGains[i];
+                    valueTexts[i].Text = $"{(int)presetGains[i]}dB";
+                }
+            }
         };
 
         var dialog = new ContentDialog
         {
-            Title = "Equaliser Preset",
-            Content = combo,
+            Title = "Equaliser & Reverb Environment",
+            Content = stack,
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             XamlRoot = this.XamlRoot,
@@ -392,14 +523,21 @@ public sealed partial class TransportBar : UserControl
 
         dialog.PrimaryButtonClick += (s, args) =>
         {
-            if (combo.SelectedItem is EqualizerPreset preset)
+            if (presetCombo.SelectedItem is EqualizerPreset preset)
             {
                 settings.Equalizer = preset;
+                settings.SelectedReverbPreset = reverbCombo.SelectedItem?.ToString() ?? "None";
+                
+                var newGains = string.Join(",", sliders.Select(sl => ((int)sl.Value).ToString()));
+                settings.CustomEqualizerGains = newGains;
+                
                 AppServices.Settings.Save();
                 if (AppServices.SettingsViewModel != null)
                 {
                     AppServices.SettingsViewModel.SelectedEqualizer = preset;
                 }
+
+                AppServices.PlaybackViewModel.Session.ApplyAudioEffects();
             }
         };
 
@@ -436,6 +574,7 @@ public sealed partial class TransportBar : UserControl
         OnAudioDevicesMenuOpening(sender, e);
         OnAspectRatioMenuOpening(sender, e);
         OnZoomMenuOpening(sender, e);
+        UpdateSleepTimerMenuChecks();
     }
 
     private async void OnAudioDevicesMenuOpening(object sender, object e)
@@ -682,6 +821,189 @@ public sealed partial class TransportBar : UserControl
         {
             BarGridTapped?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
+        }
+    }
+
+    private CancellationTokenSource? _exactThumbnailCts;
+    private bool _isExactThumbnailExtracting;
+
+    private void OnProgressSliderPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            var slider = ProgressSlider;
+            if (slider == null || slider.ActualWidth <= 0) return;
+
+            var pt = e.GetCurrentPoint(slider);
+            
+            double trackPadding = 8.0;
+            double usableWidth = slider.ActualWidth - (trackPadding * 2);
+            double relativeX = pt.Position.X - trackPadding;
+            double percent = Math.Clamp(relativeX / usableWidth, 0.0, 1.0);
+
+            double totalSeconds = slider.Maximum;
+            var playback = AppServices.PlaybackViewModel;
+            
+            if (totalSeconds <= 100.0)
+            {
+                var naturalDur = playback.Session.MediaPlayer.PlaybackSession.NaturalDuration;
+                if (naturalDur.TotalSeconds > 0)
+                {
+                    totalSeconds = naturalDur.TotalSeconds;
+                }
+                else if (playback.CurrentTrack != null && playback.CurrentTrack.Duration.TotalSeconds > 0)
+                {
+                    totalSeconds = playback.CurrentTrack.Duration.TotalSeconds;
+                }
+            }
+
+            if (totalSeconds <= 0) totalSeconds = 100.0;
+
+            double hoverSeconds = totalSeconds * percent;
+
+            if (totalSeconds >= 3600)
+            {
+                HoverTimeText.Text = TimeSpan.FromSeconds(hoverSeconds).ToString(@"h\:mm\:ss");
+            }
+            else
+            {
+                HoverTimeText.Text = TimeSpan.FromSeconds(hoverSeconds).ToString(@"m\:ss");
+            }
+
+            var track = playback.CurrentTrack;
+            if (track != null && track.IsVideo)
+            {
+                HoverPreviewPopup.HorizontalOffset = pt.Position.X - 66;
+                HoverPreviewPopup.IsOpen = true;
+
+                var cachedImg = playback.Session.GetCachedThumbnail(hoverSeconds);
+                if (cachedImg != null)
+                {
+                    HoverThumbnailImage.Source = cachedImg;
+                    HoverThumbnailImage.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    HoverThumbnailImage.Source = null;
+                    HoverThumbnailImage.Visibility = Visibility.Collapsed;
+                }
+
+                UpdateExactThumbnailAsync(hoverSeconds);
+            }
+            else
+            {
+                HoverPreviewPopup.HorizontalOffset = pt.Position.X - 30;
+                HoverPreviewPopup.IsOpen = true;
+
+                HoverThumbnailImage.Source = null;
+                HoverThumbnailImage.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch { }
+    }
+
+    private async void UpdateExactThumbnailAsync(double seconds)
+    {
+        _exactThumbnailCts?.Cancel();
+        _exactThumbnailCts = new CancellationTokenSource();
+        var token = _exactThumbnailCts.Token;
+
+        try
+        {
+            await Task.Delay(250, token); // Debounce to prevent overlapping decodes
+
+            if (_isExactThumbnailExtracting) return; // Prevent concurrent extraction
+            _isExactThumbnailExtracting = true;
+
+            try
+            {
+                var playback = AppServices.PlaybackViewModel;
+                var track = playback.CurrentTrack;
+                if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath)) return;
+
+                var session = playback.Session;
+                var timeSpan = TimeSpan.FromSeconds(seconds);
+                
+                lock (session.VideoThumbnailCacheLock)
+                {
+                    foreach (var item in session.VideoThumbnailCache)
+                    {
+                        if (Math.Abs((item.Time - timeSpan).TotalSeconds) < 0.5)
+                        {
+                            HoverThumbnailImage.Source = item.Image;
+                            HoverThumbnailImage.Visibility = Visibility.Visible;
+                            return;
+                        }
+                    }
+                }
+
+                Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
+                try
+                {
+                    stream = await session.GetExactThumbnailAsync(seconds);
+
+                    if (stream == null)
+                    {
+                        var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
+                        var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
+                        var composition = new Windows.Media.Editing.MediaComposition();
+                        composition.Clips.Add(clip);
+                        stream = await composition.GetThumbnailAsync(timeSpan, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+                    }
+
+                    if (token.IsCancellationRequested || stream == null) return;
+
+                    var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(stream);
+
+                    if (token.IsCancellationRequested) return;
+
+                    HoverThumbnailImage.Source = bitmap;
+                    HoverThumbnailImage.Visibility = Visibility.Visible;
+
+                    session.AddCachedThumbnail(timeSpan, bitmap);
+                }
+                finally
+                {
+                    stream?.Dispose();
+                }
+            }
+            finally
+            {
+                _isExactThumbnailExtracting = false;
+            }
+        }
+        catch { }
+    }
+
+    private void UpdateSleepTimerMenuChecks()
+    {
+        try
+        {
+            var settings = AppServices.Settings.Current;
+            SleepOffItem.IsChecked = settings.SleepTimerMinutes == 0 && !settings.SleepAtEndOfTrack;
+            Sleep15Item.IsChecked = settings.SleepTimerMinutes == 15;
+            Sleep30Item.IsChecked = settings.SleepTimerMinutes == 30;
+            Sleep60Item.IsChecked = settings.SleepTimerMinutes == 60;
+            SleepEndItem.IsChecked = settings.SleepAtEndOfTrack;
+        }
+        catch { }
+    }
+
+    private void OnSleepTimerItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleMenuFlyoutItem item && item.Tag is string tagStr)
+        {
+            var session = AppServices.PlaybackViewModel.Session;
+            if (tagStr == "end")
+            {
+                session.StartSleepTimer(0, true);
+            }
+            else if (int.TryParse(tagStr, out int mins))
+            {
+                session.StartSleepTimer(mins, false);
+            }
+            UpdateSleepTimerMenuChecks();
         }
     }
 }

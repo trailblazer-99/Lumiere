@@ -1035,7 +1035,122 @@
                 </Border>
             </StackPanel>
 
-            
+            <!-- AI Features -->
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="AI Features"/>
+
+                <!-- Lyrics translation -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE8C8;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Enable lyrics translation"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically translate synced lyrics on the Now Playing screen using AI."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiLyricsTranslationToggle" IsOn="False" Toggled="OnAiLyricsTranslationToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+
+                <!-- Translation Target Language -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE774;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Translation target language"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select the language into which lyrics and subtitles should be translated."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" x:Name="AiTranslationLanguageComboBox" SelectionChanged="OnAiTranslationLanguageSelectionChanged" Width="150" VerticalAlignment="Center">
+                            <ComboBoxItem Content="Hindi"/>
+                            <ComboBoxItem Content="Spanish"/>
+                            <ComboBoxItem Content="French"/>
+                            <ComboBoxItem Content="German"/>
+                            <ComboBoxItem Content="Japanese"/>
+                            <ComboBoxItem Content="Chinese"/>
+                            <ComboBoxItem Content="Russian"/>
+                            <ComboBoxItem Content="Italian"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Semantic Search -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE75E;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Enable semantic search"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use natural-language parsing for search queries in your music and video libraries."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiSemanticSearchToggle" IsOn="False" Toggled="OnAiSemanticSearchToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+
+                <!-- AI Equalizer Matcher -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE9E9;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="AI Equalizer Matcher"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically detect and set equalizer presets based on track genre and details."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiEqualizerMatcherToggle" IsOn="False" Toggled="OnAiEqualizerMatcherToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+
+                <!-- Voice Clarity Enhancer -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE720;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Voice Clarity Enhancer"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enable hardware-accelerated dialogue optimization for clearer spoken voice."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="VoiceClarityToggle" IsOn="False" Toggled="OnVoiceClarityToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+
+                <!-- Night Mode / Dynamic Volume -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE708;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Dynamic Volume Leveler (Night Mode)"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Level loud highlights and boost quiet dialogue for comfortable late-night viewing."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="NightModeToggle" IsOn="False" Toggled="OnNightModeToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
             <StackPanel Spacing="4">
                 <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Privacy &amp; History"/>
 

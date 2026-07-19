@@ -58,6 +58,25 @@ public static class SampleMediaLibrary
         return await Task.FromResult(item);
     }
 
+    public static async Task CreatePlaylistAsync(string name, string description, IReadOnlyList<MediaItem> tracks)
+    {
+        var playlist = new Playlist
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = name,
+            Description = description,
+            AccentColor = "#FFF76B1C",
+            Tracks = tracks
+        };
+
+        lock (_lock)
+        {
+            _playlists.Add(playlist);
+        }
+        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        await Task.CompletedTask;
+    }
+
     public static async Task ScanFolderAsync(Windows.Storage.StorageFolder folder)
     {
         // Your logic here

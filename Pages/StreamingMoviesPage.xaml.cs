@@ -17,6 +17,12 @@ namespace LumiereMediaPlayer.Pages
         {
             this.InitializeComponent();
             this.DataContext = this;
+            try
+            {
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                visual.Opacity = 0f;
+            }
+            catch { }
         }
 
         private readonly WatchmodeService _watchmodeService = new();
@@ -102,6 +108,14 @@ namespace LumiereMediaPlayer.Pages
         {
             var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
             var compositor = visual.Compositor;
+
+            if (AppServices.Settings.Current.ReduceMotion)
+            {
+                visual.Opacity = 1f;
+                visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                PageContent.Opacity = 1.0;
+                return;
+            }
 
             visual.Opacity = 0f;
             visual.Offset = new System.Numerics.Vector3(0, 20, 0);

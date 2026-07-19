@@ -210,7 +210,8 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
-                    CornerRadius="{StaticResource CardCornerRadiusFull}">
+                    CornerRadius="{StaticResource CardCornerRadiusFull}"
+                    Opacity="1">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -218,16 +219,25 @@
                         </Grid.RowDefinitions>
 
                         <!-- Header -->
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,10">
-                            <FontIcon
-                                FontSize="14"
-                                Glyph="&#xEA37;"
-                                Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
-                            <TextBlock
-                                FontWeight="SemiBold"
-                                FontSize="13"
-                                Text="Lyrics" />
-                        </StackPanel>
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <FontIcon
+                                    FontSize="14"
+                                    Glyph="&#xEA37;"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    FontSize="13"
+                                    Text="Lyrics" />
+                            </StackPanel>
+                            <Button Grid.Column="1" x:Name="TranslateLyricsButton" Click="OnTranslateLyricsClick" ToolTipService.ToolTip="Translate Lyrics" Style="{StaticResource TransportIconButtonStyle}" Height="28" Width="28" Visibility="Collapsed" VerticalAlignment="Center">
+                                <FontIcon FontSize="12" Glyph="&#xE8C8;"/>
+                            </Button>
+                        </Grid>
 
                         <!-- Placeholder when no lyrics -->
                         <TextBlock
@@ -261,7 +271,7 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,4">
+                                    <StackPanel Spacing="2" Margin="0,4" HorizontalAlignment="Center">
                                         <TextBlock
                                             x:Name="LyricText"
                                             Text="{Binding Text}"
@@ -270,7 +280,16 @@
                                             TextWrapping="Wrap"
                                             TextAlignment="Center"
                                             HorizontalAlignment="Center" />
-                                    </Grid>
+                                        <TextBlock
+                                            x:Name="LyricTranslationText"
+                                            Text="{Binding Translation}"
+                                            Visibility="{Binding HasTranslation}"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            TextWrapping="Wrap"
+                                            TextAlignment="Center"
+                                            HorizontalAlignment="Center" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>

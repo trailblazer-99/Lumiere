@@ -18,6 +18,12 @@ public sealed partial class SettingsPage : Page
     {
         _hostWindow = App.MainWindowInstance ?? throw new System.InvalidOperationException("MainWindow is not initialized.");
         InitializeComponent();
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.Opacity = 0f;
+        }
+        catch { }
     }
 
     private async void OnAddFolderClick(object sender, RoutedEventArgs e)
@@ -50,6 +56,18 @@ public sealed partial class SettingsPage : Page
     {
         try
         {
+            if (AppServices.Settings.Current.ReduceMotion)
+            {
+                try
+                {
+                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
+                    v.Opacity = 1f;
+                }
+                catch { }
+                PageContent.Opacity = 1.0;
+                return;
+            }
+
             ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
             var visual = ElementCompositionPreview.GetElementVisual(PageContent);
             var compositor = visual.Compositor;
@@ -70,6 +88,65 @@ public sealed partial class SettingsPage : Page
         {
             System.Diagnostics.Debug.WriteLine($"Failed to animate SettingsPage entrance: {ex.Message}");
             PageContent.Opacity = 1.0;
+        }
+
+        try
+        {
+            AiLyricsTranslationToggle.IsOn = ViewModel.AiLyricsTranslationEnabled;
+            AiTranslationLanguageComboBox.SelectedIndex = ViewModel.SelectedAiTranslationLanguageIndex;
+            AiSemanticSearchToggle.IsOn = ViewModel.AiSemanticSearchEnabled;
+            AiEqualizerMatcherToggle.IsOn = ViewModel.AiEqualizerMatcherEnabled;
+            VoiceClarityToggle.IsOn = ViewModel.VoiceClarityEnabled;
+            NightModeToggle.IsOn = ViewModel.NightModeEnabled;
+        }
+        catch { }
+    }
+
+    private void OnAiLyricsTranslationToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggle)
+        {
+            ViewModel.AiLyricsTranslationEnabled = toggle.IsOn;
+        }
+    }
+
+    private void OnAiTranslationLanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox comboBox)
+        {
+            ViewModel.SelectedAiTranslationLanguageIndex = comboBox.SelectedIndex;
+        }
+    }
+
+    private void OnAiSemanticSearchToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggle)
+        {
+            ViewModel.AiSemanticSearchEnabled = toggle.IsOn;
+        }
+    }
+
+    private void OnAiEqualizerMatcherToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggle)
+        {
+            ViewModel.AiEqualizerMatcherEnabled = toggle.IsOn;
+        }
+    }
+
+    private void OnVoiceClarityToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggle)
+        {
+            ViewModel.VoiceClarityEnabled = toggle.IsOn;
+        }
+    }
+
+    private void OnNightModeToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggle)
+        {
+            ViewModel.NightModeEnabled = toggle.IsOn;
         }
     }
 

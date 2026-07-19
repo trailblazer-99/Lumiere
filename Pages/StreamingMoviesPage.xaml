@@ -7,7 +7,7 @@
     xmlns:services="using:LumiereMediaPlayer.Services.Streaming"
     Loaded="OnPageLoaded">
 
-    <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}">
+    <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Opacity="1">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>

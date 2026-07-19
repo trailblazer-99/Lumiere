@@ -55,14 +55,14 @@ public sealed class MediaItem : INotifyPropertyChanged
     private string? _codec;
     public string? Codec
     {
-        get => _codec;
+        get => string.IsNullOrEmpty(_codec) ? "Unknown" : _codec;
         set { if (_codec != value) { _codec = value; OnPropertyChanged(); } }
     }
 
     private string? _resolution;
     public string? Resolution
     {
-        get => _resolution;
+        get => string.IsNullOrEmpty(_resolution) ? "Unknown" : _resolution;
         set { if (_resolution != value) { _resolution = value; OnPropertyChanged(); } }
     }
 

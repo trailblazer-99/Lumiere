@@ -108,6 +108,41 @@ public partial class MusicLibraryViewModel : ObservableObject
         });
     }
 
+    public async Task SearchLibraryAsync(string query, bool useAi)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            SyncTracks();
+            return;
+        }
+
+        var sourceTracks = SampleMediaLibrary.AudioTracks.ToList();
+        List<MediaItem> filtered;
+
+        if (useAi)
+        {
+            filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
+        }
+        else
+        {
+            filtered = sourceTracks
+                .Where(t => (t.Title != null && t.Title.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
+                            (t.Artist != null && t.Artist.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
+                            (t.Genre != null && t.Genre.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
+                            (t.Album != null && t.Album.Contains(query, System.StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+        }
+
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            Tracks.Clear();
+            foreach (var t in filtered)
+            {
+                Tracks.Add(t);
+            }
+        });
+    }
+
     [RelayCommand]
     public async Task AddFilesAsync()
     {

@@ -19,29 +19,22 @@ public sealed partial class NowPlayingPage : Page
 {
     public NowPlayingViewModel ViewModel { get; } = AppServices.NowPlayingViewModel;
     private readonly MusicStreamingService _musicService = new();
+    private System.ComponentModel.PropertyChangedEventHandler? _viewModelPropertyChangedHandler;
 
     public NowPlayingPage()
     {
         InitializeComponent();
-        ViewModel.PropertyChanged += (_, e) =>
+        try
         {
-            if (e.PropertyName is nameof(NowPlayingViewModel.AccentColor))
-            {
-                ApplyAccentColor(ViewModel.AccentColor);
-            }
-            else if (e.PropertyName is nameof(NowPlayingViewModel.Title))
-            {
-                var currentTrack = AppServices.PlaybackViewModel.CurrentTrack;
-                if (currentTrack != null)
-                {
-                    LoadLyrics(currentTrack.SourcePath);
-                }
-                else
-                {
-                    ShowNoLyrics();
-                }
-            }
-        };
+            var contentVisual = ElementCompositionPreview.GetElementVisual(ContentGrid);
+            contentVisual.Opacity = 0f;
+            var lyricsVisual = ElementCompositionPreview.GetElementVisual(LyricsCard);
+            lyricsVisual.Opacity = 0f;
+        }
+        catch { }
+        
+        _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
+        ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
 
         ApplyAccentColor(ViewModel.AccentColor);
         SetupVisualizer();
@@ -54,6 +47,26 @@ public sealed partial class NowPlayingPage : Page
         else
         {
             ShowNoLyrics();
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(NowPlayingViewModel.AccentColor))
+        {
+            ApplyAccentColor(ViewModel.AccentColor);
+        }
+        else if (e.PropertyName is nameof(NowPlayingViewModel.Title))
+        {
+            var currentTrack = AppServices.PlaybackViewModel.CurrentTrack;
+            if (currentTrack != null)
+            {
+                LoadLyrics(currentTrack.SourcePath);
+            }
+            else
+            {
+                ShowNoLyrics();
+            }
         }
     }
 
@@ -84,6 +97,14 @@ public sealed partial class NowPlayingPage : Page
         {
             if (AppServices.Settings.Current.ReduceMotion)
             {
+                try
+                {
+                    var cv = ElementCompositionPreview.GetElementVisual(ContentGrid);
+                    cv.Opacity = 1f;
+                    var lv = ElementCompositionPreview.GetElementVisual(LyricsCard);
+                    lv.Opacity = 1f;
+                }
+                catch { }
                 ContentGrid.Opacity = 1.0;
                 LyricsCard.Opacity = 1.0;
                 return;
@@ -349,6 +370,15 @@ public sealed partial class NowPlayingPage : Page
         this.Unloaded += (s, e) =>
         {
             _visualizerTimer?.Stop();
+            if (_viewModelPropertyChangedHandler != null)
+            {
+                ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
+            }
+
+            // Force GC collection immediately to clean up album art images and visualizer resources
+            System.GC.Collect();
+            System.GC.WaitForPendingFinalizers();
+            System.GC.Collect();
         };
     }
 
@@ -436,6 +466,8 @@ public sealed partial class NowPlayingPage : Page
     {
         public TimeSpan Timestamp { get; set; }
         public string Text { get; set; } = string.Empty;
+        public string Translation { get; set; } = string.Empty;
+        public Visibility HasTranslation => string.IsNullOrEmpty(Translation) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private List<LyricLine> _lyrics = new();
@@ -505,6 +537,10 @@ public sealed partial class NowPlayingPage : Page
                 {
                     NoLyricsPlaceholder.Visibility = Visibility.Collapsed;
                 }
+                if (TranslateLyricsButton != null)
+                {
+                    TranslateLyricsButton.Visibility = Visibility.Visible;
+                }
             }
             else
             {
@@ -526,6 +562,68 @@ public sealed partial class NowPlayingPage : Page
         if (NoLyricsPlaceholder != null)
         {
             NoLyricsPlaceholder.Visibility = Visibility.Visible;
+        }
+        if (TranslateLyricsButton != null)
+        {
+            TranslateLyricsButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void OnTranslateLyricsClick(object sender, RoutedEventArgs e)
+    {
+        if (_lyrics == null || _lyrics.Count == 0) return;
+
+        bool hasAnyTranslation = _lyrics.Any(l => !string.IsNullOrEmpty(l.Translation));
+        if (hasAnyTranslation)
+        {
+            foreach (var line in _lyrics)
+            {
+                line.Translation = string.Empty;
+            }
+            if (LyricsListView != null)
+            {
+                LyricsListView.ItemsSource = null;
+                LyricsListView.ItemsSource = _lyrics;
+            }
+            return;
+        }
+
+        if (TranslateLyricsButton != null)
+        {
+            TranslateLyricsButton.IsEnabled = false;
+        }
+
+        try
+        {
+            var rawLines = _lyrics.Select(l => l.Text).ToList();
+            var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
+            var currentTrackId = AppServices.PlaybackViewModel.CurrentTrack?.Id ?? "temp";
+            
+            var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
+            if (translations != null && translations.Count == _lyrics.Count)
+            {
+                for (int i = 0; i < _lyrics.Count; i++)
+                {
+                    _lyrics[i].Translation = translations[i];
+                }
+            }
+
+            if (LyricsListView != null)
+            {
+                LyricsListView.ItemsSource = null;
+                LyricsListView.ItemsSource = _lyrics;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Translation failed: {ex.Message}");
+        }
+        finally
+        {
+            if (TranslateLyricsButton != null)
+            {
+                TranslateLyricsButton.IsEnabled = true;
+            }
         }
     }
 

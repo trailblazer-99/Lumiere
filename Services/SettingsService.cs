@@ -86,6 +86,21 @@ public sealed class SettingsService
     private const string LargerClickTargetsKey = "LargerClickTargets";
     private const string ColorBlindModeKey = "ColorBlindMode";
 
+    // AI Features
+    private const string AiLyricsTranslationEnabledKey = "AiLyricsTranslationEnabled";
+    private const string AiTranslationTargetLanguageKey = "AiTranslationTargetLanguage";
+    private const string AiSemanticSearchEnabledKey = "AiSemanticSearchEnabled";
+    private const string GeminiApiKeyKey = "GeminiApiKey";
+    private const string AiEqualizerMatcherEnabledKey = "AiEqualizerMatcherEnabled";
+    private const string VoiceClarityEnabledKey = "VoiceClarityEnabled";
+    private const string NightModeEnabledKey = "NightModeEnabled";
+
+    // Premium General Features Keys
+    private const string SleepTimerMinutesKey = "SleepTimerMinutes";
+    private const string SleepAtEndOfTrackKey = "SleepAtEndOfTrack";
+    private const string CustomEqualizerGainsKey = "CustomEqualizerGains";
+    private const string SelectedReverbPresetKey = "SelectedReverbPreset";
+
     public AppSettings Current { get; private set; } = new();
 
     public event EventHandler? SettingsChanged;
@@ -193,6 +208,21 @@ public sealed class SettingsService
             AutoReadControls = ReadBool(settingsValues, AutoReadControlsKey, false),
             LargerClickTargets = ReadBool(settingsValues, LargerClickTargetsKey, false),
             ColorBlindMode = ParseEnum(settingsValues, ColorBlindModeKey, ColorBlindMode.Off),
+
+            // AI Features
+            AiLyricsTranslationEnabled = ReadBool(settingsValues, AiLyricsTranslationEnabledKey, false),
+            AiTranslationTargetLanguage = settingsValues.TryGetValue(AiTranslationTargetLanguageKey, out var aiLang) && aiLang is string sAiLang ? sAiLang : "Hindi",
+            AiSemanticSearchEnabled = ReadBool(settingsValues, AiSemanticSearchEnabledKey, false),
+            GeminiApiKey = settingsValues.TryGetValue(GeminiApiKeyKey, out var aiKey) && aiKey is string sAiKey ? sAiKey : "",
+            AiEqualizerMatcherEnabled = ReadBool(settingsValues, AiEqualizerMatcherEnabledKey, false),
+            VoiceClarityEnabled = ReadBool(settingsValues, VoiceClarityEnabledKey, false),
+            NightModeEnabled = ReadBool(settingsValues, NightModeEnabledKey, false),
+
+            // Premium Features
+            SleepTimerMinutes = ReadInt(settingsValues, SleepTimerMinutesKey, 0),
+            SleepAtEndOfTrack = ReadBool(settingsValues, SleepAtEndOfTrackKey, false),
+            CustomEqualizerGains = settingsValues.TryGetValue(CustomEqualizerGainsKey, out var eqGains) && eqGains is string sEqGains ? sEqGains : "0,0,0,0,0,0,0,0,0,0",
+            SelectedReverbPreset = settingsValues.TryGetValue(SelectedReverbPresetKey, out var reverb) && reverb is string sReverb ? sReverb : "None",
         };
     }
 
@@ -275,6 +305,21 @@ public sealed class SettingsService
         s.Values[LargerClickTargetsKey] = Current.LargerClickTargets;
         s.Values[ColorBlindModeKey] = Current.ColorBlindMode.ToString();
 
+        // AI Features
+        s.Values[AiLyricsTranslationEnabledKey] = Current.AiLyricsTranslationEnabled;
+        s.Values[AiTranslationTargetLanguageKey] = Current.AiTranslationTargetLanguage;
+        s.Values[AiSemanticSearchEnabledKey] = Current.AiSemanticSearchEnabled;
+        s.Values[GeminiApiKeyKey] = Current.GeminiApiKey;
+        s.Values[AiEqualizerMatcherEnabledKey] = Current.AiEqualizerMatcherEnabled;
+        s.Values[VoiceClarityEnabledKey] = Current.VoiceClarityEnabled;
+        s.Values[NightModeEnabledKey] = Current.NightModeEnabled;
+
+        // Premium Features
+        s.Values[SleepTimerMinutesKey] = Current.SleepTimerMinutes;
+        s.Values[SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack;
+        s.Values[CustomEqualizerGainsKey] = Current.CustomEqualizerGains;
+        s.Values[SelectedReverbPresetKey] = Current.SelectedReverbPreset;
+
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -335,6 +380,9 @@ public sealed class SettingsService
             ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
             KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
             LargerClickTargetsKey, ColorBlindModeKey,
+            AiLyricsTranslationEnabledKey, AiTranslationTargetLanguageKey, AiSemanticSearchEnabledKey, GeminiApiKeyKey,
+            AiEqualizerMatcherEnabledKey, VoiceClarityEnabledKey, NightModeEnabledKey,
+            SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey
         ];
 
         foreach (var key in allKeys)

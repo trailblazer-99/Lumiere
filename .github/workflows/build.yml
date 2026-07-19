@@ -72,14 +72,16 @@ jobs:
     - name: Update Manifest and Project Version
       shell: powershell
       run: |
+        $releaseVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
+
         [xml]$manifest = Get-Content "Package.appxmanifest" -Encoding utf8
-        $manifest.Package.Identity.Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $manifest.Package.Identity.Version = $releaseVersion
         $manifest.Save("Package.appxmanifest")
 
         [xml]$csproj = Get-Content "LumiereMediaPlayer.csproj" -Encoding utf8
-        $csproj.Project.PropertyGroup[0].Version = "1.0.1.$env:GITHUB_RUN_NUMBER"
-        $csproj.Project.PropertyGroup[0].ApplicationVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
-        $csproj.Project.PropertyGroup[0].ApplicationDisplayVersion = "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $csproj.Project.PropertyGroup[0].Version = $releaseVersion
+        $csproj.Project.PropertyGroup[0].ApplicationVersion = $releaseVersion
+        $csproj.Project.PropertyGroup[0].ApplicationDisplayVersion = $releaseVersion
         $csproj.Save("LumiereMediaPlayer.csproj")
 
     # Diagnostic: Print manifest and project versions before compiling
@@ -104,7 +106,8 @@ jobs:
           /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
-          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxAutoIncrementPackageRevision=False
 
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
@@ -131,7 +134,8 @@ jobs:
           /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
-          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER"
+          /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:AppxAutoIncrementPackageRevision=False
 
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
@@ -185,11 +189,16 @@ jobs:
         [xml]$sourceManifest = Get-Content "Package.appxmanifest" -Encoding utf8
         $packageIdentityName = [string]$sourceManifest.Package.Identity.Name
         $packagePublisher = [string]$sourceManifest.Package.Identity.Publisher
+        $packageVersion = [string]$sourceManifest.Package.Identity.Version
         if ([string]::IsNullOrWhiteSpace($packageIdentityName) -or [string]::IsNullOrWhiteSpace($packagePublisher)) {
           throw "Package.appxmanifest must define Identity Name and Publisher."
         }
+        if ($packageVersion -ne "1.0.1.$env:GITHUB_RUN_NUMBER") {
+          throw "Package.appxmanifest Identity Version '$packageVersion' does not match expected release version '1.0.1.$env:GITHUB_RUN_NUMBER'."
+        }
         Write-Output "Expected package identity: $packageIdentityName"
         Write-Output "Expected package publisher: $packagePublisher"
+        Write-Output "Expected package version: $packageVersion"
 
         # 1. Locate Windows SDK tools (signtool.exe and makeappx.exe)
         $sdkBinPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*x64*" } | Select-Object -ExpandProperty DirectoryName -First 1
@@ -212,6 +221,7 @@ jobs:
         # Verify every architecture package before bundling. App Installer
         # requires these values to match exactly.
         Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $validatedPackageCount = 0
         Get-ChildItem -Path "AppPackages\BundleSources\*.msix" | ForEach-Object {
           $archive = [System.IO.Compression.ZipFile]::OpenRead($_.FullName)
           try {
@@ -229,20 +239,56 @@ jobs:
 
             $actualIdentityName = [string]$packageManifest.Package.Identity.Name
             $actualPublisher = [string]$packageManifest.Package.Identity.Publisher
+            $actualVersion = [string]$packageManifest.Package.Identity.Version
             if ($actualIdentityName -ne $packageIdentityName -or $actualPublisher -ne $packagePublisher) {
               throw "Package identity mismatch in $($_.Name): found '$actualIdentityName' / '$actualPublisher', expected '$packageIdentityName' / '$packagePublisher'."
             }
-            Write-Output "Validated package identity: $($_.Name)"
+            if ($actualVersion -ne $packageVersion) {
+              throw "Package version mismatch in $($_.Name): found '$actualVersion', expected '$packageVersion'."
+            }
+            $validatedPackageCount++
+            Write-Output "Validated package identity and version: $($_.Name)"
           } finally {
             $archive.Dispose()
           }
+        }
+        if ($validatedPackageCount -eq 0) {
+          throw "No MSIX packages were staged for bundling."
         }
 
         # 3. Create MSIXBundle
         New-Item -ItemType Directory -Force -Path deploy
         $bundleFilename = "LumiereMediaPlayer_1.0.1.$($env:GITHUB_RUN_NUMBER)_x64_arm64.msixbundle"
         Write-Output "Bundling packages to: deploy\$bundleFilename"
-        & $makeappx bundle /d "AppPackages\BundleSources" /p "deploy\$bundleFilename" /o
+        & $makeappx bundle /d "AppPackages\BundleSources" /p "deploy\$bundleFilename" /bv $packageVersion /o
+
+        $bundleArchive = [System.IO.Compression.ZipFile]::OpenRead("$PWD\deploy\$bundleFilename")
+        try {
+          $bundleManifestEntry = $bundleArchive.GetEntry("AppxMetadata/AppxBundleManifest.xml")
+          if (-not $bundleManifestEntry) {
+            $bundleManifestEntry = $bundleArchive.GetEntry("AppxBundleManifest.xml")
+          }
+          if (-not $bundleManifestEntry) {
+            throw "AppxBundleManifest.xml is missing from $bundleFilename."
+          }
+
+          $reader = [System.IO.StreamReader]::new($bundleManifestEntry.Open())
+          try {
+            [xml]$bundleManifest = $reader.ReadToEnd()
+          } finally {
+            $reader.Dispose()
+          }
+
+          $bundleIdentityName = [string]$bundleManifest.Bundle.Identity.Name
+          $bundlePublisher = [string]$bundleManifest.Bundle.Identity.Publisher
+          $bundleVersion = [string]$bundleManifest.Bundle.Identity.Version
+          if ($bundleIdentityName -ne $packageIdentityName -or $bundlePublisher -ne $packagePublisher -or $bundleVersion -ne $packageVersion) {
+            throw "Bundle identity mismatch: found '$bundleIdentityName' / '$bundlePublisher' / '$bundleVersion', expected '$packageIdentityName' / '$packagePublisher' / '$packageVersion'."
+          }
+          Write-Output "Validated bundle identity and version: $bundleIdentityName $bundleVersion"
+        } finally {
+          $bundleArchive.Dispose()
+        }
 
         # 4. Sign the generated bundle
         Write-Output "Signing Bundle..."
@@ -276,19 +322,41 @@ jobs:
         
         $bundleFilename = "LumiereMediaPlayer_1.0.1.$($env:GITHUB_RUN_NUMBER)_x64_arm64.msixbundle"
 
-        [xml]$sourceManifest = Get-Content "Package.appxmanifest" -Encoding utf8
-        $packageIdentityName = [string]$sourceManifest.Package.Identity.Name
-        $packagePublisher = [string]$sourceManifest.Package.Identity.Publisher
-        if ([string]::IsNullOrWhiteSpace($packageIdentityName) -or [string]::IsNullOrWhiteSpace($packagePublisher)) {
-          throw "Package.appxmanifest must define Identity Name and Publisher."
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $bundleArchive = [System.IO.Compression.ZipFile]::OpenRead("$PWD\deploy\$bundleFilename")
+        try {
+          $bundleManifestEntry = $bundleArchive.GetEntry("AppxMetadata/AppxBundleManifest.xml")
+          if (-not $bundleManifestEntry) {
+            $bundleManifestEntry = $bundleArchive.GetEntry("AppxBundleManifest.xml")
+          }
+          if (-not $bundleManifestEntry) {
+            throw "AppxBundleManifest.xml is missing from $bundleFilename."
+          }
+
+          $reader = [System.IO.StreamReader]::new($bundleManifestEntry.Open())
+          try {
+            [xml]$bundleManifest = $reader.ReadToEnd()
+          } finally {
+            $reader.Dispose()
+          }
+
+          $packageIdentityName = [string]$bundleManifest.Bundle.Identity.Name
+          $packagePublisher = [string]$bundleManifest.Bundle.Identity.Publisher
+          $packageVersion = [string]$bundleManifest.Bundle.Identity.Version
+        } finally {
+          $bundleArchive.Dispose()
+        }
+
+        if ([string]::IsNullOrWhiteSpace($packageIdentityName) -or [string]::IsNullOrWhiteSpace($packagePublisher) -or [string]::IsNullOrWhiteSpace($packageVersion)) {
+          throw "MSIX bundle manifest must define Identity Name, Publisher, and Version."
         }
         
         # 2. Generate dynamic .appinstaller pointing to the GitHub Release asset URL
         $releaseDownloadUrl = "https://github.com/$owner/$repoName/releases/download/v1.0.1.$env:GITHUB_RUN_NUMBER/$bundleFilename"
         
         $xml = '<?xml version="1.0" encoding="utf-8"?>'
-        $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
-        $xml += "`n" + '  <MainBundle Name="' + $packageIdentityName + '" Version="1.0.1.' + $env:GITHUB_RUN_NUMBER + '" Publisher="' + $packagePublisher + '" Uri="' + $releaseDownloadUrl + '" />'
+        $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="' + $packageVersion + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
+        $xml += "`n" + '  <MainBundle Name="' + $packageIdentityName + '" Version="' + $packageVersion + '" Publisher="' + $packagePublisher + '" Uri="' + $releaseDownloadUrl + '" />'
         $xml += "`n" + '  <UpdateSettings>'
         $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />'
         $xml += "`n" + '  </UpdateSettings>'
@@ -305,7 +373,7 @@ jobs:
         $html = Get-Content "Signing\index.html" -Raw -Encoding utf8
         $html = $html -replace "APP_INSTALLER_FILENAME", "LumiereMediaPlayer.appinstaller"
         $html = $html -replace "MSIX_BUNDLE_FILENAME", $releaseDownloadUrl
-        $html = $html -replace "APP_VERSION", "1.0.1.$env:GITHUB_RUN_NUMBER"
+        $html = $html -replace "APP_VERSION", $packageVersion
         $html | Out-File "deploy\index.html" -Encoding utf8
         
         # 5. Delete the large msixbundle from deploy folder to prevent git commit limit failures

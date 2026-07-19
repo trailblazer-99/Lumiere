@@ -219,6 +219,7 @@
             <!-- Metadata Overlay -->
             <Border
                 x:Name="FullscreenMetadataOverlay"
+                x:FieldModifier="public"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
                 Margin="24"
@@ -262,14 +263,14 @@
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="290" TextWrapping="Wrap" Foreground="White" />
                     </Grid>
 
                     <!-- Divider between File Information and Internet Match -->
                     <MenuFlyoutSeparator Margin="0,8,0,4" Background="#33FFFFFF" x:Name="FullscreenMetadataDivider" x:FieldModifier="public" Visibility="Collapsed" />
 
                     <!-- Internet Metadata Match (syncs with normal mode's metadata side panel) -->
-                    <StackPanel x:Name="FullscreenInternetMetadataPanel" x:FieldModifier="public" Spacing="12" Visibility="Collapsed" Width="260">
+                    <StackPanel x:Name="FullscreenInternetMetadataPanel" x:FieldModifier="public" Spacing="12" Visibility="Collapsed" Width="300">
                         <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
                         <ProgressRing x:Name="FullscreenInternetMetadataProgress" x:FieldModifier="public" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="White" />
                         
@@ -311,7 +312,10 @@
             Grid.Row="0"
             Grid.RowSpan="2"
             Background="#FF111111"
-            Visibility="Collapsed">
+            Visibility="Collapsed"
+            PointerMoved="OnMiniPlayerPointerMoved"
+            PointerEntered="OnMiniPlayerPointerEntered"
+            PointerExited="OnMiniPlayerPointerExited">
             <Grid.RowDefinitions>
                 <RowDefinition Height="48" />
                 <RowDefinition Height="*" />
@@ -447,57 +451,60 @@
                 <!-- Album Art (Audio mode) -->
                 <Image x:Name="MiniAudioArt" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="UniformToFill" Opacity="0.3" Visibility="Collapsed" />
                 
-                <!-- Dimming overlay to make controls stand out -->
-                <Grid x:Name="MiniControlsDimmer" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
+                <!-- Dimming overlay and control buttons wrapper -->
+                <Grid x:Name="MiniOverlayControls">
+                    <!-- Dimming overlay to make controls stand out -->
+                    <Grid x:Name="MiniControlsDimmer" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
 
-                <!-- Center Control Buttons -->
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="24"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-                    
-                    <!-- Previous Button -->
+                    <!-- Center Control Buttons -->
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="24"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                        
+                        <!-- Previous Button -->
+                        <Button
+                            Click="OnMiniPreviousClick"
+                            Style="{StaticResource MiniIconButtonStyle}"
+                            ToolTipService.ToolTip="Previous">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE892;" Foreground="White" />
+                        </Button>
+
+                        <!-- Play/Pause Button -->
+                        <Button
+                            Style="{StaticResource MiniPlayPauseButtonStyle}"
+                            Click="OnMiniPlayPauseClick"
+                            ToolTipService.ToolTip="Play">
+                            <FontIcon
+                                x:Name="MiniPlayPauseIcon"
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="20"
+                                Glyph="&#xE768;"
+                                Foreground="White"
+                                Margin="2,0,0,0" />
+                        </Button>
+
+                        <!-- Next Button -->
+                        <Button
+                            Click="OnMiniNextClick"
+                            Style="{StaticResource MiniIconButtonStyle}"
+                            ToolTipService.ToolTip="Next">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE893;" Foreground="White" />
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Revert / Exit PiP Button in Bottom Right -->
                     <Button
-                        Click="OnMiniPreviousClick"
+                        Click="OnMiniExitPipClick"
                         Style="{StaticResource MiniIconButtonStyle}"
-                        ToolTipService.ToolTip="Previous">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE892;" Foreground="White" />
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,16,16"
+                        ToolTipService.ToolTip="Exit Picture in Picture">
+                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" Glyph="&#xE93A;" Foreground="White" />
                     </Button>
-
-                    <!-- Play/Pause Button -->
-                    <Button
-                        Style="{StaticResource MiniPlayPauseButtonStyle}"
-                        Click="OnMiniPlayPauseClick"
-                        ToolTipService.ToolTip="Play">
-                        <FontIcon
-                            x:Name="MiniPlayPauseIcon"
-                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                            FontSize="20"
-                            Glyph="&#xE768;"
-                            Foreground="White"
-                            Margin="2,0,0,0" />
-                    </Button>
-
-                    <!-- Next Button -->
-                    <Button
-                        Click="OnMiniNextClick"
-                        Style="{StaticResource MiniIconButtonStyle}"
-                        ToolTipService.ToolTip="Next">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE893;" Foreground="White" />
-                    </Button>
-                </StackPanel>
-
-                <!-- Revert / Exit PiP Button in Bottom Right -->
-                <Button
-                    Click="OnMiniExitPipClick"
-                    Style="{StaticResource MiniIconButtonStyle}"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Bottom"
-                    Margin="0,0,16,16"
-                    ToolTipService.ToolTip="Exit Picture in Picture">
-                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" Glyph="&#xE93A;" Foreground="White" />
-                </Button>
+                </Grid>
             </Grid>
         </Grid>
     </Grid>

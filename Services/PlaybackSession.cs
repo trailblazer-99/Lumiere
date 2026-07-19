@@ -40,6 +40,15 @@ public sealed class PlaybackSession
     private bool _disposed;
     private bool _isChangingSource;
 
+    private bool _isCrossfading;
+    private MediaPlayer? _transitionPlayer;
+    private IMediaPlaybackSource? _preloadedNextSource;
+    private IMediaPlaybackSource? _currentPlaybackSource;
+    private string? _preloadedTrackId;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _crossfadeCheckTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _sleepCheckTimer;
+    private DateTime? _sleepExpireTime;
+
     public PlaybackSession(IEnumerable<MediaItem> initialQueue)
     {
         _queue = initialQueue.ToList();
@@ -72,6 +81,22 @@ public sealed class PlaybackSession
         _mediaPlayer.MediaFailed += OnMediaPlayerMediaFailed;
 
         RestoreLastPlayedTrack();
+        ApplyAudioEffects();
+
+        _crossfadeCheckTimer = App.MainDispatcher?.CreateTimer();
+        if (_crossfadeCheckTimer != null)
+        {
+            _crossfadeCheckTimer.Interval = TimeSpan.FromMilliseconds(250);
+            _crossfadeCheckTimer.Tick += OnCrossfadeCheckTimerTick;
+            _crossfadeCheckTimer.Start();
+        }
+
+        try
+        {
+            AppServices.Settings.Current.SleepTimerMinutes = 0;
+            AppServices.Settings.Current.SleepAtEndOfTrack = false;
+        }
+        catch { }
     }
 
     public MediaPlayer MediaPlayer => _mediaPlayer;
@@ -120,8 +145,11 @@ public sealed class PlaybackSession
         }
     }
 
-    private int BeginPlaybackRequest() =>
-        System.Threading.Interlocked.Increment(ref _playbackRequestVersion);
+    private int BeginPlaybackRequest()
+    {
+        CancelActiveTransition();
+        return System.Threading.Interlocked.Increment(ref _playbackRequestVersion);
+    }
 
     private bool IsCurrentPlaybackRequest(int requestVersion) =>
         requestVersion == System.Threading.Volatile.Read(ref _playbackRequestVersion);
@@ -173,6 +201,11 @@ public sealed class PlaybackSession
         try
         {
             _mediaPlayer.Source = null;
+            if (_currentPlaybackSource != null)
+            {
+                CleanupPlaybackSource(_currentPlaybackSource);
+                _currentPlaybackSource = null;
+            }
         }
         catch { }
 
@@ -191,7 +224,21 @@ public sealed class PlaybackSession
 
         Log($"LoadCurrentTrackSourceAsync: Track ID {track.Id}, SourcePath: {track.SourcePath}");
 
-        var source = await CreatePlaybackSourceAsync(track);
+        RunAiEqualizerMatcher(track);
+        ApplyAudioEffects();
+
+        IMediaPlaybackSource? source = null;
+        if (_preloadedNextSource != null && _preloadedTrackId == track.Id)
+        {
+            source = _preloadedNextSource;
+            _preloadedNextSource = null;
+            _preloadedTrackId = null;
+            Log("LoadCurrentTrackSourceAsync: Using preloaded source (Gapless playback achieved).");
+        }
+        else
+        {
+            source = await CreatePlaybackSourceAsync(track);
+        }
         if (!IsCurrentPlaybackRequest(requestVersion) || CurrentTrack?.Id != track.Id)
         {
             Log("LoadCurrentTrackSourceAsync: Request version changed or track changed. Aborting.");
@@ -218,7 +265,12 @@ public sealed class PlaybackSession
                 Log($"LoadCurrentTrackSourceAsync: Failed to disable VideoFrameServer: {ex.Message}");
             }
 
+            _currentPlaybackSource = source;
             _mediaPlayer.Source = source;
+            if (track.IsVideo)
+            {
+                PrefetchVideoThumbnails(track);
+            }
 
             var targetPos = GetResumePositionSeconds(track);
             if (targetPos > 0)
@@ -328,6 +380,14 @@ public sealed class PlaybackSession
             UpdateDisplayRequestState();
             AccessibilityHelper.NotifySoundCue();
             AppServices.HdrPipeline.ResetContentState();
+            if (AppServices.Settings.Current.SleepAtEndOfTrack)
+            {
+                Log("OnMediaPlayerMediaEnded: SleepAtEndOfTrack is active. Stopping playback.");
+                StartSleepTimer(0, false);
+                Stop();
+                return;
+            }
+
             if (AppServices.Settings.Current.AutoAdvanceToNextTrack && CurrentTrack != null)
             {
                 Log("OnMediaPlayerMediaEnded: AutoAdvanceToNextTrack is true. Calling Next().");
@@ -641,8 +701,44 @@ public sealed class PlaybackSession
         _mediaPlayer.Source = null;
         CurrentTrack = null;
         _currentIndex = -1;
+
+        if (_currentPlaybackSource != null)
+        {
+            CleanupPlaybackSource(_currentPlaybackSource);
+            _currentPlaybackSource = null;
+        }
+
+        if (_preloadedNextSource != null)
+        {
+            CleanupPlaybackSource(_preloadedNextSource);
+            _preloadedNextSource = null;
+            _preloadedTrackId = null;
+        }
+
+        try
+        {
+            _prefetchCts?.Cancel();
+            _prefetchCts = null;
+        }
+        catch { }
+
+        lock (VideoThumbnailCacheLock)
+        {
+            _videoThumbnailCache.Clear();
+        }
+
+        lock (_compositionLock)
+        {
+            _activeComposition = null;
+        }
+
         UpdateDisplayRequestState();
         StateChanged?.Invoke(this, EventArgs.Empty);
+
+        // Force GC collection immediately to free up decoders and video buffers from RAM
+        System.GC.Collect();
+        System.GC.WaitForPendingFinalizers();
+        System.GC.Collect();
     }
 
     private async void RestoreLastPlayedTrack()
@@ -691,6 +787,26 @@ public sealed class PlaybackSession
         _disposed = true;
         BeginPlaybackRequest();
 
+        if (_currentPlaybackSource != null)
+        {
+            CleanupPlaybackSource(_currentPlaybackSource);
+            _currentPlaybackSource = null;
+        }
+
+        if (_preloadedNextSource != null)
+        {
+            CleanupPlaybackSource(_preloadedNextSource);
+            _preloadedNextSource = null;
+            _preloadedTrackId = null;
+        }
+
+        try
+        {
+            _prefetchCts?.Cancel();
+            _prefetchCts = null;
+        }
+        catch { }
+
         try
         {
             _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
@@ -712,6 +828,542 @@ public sealed class PlaybackSession
         catch { }
 
         _mediaPlayer.Dispose();
+    }
+
+    public void ApplyAudioEffects()
+    {
+        try
+        {
+            var settings = AppServices.Settings.Current;
+            if (settings.VoiceClarityEnabled)
+            {
+                _mediaPlayer.AudioCategory = MediaPlayerAudioCategory.Speech;
+            }
+            else if (settings.NightModeEnabled)
+            {
+                _mediaPlayer.AudioCategory = MediaPlayerAudioCategory.Movie;
+            }
+            else
+            {
+                _mediaPlayer.AudioCategory = settings.SelectedReverbPreset switch
+                {
+                    "Concert Hall" => MediaPlayerAudioCategory.Movie,
+                    "Cave" => MediaPlayerAudioCategory.Movie,
+                    "Auditorium" => MediaPlayerAudioCategory.Media,
+                    _ => MediaPlayerAudioCategory.Media
+                };
+            }
+            Log($"ApplyAudioEffects: VoiceClarity={settings.VoiceClarityEnabled}, NightMode={settings.NightModeEnabled}, Reverb={settings.SelectedReverbPreset}, AudioCategory={_mediaPlayer.AudioCategory}");
+        }
+        catch (Exception ex)
+        {
+            Log($"ApplyAudioEffects error: {ex.Message}");
+        }
+    }
+
+    public void ApplyVoiceClarity(bool enabled) => ApplyAudioEffects();
+    public void ApplyNightMode(bool enabled) => ApplyAudioEffects();
+
+    private async void RunAiEqualizerMatcher(MediaItem track)
+    {
+        var settings = AppServices.Settings.Current;
+        if (!settings.AiEqualizerMatcherEnabled) return;
+
+        try
+        {
+            string genre = track.Genre ?? string.Empty;
+            string title = track.Title ?? string.Empty;
+
+            EqualizerPreset matchedPreset = EqualizerPreset.Flat;
+
+            // 1. Fast offline matching
+            if (genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || genre.Contains("Metal", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Rock;
+            }
+            else if (genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || genre.Contains("Dance", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Pop;
+            }
+            else if (genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || genre.Contains("Techno", StringComparison.OrdinalIgnoreCase) || genre.Contains("Club", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Electronic;
+            }
+            else if (genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || genre.Contains("Orchestral", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Classical;
+            }
+            else if (genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || genre.Contains("Blues", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Jazz;
+            }
+            else if (genre.Contains("Speech", StringComparison.OrdinalIgnoreCase) || genre.Contains("Podcast", StringComparison.OrdinalIgnoreCase) || genre.Contains("Vocal", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedPreset = EqualizerPreset.Vocal;
+            }
+            
+            // 2. Cloud matching fallback (using proxy/Gemini) if UseProxy is enabled
+            var config = ConfigService.Config;
+            if (matchedPreset == EqualizerPreset.Flat && config.UseProxy)
+            {
+                try
+                {
+                    string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
+                    var apiResult = await AiAssistantService.TranslateLyricsAsync(track.Id, new List<string> { prompt }, "English");
+                    if (apiResult != null && apiResult.Count > 0)
+                    {
+                        string responseText = apiResult[0].Trim();
+                        if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
+                        {
+                            matchedPreset = parsedPreset;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (settings.Equalizer != matchedPreset)
+            {
+                Log($"AI Equalizer Matcher: Autodetected and changed EQ preset to '{matchedPreset}' for track '{title}'");
+                App.MainDispatcher?.TryEnqueue(() =>
+                {
+                    AppServices.SettingsViewModel.SelectedEqualizer = matchedPreset;
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"RunAiEqualizerMatcher error: {ex.Message}");
+        }
+    }
+
+    private int GetNextTrackIndex()
+    {
+        if (_queue.Count == 0) return -1;
+        return (_currentIndex + 1) % _queue.Count;
+    }
+
+    private void CancelActiveTransition()
+    {
+        if (_isCrossfading)
+        {
+            _isCrossfading = false;
+            Log("CancelActiveTransition: Aborting crossfade.");
+        }
+
+        if (_transitionPlayer != null)
+        {
+            try
+            {
+                _transitionPlayer.Pause();
+                _transitionPlayer.Source = null;
+                _transitionPlayer.Dispose();
+            }
+            catch { }
+            _transitionPlayer = null;
+        }
+
+        try
+        {
+            _mediaPlayer.Volume = Volume / 100.0;
+        }
+        catch { }
+    }
+
+    private async void InitiateCrossfade(int nextIndex)
+    {
+        if (_isCrossfading) return;
+
+        var nextTrack = _queue[nextIndex];
+        Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
+
+        try
+        {
+            var requestVersion = BeginPlaybackRequest();
+            _isCrossfading = true;
+
+            _transitionPlayer = new MediaPlayer
+            {
+                AudioCategory = _mediaPlayer.AudioCategory,
+                AutoPlay = false
+            };
+            
+            _transitionPlayer.Source = _mediaPlayer.Source;
+            _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+            _transitionPlayer.Volume = _mediaPlayer.Volume;
+            _transitionPlayer.Play();
+
+            _currentIndex = nextIndex;
+            CurrentTrack = nextTrack;
+
+            IMediaPlaybackSource? nextSource = null;
+            if (_preloadedNextSource != null && _preloadedTrackId == nextTrack.Id)
+            {
+                nextSource = _preloadedNextSource;
+                _preloadedNextSource = null;
+                _preloadedTrackId = null;
+            }
+            else
+            {
+                nextSource = await CreatePlaybackSourceAsync(nextTrack);
+            }
+
+            if (nextSource != null)
+            {
+                _mediaPlayer.Source = nextSource;
+                _mediaPlayer.Volume = 0.0;
+                _mediaPlayer.Play();
+
+                StateChanged?.Invoke(this, EventArgs.Empty);
+                SaveLastPlayedTrack(nextTrack);
+
+                int durationMs = AppServices.Settings.Current.CrossfadeDuration * 1000;
+                int intervalMs = 50;
+                int steps = durationMs / intervalMs;
+                double initialTransitionVolume = _transitionPlayer.Volume;
+                double finalTargetVolume = Volume / 100.0;
+
+                int currentStep = 0;
+                var fadeTimer = App.MainDispatcher?.CreateTimer();
+                if (fadeTimer != null)
+                {
+                    fadeTimer.Interval = TimeSpan.FromMilliseconds(intervalMs);
+                    fadeTimer.Tick += (s, ev) =>
+                    {
+                        if (!_isCrossfading || _transitionPlayer == null)
+                        {
+                            fadeTimer.Stop();
+                            return;
+                        }
+
+                        currentStep++;
+                        double progress = (double)currentStep / steps;
+
+                        _transitionPlayer.Volume = Math.Clamp(initialTransitionVolume * (1.0 - progress), 0.0, 1.0);
+                        _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
+
+                        if (currentStep >= steps)
+                        {
+                            fadeTimer.Stop();
+                            CancelActiveTransition();
+                        }
+                    };
+                    fadeTimer.Start();
+                }
+            }
+            else
+            {
+                _isCrossfading = false;
+                Log("InitiateCrossfade failed: Next track source is null.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _isCrossfading = false;
+            Log($"InitiateCrossfade exception: {ex.Message}");
+        }
+    }
+
+    private void OnCrossfadeCheckTimerTick(object sender, object e)
+    {
+        var settings = AppServices.Settings.Current;
+        var track = CurrentTrack;
+        if (track == null || _isChangingSource || _isCrossfading) return;
+
+        double pos = PositionSeconds;
+        double dur = _mediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+
+        if (dur <= 0) return;
+
+        int nextIndex = GetNextTrackIndex();
+        if (nextIndex >= 0 && nextIndex < _queue.Count)
+        {
+            var nextTrack = _queue[nextIndex];
+            if (_preloadedTrackId != nextTrack.Id && pos >= dur * 0.8)
+            {
+                _preloadedTrackId = nextTrack.Id;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var src = await CreatePlaybackSourceAsync(nextTrack);
+                        if (nextTrack.Id == _preloadedTrackId)
+                        {
+                            _preloadedNextSource = src;
+                            Log($"Pre-loaded next track '{nextTrack.Title}' for gapless playback.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Preload failed: {ex.Message}");
+                    }
+                });
+            }
+        }
+
+        if (settings.CrossfadeEnabled && !track.IsVideo && nextIndex >= 0 && nextIndex < _queue.Count)
+        {
+            double fadeThreshold = dur - settings.CrossfadeDuration;
+            if (pos >= fadeThreshold && fadeThreshold > 0)
+            {
+                InitiateCrossfade(nextIndex);
+            }
+        }
+    }
+
+    public void StartSleepTimer(int minutes, bool stopAtEnd)
+    {
+        var settings = AppServices.Settings.Current;
+        settings.SleepTimerMinutes = minutes;
+        settings.SleepAtEndOfTrack = stopAtEnd;
+        AppServices.Settings.Save();
+
+        if (_sleepCheckTimer == null)
+        {
+            _sleepCheckTimer = App.MainDispatcher?.CreateTimer();
+            if (_sleepCheckTimer != null)
+            {
+                _sleepCheckTimer.Interval = TimeSpan.FromSeconds(1);
+                _sleepCheckTimer.Tick += OnSleepCheckTimerTick;
+            }
+        }
+
+        if (minutes > 0)
+        {
+            _sleepExpireTime = DateTime.Now.AddMinutes(minutes);
+            _sleepCheckTimer?.Start();
+            Log($"Sleep Timer started: stops in {minutes} minutes.");
+        }
+        else if (stopAtEnd)
+        {
+            _sleepExpireTime = null;
+            _sleepCheckTimer?.Start();
+            Log("Sleep Timer started: stops at end of current track.");
+        }
+        else
+        {
+            _sleepExpireTime = null;
+            _sleepCheckTimer?.Stop();
+            Log("Sleep Timer stopped.");
+        }
+    }
+
+    private void OnSleepCheckTimerTick(object sender, object e)
+    {
+        var settings = AppServices.Settings.Current;
+        if (settings.SleepTimerMinutes <= 0 && !settings.SleepAtEndOfTrack)
+        {
+            _sleepCheckTimer?.Stop();
+            return;
+        }
+
+        if (_sleepExpireTime.HasValue && DateTime.Now >= _sleepExpireTime.Value)
+        {
+            Log("Sleep Timer expired. Stopping playback.");
+            _sleepExpireTime = null;
+            StartSleepTimer(0, false);
+            FadeOutAndStop();
+        }
+    }
+
+    private async void FadeOutAndStop()
+    {
+        try
+        {
+            double startVol = _mediaPlayer.Volume;
+            int steps = 20;
+            int intervalMs = 100;
+            for (int i = 0; i <= steps; i++)
+            {
+                double factor = 1.0 - ((double)i / steps);
+                _mediaPlayer.Volume = Math.Clamp(startVol * factor, 0.0, 1.0);
+                await Task.Delay(intervalMs);
+            }
+        }
+        catch { }
+
+        Stop();
+        try
+        {
+            _mediaPlayer.Volume = Volume / 100.0;
+        }
+        catch { }
+    }
+
+    public readonly object VideoThumbnailCacheLock = new();
+    private readonly List<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> _videoThumbnailCache = new();
+    private System.Threading.CancellationTokenSource? _prefetchCts;
+    private Windows.Media.Editing.MediaComposition? _activeComposition;
+    private readonly object _compositionLock = new();
+
+    public IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache => _videoThumbnailCache;
+
+    public void AddCachedThumbnail(TimeSpan time, Microsoft.UI.Xaml.Media.ImageSource image)
+    {
+        lock (VideoThumbnailCacheLock)
+        {
+            _videoThumbnailCache.RemoveAll(x => Math.Abs((x.Time - time).TotalSeconds) < 0.2);
+            _videoThumbnailCache.Add((time, image));
+        }
+    }
+
+    public void PrefetchVideoThumbnails(MediaItem track)
+    {
+        _prefetchCts?.Cancel();
+        _prefetchCts = new System.Threading.CancellationTokenSource();
+        var token = _prefetchCts.Token;
+
+        lock (VideoThumbnailCacheLock)
+        {
+            _videoThumbnailCache.Clear();
+        }
+
+        lock (_compositionLock)
+        {
+            _activeComposition = null;
+        }
+
+        if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Log($"PrefetchVideoThumbnails: Starting for track '{track.Title}'");
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
+                var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
+                var composition = new Windows.Media.Editing.MediaComposition();
+                composition.Clips.Add(clip);
+
+                lock (_compositionLock)
+                {
+                    _activeComposition = composition;
+                }
+
+                double totalSec = clip.OriginalDuration.TotalSeconds;
+                if (totalSec <= 0) return;
+
+                int numThumbnails = 45;
+                double step = totalSec / numThumbnails;
+
+                for (int i = 0; i < numThumbnails; i++)
+                {
+                    if (token.IsCancellationRequested) break;
+
+                    double sec = i * step;
+                    var time = TimeSpan.FromSeconds(sec);
+
+                    try
+                    {
+                        var stream = await composition.GetThumbnailAsync(time, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+                        
+                        bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
+                        {
+                            using (stream)
+                            {
+                                try
+                                {
+                                    if (token.IsCancellationRequested) return;
+
+                                    var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                                    await bitmap.SetSourceAsync(stream);
+                                    AddCachedThumbnail(time, bitmap);
+                                }
+                                catch { }
+                            }
+                        }) ?? false;
+
+                        if (!enqueued)
+                        {
+                            stream.Dispose();
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore individual frame extraction failures
+                    }
+
+                    await Task.Delay(40, token);
+                }
+                Log("PrefetchVideoThumbnails: Thread finished enqueuing tasks.");
+            }
+            catch (Exception ex)
+            {
+                Log($"PrefetchVideoThumbnails error: {ex.Message}");
+            }
+        });
+    }
+
+    public async Task<Windows.Storage.Streams.IRandomAccessStreamWithContentType?> GetExactThumbnailAsync(double seconds)
+    {
+        Windows.Media.Editing.MediaComposition? comp;
+        lock (_compositionLock)
+        {
+            comp = _activeComposition;
+        }
+
+        if (comp == null) return null;
+
+        try
+        {
+            var timeSpan = TimeSpan.FromSeconds(seconds);
+            return await comp.GetThumbnailAsync(timeSpan, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public Microsoft.UI.Xaml.Media.ImageSource? GetCachedThumbnail(double seconds)
+    {
+        lock (VideoThumbnailCacheLock)
+        {
+            if (_videoThumbnailCache.Count == 0) return null;
+
+            var target = TimeSpan.FromSeconds(seconds);
+            var closest = _videoThumbnailCache[0];
+            double minDiff = Math.Abs((closest.Time - target).TotalSeconds);
+
+            for (int i = 1; i < _videoThumbnailCache.Count; i++)
+            {
+                var item = _videoThumbnailCache[i];
+                double diff = Math.Abs((item.Time - target).TotalSeconds);
+                if (diff < minDiff)
+                {
+                    minDiff = diff;
+                    closest = item;
+                }
+            }
+
+            return closest.Image;
+        }
+    }
+
+    private void CleanupPlaybackSource(IMediaPlaybackSource? source)
+    {
+        if (source == null) return;
+
+        try
+        {
+            if (source is MediaPlaybackItem playbackItem)
+            {
+                var sourceToDispose = playbackItem.Source;
+                try
+                {
+                    sourceToDispose?.Dispose();
+                }
+                catch { }
+            }
+            else if (source is IDisposable disposableSource)
+            {
+                disposableSource.Dispose();
+            }
+        }
+        catch { }
     }
 }
 

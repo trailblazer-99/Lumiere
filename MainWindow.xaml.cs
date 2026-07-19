@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
     private AppThemeOption _lastTheme = AppServices.Settings.Current.Theme;
     private AppThemeBackdrop _lastBackdrop = AppServices.Settings.Current.BackdropType;
     private readonly DispatcherTimer _videoControlsTimer;
+    private readonly DispatcherTimer _miniPlayerInteractionTimer;
     private readonly System.Collections.Generic.Dictionary<UIElement, double> _targetOpacities = new();
     private DateTime _lastPresenterChangeTime = DateTime.MinValue;
     private static readonly TimeSpan PositionSaveInterval = TimeSpan.FromSeconds(5);
@@ -285,6 +286,9 @@ public sealed partial class MainWindow : Window
         _videoControlsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _videoControlsTimer.Tick += OnVideoControlsTimerTick;
 
+        _miniPlayerInteractionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _miniPlayerInteractionTimer.Tick += OnMiniPlayerInteractionTimerTick;
+
         _playback.PropertyChanged += OnPlaybackPropertyChanged;
 
         _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -448,9 +452,18 @@ public sealed partial class MainWindow : Window
 
             if (isFullScreen)
             {
-                FullscreenMetadataOverlay.Visibility = FullscreenMetadataOverlay.Visibility == Visibility.Visible 
-                    ? Visibility.Collapsed 
-                    : Visibility.Visible;
+                if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
+                {
+                    FullscreenMetadataOverlay.Visibility = Visibility.Visible;
+                    if (isVideoMode && ContentFrame?.Content is VideoPage videoPage && _playback.CurrentTrack != null)
+                    {
+                        _ = videoPage.FetchInternetMetadataAsync(_playback.CurrentTrack.Title);
+                    }
+                }
+                else
+                {
+                    FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
+                }
             }
             else if (ContentFrame?.Content is VideoPage videoPage)
             {
@@ -707,13 +720,9 @@ public sealed partial class MainWindow : Window
         {
             Microsoft.UI.Xaml.Media.Animation.NavigationTransitionInfo transitionInfo;
 
-            if (pageType == typeof(VideoPage) && _playback.IsVideoPlayerActive)
+            if (pageType == typeof(VideoPage) || pageType == typeof(NowPlayingPage))
             {
-                transitionInfo = new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo();
-            }
-            else if (pageType == typeof(NowPlayingPage))
-            {
-                // NowPlaying uses a DrillIn for a focused feel
+                // DrillIn expands/collapses the player smoothly from/to the center
                 transitionInfo = new Microsoft.UI.Xaml.Media.Animation.DrillInNavigationTransitionInfo();
             }
             else
@@ -1107,6 +1116,12 @@ public sealed partial class MainWindow : Window
             FileSize = fileSize
         };
 
+        try
+        {
+            Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
+        }
+        catch { }
+
         await Services.SampleMediaLibrary.AddTrackAsync(item);
         _playback.PlayTrack(item);
     }
@@ -1168,7 +1183,7 @@ public sealed partial class MainWindow : Window
                         duration = TimeSpan.FromMinutes(3); // fallback
                     }
 
-                    mediaItems.Add(new MediaItem
+                    var item = new MediaItem
                     {
                         Id = Guid.NewGuid().ToString(),
                         Title = title,
@@ -1178,7 +1193,13 @@ public sealed partial class MainWindow : Window
                         AccentColor = "#FFF76B1C",
                         Kind = kind,
                         SourcePath = file.Path
-                    });
+                    };
+                    try
+                    {
+                        Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
+                    }
+                    catch { }
+                    mediaItems.Add(item);
                 }
             }
 
@@ -1468,14 +1489,66 @@ public sealed partial class MainWindow : Window
             if (TransportControls != null) TransportControls.Visibility = Visibility.Collapsed;
             if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Visible;
             if (AppTitleBar != null) AppTitleBar.Height = 48;
+            
+            if (ContentFrame?.Content is VideoPage vp)
+            {
+                vp.SyncMediaPlayer();
+            }
+
+            var track = _playback.CurrentTrack;
+            if (track != null)
+            {
+                if (track.IsVideo)
+                {
+                    if (MiniVideoPlayer != null)
+                    {
+                        MiniVideoPlayer.Visibility = Visibility.Visible;
+                        MiniVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+                    }
+                    if (MiniAudioArt != null) MiniAudioArt.Visibility = Visibility.Collapsed;
+                    if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    if (MiniVideoPlayer != null)
+                    {
+                        MiniVideoPlayer.Visibility = Visibility.Collapsed;
+                        MiniVideoPlayer.SetMediaPlayer(null);
+                    }
+                    if (MiniAudioArt != null)
+                    {
+                        MiniAudioArt.Visibility = Visibility.Visible;
+                        MiniAudioArt.Source = track.Artwork;
+                    }
+                    if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
+                }
+            }
             UpdateMiniPlayPauseIcon();
+
+            if (MiniOverlayControls != null)
+            {
+                MiniOverlayControls.Visibility = Visibility.Visible;
+            }
+            _miniPlayerInteractionTimer?.Start();
         }
         else
         {
+            _miniPlayerInteractionTimer?.Stop();
+
             if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Visible;
             UpdateLayoutForVideoMode();
             if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Collapsed;
             if (AppTitleBar != null) AppTitleBar.Height = 48;
+
+            if (MiniVideoPlayer != null)
+            {
+                MiniVideoPlayer.SetMediaPlayer(null);
+            }
+
+            if (ContentFrame?.Content is VideoPage vp)
+            {
+                vp.SyncMediaPlayer();
+            }
         }
     }
 
@@ -2033,6 +2106,70 @@ public sealed partial class MainWindow : Window
                 MiniPlayPauseIcon.Glyph = "\uE768"; // Solid Play
                 MiniPlayPauseIcon.Margin = new Thickness(2, 0, 0, 0);
             }
+        }
+    }
+
+    private void OnMiniPlayerPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        ShowMiniPlayerControls();
+        _miniPlayerInteractionTimer?.Stop();
+        _miniPlayerInteractionTimer?.Start();
+    }
+
+    private void OnMiniPlayerPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        ShowMiniPlayerControls();
+        _miniPlayerInteractionTimer?.Stop();
+        _miniPlayerInteractionTimer?.Start();
+    }
+
+    private void OnMiniPlayerPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        try
+        {
+            var grid = MiniPlayerGrid;
+            if (grid != null)
+            {
+                var pt = e.GetCurrentPoint(grid);
+                if (pt.Position.X < 0 || pt.Position.X > grid.ActualWidth ||
+                    pt.Position.Y < 0 || pt.Position.Y > grid.ActualHeight)
+                {
+                    _miniPlayerInteractionTimer?.Stop();
+                    HideMiniPlayerControls();
+                }
+            }
+            else
+            {
+                _miniPlayerInteractionTimer?.Stop();
+                HideMiniPlayerControls();
+            }
+        }
+        catch
+        {
+            _miniPlayerInteractionTimer?.Stop();
+            HideMiniPlayerControls();
+        }
+    }
+
+    private void OnMiniPlayerInteractionTimerTick(object? sender, object? e)
+    {
+        HideMiniPlayerControls();
+        _miniPlayerInteractionTimer?.Stop();
+    }
+
+    private void ShowMiniPlayerControls()
+    {
+        if (MiniOverlayControls != null && MiniOverlayControls.Visibility != Visibility.Visible)
+        {
+            MiniOverlayControls.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void HideMiniPlayerControls()
+    {
+        if (MiniOverlayControls != null && MiniOverlayControls.Visibility == Visibility.Visible)
+        {
+            MiniOverlayControls.Visibility = Visibility.Collapsed;
         }
     }
 

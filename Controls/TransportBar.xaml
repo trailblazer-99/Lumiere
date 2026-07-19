@@ -36,13 +36,31 @@
                 VerticalAlignment="Center"
                 FontSize="12" />
 
-            <Slider
-                x:Name="ProgressSlider"
-                Grid.Column="1"
-                Maximum="100"
-                ValueChanged="OnProgressValueChanged"
-                VerticalAlignment="Center"
-                Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+            <Grid Grid.Column="1" VerticalAlignment="Center">
+                <Slider
+                    x:Name="ProgressSlider"
+                    Maximum="100"
+                    ValueChanged="OnProgressValueChanged"
+                    PointerMoved="OnProgressSliderPointerMoved"
+                    PointerExited="OnProgressSliderPointerExited"
+                    Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                
+                <!-- Hover Preview Popup -->
+                <Popup x:Name="HoverPreviewPopup" IsLightDismissEnabled="False" VerticalOffset="-96">
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="6">
+                        <StackPanel Spacing="6" HorizontalAlignment="Center">
+                            <Border CornerRadius="4" BorderThickness="0" Background="#FF1E1E1E">
+                                <Image x:Name="HoverThumbnailImage" Width="120" Height="68" Stretch="Uniform" />
+                            </Border>
+                            <TextBlock x:Name="HoverTimeText" Text="0:00" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontSize="12" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
 
             <TextBlock
                 x:Name="TotalTimeText"
@@ -145,11 +163,24 @@
                     <FontIcon FontSize="16" Glyph="&#xE892;" />
                 </Button>
                 <Button
+                    x:Name="ReplayButton"
                     AutomationProperties.Name="Replay from beginning"
                     Click="OnReplayClick"
-                    Style="{StaticResource TransportIconButtonStyle}"
-                    ToolTipService.ToolTip="Replay from beginning">
-                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    Background="#12B76A"
+                    BorderThickness="0"
+                    CornerRadius="6"
+                    ToolTipService.ToolTip="Replay from beginning"
+                    VerticalAlignment="Center">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#109B59" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0E804A" />
+                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                    </Button.Resources>
+                    <FontIcon FontSize="12" Glyph="&#xE72C;" Foreground="White" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="R" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
@@ -190,15 +221,21 @@
                     x:Name="StopButton"
                     AutomationProperties.Name="Stop"
                     Click="OnStopClick"
-                    Width="28"
-                    Height="28"
+                    Width="32"
+                    Height="32"
                     Padding="0"
                     Background="#D92D20"
                     BorderThickness="0"
                     CornerRadius="6"
                     ToolTipService.ToolTip="Stop"
                     VerticalAlignment="Center">
-                    <FontIcon FontSize="10" Glyph="&#xE15B;" Foreground="White" />
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B92318" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#9A1B14" />
+                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                    </Button.Resources>
+                    <FontIcon FontSize="11" Glyph="&#xE15B;" Foreground="White" />
                 </Button>
 
                 <Button
@@ -364,6 +401,17 @@
                                  <MenuFlyoutItem Text="1.5x" Click="OnSpeedClick" Tag="1.5" />
                                  <MenuFlyoutItem Text="2.0x" Click="OnSpeedClick" Tag="2.0" />
                              </MenuFlyoutSubItem>
+
+                              <MenuFlyoutSubItem Text="Sleep Timer">
+                                  <MenuFlyoutSubItem.Icon>
+                                      <FontIcon Glyph="&#xE708;" />
+                                  </MenuFlyoutSubItem.Icon>
+                                  <ToggleMenuFlyoutItem x:Name="SleepOffItem" Text="Off" Click="OnSleepTimerItemClick" Tag="0" IsChecked="True"/>
+                                  <ToggleMenuFlyoutItem x:Name="Sleep15Item" Text="15 Minutes" Click="OnSleepTimerItemClick" Tag="15"/>
+                                  <ToggleMenuFlyoutItem x:Name="Sleep30Item" Text="30 Minutes" Click="OnSleepTimerItemClick" Tag="30"/>
+                                  <ToggleMenuFlyoutItem x:Name="Sleep60Item" Text="60 Minutes" Click="OnSleepTimerItemClick" Tag="60"/>
+                                  <ToggleMenuFlyoutItem x:Name="SleepEndItem" Text="End of Current Track" Click="OnSleepTimerItemClick" Tag="end"/>
+                              </MenuFlyoutSubItem>
 
                              <MenuFlyoutItem Text="Cast to device" Click="OnCastToDeviceClick">
                                  <MenuFlyoutItem.Icon>

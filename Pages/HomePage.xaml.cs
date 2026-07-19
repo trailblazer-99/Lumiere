@@ -15,6 +15,14 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
+        
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.Opacity = 0f;
+        }
+        catch { }
+
         SetGreeting();
         UpdateOpenFileButtonVisibility();
         AppServices.Settings.SettingsChanged += OnSettingsChanged;
@@ -78,6 +86,12 @@ public sealed partial class HomePage : Page
         {
             if (AppServices.Settings.Current.ReduceMotion)
             {
+                try
+                {
+                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
+                    v.Opacity = 1f;
+                }
+                catch { }
                 PageContent.Opacity = 1.0;
                 RecentSection.Opacity = 1.0;
                 return;
