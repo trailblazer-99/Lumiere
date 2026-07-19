@@ -234,7 +234,7 @@ namespace LumiereMediaPlayer.Pages
                     {
                         var shadowVisual = compositor.CreateSpriteVisual();
                         var shadow = compositor.CreateDropShadow();
-                        shadow.BlurRadius = 24f;
+                        shadow.BlurRadius = 32f;
                         shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
                         shadow.Opacity = 0.0f;
                         shadow.Offset = new System.Numerics.Vector3(0, 4, 0);
@@ -270,7 +270,7 @@ namespace LumiereMediaPlayer.Pages
                 }
 
                 var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.04f, 1.04f, 1.0f));
+                scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.06f, 1.06f, 1.0f));
                 scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
                 
                 visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
@@ -329,7 +329,7 @@ namespace LumiereMediaPlayer.Pages
                     dropShadow.StartAnimation("Opacity", opacityAnim);
                     
                     var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-                    offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 4, 8));
+                    offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 6, 12));
                     offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
                     dropShadow.StartAnimation("Offset", offsetAnim);
                 }
@@ -341,7 +341,7 @@ namespace LumiereMediaPlayer.Pages
                 visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                 visual.StartAnimation("Scale", scaleAnim);
 
-                border.Translation = new System.Numerics.Vector3(0, 0, 8);
+                border.Translation = new System.Numerics.Vector3(0, 0, 16);
 
                 Border? overlay = null;
                 if (border.Child is Grid grid)
