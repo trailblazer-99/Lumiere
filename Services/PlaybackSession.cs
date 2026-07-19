@@ -233,6 +233,24 @@ public sealed class PlaybackSession
             source = _preloadedNextSource;
             _preloadedNextSource = null;
             _preloadedTrackId = null;
+
+        if (_crossfadeCheckTimer != null)
+        {
+            _crossfadeCheckTimer.Stop();
+            _crossfadeCheckTimer = null;
+        }
+
+        if (_sleepCheckTimer != null)
+        {
+            _sleepCheckTimer.Stop();
+            _sleepCheckTimer = null;
+        }
+
+        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
+        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
+        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
+        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
+        _mediaPlayer.Dispose();
             Log("LoadCurrentTrackSourceAsync: Using preloaded source (Gapless playback achieved).");
         }
         else
@@ -713,6 +731,24 @@ public sealed class PlaybackSession
             CleanupPlaybackSource(_preloadedNextSource);
             _preloadedNextSource = null;
             _preloadedTrackId = null;
+
+        if (_crossfadeCheckTimer != null)
+        {
+            _crossfadeCheckTimer.Stop();
+            _crossfadeCheckTimer = null;
+        }
+
+        if (_sleepCheckTimer != null)
+        {
+            _sleepCheckTimer.Stop();
+            _sleepCheckTimer = null;
+        }
+
+        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
+        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
+        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
+        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
+        _mediaPlayer.Dispose();
         }
 
         try
@@ -798,6 +834,24 @@ public sealed class PlaybackSession
             CleanupPlaybackSource(_preloadedNextSource);
             _preloadedNextSource = null;
             _preloadedTrackId = null;
+
+        if (_crossfadeCheckTimer != null)
+        {
+            _crossfadeCheckTimer.Stop();
+            _crossfadeCheckTimer = null;
+        }
+
+        if (_sleepCheckTimer != null)
+        {
+            _sleepCheckTimer.Stop();
+            _sleepCheckTimer = null;
+        }
+
+        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
+        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
+        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
+        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
+        _mediaPlayer.Dispose();
         }
 
         try

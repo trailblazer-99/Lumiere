@@ -63,6 +63,7 @@ public static class AudioPipelineHelper
 
             lock (_cacheLock)
             {
+                if (_transcodedCache.Count > 10) { _transcodedCache.Clear(); }
                 if (_transcodedCache.TryGetValue(key, out var cachedPath) && File.Exists(cachedPath))
                 {
                     return cachedPath;
