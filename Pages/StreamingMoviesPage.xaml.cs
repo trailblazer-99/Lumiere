@@ -73,7 +73,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            string query = args.QueryText;
+            string? query = args.ChosenSuggestion != null ? args.ChosenSuggestion.ToString() : args.QueryText;
             if (!string.IsNullOrWhiteSpace(query))
             {
                 ViewModel.PerformSearchCommand.Execute(query);

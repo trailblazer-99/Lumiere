@@ -80,6 +80,7 @@ namespace LumiereMediaPlayer.ViewModels
         {
             if (_initialized && value != null)
             {
+                CurrentPage = 1;
                 if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
                 else _ = PerformSearchAsync(ActiveSearchQuery);
             }
@@ -93,6 +94,7 @@ namespace LumiereMediaPlayer.ViewModels
         {
             if (_initialized && value != null)
             {
+                CurrentPage = 1;
                 if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
                 else _ = PerformSearchAsync(ActiveSearchQuery);
             }
@@ -101,6 +103,7 @@ namespace LumiereMediaPlayer.ViewModels
         {
             if (_initialized && value != null)
             {
+                CurrentPage = 1;
                 if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
                 else _ = PerformSearchAsync(ActiveSearchQuery);
             }
@@ -109,6 +112,12 @@ namespace LumiereMediaPlayer.ViewModels
         partial void OnCurrentPageChanged(int value)
         {
             CanGoPrevious = value > 1;
+        }
+
+        [RelayCommand]
+        public void NextPage()
+        {
+            CurrentPage++;
             if (_initialized)
             {
                 if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
@@ -117,17 +126,16 @@ namespace LumiereMediaPlayer.ViewModels
         }
 
         [RelayCommand]
-        public void NextPage()
-        {
-            CurrentPage++;
-        }
-
-        [RelayCommand]
         public void PreviousPage()
         {
             if (CurrentPage > 1)
             {
                 CurrentPage--;
+                if (_initialized)
+                {
+                    if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
+                    else _ = PerformSearchAsync(ActiveSearchQuery);
+                }
             }
         }
 
