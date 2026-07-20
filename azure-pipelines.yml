@@ -68,8 +68,8 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          dotnet restore $(solution) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework)
-          dotnet build $(solution) -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
+          dotnet restore $(solution) -p:Platform=$(buildPlatform)
+          dotnet build $(solution) -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
 
     - task: CopyFiles@2
       displayName: 'Stage WinUI 3 App Artifacts'
@@ -101,7 +101,7 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          dotnet publish $(proxyProject) -c $(buildConfiguration) -p:TargetFramework=$(ciProxyTargetFramework) --output $(Build.ArtifactStagingDirectory)/ProxyPackage /p:DeployOnBuild=true /p:DeployTarget=Package
+          dotnet publish $(proxyProject) -c $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/ProxyPackage /p:DeployOnBuild=true /p:DeployTarget=Package
 
     - task: ArchiveFiles@2
       displayName: 'Zip Proxy Package'
