@@ -135,35 +135,38 @@ stages:
         publishLocation: 'Container'
 
 # ==========================================
-# STAGE 2: DEPLOY PROXY BACKEND (Zero Balance $0 Cost Tier)
+# STAGE 2: DEPLOY PROXY BACKEND (Optional - Enable after creating Azure Service Connection)
+# To enable automated deployment:
+# 1. Create an ARM Service Connection named 'Azure-ARM-ServiceConnection' in Azure DevOps Project Settings.
+# 2. Uncomment the Stage 2 block below.
 # ==========================================
-- stage: Deploy_Proxy_Stage
-  displayName: 'Deploy Azure Functions Proxy ($0 Cost Free Tier)'
-  dependsOn: Build_Stage
-  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['deployProxyToAzure'], 'true'))
-  jobs:
-  - deployment: DeployProxyJob
-    displayName: 'Deploy Proxy to Azure Function App'
-    environment: 'production'
-    pool:
-      vmImage: 'windows-latest'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Proxy Zip Package'
-            inputs:
-              buildType: 'current'
-              downloadType: 'single'
-              artifactName: 'LumiereProxy-Package'
-              downloadPath: '$(System.ArtifactsDirectory)'
-
-          - task: AzureFunctionApp@2
-            displayName: 'Deploy Azure Function App (.NET 10 Isolated)'
-            inputs:
-              connectedServiceNameARM: '$(azureServiceConnection)'
-              appType: 'functionApp'
-              appName: '$(azureFunctionAppName)'
-              package: '$(System.ArtifactsDirectory)/LumiereProxy-Package/*.zip'
-              deploymentMethod: 'zipDeploy'
+# - stage: Deploy_Proxy_Stage
+#   displayName: 'Deploy Azure Functions Proxy ($0 Cost Free Tier)'
+#   dependsOn: Build_Stage
+#   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['deployProxyToAzure'], 'true'))
+#   jobs:
+#   - deployment: DeployProxyJob
+#     displayName: 'Deploy Proxy to Azure Function App'
+#     environment: 'production'
+#     pool:
+#       vmImage: 'windows-latest'
+#     strategy:
+#       runOnce:
+#         deploy:
+#           steps:
+#           - task: DownloadBuildArtifacts@0
+#             displayName: 'Download Proxy Zip Package'
+#             inputs:
+#               buildType: 'current'
+#               downloadType: 'single'
+#               artifactName: 'LumiereProxy-Package'
+#               downloadPath: '$(System.ArtifactsDirectory)'
+#
+#           - task: AzureFunctionApp@2
+#             displayName: 'Deploy Azure Function App (.NET 10 Isolated)'
+#             inputs:
+#               connectedServiceNameARM: 'Azure-ARM-ServiceConnection'
+#               appType: 'functionApp'
+#               appName: '$(azureFunctionAppName)'
+#               package: '$(System.ArtifactsDirectory)/LumiereProxy-Package/*.zip'
+#               deploymentMethod: 'zipDeploy'
