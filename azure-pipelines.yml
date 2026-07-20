@@ -1,5 +1,5 @@
-# Azure Pipelines CI/CD Workflow for Lumière Media Player
-# Hybrid Azure DevOps - GitHub Integration
+# Enterprise Azure DevOps Multi-Stage CI/CD Pipeline
+# Lumière Media Player & Azure Functions API Proxy Backend
 
 trigger:
   branches:
@@ -15,73 +15,153 @@ pr:
       - master
       - dev
 
-pool:
-  vmImage: 'windows-latest'
-
 variables:
-  solution: 'LumiereMediaPlayer.csproj'
-  proxyProject: 'LumiereProxy/LumiereProxy.csproj'
-  buildConfiguration: 'Release'
-  buildPlatform: 'x64'
-  ciAppTargetFramework: 'net9.0-windows10.0.19041.0'
-  ciProxyTargetFramework: 'net9.0'
+  - group: Lumiere-Pipeline-Vars # Optional Variable Group for Azure DevOps secrets
+  - name: solution
+    value: 'LumiereMediaPlayer.csproj'
+  - name: proxyProject
+    value: 'LumiereProxy/LumiereProxy.csproj'
+  - name: buildConfiguration
+    value: 'Release'
+  - name: buildPlatform
+    value: 'x64'
+  - name: ciAppTargetFramework
+    value: 'net9.0-windows10.0.19041.0'
+  - name: ciProxyTargetFramework
+    value: 'net9.0'
 
-steps:
-- task: UseDotNet@2
-  displayName: 'Install .NET 9.0 SDK for MSBuild 17.x Compatibility'
-  inputs:
-    packageType: 'sdk'
-    version: '9.0.x'
-    performMultiLevelLookup: true
+stages:
+# ==========================================
+# STAGE 1: BUILD & PACKAGE
+# ==========================================
+- stage: Build_Stage
+  displayName: 'Build & Package Artifacts'
+  jobs:
+  - job: Build_WinUI3_App
+    displayName: 'Build WinUI 3 Desktop App ($(buildPlatform))'
+    pool:
+      vmImage: 'windows-latest'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Install .NET 9.0 SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '9.0.x'
+        performMultiLevelLookup: true
 
-- task: PowerShell@2
-  displayName: 'Prepare Configuration Files for CI'
-  inputs:
-    targetType: 'inline'
-    script: |
-      if (-not (Test-Path "appsettings.json")) {
-        Copy-Item "appsettings.json.example" "appsettings.json"
-        Write-Host "Created appsettings.json from template."
-      }
-      if (Test-Path "global.json") {
-        Remove-Item "global.json" -Force
-        Write-Host "Bypassed global.json SDK lock for Azure Pipelines agent compatibility."
-      }
+    - task: PowerShell@2
+      displayName: 'Prepare Configuration Files'
+      inputs:
+        targetType: 'inline'
+        script: |
+          if (-not (Test-Path "appsettings.json")) {
+            Copy-Item "appsettings.json.example" "appsettings.json"
+            Write-Host "Created appsettings.json template."
+          }
+          if (Test-Path "global.json") {
+            Remove-Item "global.json" -Force
+            Write-Host "Bypassed global.json for CI agent compatibility."
+          }
 
-- task: PowerShell@2
-  displayName: 'Restore Project Dependencies'
-  inputs:
-    targetType: 'inline'
-    script: |
-      dotnet restore LumiereMediaPlayer.csproj -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework)
-      dotnet restore LumiereProxy/LumiereProxy.csproj -p:TargetFramework=$(ciProxyTargetFramework)
+    - task: PowerShell@2
+      displayName: 'Restore & Build WinUI 3 Package'
+      inputs:
+        targetType: 'inline'
+        script: |
+          dotnet restore $(solution) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework)
+          dotnet build $(solution) -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
 
-- task: PowerShell@2
-  displayName: 'Build WinUI 3 Desktop App ($(buildPlatform) | $(buildConfiguration))'
-  inputs:
-    targetType: 'inline'
-    script: |
-      dotnet build LumiereMediaPlayer.csproj -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
+    - task: CopyFiles@2
+      displayName: 'Stage WinUI 3 App Artifacts'
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)'
+        Contents: 'bin/$(buildPlatform)/$(buildConfiguration)/**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/WinUI3App'
 
-- task: PowerShell@2
-  displayName: 'Build Azure Functions Proxy ($(buildConfiguration))'
-  inputs:
-    targetType: 'inline'
-    script: |
-      dotnet build LumiereProxy/LumiereProxy.csproj -c $(buildConfiguration) -p:TargetFramework=$(ciProxyTargetFramework)
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish WinUI 3 Artifact Drop'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/WinUI3App'
+        ArtifactName: 'LumiereMediaPlayer-WinUI3'
+        publishLocation: 'Container'
 
-- task: CopyFiles@2
-  displayName: 'Stage Build Artifacts'
-  inputs:
-    SourceFolder: '$(Build.SourcesDirectory)'
-    Contents: |
-      bin/$(buildPlatform)/$(buildConfiguration)/**
-      LumiereProxy/bin/$(buildConfiguration)/**
-    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+  - job: Build_Azure_Proxy
+    displayName: 'Build & Publish Azure Functions Proxy'
+    pool:
+      vmImage: 'windows-latest'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Install .NET 9.0 SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '9.0.x'
 
-- task: PublishBuildArtifacts@1
-  displayName: 'Publish Pipeline Artifacts'
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'LumiereMediaPlayer-Drop'
-    publishLocation: 'Container'
+    - task: PowerShell@2
+      displayName: 'Publish Proxy Zip Package'
+      inputs:
+        targetType: 'inline'
+        script: |
+          dotnet publish $(proxyProject) -c $(buildConfiguration) -p:TargetFramework=$(ciProxyTargetFramework) --output $(Build.ArtifactStagingDirectory)/ProxyPackage /p:DeployOnBuild=true /p:DeployTarget=Package
+
+    - task: ArchiveFiles@2
+      displayName: 'Zip Proxy Package'
+      inputs:
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/ProxyPackage'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/LumiereProxy-$(Build.BuildId).zip'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Proxy Artifact Drop'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/LumiereProxy-$(Build.BuildId).zip'
+        ArtifactName: 'LumiereProxy-Package'
+        publishLocation: 'Container'
+
+    - task: CopyFiles@2
+      displayName: 'Stage Bicep Templates'
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)/azure-infrastructure'
+        Contents: '**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/Bicep'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish IaC Artifact Drop'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/Bicep'
+        ArtifactName: 'Azure-Infrastructure'
+        publishLocation: 'Container'
+
+# ==========================================
+# STAGE 2: DEPLOY PROXY BACKEND (Conditional)
+# ==========================================
+- stage: Deploy_Proxy_Stage
+  displayName: 'Deploy Azure Functions Proxy'
+  dependsOn: Build_Stage
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['deployProxyToAzure'], 'true'))
+  jobs:
+  - deployment: DeployProxyJob
+    displayName: 'Deploy Proxy to Azure Function App'
+    environment: 'production'
+    pool:
+      vmImage: 'windows-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download Proxy Zip Package'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'LumiereProxy-Package'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - task: AzureFunctionApp@2
+            displayName: 'Deploy Azure Function App'
+            inputs:
+              connectedServiceNameARM: '$(azureServiceConnection)'
+              appType: 'functionApp'
+              appName: '$(azureFunctionAppName)'
+              package: '$(System.ArtifactsDirectory)/LumiereProxy-Package/*.zip'
+              deploymentMethod: 'zipDeploy'
