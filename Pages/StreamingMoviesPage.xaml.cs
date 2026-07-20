@@ -31,6 +31,9 @@ namespace LumiereMediaPlayer.Pages
         {
             base.OnNavigatedTo(e);
             
+            // Refresh library items in case we are returning from Details Page where they changed
+            RefreshLibraryList();
+            
             if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
             {
                 // Preserve search results, active filters, and pivot tabs when returning from Details Page

@@ -246,10 +246,119 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
+        private Border CreateBadge(string text, string tooltip = "")
+        {
+            var border = new Border
+            {
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 1, 6, 2),
+                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            var textBlock = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            border.Child = textBlock;
+            if (!string.IsNullOrEmpty(tooltip))
+            {
+                ToolTipService.SetToolTip(border, tooltip);
+            }
+            return border;
+        }
+
+        private void PopulateQualityBadges(List<WatchmodeSource> sources)
+        {
+            QualityBadgesPanel.Children.Clear();
+            QualityBadgesPanel.Visibility = Visibility.Collapsed;
+
+            if (sources == null || sources.Count == 0) return;
+
+            var formats = sources
+                .Select(s => s.Format?.ToUpperInvariant() ?? "")
+                .Where(f => !string.IsNullOrEmpty(f))
+                .Distinct()
+                .ToList();
+
+            string highestFormat = "";
+            if (formats.Contains("4K")) highestFormat = "4K";
+            else if (formats.Contains("HD")) highestFormat = "HD";
+            else if (formats.Contains("SD")) highestFormat = "SD";
+
+            if (string.IsNullOrEmpty(highestFormat))
+            {
+                // Default to HD if year is recent
+                highestFormat = (_details?.Year >= 2000) ? "HD" : "SD";
+            }
+
+            // 1. Resolution Badge
+            if (highestFormat == "4K")
+            {
+                QualityBadgesPanel.Children.Add(CreateBadge("4K UHD", "4K Ultra High Definition"));
+            }
+            else if (highestFormat == "HD")
+            {
+                QualityBadgesPanel.Children.Add(CreateBadge("HD", "High Definition (1080p/720p)"));
+            }
+            else
+            {
+                QualityBadgesPanel.Children.Add(CreateBadge("SD", "Standard Definition"));
+            }
+
+            // 2. HDR / Dolby Vision Badge
+            if (highestFormat == "4K")
+            {
+                if (_details?.Year >= 2017)
+                {
+                    QualityBadgesPanel.Children.Add(CreateBadge("Dolby Vision", "Dolby Vision High Dynamic Range"));
+                }
+                else
+                {
+                    QualityBadgesPanel.Children.Add(CreateBadge("HDR", "High Dynamic Range"));
+                }
+            }
+
+            // 3. Audio Badge
+            if (_details?.Year >= 1995)
+            {
+                if (highestFormat == "4K" && _details?.Year >= 2015)
+                {
+                    QualityBadgesPanel.Children.Add(CreateBadge("Dolby Atmos", "Dolby Atmos Spatial Audio"));
+                }
+                else if (_details?.Year >= 2005)
+                {
+                    QualityBadgesPanel.Children.Add(CreateBadge("Dolby Audio 5.1", "Dolby Digital Surround Sound"));
+                }
+                else
+                {
+                    QualityBadgesPanel.Children.Add(CreateBadge("Surround Sound", "Multi-channel Surround Sound"));
+                }
+            }
+            else
+            {
+                QualityBadgesPanel.Children.Add(CreateBadge("Stereo", "Two-channel Stereo Sound"));
+            }
+
+            if (QualityBadgesPanel.Children.Count > 0)
+            {
+                QualityBadgesPanel.Visibility = Visibility.Visible;
+            }
+        }
 
         private void BuildProvidersSection(List<WatchmodeSource> sources)
         {
             ProvidersContainer.Children.Clear();
+
+            // Populate Video/Audio Quality Badges
+            PopulateQualityBadges(sources);
 
             if (sources == null || sources.Count == 0)
             {
@@ -326,8 +435,8 @@ namespace LumiereMediaPlayer.Pages
             var panel = new VariableSizedWrapGrid 
             { 
                 Orientation = Orientation.Horizontal,
-                ItemWidth = 140,
-                ItemHeight = 110
+                ItemWidth = 155,
+                ItemHeight = 125
             };
 
             foreach (var source in sourcesList)
@@ -352,8 +461,8 @@ namespace LumiereMediaPlayer.Pages
                 var logo = new Image
                 {
                     Source = new BitmapImage(new Uri(iconUrl)),
-                    Width = 32,
-                    Height = 32,
+                    Width = 40,
+                    Height = 40,
                     Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                 };
                 contentPanel.Children.Add(logo);
@@ -458,50 +567,40 @@ namespace LumiereMediaPlayer.Pages
             string webUrl = source.WebUrl ?? "";
             string name = source.Name?.ToLowerInvariant() ?? "";
 
-            // For Apple TV sources whose web_url points to Amazon (Apple TV Channel on Prime Video),
-            // resolve to the actual Apple TV deep link instead
             if (name.Contains("apple"))
             {
                 bool isAmazonUrl = webUrl.Contains("amazon", StringComparison.OrdinalIgnoreCase) 
                                 || webUrl.Contains("primevideo", StringComparison.OrdinalIgnoreCase);
-                
+
+                // 1. If webUrl is an Amazon URL (e.g. Apple TV Channel on Prime Video), check if ios_url provides a direct Apple link
                 if (isAmazonUrl)
                 {
-                    // 1. Try ios_url — the API may provide a real Apple TV deep link there
-                    if (!string.IsNullOrEmpty(source.IosUrl) && source.IosUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrEmpty(source.IosUrl) && 
+                        (source.IosUrl.Contains("apple.com", StringComparison.OrdinalIgnoreCase) || 
+                         source.IosUrl.Contains("apple.co", StringComparison.OrdinalIgnoreCase)))
                     {
                         webUrl = source.IosUrl;
                     }
-                    else
+                    else if (_details != null && !string.IsNullOrEmpty(_details.Title))
                     {
-                        // 2. Construct a region-aware Apple TV URL with the title using user's physical OS storefront region
-                        if (_details != null && !string.IsNullOrEmpty(_details.Title))
+                        string regionPath = "us";
+                        try
                         {
-                            string regionPath = "us";
-                            try
+                            string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
+                            if (!string.IsNullOrEmpty(osRegion))
                             {
-                                string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
-                                if (!string.IsNullOrEmpty(osRegion))
-                                {
-                                    regionPath = osRegion;
-                                }
+                                regionPath = osRegion;
                             }
-                            catch { }
-
-                            string titleSlug = _details.Title.Replace(" ", "-").ToLowerInvariant();
-                            string constructed = $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
-                            AntiGravityLogger.Log($"Apple TV: constructed deep link: {constructed}");
-                            return constructed;
                         }
+                        catch { }
 
-                        webUrl = "https://tv.apple.com/";
+                        return $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
                     }
                 }
 
-                // Rewrite any tv.apple.com URL to be region-aware based on the user's local OS storefront region.
-                // The Windows Apple TV app defaults to the user's Apple ID region storefront and throws
-                // "content not available" if launched with a mismatched region in the path (e.g. /us/ in India).
-                if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
+                // 2. Rewrite any tv.apple.com or itunes.apple.com URL to be region-aware based on local OS storefront region
+                if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || 
+                    webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                 {
                     string targetRegion = "us";
                     try
@@ -513,23 +612,21 @@ namespace LumiereMediaPlayer.Pages
                         }
                     }
                     catch { }
-                    
-                    // Match /us/ or other 2-letter country code path (e.g. /in/, /gb/) right after the host
-                    var match = System.Text.RegularExpressions.Regex.Match(webUrl, @"tv\.apple\.com/([a-zA-Z]{2})(/|$)");
+
+                    var match = System.Text.RegularExpressions.Regex.Match(webUrl, @"((?:tv|itunes)\.apple\.com)/([a-zA-Z]{2})(/|$)");
                     if (match.Success)
                     {
-                        string foundRegion = match.Groups[1].Value;
+                        string foundRegion = match.Groups[2].Value;
                         if (!foundRegion.Equals(targetRegion, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Replace the first occurrence of tv.apple.com/{foundRegion} with tv.apple.com/{targetRegion}
-                            webUrl = System.Text.RegularExpressions.Regex.Replace(webUrl, @"(tv\.apple\.com/)[a-zA-Z]{2}(/|$)", $"$1{targetRegion}$2");
+                            webUrl = System.Text.RegularExpressions.Regex.Replace(webUrl, @"((?:tv|itunes)\.apple\.com/)[a-zA-Z]{2}(/|$)", $"$1{targetRegion}$2");
                             AntiGravityLogger.Log($"Apple TV: Rewrote URL region from '{foundRegion}' to '{targetRegion}'. Result: {webUrl}");
                         }
                     }
                     else
                     {
-                        // If no region code path is present, insert the target region
-                        webUrl = webUrl.Replace("tv.apple.com/", $"tv.apple.com/{targetRegion}/");
+                        webUrl = webUrl.Replace("tv.apple.com/", $"tv.apple.com/{targetRegion}/")
+                                       .Replace("itunes.apple.com/", $"itunes.apple.com/{targetRegion}/");
                         AntiGravityLogger.Log($"Apple TV: Inserted region '{targetRegion}'. Result: {webUrl}");
                     }
                 }
@@ -561,7 +658,8 @@ namespace LumiereMediaPlayer.Pages
             if (name.Contains("netflix")) domain = "netflix.com";
             else if (name.Contains("hulu")) domain = "hulu.com";
             else if (name.Contains("prime") || name.Contains("amazon")) domain = "primevideo.com";
-            else if (name.Contains("disney") || name.Contains("hotstar")) domain = "hotstar.com";
+            else if (name.Contains("disney")) domain = "disneyplus.com";
+            else if (name.Contains("hotstar")) domain = "hotstar.com";
             else if (name.Contains("max") || name.Contains("hbo")) domain = "max.com";
             else if (name.Contains("apple")) domain = "tv.apple.com";
             else if (name.Contains("peacock")) domain = "peacocktv.com";
@@ -575,9 +673,22 @@ namespace LumiereMediaPlayer.Pages
             else if (name.Contains("tubi")) domain = "tubitv.com";
             else if (name.Contains("pluto")) domain = "pluto.tv";
             else if (name.Contains("roku")) domain = "roku.com";
-            else if (name.Contains("jio")) domain = "jiocinema.com";
-            else if (name.Contains("zee")) domain = "zee5.com";
-            else if (name.Contains("liv")) domain = "sonyliv.com";
+            else if (name.Contains("jiocinema")) domain = "jiocinema.com";
+            else if (name.Contains("zee5") || name.Equals("zee")) domain = "zee5.com";
+            else if (name.Contains("sonyliv")) domain = "sonyliv.com";
+            else if (name.Contains("sling")) domain = "sling.com";
+            else if (name.Contains("fubo")) domain = "fubo.tv";
+            else if (name.Contains("philo")) domain = "philo.com";
+            else if (name.Contains("directv")) domain = "directv.com";
+            else if (name.Contains("showtime") || name.Equals("sho")) domain = "sho.com";
+            else if (name.Contains("starz")) domain = "starz.com";
+            else if (name.Contains("mgm") || name.Contains("epix")) domain = "mgmplus.com";
+            else if (name.Contains("criterion")) domain = "criterionchannel.com";
+            else if (name.Contains("shudder")) domain = "shudder.com";
+            else if (name.Contains("britbox")) domain = "britbox.com";
+            else if (name.Contains("acorn")) domain = "acorn.tv";
+            else if (name.Contains("kanopy")) domain = "kanopy.com";
+            else if (name.Contains("hoopla")) domain = "hoopladigital.com";
             else if (name.Contains("iplayer") || name.Contains("bbc")) domain = "bbc-iplayer.co.uk";
             else if (name.Contains("itv")) domain = "itv.com";
             else if (name.Contains("my5")) domain = "channel5.com";
