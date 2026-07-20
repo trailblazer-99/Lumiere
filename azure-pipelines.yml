@@ -1,0 +1,82 @@
+# Azure Pipelines CI/CD Workflow for Lumière Media Player
+# Hybrid Azure DevOps - GitHub Integration
+
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - dev
+
+pr:
+  branches:
+    include:
+      - main
+      - master
+      - dev
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  solution: 'LumiereMediaPlayer.csproj'
+  proxyProject: 'LumiereProxy/LumiereProxy.csproj'
+  buildConfiguration: 'Release'
+  buildPlatform: 'x64'
+
+steps:
+- task: UseDotNet@2
+  displayName: 'Acquire .NET 10.0 SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '10.x'
+    includePreviewVersions: true
+
+- task: PowerShell@2
+  displayName: 'Create Local Configuration File'
+  inputs:
+    targetType: 'inline'
+    script: |
+      if (-not (Test-Path "appsettings.json")) {
+        Copy-Item "appsettings.json.example" "appsettings.json"
+        Write-Host "Created appsettings.json from template."
+      }
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore NuGet Packages'
+  inputs:
+    command: 'restore'
+    projects: |
+      $(solution)
+      $(proxyProject)
+
+- task: VSBuild@1
+  displayName: 'Build WinUI 3 Desktop App ($(buildPlatform) | $(buildConfiguration))'
+  inputs:
+    solution: '$(solution)'
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
+    msbuildArgs: '/p:GenerateAppxPackageOnBuild=true /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Azure Functions Proxy ($(buildConfiguration))'
+  inputs:
+    command: 'build'
+    projects: '$(proxyProject)'
+    arguments: '--configuration $(buildConfiguration)'
+
+- task: CopyFiles@2
+  displayName: 'Stage Build Artifacts'
+  inputs:
+    SourceFolder: '$(Build.SourcesDirectory)'
+    Contents: |
+      bin/$(buildPlatform)/$(buildConfiguration)/**
+      LumiereProxy/bin/$(buildConfiguration)/**
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Pipeline Artifacts'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'LumiereMediaPlayer-Drop'
+    publishLocation: 'Container'
