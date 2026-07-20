@@ -26,13 +26,17 @@ variables:
 
 steps:
 - task: PowerShell@2
-  displayName: 'Prepare Local Configuration File'
+  displayName: 'Prepare Configuration Files for CI'
   inputs:
     targetType: 'inline'
     script: |
       if (-not (Test-Path "appsettings.json")) {
         Copy-Item "appsettings.json.example" "appsettings.json"
         Write-Host "Created appsettings.json from template."
+      }
+      if (Test-Path "global.json") {
+        Remove-Item "global.json" -Force
+        Write-Host "Removed global.json SDK lock for Azure Pipelines agent compatibility."
       }
 
 - task: PowerShell@2
