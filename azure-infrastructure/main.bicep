@@ -1,5 +1,5 @@
-// Bicep template for Lumière Media Player Azure Infrastructure
-// Provisions Storage Account, App Service Plan, Application Insights, and Azure Function App
+// Bicep template for Lumière Media Player Azure Infrastructure ($0 Cost Free Tier Guarantee)
+// Provisions Storage Account (Free Tier), App Service Plan (Y1 Serverless Free Tier), Application Insights (Free 5GB/mo), and .NET 10.0 Isolated Function App
 
 @description('Location for all resources.')
 param location string = resourceGroup().location
