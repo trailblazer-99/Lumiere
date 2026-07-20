@@ -25,15 +25,8 @@ variables:
   buildPlatform: 'x64'
 
 steps:
-- task: UseDotNet@2
-  displayName: 'Acquire .NET 10.0 SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '10.x'
-    includePreviewVersions: true
-
 - task: PowerShell@2
-  displayName: 'Create Local Configuration File'
+  displayName: 'Prepare Local Configuration File'
   inputs:
     targetType: 'inline'
     script: |
@@ -42,28 +35,27 @@ steps:
         Write-Host "Created appsettings.json from template."
       }
 
-- task: DotNetCoreCLI@2
-  displayName: 'Restore NuGet Packages'
+- task: PowerShell@2
+  displayName: 'Restore Project Dependencies'
   inputs:
-    command: 'restore'
-    projects: |
-      $(solution)
-      $(proxyProject)
+    targetType: 'inline'
+    script: |
+      dotnet restore LumiereMediaPlayer.csproj
+      dotnet restore LumiereProxy/LumiereProxy.csproj
 
-- task: VSBuild@1
+- task: PowerShell@2
   displayName: 'Build WinUI 3 Desktop App ($(buildPlatform) | $(buildConfiguration))'
   inputs:
-    solution: '$(solution)'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
-    msbuildArgs: '/p:GenerateAppxPackageOnBuild=true /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never'
+    targetType: 'inline'
+    script: |
+      dotnet build LumiereMediaPlayer.csproj -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
 
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Build Azure Functions Proxy ($(buildConfiguration))'
   inputs:
-    command: 'build'
-    projects: '$(proxyProject)'
-    arguments: '--configuration $(buildConfiguration)'
+    targetType: 'inline'
+    script: |
+      dotnet build LumiereProxy/LumiereProxy.csproj -c $(buildConfiguration)
 
 - task: CopyFiles@2
   displayName: 'Stage Build Artifacts'
