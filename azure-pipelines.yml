@@ -103,7 +103,7 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          dotnet publish $(proxyProject) -c $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/ProxyPackage /p:DeployOnBuild=true /p:DeployTarget=Package
+          dotnet publish $(proxyProject) -c $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/ProxyPackage
 
     - task: ArchiveFiles@2
       displayName: 'Zip Proxy Package'
