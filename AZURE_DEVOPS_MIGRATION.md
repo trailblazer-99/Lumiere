@@ -28,11 +28,22 @@ This guide details the complete migration of **Lumière Media Player** to **Azur
                        +---------------------------------+
 ```
 
-### Components
-1. **Desktop Client**: WinUI 3 packaged desktop app (`LumiereMediaPlayer.csproj`) compiled on `windows-latest` hosted agents.
-2. **Backend Proxy**: .NET isolated worker Azure Function (`LumiereProxy/LumiereProxy.csproj`) protecting service API keys.
-3. **Infrastructure as Code**: Bicep template (`azure-infrastructure/main.bicep`) for automated provisioning.
-4. **CI/CD Pipeline**: Multi-stage YAML pipeline (`azure-pipelines.yml`) handling build, packaging, artifact drop publishing, and deployment.
+### Components & Framework Version
+1. **Desktop Client**: WinUI 3 packaged desktop app (`LumiereMediaPlayer.csproj`) targeting **.NET 10.0** (`net10.0-windows10.0.19041.0`).
+2. **Backend Proxy**: .NET 10.0 isolated worker Azure Function (`LumiereProxy/LumiereProxy.csproj`) protecting service API keys.
+3. **Infrastructure as Code**: Bicep template (`azure-infrastructure/main.bicep`) for automated provisioning under Azure's 100% Free Tier.
+4. **CI/CD Pipeline**: Multi-stage YAML pipeline (`azure-pipelines.yml`) using **.NET 10.0 SDK** for build, packaging, artifact drop publishing, and deployment.
+
+---
+
+## Zero Balance ($0 Cost) Free Tier Model
+
+This Azure DevOps and Azure Cloud integration is designed to run at **$0 / Zero Balance**:
+
+- **Azure Functions (Y1 Serverless Consumption Plan)**: Includes **1,000,000 requests per month FREE** and **400,000 GB-seconds of execution time FREE** every month.
+- **Azure Storage Account (Standard_LRS)**: Includes **5 GB of free monthly blob storage**.
+- **Application Insights**: Includes **5 GB of free data ingestion** per month.
+- **Azure DevOps Service**: Includes **1,800 free build minutes per month** on Microsoft-hosted agents, 5 free parallel jobs, and unlimited free private Git repositories.
 
 ---
 

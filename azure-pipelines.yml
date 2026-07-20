@@ -1,5 +1,5 @@
 # Enterprise Azure DevOps Multi-Stage CI/CD Pipeline
-# Lumière Media Player & Azure Functions API Proxy Backend
+# Lumière Media Player & Azure Functions API Proxy Backend (.NET 10.0 Latest Version Alignment)
 
 trigger:
   branches:
@@ -31,21 +31,22 @@ variables:
 
 stages:
 # ==========================================
-# STAGE 1: BUILD & PACKAGE
+# STAGE 1: BUILD & PACKAGE (.NET 10.0)
 # ==========================================
 - stage: Build_Stage
-  displayName: 'Build & Package Artifacts'
+  displayName: 'Build & Package Artifacts (.NET 10.0)'
   jobs:
   - job: Build_WinUI3_App
-    displayName: 'Build WinUI 3 Desktop App ($(buildPlatform))'
+    displayName: 'Build WinUI 3 Desktop App (.NET 10.0 | $(buildPlatform))'
     pool:
       vmImage: 'windows-latest'
     steps:
     - task: UseDotNet@2
-      displayName: 'Install .NET 9.0 SDK'
+      displayName: 'Install Latest .NET 10.0 SDK'
       inputs:
         packageType: 'sdk'
-        version: '9.0.x'
+        version: '10.x'
+        includePreviewVersions: true
         performMultiLevelLookup: true
 
     - task: PowerShell@2
@@ -59,7 +60,7 @@ stages:
           }
           if (Test-Path "global.json") {
             Remove-Item "global.json" -Force
-            Write-Host "Bypassed global.json for CI agent compatibility."
+            Write-Host "Bypassed global.json SDK lock for CI agent compatibility."
           }
 
     - task: PowerShell@2
@@ -85,15 +86,17 @@ stages:
         publishLocation: 'Container'
 
   - job: Build_Azure_Proxy
-    displayName: 'Build & Publish Azure Functions Proxy'
+    displayName: 'Build & Publish Azure Functions Proxy (.NET 10.0)'
     pool:
       vmImage: 'windows-latest'
     steps:
     - task: UseDotNet@2
-      displayName: 'Install .NET 9.0 SDK'
+      displayName: 'Install Latest .NET 10.0 SDK'
       inputs:
         packageType: 'sdk'
-        version: '9.0.x'
+        version: '10.x'
+        includePreviewVersions: true
+        performMultiLevelLookup: true
 
     - task: PowerShell@2
       displayName: 'Publish Proxy Zip Package'
@@ -132,10 +135,10 @@ stages:
         publishLocation: 'Container'
 
 # ==========================================
-# STAGE 2: DEPLOY PROXY BACKEND (Conditional)
+# STAGE 2: DEPLOY PROXY BACKEND (Zero Balance $0 Cost Tier)
 # ==========================================
 - stage: Deploy_Proxy_Stage
-  displayName: 'Deploy Azure Functions Proxy'
+  displayName: 'Deploy Azure Functions Proxy ($0 Cost Free Tier)'
   dependsOn: Build_Stage
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['deployProxyToAzure'], 'true'))
   jobs:
@@ -157,7 +160,7 @@ stages:
               downloadPath: '$(System.ArtifactsDirectory)'
 
           - task: AzureFunctionApp@2
-            displayName: 'Deploy Azure Function App'
+            displayName: 'Deploy Azure Function App (.NET 10 Isolated)'
             inputs:
               connectedServiceNameARM: '$(azureServiceConnection)'
               appType: 'functionApp'
