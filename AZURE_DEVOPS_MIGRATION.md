@@ -79,6 +79,8 @@ To allow Azure Pipelines to deploy Bicep templates and Function Apps to your Azu
 | `TMDB_API_KEY` | Secret key for TMDB API | `your_tmdb_key` | **Yes** |
 
 4. Click **Save**.
+5. Click **Pipeline permissions** at the top of the variable group and select **Grant permission to all pipelines** (or authorize when prompted during first pipeline run).
+6. In `azure-pipelines.yml`, uncomment `# - group: Lumiere-Pipeline-Vars` to enable secret injection into your deployment stage.
 
 ---
 

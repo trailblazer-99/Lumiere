@@ -16,7 +16,8 @@ pr:
       - dev
 
 variables:
-  - group: Lumiere-Pipeline-Vars # Optional Variable Group for Azure DevOps secrets
+  # Optional: Uncomment the group line below after creating Variable Group 'Lumiere-Pipeline-Vars' in Azure DevOps Library
+  # - group: Lumiere-Pipeline-Vars
   - name: solution
     value: 'LumiereMediaPlayer.csproj'
   - name: proxyProject
@@ -25,10 +26,8 @@ variables:
     value: 'Release'
   - name: buildPlatform
     value: 'x64'
-  - name: ciAppTargetFramework
-    value: 'net9.0-windows10.0.19041.0'
-  - name: ciProxyTargetFramework
-    value: 'net9.0'
+  - name: deployProxyToAzure
+    value: 'false'
 
 stages:
 # ==========================================
