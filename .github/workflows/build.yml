@@ -329,10 +329,19 @@ jobs:
         tag_name: v1.0.1.${{ github.run_number }}
         name: Lumière Media Player v1.0.1.${{ github.run_number }}
         body: |
-          Automated Release of Lumière Media Player.
+          Release of Lumière Media Player v1.0.1.${{ github.run_number }}.
           
-          ### Installation
-          Download and run the App Installer or sideload using the `.msixbundle` below.
+          ### Installation Instructions
+          
+          **Option 1: One-Click Web Installer**
+          Open [Web App Installer](https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller) to install or update automatically.
+          
+          **Option 2: Direct Sideloading (.msixbundle)**
+          1. **Enable Developer Mode**: Windows **Settings** > **Privacy & security** (or Update & Security) > **For developers** > Turn **Developer Mode** **ON**.
+          2. **Install Certificate**: Download `LumiereMediaPlayer.cer` (or use `Signing/LumiereMediaPlayer.cer`), right-click > **Install Certificate** > **Local Machine** > **Trusted Root Certification Authorities**.
+          3. **Install Package**: Double-click the `.msixbundle` below to install!
+          
+          For complete instructions and troubleshooting, see [INSTALL.md](https://github.com/trailblazer-99/Lumiere/blob/main/INSTALL.md).
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}

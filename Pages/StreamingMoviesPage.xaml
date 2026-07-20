@@ -33,13 +33,15 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16" Margin="0,0,0,24">
-                        <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="280" VerticalAlignment="Bottom" />
-                        <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="160" VerticalAlignment="Bottom" />
-                        <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="140" VerticalAlignment="Bottom" />
-                        <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="130" VerticalAlignment="Bottom" />
-                        <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="120" VerticalAlignment="Bottom" />
-                    </StackPanel>
+                    <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" Margin="0,0,0,24">
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="280" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="160" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="140" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="130" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="120" VerticalAlignment="Bottom" />
+                        </StackPanel>
+                    </ScrollViewer>
 
                     <InfoBar Grid.Row="1"
                              Severity="Error"

@@ -28,25 +28,50 @@ The application is designed to keep media playback local while using a small opt
 - YouTube and Twitch pages hosted through WebView2.
 - Movie and TV discovery through Watchmode and TMDB-backed metadata.
 - Region-aware provider and episode details for movies and shows.
+- **Native Deep-Link Router**: Directly launches native Windows desktop apps for streaming providers including Netflix, Spotify, Disney+, Prime Video, Hulu, Max, Paramount+, Peacock, Tubi, Pluto TV, and Apple TV with clean web browser fallbacks.
+- **Dynamic Quality Badges**: Automatic visual badges for **4K UHD**, **HD**, **SD**, **HDR**, **Dolby Vision**, **Dolby Atmos**, **Dolby Audio 5.1**, and **Surround Sound** based on provider metadata.
+- High-resolution brand logos and provider icons.
+- Persistent local watchlist categories (**Watchlist**, **Plan to Watch**, **Watching**, **Completed**, **Favorites**).
 - Music search through the optional MusicAPI proxy with iTunes fallback.
 - External links for services such as Spotify, Apple Music, YouTube Music, Amazon Music, Tidal, and SoundCloud when available.
-- Saved streaming items and watchlists stored locally under the user profile.
 
 ### Fluent desktop experience
 
 - WinUI 3 navigation and Windows App SDK windowing.
 - Mica/Acrylic-style backdrops, accent colors, animated transitions, compact density, media-card glow, and timeline preview settings.
+- Comprehensive Settings experience with interactive sliders for Crossfade Duration, Subtitle Opacity, Focus Indicator Thickness, Default Volume, Bass Boost, and Audio Balance.
+- Interactive settings commands for clearing playback history, search history, recent files, and factory resetting.
 - Accessibility options including high contrast, large text, reduced motion, screen-reader optimization, captions, color-blind modes, keyboard focus indicators, and larger click targets.
 
 ## Requirements
 
 - Windows 10 version 1809 (build 17763) or newer; Windows 11 is recommended.
-- .NET 10 SDK.
+- .NET 10 SDK (for building from source).
 - Visual Studio 2026 with WinUI 3/Windows App SDK and .NET desktop development support, or the equivalent MSBuild and Windows SDK tooling.
 - Microsoft Edge WebView2 Runtime for the YouTube and Twitch pages.
 - A display and graphics driver with HDR support for HDR-specific features.
 
 The main application targets `net10.0-windows10.0.19041.0` and currently supports x86, x64, and ARM64 project platforms. Release packaging is configured for x64 and ARM64.
+
+## Installation
+
+For a full step-by-step installation guide with troubleshooting, see [INSTALL.md](INSTALL.md).
+
+### Method 1: Web / App Installer (One-Click)
+
+1. Download or click the `.appinstaller` file from the release page (`https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller`).
+2. The Windows App Installer dialog will prompt you to install or update the app.
+3. Click **Install**!
+
+### Method 2: Sideloading `.msixbundle` / `.msix` Release Packages
+
+1. **Enable Developer Mode**: Go to Windows **Settings** > **Privacy & security** (or Update & Security) > **For developers**, and turn **Developer Mode** **ON**.
+2. **Install Public Certificate**:
+   - Right-click `LumiereMediaPlayer.cer` (or `Signing/LumiereMediaPlayer.cer`) and choose **Install Certificate**.
+   - Select **Local Machine** > **Place all certificates in the following store** > **Trusted Root Certification Authorities**.
+3. **Run Package**: Double-click `LumiereMediaPlayer.msixbundle` to install, or right-click `Add-AppDevPackage.ps1` and select **Run with PowerShell**.
+
+---
 
 ## Get started
 
