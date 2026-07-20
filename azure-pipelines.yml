@@ -23,14 +23,15 @@ variables:
   proxyProject: 'LumiereProxy/LumiereProxy.csproj'
   buildConfiguration: 'Release'
   buildPlatform: 'x64'
+  ciAppTargetFramework: 'net9.0-windows10.0.19041.0'
+  ciProxyTargetFramework: 'net9.0'
 
 steps:
 - task: UseDotNet@2
-  displayName: 'Install .NET 10.0 SDK'
+  displayName: 'Install .NET 9.0 SDK for MSBuild 17.x Compatibility'
   inputs:
     packageType: 'sdk'
-    version: '10.x'
-    includePreviewVersions: true
+    version: '9.0.x'
     performMultiLevelLookup: true
 
 - task: PowerShell@2
@@ -42,28 +43,32 @@ steps:
         Copy-Item "appsettings.json.example" "appsettings.json"
         Write-Host "Created appsettings.json from template."
       }
+      if (Test-Path "global.json") {
+        Remove-Item "global.json" -Force
+        Write-Host "Bypassed global.json SDK lock for Azure Pipelines agent compatibility."
+      }
 
 - task: PowerShell@2
   displayName: 'Restore Project Dependencies'
   inputs:
     targetType: 'inline'
     script: |
-      dotnet restore LumiereMediaPlayer.csproj -p:Platform=$(buildPlatform)
-      dotnet restore LumiereProxy/LumiereProxy.csproj
+      dotnet restore LumiereMediaPlayer.csproj -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework)
+      dotnet restore LumiereProxy/LumiereProxy.csproj -p:TargetFramework=$(ciProxyTargetFramework)
 
 - task: PowerShell@2
   displayName: 'Build WinUI 3 Desktop App ($(buildPlatform) | $(buildConfiguration))'
   inputs:
     targetType: 'inline'
     script: |
-      dotnet build LumiereMediaPlayer.csproj -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
+      dotnet build LumiereMediaPlayer.csproj -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:TargetFramework=$(ciAppTargetFramework) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
 
 - task: PowerShell@2
   displayName: 'Build Azure Functions Proxy ($(buildConfiguration))'
   inputs:
     targetType: 'inline'
     script: |
-      dotnet build LumiereProxy/LumiereProxy.csproj -c $(buildConfiguration)
+      dotnet build LumiereProxy/LumiereProxy.csproj -c $(buildConfiguration) -p:TargetFramework=$(ciProxyTargetFramework)
 
 - task: CopyFiles@2
   displayName: 'Stage Build Artifacts'
