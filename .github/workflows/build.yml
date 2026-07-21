@@ -319,7 +319,29 @@ jobs:
 
         # 4. Sign the generated bundle
         Write-Output "Signing Bundle..."
-        & $signtool sign /fd SHA256 /f "Signing\LumiereMediaPlayer.pfx" /p Lumiere123! "deploy\$bundleFilename"
+        $pfxPath = "Signing\LumiereMediaPlayer.pfx"
+        $pfxPassword = "Lumiere123!"
+
+        if (-not (Test-Path $pfxPath)) {
+          if ($env:BASE64_ENCODED_PFX) {
+            Write-Output "Decoding PFX certificate from BASE64_ENCODED_PFX secret..."
+            $pfxBytes = [System.Convert]::FromBase64String($env:BASE64_ENCODED_PFX)
+            [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          } else {
+            Write-Output "No PFX file found on disk or secret. Generating temporary CI signing certificate..."
+            $tempPfx = "temp_ci_signing.pfx"
+            $secPassword = ConvertTo-SecureString $pfxPassword -AsPlainText -Force
+            $cert = New-SelfSignedCertificate -Type Custom -Subject $packagePublisher -KeyUsage DigitalSignature -FriendlyName "Lumiere CI Signing" -CertStoreLocation "Cert:\CurrentUser\My"
+            Export-PfxCertificate -Cert $cert -FilePath $tempPfx -Password $secPassword | Out-Null
+            $pfxPath = $tempPfx
+          }
+        }
+
+        & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPassword "deploy\$bundleFilename"
+
+        if (Test-Path "temp_ci_signing.pfx") {
+          Remove-Item "temp_ci_signing.pfx" -Force
+        }
 
     # Create a GitHub Release and upload the msixbundle (GitHub Releases allows files > 100MB)
     - name: Create GitHub Release
