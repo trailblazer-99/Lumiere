@@ -26,6 +26,8 @@ variables:
     value: 'Release'
   - name: buildPlatform
     value: 'x64'
+  - name: azureFunctionAppName
+    value: 'LumiereProxy'
   - name: deployProxyToAzure
     value: 'false'
 
