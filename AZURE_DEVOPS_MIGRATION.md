@@ -83,7 +83,7 @@ To allow Azure Pipelines to deploy Bicep templates and Function Apps to your Azu
 | Variable Name | Description | Example / Value | Secret? |
 | --- | --- | --- | --- |
 | `azureServiceConnection` | Name of your Azure Service Connection | `Azure-ARM-ServiceConnection` | No |
-| `azureFunctionAppName` | Name of target Azure Function App | `lumiere-proxy-prod-xxxx` | No |
+| `azureFunctionAppName` | Name of target Azure Function App | `LumiereProxy` | No |
 | `deployProxyToAzure` | Set to `true` to enable automatic deployment stage | `true` | No |
 | `APP_TOKEN` | Custom client-proxy authorization token | `YourSecretAppToken` | **Yes** |
 | `WATCHMODE_API_KEY` | Secret key for Watchmode API | `your_watchmode_key` | **Yes** |
@@ -100,12 +100,11 @@ To allow Azure Pipelines to deploy Bicep templates and Function Apps to your Azu
 You can provision all Azure resources (Storage Account, Function App, App Insights, and App Settings) using the included Bicep template:
 
 ```powershell
-az deployment group create `
-  --resource-group rg-lumiere-prod `
-  --template-file azure-infrastructure/main.bicep `
-  --parameters appToken="YourSecretAppToken" `
-               watchmodeApiKey="your_watchmode_key" `
-               tmdbApiKey="your_tmdb_key"
+# 1. Create Resource Group
+az group create --name rg-lumiere-prod --location eastus
+
+# 2. Deploy $0 Free Tier Infrastructure
+az deployment group create --resource-group rg-lumiere-prod --template-file azure-infrastructure/main.bicep --parameters appToken="YourSecretAppToken" watchmodeApiKey="your_watchmode_key" tmdbApiKey="your_tmdb_key"
 ```
 
 ---
