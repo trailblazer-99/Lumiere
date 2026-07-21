@@ -22,10 +22,10 @@ _Package/
 *.msixupload
 *.cer
 *.pfx
-!Signing/LumiereMediaPlayer.pfx
 !Signing/LumiereMediaPlayer.cer
 
 ## Configuration / Secrets (DO NOT COMMIT to Git)
+Package.StoreAssociation.xml
 appsettings.json
 local.settings.json
 private.ec.key
@@ -54,3 +54,9 @@ Desktop.ini
 
 ## GitHub Pages Deployment Staging
 deploy/
+
+## Agent / AI Rules & Customizations
+.agents/
+AGENTS.md
+Agent.md
+AGENTS.override.md
