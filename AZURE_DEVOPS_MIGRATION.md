@@ -95,17 +95,9 @@ To allow Azure Pipelines to deploy Bicep templates and Function Apps to your Azu
 
 ---
 
-### Phase 4: Deploy Azure Infrastructure (Bicep)
+### Phase 4: Target Existing LumiereProxy Function App
 
-You can provision all Azure resources (Storage Account, Function App, App Insights, and App Settings) using the included Bicep template:
-
-```powershell
-# 1. Create Resource Group
-az group create --name rg-lumiere-prod --location eastus
-
-# 2. Deploy $0 Free Tier Infrastructure
-az deployment group create --resource-group rg-lumiere-prod --template-file azure-infrastructure/main.bicep --parameters appToken="YourSecretAppToken" watchmodeApiKey="your_watchmode_key" tmdbApiKey="your_tmdb_key"
-```
+Your code and pipeline deploy directly to your existing live **`LumiereProxy`** Azure Function App. No Bicep infrastructure provisioning or extra resource group creation is required.
 
 ---
 

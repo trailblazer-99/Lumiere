@@ -9,6 +9,7 @@
 
 ## MSIX & Windows App SDK Packaging
 AppPackages/
+Backups/
 BundleArtifacts/
 _pkg/
 Generated Files/
@@ -36,6 +37,8 @@ public.pem
 *.txt.log
 build_log*.txt
 msbuild.binlog
+diff*.txt
+*_debug.txt
 
 ## Python (used for temporary migration / generation scripts)
 __pycache__/
