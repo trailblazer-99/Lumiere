@@ -363,7 +363,7 @@ jobs:
           2. **Install Certificate**: Download `LumiereMediaPlayer.cer` (or use `Signing/LumiereMediaPlayer.cer`), right-click > **Install Certificate** > **Local Machine** > **Trusted Root Certification Authorities**.
           3. **Install Package**: Double-click the `.msixbundle` below to install!
           
-          For complete instructions and troubleshooting, see [INSTALL.md](https://github.com/trailblazer-99/Lumiere/blob/main/INSTALL.md).
+          For complete instructions and troubleshooting, see [INSTALL.md](https://github.com/trailblazer-99/Lumiere/blob/main/docs/INSTALL.md).
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
