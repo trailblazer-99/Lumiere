@@ -4,7 +4,7 @@
 [![UI Library](https://img.shields.io/badge/UI-WinUI%203%20%7C%20Windows%20App%20SDK-0078D4.svg?style=flat-square&logo=windows)](https://learn.microsoft.com/windows/apps/winui/winui3/)
 [![Design System](https://img.shields.io/badge/Design-Fluent%20Design-0078D4.svg?style=flat-square)](https://fluent2.microsoft.com/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![CI/CD](https://img.shields.io/badge/DevOps-Azure%20%26%20GitHub%20Hybrid-0078D4.svg?style=flat-square&logo=azure-devops)](AZURE_DEVOPS_MIGRATION.md)
+[![CI/CD](https://img.shields.io/badge/DevOps-Azure%20%26%20GitHub%20Hybrid-0078D4.svg?style=flat-square&logo=azure-devops)](docs/AZURE_DEVOPS_MIGRATION.md)
 
 **Lumière Media Player** is an enterprise-grade, high-performance native Windows desktop audio and video player built with **WinUI 3**, **C#**, and the **Windows App SDK**. Designed in strict accordance with the latest **Microsoft Fluent Design System** (Mica/Acrylic materials, rounded corners, theme shadows, compact density, and smooth micro-interactions), Lumière combines a local media library engine, queue/playlist management, HDR-aware video rendering (HDR10, HLG, Dolby Vision), and an API-backed streaming discovery catalog into a unified desktop experience.
 
@@ -68,12 +68,9 @@ Lumière Media Player utilizes an optional serverless backend project (**`Lumier
 
 ### Why Use a Proxy?
 - **Zero API Key Leakage**: API credentials for third-party metadata services are stored as Environment Variables inside Azure Portal App Settings and never exposed to client binaries.
-- **Zero Balance ($0/month) Cloud Cost**: Operates 100% within Azure's Perpetual Free Tier limits:
-  - **Azure Functions (Y1 Serverless)**: 1,000,000 free requests + 400,000 GB-seconds free execution per month.
-  - **Azure Storage (Standard_LRS)**: 5 GB free blob storage per month.
-  - **Application Insights**: 5 GB free telemetry ingestion per month.
+- **Zero Balance ($0/month) Cloud Cost**: Operates 100% within Azure's Perpetual Free Tier limits.
 
-For complete Azure proxy deployment instructions, see [AZURE_PROXY_SETUP.md](AZURE_PROXY_SETUP.md) and [AZURE_DEVOPS_MIGRATION.md](AZURE_DEVOPS_MIGRATION.md).
+For complete Azure proxy deployment instructions, see [AZURE_PROXY_SETUP.md](docs/AZURE_PROXY_SETUP.md) and [AZURE_DEVOPS_MIGRATION.md](docs/AZURE_DEVOPS_MIGRATION.md).
 
 ---
 
@@ -91,7 +88,7 @@ For complete Azure proxy deployment instructions, see [AZURE_PROXY_SETUP.md](AZU
 
 ## 🚀 Quick Start & Installation
 
-For detailed step-by-step sideloading and certificate installation instructions, see [INSTALL.md](INSTALL.md).
+For detailed step-by-step sideloading and certificate installation instructions, see [INSTALL.md](docs/INSTALL.md).
 
 ### Method 1: Web / App Installer (One-Click)
 1. Download or click the `.appinstaller` file from the latest release page ([https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller](https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller)).
@@ -155,6 +152,13 @@ dotnet build LumiereMediaPlayer.csproj -c Release -p:Platform=x64
 
 ```
 Lumière Media Player/
+├── docs/                          # 📁 Documentation Hub
+│   ├── AZURE_DEVOPS_MIGRATION.md  # Azure DevOps Operations Guide
+│   ├── AZURE_PROXY_SETUP.md       # Azure Proxy Architecture Guide
+│   ├── INSTALL.md                 # Installation & Sideloading Guide
+│   ├── LOCAL_BACKUP_GUIDE.md      # Local Fallback Backup Guide
+│   ├── PRIVACY_POLICY.md          # Privacy Policy
+│   └── PUBLISHING.md              # Publishing & Store Distribution
 ├── Assets/                        # Application branding, Fluent icons, and vector artwork
 ├── Controls/                      # Reusable UI controls (Transport, Queue, Media Cards)
 ├── Helpers/                       # Utilities (StreamingRouter, Deep-Link Parsers, Audio Helpers)
@@ -168,11 +172,9 @@ Lumière Media Player/
 ├── LumiereProxy/                  # .NET 10 Serverless Azure Function App backend
 ├── .github/workflows/             # GitHub Actions CI/CD workflows (build.yml)
 ├── azure-pipelines.yml            # Azure DevOps multi-stage CI/CD pipeline
-├── AZURE_DEVOPS_MIGRATION.md      # Azure DevOps operations & deployment guide
-├── AZURE_PROXY_SETUP.md           # Azure Proxy architecture setup guide
-├── INSTALL.md                     # Comprehensive end-user installation & troubleshooting guide
 ├── LumiereMediaPlayer.csproj      # WinUI 3 Desktop Client Project File (.NET 10.0)
-└── README.md                      # Project documentation
+├── LICENSE                        # GNU GPLv3 License File
+└── README.md                      # Project documentation landing page
 ```
 
 ---
