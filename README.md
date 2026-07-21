@@ -1,204 +1,206 @@
 # Lumière Media Player
 
-Lumière Media Player is a Windows desktop audio and video player built with WinUI 3 and the Windows App SDK. It combines a local media library, queue and playlist management, configurable playback controls, HDR-aware video playback, and optional streaming discovery in one Fluent-style interface.
+[![Framework](https://img.shields.io/badge/Framework-.NET%2010.0-512BD4.svg?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
+[![UI Library](https://img.shields.io/badge/UI-WinUI%203%20%7C%20Windows%20App%20SDK-0078D4.svg?style=flat-square&logo=windows)](https://learn.microsoft.com/windows/apps/winui/winui3/)
+[![Design System](https://img.shields.io/badge/Design-Fluent%20Design-0078D4.svg?style=flat-square)](https://fluent2.microsoft.com/)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
+[![CI/CD](https://img.shields.io/badge/DevOps-Azure%20%26%20GitHub%20Hybrid-0078D4.svg?style=flat-square&logo=azure-devops)](AZURE_DEVOPS_MIGRATION.md)
 
-The application is designed to keep media playback local while using a small optional proxy service for API-backed discovery. It does not ship third-party API secrets in the desktop client.
+**Lumière Media Player** is an enterprise-grade, high-performance native Windows desktop audio and video player built with **WinUI 3**, **C#**, and the **Windows App SDK**. Designed in strict accordance with the latest **Microsoft Fluent Design System** (Mica/Acrylic materials, rounded corners, theme shadows, compact density, and smooth micro-interactions), Lumière combines a local media library engine, queue/playlist management, HDR-aware video rendering (HDR10, HLG, Dolby Vision), and an API-backed streaming discovery catalog into a unified desktop experience.
 
-## What it does
-
-### Local media and playback
-
-- Scans user-selected folders for audio and video files.
-- Reads media metadata and artwork with TagLibSharp.
-- Maintains a queue, playlists, playback history, recently played items, and resume positions.
-- Supports play, pause, seeking, skip intervals, playback speed, shuffle, repeat, and automatic next-track behavior.
-- Includes audio balance, mono audio, bass boost, volume normalization, equalizer presets, crossfade, and gapless-playback settings.
-
-### Video and display features
-
-- Hardware-accelerated Windows Media playback.
-- Fullscreen and picture-in-picture/compact-overlay modes.
-- Subtitle language, font-size, background-opacity, and caption controls.
-- Configurable aspect ratios, including Auto, 16:9, 4:3, 21:9, and Fill.
-- HDR detection and display-aware HDR output handling for HDR10, HLG, and Dolby Vision content where supported by Windows and the display.
-- HDR tone mapping, peak-brightness, real-time playback, and HDR badge settings.
-
-### Streaming and discovery
-
-- YouTube and Twitch pages hosted through WebView2.
-- Movie and TV discovery through Watchmode and TMDB-backed metadata.
-- Region-aware provider and episode details for movies and shows.
-- **Native Deep-Link Router**: Directly launches native Windows desktop apps for streaming providers including Netflix, Spotify, Disney+, Prime Video, Hulu, Max, Paramount+, Peacock, Tubi, Pluto TV, and Apple TV with clean web browser fallbacks.
-- **Dynamic Quality Badges**: Automatic visual badges for **4K UHD**, **HD**, **SD**, **HDR**, **Dolby Vision**, **Dolby Atmos**, **Dolby Audio 5.1**, and **Surround Sound** based on provider metadata.
-- High-resolution brand logos and provider icons.
-- Persistent local watchlist categories (**Watchlist**, **Plan to Watch**, **Watching**, **Completed**, **Favorites**).
-- Music search through the optional MusicAPI proxy with iTunes fallback.
-- External links for services such as Spotify, Apple Music, YouTube Music, Amazon Music, Tidal, and SoundCloud when available.
-
-### Fluent desktop experience
-
-- WinUI 3 navigation and Windows App SDK windowing.
-- Mica/Acrylic-style backdrops, accent colors, animated transitions, compact density, media-card glow, and timeline preview settings.
-- Comprehensive Settings experience with interactive sliders for Crossfade Duration, Subtitle Opacity, Focus Indicator Thickness, Default Volume, Bass Boost, and Audio Balance.
-- Interactive settings commands for clearing playback history, search history, recent files, and factory resetting.
-- Accessibility options including high contrast, large text, reduced motion, screen-reader optimization, captions, color-blind modes, keyboard focus indicators, and larger click targets.
-
-## Requirements
-
-- Windows 10 version 1809 (build 17763) or newer; Windows 11 is recommended.
-- .NET 10 SDK (for building from source).
-- Visual Studio 2026 with WinUI 3/Windows App SDK and .NET desktop development support, or the equivalent MSBuild and Windows SDK tooling.
-- Microsoft Edge WebView2 Runtime for the YouTube and Twitch pages.
-- A display and graphics driver with HDR support for HDR-specific features.
-
-The main application targets `net10.0-windows10.0.19041.0` and currently supports x86, x64, and ARM64 project platforms. Release packaging is configured for x64 and ARM64.
-
-## Installation
-
-For a full step-by-step installation guide with troubleshooting, see [INSTALL.md](INSTALL.md).
-
-### Method 1: Web / App Installer (One-Click)
-
-1. Download or click the `.appinstaller` file from the release page (`https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller`).
-2. The Windows App Installer dialog will prompt you to install or update the app.
-3. Click **Install**!
-
-### Method 2: Sideloading `.msixbundle` / `.msix` Release Packages
-
-1. **Enable Developer Mode**: Go to Windows **Settings** > **Privacy & security** (or Update & Security) > **For developers**, and turn **Developer Mode** **ON**.
-2. **Install Public Certificate**:
-   - Right-click `LumiereMediaPlayer.cer` (or `Signing/LumiereMediaPlayer.cer`) and choose **Install Certificate**.
-   - Select **Local Machine** > **Place all certificates in the following store** > **Trusted Root Certification Authorities**.
-3. **Run Package**: Double-click `LumiereMediaPlayer.msixbundle` to install, or right-click `Add-AppDevPackage.ps1` and select **Run with PowerShell**.
+Lumière operates on a **Zero-Trust Cloud Architecture**: all local playback and media file parsing stay entirely on the user's device, while sensitive external discovery APIs (TMDB, Watchmode, MusicAPI, Movie of the Night) are proxied through a serverless, zero-cost Azure Function backend (**LumiereProxy**). API credentials are never compiled or shipped inside distributed client binaries.
 
 ---
 
-## Get started
+## 🌟 Key Features & Architecture
 
-Clone the repository:
+### 🎵 1. Local Media & Audio Engine
+- **Folder Scanning & Metadata Parsing**: Recursively scans user-designated folders and extracts metadata, album art, sample rates, and bitrates using `TagLibSharp`.
+- **Playback Controls**: Full play, pause, frame-accurate seeking, skip intervals (5s, 10s, 30s), custom playback speed (0.25x to 4.0x), shuffle, repeat (None, One, All), and seamless queue progression.
+- **Advanced DSP & Audio Processing**:
+  - 10-Band Graphic Equalizer with curated presets (Flat, Bass Boost, Rock, Pop, Classical, Vocal Boost).
+  - Crossfade transition duration control (0 to 10 seconds).
+  - Gapless playback engine for continuous audio tracks.
+  - Audio Balance slider (Stereo L/R pan).
+  - Mono Audio mixdown toggle for accessibility and single-earpiece listening.
+  - Dynamic Volume Normalization and Peak Limiting.
 
+### 🎬 2. Video & Display Engine (HDR & Dolby Vision)
+- **Hardware-Accelerated Video Pipeline**: Native Windows Media engine leveraging Direct3D 11/12 GPU acceleration.
+- **Display-Aware HDR Handling**:
+  - Automatic hardware detection of Windows HDR-capable displays.
+  - Full HDR10, Hybrid Log-Gamma (HLG), and Dolby Vision content output routing.
+  - HDR Peak-Brightness tuning, Real-Time Tone Mapping, and SDR Fallback for legacy displays.
+- **Dynamic Quality & Audio Badges**: Automatic visual badge rendering for **4K UHD**, **HD**, **SD**, **HDR**, **Dolby Vision**, **Dolby Atmos**, **Dolby Audio 5.1**, and **Surround Sound** based on stream metadata.
+- **Custom Subtitle Engine**: Subtitle track selection, custom font scaling, background opacity control, and caption position adjustments.
+- **Window Modes**: Fullscreen, Normal Windowed, and Picture-in-Picture (PiP / Compact Overlay) mode for multitasking.
+- **Aspect Ratio Selector**: Auto, 16:9, 4:3, 21:9, and Stretch/Fill modes.
+
+### 🌐 3. Streaming & Provider Discovery Engine
+- **Native Deep-Link Router**: Seamlessly launches native Windows storefront apps for major streaming providers including **Netflix**, **Spotify**, **Disney+**, **Prime Video**, **Hulu**, **Max (HBO)**, **Paramount+**, **Peacock**, **Tubi**, **Pluto TV**, and **Apple TV**. Rent & Buy links and channel add-ons preserve clean HTTPS URLs with automatic browser fallbacks.
+- **Movie & TV Discovery**: Explore trending, top-rated, and upcoming titles powered by Watchmode, TMDB, and Movie of the Night metadata.
+- **Region-Aware Provider Catalog**: Displays subscription, rent, buy, and free streaming availability tailored by region (US, GB, CA, AU, etc.).
+- **WebView2 Integration**: Embedded YouTube and Twitch browsing portals powered by Microsoft Edge WebView2 Runtime.
+- **Persistent Local Watchlists**: Categorize titles into **Watchlist**, **Plan to Watch**, **Watching**, **Completed**, and **Favorites**, backed by local JSON persistence.
+- **Music Search**: Integrated song search powered by the optional `LumiereProxy` API with iTunes fallback.
+
+### ✨ 4. Fluent Design & Accessibility Suite
+- **Modern Fluent Design System**: Built with Mica and Acrylic materials, subtle lighting, hover states, smooth micro-interactions, and visual transitions.
+- **Interactive Settings Page**: Fine-tune crossfade duration, subtitle opacity, focus thickness, default volume, bass boost level, and audio balance via real-time interactive sliders.
+- **Data & History Management**: Interactive one-click commands for clearing playback history, search history, recent files, and performing full factory resets.
+- **Accessibility Suite**: High Contrast modes, large text scaling, reduced motion toggles, screen-reader optimizations, high-visibility keyboard focus indicators, and enlarged touch/click targets.
+
+---
+
+## 🏗️ Cloud Backend & Zero-Cost Architecture
+
+```
+ +----------------------------------+             +-----------------------------------+
+ |   LUMIÈRE WINUI 3 DESKTOP APP    |             |      LUMIEREPROXY (AZURE)         |
+ |  - Local Media Playback          |             |  - Serverless .NET 10 Function    |
+ |  - Fluent UI & Video Engine      |  HTTPS/REST |  - Holds Secret API Keys          |
+ |  - Passes 'APP_TOKEN' Header     | ----------->|  - TMDB / Watchmode / MusicAPI    |
+ |  - Zero Embedded API Secrets     |             |  - 100% Free Tier ($0/month)      |
+ +----------------------------------+             +-----------------------------------+
+```
+
+Lumière Media Player utilizes an optional serverless backend project (**`LumiereProxy`**) written as a .NET 10 isolated Azure Function. 
+
+### Why Use a Proxy?
+- **Zero API Key Leakage**: API credentials for third-party metadata services are stored as Environment Variables inside Azure Portal App Settings and never exposed to client binaries.
+- **Zero Balance ($0/month) Cloud Cost**: Operates 100% within Azure's Perpetual Free Tier limits:
+  - **Azure Functions (Y1 Serverless)**: 1,000,000 free requests + 400,000 GB-seconds free execution per month.
+  - **Azure Storage (Standard_LRS)**: 5 GB free blob storage per month.
+  - **Application Insights**: 5 GB free telemetry ingestion per month.
+
+For complete Azure proxy deployment instructions, see [AZURE_PROXY_SETUP.md](AZURE_PROXY_SETUP.md) and [AZURE_DEVOPS_MIGRATION.md](AZURE_DEVOPS_MIGRATION.md).
+
+---
+
+## 💻 Technical Requirements & Prerequisites
+
+| Component | Minimum Requirement | Recommended |
+| --- | --- | --- |
+| **Operating System** | Windows 10 Version 1809 (Build 17763) | Windows 11 Version 22H2 or newer |
+| **SDK & Runtime** | .NET 10.0 SDK | .NET 10.0.302 SDK |
+| **Tooling** | Visual Studio 2026 / Visual Studio 2022 | VS 2026 with WinUI 3 & .NET Desktop Workload |
+| **Web Runtime** | Microsoft Edge WebView2 Runtime | Latest Evergreen WebView2 |
+| **HDR Playback** | Standard SDR Display | HDR10 / Dolby Vision Display + WDDM 2.7+ GPU Driver |
+
+---
+
+## 🚀 Quick Start & Installation
+
+For detailed step-by-step sideloading and certificate installation instructions, see [INSTALL.md](INSTALL.md).
+
+### Method 1: Web / App Installer (One-Click)
+1. Download or click the `.appinstaller` file from the latest release page ([https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller](https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller)).
+2. The native Windows App Installer dialog will launch.
+3. Click **Install** or **Update**.
+
+### Method 2: Sideloading `.msixbundle` / `.msix` Release Packages
+1. **Enable Developer Mode**: Go to Windows **Settings** > **Privacy & security** > **For developers** > turn **Developer Mode** **ON**.
+2. **Install Public Certificate**:
+   - Right-click `LumiereMediaPlayer.cer` (located in `Signing/LumiereMediaPlayer.cer`) > select **Install Certificate**.
+   - Select **Local Machine** > **Place all certificates in the following store** > choose **Trusted Root Certification Authorities**.
+3. **Install Package**: Double-click `LumiereMediaPlayer.msixbundle` to install, or right-click `Add-AppDevPackage.ps1` and select **Run with PowerShell**.
+
+---
+
+## 🛠️ Building & Running from Source
+
+### 1. Clone the Repository
 ```powershell
 git clone https://github.com/trailblazer-99/Lumiere.git
 cd Lumiere
 ```
 
-Create the local configuration file:
-
+### 2. Configure Local Application Settings
+Create your local settings file from the example template:
 ```powershell
 Copy-Item appsettings.json.example appsettings.json
 ```
 
-For proxy-backed discovery, update `appsettings.json`:
-
+Update `appsettings.json` to enable cloud proxy discovery:
 ```json
 {
   "UseProxy": true,
-  "ProxyBaseUrl": "https://your-function-app.azurewebsites.net/api",
+  "ProxyBaseUrl": "https://LumiereProxy.azurewebsites.net/api",
   "ProxyAppToken": "your-app-token"
 }
 ```
+*(Note: `appsettings.json` is ignored by Git to prevent committing local keys to source control).*
 
-`ProxyBaseUrl` should point to the deployed Azure Functions HTTP base route, and `ProxyAppToken` must match the token configured by the proxy. The local `appsettings.json` file is ignored by Git and should never contain production secrets committed to the repository.
-
-Without a configured proxy, the local player remains available. Movie/TV metadata and MusicAPI discovery require the proxy; music search can fall back to iTunes. YouTube and Twitch are browser-based pages and use WebView2 directly.
-
-## Build and run
-
-### Visual Studio
-
-1. Open `LumiereMediaPlayer.slnx`.
-2. Select `Debug` or `Release`.
-3. Select `x64` for standard Windows PCs or `ARM64` for Windows on ARM.
-4. Press `F5`.
-
-### .NET CLI
-
-Restore the application dependencies:
-
+### 3. Build via .NET CLI
+Restore dependencies and compile the desktop app:
 ```powershell
+# Restore NuGet packages
 dotnet restore LumiereMediaPlayer.csproj
-```
 
-Build the application:
-
-```powershell
+# Build Debug x64 package
 dotnet build LumiereMediaPlayer.csproj -c Debug -p:Platform=x64
-```
 
-Build a Release package for x64 or ARM64:
-
-```powershell
+# Build Release x64 package
 dotnet build LumiereMediaPlayer.csproj -c Release -p:Platform=x64
-dotnet build LumiereMediaPlayer.csproj -c Release -p:Platform=ARM64
 ```
 
-The generated executable is placed below `bin/<Platform>/<Configuration>/`. MSIX test packages and upload containers are written below `AppPackages/`.
+### 4. Build via Visual Studio
+1. Open `LumiereMediaPlayer.slnx` (or `LumiereMediaPlayer.sln`) in Visual Studio 2026.
+2. Select target configuration (`Debug` or `Release`) and architecture (`x64` or `ARM64`).
+3. Press `F5` to build and launch.
 
-## Packaging and signing
+---
 
-The project produces architecture-specific `.msix` packages and `.msixupload` containers. The upload container is intended for Store submission; a test-layout MSIX is produced for local deployment.
+## 📂 Repository Layout
 
-The repository defaults to unsigned package generation so a clean checkout can build without a developer-specific certificate. To create a signed local package, configure a certificate in Visual Studio or pass a certificate thumbprint available in the current user certificate store:
-
-```powershell
-dotnet build LumiereMediaPlayer.csproj `
-  -c Release `
-  -p:Platform=x64 `
-  -p:AppxPackageSigningEnabled=true `
-  -p:PackageCertificateThumbprint=<certificate-thumbprint>
+```
+Lumière Media Player/
+├── Assets/                        # Application branding, Fluent icons, and vector artwork
+├── Controls/                      # Reusable UI controls (Transport, Queue, Media Cards)
+├── Helpers/                       # Utilities (StreamingRouter, Deep-Link Parsers, Audio Helpers)
+├── Models/                        # Data models (MediaItem, Playlist, QueueItem, Watchmode API)
+├── Pages/                         # WinUI 3 Pages (Home, Library, Movies, TV, Settings, Streaming)
+├── Properties/                    # Assembly metadata and PublishProfiles (win-x64.pubxml)
+├── Services/                      # Application services (Playback, Audio DSP, HDR, Settings)
+├── Signing/                       # Sideloading scripts and public certificate (LumiereMediaPlayer.cer)
+├── Styles/                        # Fluent Design XAML dictionaries, brushes, and control templates
+├── ViewModels/                    # MVVM ViewModel classes and RelayCommands
+├── LumiereProxy/                  # .NET 10 Serverless Azure Function App backend
+├── .github/workflows/             # GitHub Actions CI/CD workflows (build.yml)
+├── azure-pipelines.yml            # Azure DevOps multi-stage CI/CD pipeline
+├── AZURE_DEVOPS_MIGRATION.md      # Azure DevOps operations & deployment guide
+├── AZURE_PROXY_SETUP.md           # Azure Proxy architecture setup guide
+├── INSTALL.md                     # Comprehensive end-user installation & troubleshooting guide
+├── LumiereMediaPlayer.csproj      # WinUI 3 Desktop Client Project File (.NET 10.0)
+└── README.md                      # Project documentation
 ```
 
-The public certificate used by the project is in `Signing/LumiereMediaPlayer.cer`. Keep private keys and passwords out of source control. See `PUBLISHING.md` for Store packaging guidance and `.github/workflows/build.yml` for the automated release flow.
+---
 
-## Optional API proxy
+## 🔄 CI/CD & DevOps Engineering
 
-`LumiereProxy/` is a separate .NET 10 isolated Azure Functions project. It keeps service credentials on the server and exposes the routes used by the desktop client for:
+Lumière Media Player features a **Hybrid GitHub & Azure DevOps CI/CD Ecosystem**:
 
-- TMDB metadata.
-- Watchmode catalog, provider, season, and episode data.
-- Movie of the Night data.
-- MusicAPI search.
+- **GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml))**: Automated pull request checks, MSIX bundle creation, GitHub release creation, and GitHub Pages web installer deployment.
+- **Azure DevOps Pipeline ([azure-pipelines.yml](azure-pipelines.yml))**: Multi-stage enterprise pipeline staging WinUI 3 MSIX artifacts, zip packaging Azure Functions backend drops, and managing automated Azure Cloud deployments under Azure's $0 Free Tier model.
 
-Deploy and configure it using [AZURE_PROXY_SETUP.md](AZURE_PROXY_SETUP.md). The proxy's application settings hold the service credentials; the desktop app only receives the proxy URL and app token.
+---
 
-## Repository layout
+## ⚖️ License
 
-| Path | Purpose |
-| --- | --- |
-| `Pages/` | Home, library, playback, playlists, settings, and streaming pages |
-| `ViewModels/` | MVVM state and commands for the UI |
-| `Services/` | Playback, settings, history, HDR, metadata, and streaming services |
-| `Controls/` | Reusable transport, queue, and media-card controls |
-| `Models/` | Media, settings, playlist, queue, and streaming models |
-| `LumiereProxy/` | Optional Azure Functions API proxy |
-| `Assets/` and `Styles/` | Application artwork and Fluent UI resources |
-| `Signing/` | Public certificate and sideloading assets |
-| `AppPackages/` | Local build output; ignored by Git |
+Lumière Media Player is free and open-source software licensed under the **[GNU General Public License v3.0 (GPLv3)](LICENSE)**.
 
-## Troubleshooting
+```
+Lumière Media Player - Native WinUI 3 Media Player
+Copyright (C) 2026 Sourav / Lumière Media Player Contributors
 
-### Streaming pages are empty
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-Check that `UseProxy` is `true`, `ProxyBaseUrl` is reachable, and `ProxyAppToken` matches the Azure Function's `APP_TOKEN`. Results can also vary by region and provider availability.
-
-### YouTube or Twitch does not load
-
-Install or repair the Microsoft Edge WebView2 Runtime, then restart the application. The pages depend on the external services and their current browser policies.
-
-### HDR is unavailable
-
-Confirm that Windows HDR is enabled, the display and GPU support HDR, and the media contains HDR metadata. The application can fall back to SDR when the display or content does not support HDR.
-
-### A package says another version is already installed
-
-Windows can block a packaged build when an unpackaged development copy is already registered. Remove the old development registration or launch the package from the matching Visual Studio configuration before installing the new MSIX.
-
-## CI/CD
-
-GitHub Actions runs on pushes and pull requests targeting `main`, `master`, or `dev`. The workflow restores dependencies, builds x64 and ARM64 packages, creates release artifacts, and publishes the deployment website for release builds.
-
-Release builds require these repository secrets so the packaged app can reach the proxy-backed Movie and TV APIs: `LUMIERE_PROXY_BASE_URL` and `LUMIERE_PROXY_APP_TOKEN`. Set `LUMIERE_PROXY_BASE_URL` to the Azure Functions base route, for example `https://your-function-app.azurewebsites.net/api`.
-
-## License
-
-Lumière Media Player is distributed under the [Apache License 2.0](LICENSE).
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+```

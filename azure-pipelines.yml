@@ -122,20 +122,6 @@ stages:
         ArtifactName: 'LumiereProxy-Package'
         publishLocation: 'Container'
 
-    - task: CopyFiles@2
-      displayName: 'Stage Bicep Templates'
-      inputs:
-        SourceFolder: '$(Build.SourcesDirectory)/azure-infrastructure'
-        Contents: '**'
-        TargetFolder: '$(Build.ArtifactStagingDirectory)/Bicep'
-
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish IaC Artifact Drop'
-      inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)/Bicep'
-        ArtifactName: 'Azure-Infrastructure'
-        publishLocation: 'Container'
-
 # ==========================================
 # STAGE 2: DEPLOY PROXY BACKEND (Optional - Enable after creating Azure Service Connection)
 # To enable automated deployment:
