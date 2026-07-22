@@ -4,6 +4,19 @@ This guide details the step-by-step process for preparing, packaging, and submit
 
 ---
 
+## GitHub Release Signing
+
+GitHub release builds are signed only when both of these repository secrets are configured:
+
+- `LUMIERE_SIGNING_PFX_BASE64`: the Base64-encoded private PFX.
+- `LUMIERE_SIGNING_PFX_PASSWORD`: the password for that PFX.
+
+The PFX must match `Signing/LumiereMediaPlayer.cer`, and its certificate subject must match the `Publisher` in `Package.appxmanifest`. The workflow validates both conditions and stops before publishing if either is wrong. The private PFX is intentionally ignored by Git; never add it, its password, or a Base64 copy of it to the repository.
+
+Because the previous signing password was present in repository history, rotate the signing certificate and both GitHub secrets before the next public release. Updating the certificate also requires updating the public `.cer` and the manifest publisher identity together.
+
+---
+
 ## Step 1: Create a Partner Center App Reservation
 
 Before you can package the app for the Store, you must reserve your app's name:

@@ -7,7 +7,7 @@ on:
     branches: [ main, master, dev ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # Job 1: Build check for Pull Requests and development branch pushes (fast build check)
@@ -51,6 +51,8 @@ jobs:
     name: Build, Sign, and Deploy to GitHub Pages
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout Source Code
@@ -210,6 +212,9 @@ jobs:
     # Bundle the individual architecture packages into an MSIXBundle and sign them
     - name: Bundle and Sign Packages
       shell: powershell
+      env:
+        LUMIERE_SIGNING_PFX_BASE64: ${{ secrets.LUMIERE_SIGNING_PFX_BASE64 }}
+        LUMIERE_SIGNING_PFX_PASSWORD: ${{ secrets.LUMIERE_SIGNING_PFX_PASSWORD }}
       run: |
         # Keep the App Installer metadata tied to the package manifest. The
         # identity is Store-linked, so do not duplicate or rename it here.
@@ -317,30 +322,42 @@ jobs:
           $bundleArchive.Dispose()
         }
 
-        # 4. Sign the generated bundle
-        Write-Output "Signing Bundle..."
-        $pfxPath = "Signing\LumiereMediaPlayer.pfx"
-        $pfxPassword = "Lumiere123!"
-
-        if (-not (Test-Path $pfxPath)) {
-          if ($env:BASE64_ENCODED_PFX) {
-            Write-Output "Decoding PFX certificate from BASE64_ENCODED_PFX secret..."
-            $pfxBytes = [System.Convert]::FromBase64String($env:BASE64_ENCODED_PFX)
-            [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-          } else {
-            Write-Output "No PFX file found on disk or secret. Generating temporary CI signing certificate..."
-            $tempPfx = "temp_ci_signing.pfx"
-            $secPassword = ConvertTo-SecureString $pfxPassword -AsPlainText -Force
-            $cert = New-SelfSignedCertificate -Type Custom -Subject $packagePublisher -KeyUsage DigitalSignature -FriendlyName "Lumiere CI Signing" -CertStoreLocation "Cert:\CurrentUser\My"
-            Export-PfxCertificate -Cert $cert -FilePath $tempPfx -Password $secPassword | Out-Null
-            $pfxPath = $tempPfx
-          }
+        # 4. Sign the generated bundle with the release certificate. The PFX
+        # is supplied only through GitHub Actions secrets and is never written
+        # to the repository or replaced with an untrusted fallback certificate.
+        if ([string]::IsNullOrWhiteSpace($env:LUMIERE_SIGNING_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:LUMIERE_SIGNING_PFX_PASSWORD)) {
+          throw "Release signing secrets are missing. Configure LUMIERE_SIGNING_PFX_BASE64 and LUMIERE_SIGNING_PFX_PASSWORD before publishing a release."
         }
 
-        & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPassword "deploy\$bundleFilename"
+        $pfxPath = Join-Path $env:RUNNER_TEMP "LumiereMediaPlayer-signing.pfx"
+        try {
+          $pfxBytes = [System.Convert]::FromBase64String($env:LUMIERE_SIGNING_PFX_BASE64)
+          [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
 
-        if (Test-Path "temp_ci_signing.pfx") {
-          Remove-Item "temp_ci_signing.pfx" -Force
+          $signingCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $env:LUMIERE_SIGNING_PFX_PASSWORD)
+          $publishedCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new("Signing\LumiereMediaPlayer.cer")
+          if ($signingCertificate.Thumbprint -ne $publishedCertificate.Thumbprint) {
+            throw "The signing PFX does not match Signing\\LumiereMediaPlayer.cer. Refusing to publish an installer with a mismatched certificate."
+          }
+          if ($signingCertificate.Subject -ne $packagePublisher) {
+            throw "The signing certificate subject '$($signingCertificate.Subject)' does not match the package publisher '$packagePublisher'."
+          }
+          if ($signingCertificate.NotAfter -le (Get-Date)) {
+            throw "The signing certificate has expired. Renew it before publishing a release."
+          }
+
+          Write-Output "Signing and timestamping bundle with the validated release certificate..."
+          & $signtool sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD "deploy\$bundleFilename"
+          if ($LASTEXITCODE -ne 0) {
+            throw "signtool failed to sign the MSIX bundle (exit code $LASTEXITCODE)."
+          }
+
+          & $signtool verify /pa /all /v "deploy\$bundleFilename"
+          if ($LASTEXITCODE -ne 0) {
+            throw "signtool could not verify the signed MSIX bundle (exit code $LASTEXITCODE)."
+          }
+        } finally {
+          Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
         }
 
     # Create a GitHub Release and upload the msixbundle (GitHub Releases allows files > 100MB)
@@ -360,7 +377,7 @@ jobs:
           
           **Option 2: Direct Sideloading (.msixbundle)**
           1. **Enable Developer Mode**: Windows **Settings** > **Privacy & security** (or Update & Security) > **For developers** > Turn **Developer Mode** **ON**.
-          2. **Install Certificate**: Download `LumiereMediaPlayer.cer` (or use `Signing/LumiereMediaPlayer.cer`), right-click > **Install Certificate** > **Local Machine** > **Trusted Root Certification Authorities**.
+          2. **Install Certificate**: Download `LumiereMediaPlayer.cer`, right-click > **Install Certificate** > **Local Machine** > **Trusted People**.
           3. **Install Package**: Double-click the `.msixbundle` below to install!
           
           For complete instructions and troubleshooting, see [INSTALL.md](https://github.com/trailblazer-99/Lumiere/blob/main/docs/INSTALL.md).

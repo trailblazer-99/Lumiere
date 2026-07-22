@@ -40,14 +40,14 @@ Because the app is package-signed with a project security certificate:
 
 ### Step 2: Install the Security Certificate
 
-Windows requires the package's public certificate (`LumiereMediaPlayer.cer`) to be installed in the Trusted Root Certification Authorities store:
+Windows requires the package's public certificate (`LumiereMediaPlayer.cer`) to be installed in the **Trusted People** store. Do not add this self-signed package certificate to **Trusted Root Certification Authorities**.
 
 1. Locate `LumiereMediaPlayer.cer` in your downloaded release folder (or inside `Signing/LumiereMediaPlayer.cer`).
 2. Right-click `LumiereMediaPlayer.cer` and select **Install Certificate**.
 3. In the Certificate Import Wizard:
    - Select **Local Machine** and click **Next**. (Click **Yes** if prompted by User Account Control / UAC).
    - Choose **Place all certificates in the following store**.
-   - Click **Browse...** and select **Trusted Root Certification Authorities**.
+   - Click **Browse...** and select **Trusted People**.
    - Click **OK**, then click **Next**.
    - Click **Finish**. You should see a message stating *"The import was successful."*
 
@@ -69,8 +69,8 @@ If your download includes `Add-AppDevPackage.ps1`:
 ## Troubleshooting Installation Issues
 
 ### Error: "This app package is not signed with a trusted certificate" (`0x800B0109`)
-- **Cause**: The `LumiereMediaPlayer.cer` certificate was not imported into the **Trusted Root Certification Authorities** store under **Local Machine**.
-- **Fix**: Follow **Step 2** above carefully. Make sure to choose **Local Machine** (not Current User) and select **Trusted Root Certification Authorities**.
+- **Cause**: The `LumiereMediaPlayer.cer` certificate was not imported into the **Trusted People** store under **Local Machine**.
+- **Fix**: Follow **Step 2** above carefully. Make sure to choose **Local Machine** (not Current User) and select **Trusted People**.
 
 ### Error: "Developer mode is disabled"
 - **Cause**: Windows blocks non-Store MSIX packages unless Developer Mode or Sideloading is enabled.

@@ -99,7 +99,7 @@ For detailed step-by-step sideloading and certificate installation instructions,
 1. **Enable Developer Mode**: Go to Windows **Settings** > **Privacy & security** > **For developers** > turn **Developer Mode** **ON**.
 2. **Install Public Certificate**:
    - Right-click `LumiereMediaPlayer.cer` (located in `Signing/LumiereMediaPlayer.cer`) > select **Install Certificate**.
-   - Select **Local Machine** > **Place all certificates in the following store** > choose **Trusted Root Certification Authorities**.
+   - Select **Local Machine** > **Place all certificates in the following store** > choose **Trusted People**. Do not add the self-signed package certificate to **Trusted Root Certification Authorities**.
 3. **Install Package**: Double-click `LumiereMediaPlayer.msixbundle` to install, or right-click `Add-AppDevPackage.ps1` and select **Run with PowerShell**.
 
 ---
