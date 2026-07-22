@@ -352,9 +352,31 @@ jobs:
             throw "signtool failed to sign the MSIX bundle (exit code $LASTEXITCODE)."
           }
 
-          & $signtool verify /pa /all /v "deploy\$bundleFilename"
-          if ($LASTEXITCODE -ne 0) {
-            throw "signtool could not verify the signed MSIX bundle (exit code $LASTEXITCODE)."
+          # GitHub-hosted runners do not trust the self-signed release
+          # certificate. Add the already-validated public certificate to the
+          # runner's current-user Trusted People store only for verification,
+          # then remove it before the job exits.
+          $trustedPeopleStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPeople", "CurrentUser")
+          $certificateAlreadyTrusted = $false
+          $trustedPeopleStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+          try {
+            $certificateAlreadyTrusted = $trustedPeopleStore.Certificates.Find(
+              [System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
+              $publishedCertificate.Thumbprint,
+              $false).Count -gt 0
+            if (-not $certificateAlreadyTrusted) {
+              $trustedPeopleStore.Add($publishedCertificate)
+            }
+
+            & $signtool verify /pa /all /v "deploy\$bundleFilename"
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool could not verify the signed MSIX bundle (exit code $LASTEXITCODE)."
+            }
+          } finally {
+            if (-not $certificateAlreadyTrusted) {
+              $trustedPeopleStore.Remove($publishedCertificate)
+            }
+            $trustedPeopleStore.Close()
           }
         } finally {
           Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
