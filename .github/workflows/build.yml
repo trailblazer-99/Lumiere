@@ -353,19 +353,21 @@ jobs:
           }
 
           # GitHub-hosted runners do not trust the self-signed release
-          # certificate. Add the already-validated public certificate to the
-          # runner's current-user Trusted People store only for verification,
-          # then remove it before the job exits.
-          $trustedPeopleStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPeople", "CurrentUser")
+          # certificate. Authenticode policy verification requires a trusted
+          # root, so add the already-validated public certificate to the
+          # disposable runner's current-user Root store only for this check.
+          # It is removed before the job exits; end-user instructions continue
+          # to use the narrower Trusted People store.
+          $verificationRootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("Root", "CurrentUser")
           $certificateAlreadyTrusted = $false
-          $trustedPeopleStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+          $verificationRootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
           try {
-            $certificateAlreadyTrusted = $trustedPeopleStore.Certificates.Find(
+            $certificateAlreadyTrusted = $verificationRootStore.Certificates.Find(
               [System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
               $publishedCertificate.Thumbprint,
               $false).Count -gt 0
             if (-not $certificateAlreadyTrusted) {
-              $trustedPeopleStore.Add($publishedCertificate)
+              $verificationRootStore.Add($publishedCertificate)
             }
 
             & $signtool verify /pa /all /v "deploy\$bundleFilename"
@@ -374,9 +376,9 @@ jobs:
             }
           } finally {
             if (-not $certificateAlreadyTrusted) {
-              $trustedPeopleStore.Remove($publishedCertificate)
+              $verificationRootStore.Remove($publishedCertificate)
             }
-            $trustedPeopleStore.Close()
+            $verificationRootStore.Close()
           }
         } finally {
           Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
