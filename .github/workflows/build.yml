@@ -346,10 +346,49 @@ jobs:
             throw "The signing certificate has expired. Renew it before publishing a release."
           }
 
-          Write-Output "Signing and timestamping bundle with the validated release certificate..."
-          & $signtool sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD "deploy\$bundleFilename"
-          if ($LASTEXITCODE -ne 0) {
-            throw "signtool failed to sign the MSIX bundle (exit code $LASTEXITCODE)."
+          # Sign with RFC 3161 timestamp. signtool has no built-in timeout for
+          # the /tr call so we wrap each attempt in a background job with a
+          # 60-second deadline, trying three public servers before falling back
+          # to signing without a timestamp (acceptable for self-signed sideload).
+          $timestampServers = @(
+            "http://timestamp.digicert.com",
+            "http://timestamp.sectigo.com",
+            "http://timestamp.comodoca.com"
+          )
+          $signed = $false
+          foreach ($tsServer in $timestampServers) {
+            Write-Output "Attempting to sign with timestamp server: $tsServer"
+            $job = Start-Job -ScriptBlock {
+              param($tool, $tsUrl, $pfx, $pwd, $bundle)
+              & $tool sign /fd SHA256 /tr $tsUrl /td SHA256 /f $pfx /p $pwd $bundle
+              return $LASTEXITCODE
+            } -ArgumentList $signtool, $tsServer, $pfxPath, $env:LUMIERE_SIGNING_PFX_PASSWORD, "deploy\$bundleFilename"
+
+            $completed = Wait-Job $job -Timeout 60
+            if ($completed) {
+              $exitCode = Receive-Job $job
+              Remove-Job $job -Force
+              if ($exitCode -eq 0) {
+                Write-Output "Successfully signed with timestamp server: $tsServer"
+                $signed = $true
+                break
+              } else {
+                Write-Warning "signtool returned exit code $exitCode with server $tsServer. Trying next."
+              }
+            } else {
+              Write-Warning "Timestamp server $tsServer timed out after 60s. Trying next."
+              Stop-Job $job
+              Remove-Job $job -Force
+            }
+          }
+
+          if (-not $signed) {
+            Write-Warning "All timestamp servers failed or timed out. Signing without a timestamp (sideload-only release)."
+            & $signtool sign /fd SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD "deploy\$bundleFilename"
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool failed to sign the MSIX bundle without a timestamp (exit code $LASTEXITCODE)."
+            }
+            Write-Output "Bundle signed successfully (no timestamp)."
           }
 
           # GitHub-hosted runners do not trust the self-signed release
