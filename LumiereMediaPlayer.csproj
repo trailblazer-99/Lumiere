@@ -72,8 +72,7 @@
   <!-- Publish Properties -->
   <PropertyGroup>
     <PublishReadyToRun>False</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">False</PublishTrimmed>
+    <PublishTrimmed>False</PublishTrimmed>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">True</WindowsAppSDKSelfContained>
     <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)' != 'Debug'">False</WindowsAppSdkDeploymentManagerInitialize>

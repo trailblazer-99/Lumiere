@@ -9,6 +9,7 @@
 
 ## MSIX & Windows App SDK Packaging
 AppPackages/
+AppPackages*/
 Backups/
 BundleArtifacts/
 _pkg/
@@ -39,6 +40,8 @@ build_log*.txt
 msbuild.binlog
 diff*.txt
 *_debug.txt
+last_edit.json
+TestHdr.cs
 
 ## Python (used for temporary migration / generation scripts)
 __pycache__/
@@ -46,6 +49,9 @@ __pycache__/
 *.pyo
 *.pyd
 .ipynb_checkpoints/
+
+## One-off Migration & Generation Scripts (DO NOT COMMIT)
+Scripts/
 
 ## OS Files
 Thumbs.db
