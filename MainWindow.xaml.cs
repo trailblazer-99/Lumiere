@@ -329,32 +329,36 @@ public sealed partial class MainWindow : Window
                 }
             });
         };
-        ApplyConfiguredTheme();
-        UpdateAccentColor();
-        UpdateLayoutForPip(AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay);
-        ApplyBackdrop(AppServices.Settings.Current.BackdropType);
+        try { ApplyConfiguredTheme(); } catch { }
+        try { UpdateAccentColor(); } catch { }
+        try { UpdateLayoutForPip(AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay); } catch { }
+        try { ApplyBackdrop(AppServices.Settings.Current.BackdropType); } catch { }
 
         // Initialise display manager first — HdrPipelineService reads capability from it.
-        AppServices.DisplayManager.InitializeForWindow(this);
-        AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged;
+        try { AppServices.DisplayManager.InitializeForWindow(this); } catch { }
+        try { AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged; } catch { }
 
         // Initialise HDR pipeline after DisplayManager so the first RefreshDisplayCapability()
         // call inside Initialize() sees valid display state.
-        AppServices.HdrPipeline.Initialize(this);
+        try { AppServices.HdrPipeline.Initialize(this); } catch { }
 
         if (PlaybackInfoBadge != null)
         {
             PlaybackInfoBadge.Visibility = _playback.IsPlaying ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        if (AppServices.Settings.Current.AutoplayOnLaunch)
+        try
         {
-            var firstTrack = Services.SampleMediaLibrary.AudioTracks.FirstOrDefault();
-            if (firstTrack is not null)
+            if (AppServices.Settings.Current.AutoplayOnLaunch)
             {
-                _playback.PlayTrack(firstTrack);
+                var firstTrack = Services.SampleMediaLibrary.AudioTracks.FirstOrDefault();
+                if (firstTrack is not null)
+                {
+                    _playback.PlayTrack(firstTrack);
+                }
             }
         }
+        catch { }
     }
 
     private void ConfigureWindow()

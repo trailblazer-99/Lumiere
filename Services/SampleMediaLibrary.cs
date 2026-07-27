@@ -159,7 +159,7 @@ public static class SampleMediaLibrary
                         _allTracks.Clear();
                         _allTracks.AddRange(uniqueTracks);
                     }
-                    LibraryChanged?.Invoke(null, EventArgs.Empty);
+                    try { LibraryChanged?.Invoke(null, EventArgs.Empty); } catch { }
 
                     if (wasModified)
                     {
