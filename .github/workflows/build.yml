@@ -294,7 +294,14 @@ jobs:
         Write-Output "Bundling packages to: deploy\$bundleFilename"
         & $makeappx bundle /d "AppPackages\BundleSources" /p "deploy\$bundleFilename" /bv $packageVersion /o
 
-        $bundleArchive = [System.IO.Compression.ZipFile]::OpenRead("$PWD\deploy\$bundleFilename")
+        # Start-Job does not reliably inherit the caller's working directory.
+        # Use an absolute path for every operation after bundling so SignTool
+        # can find the bundle from both the parent process and the job.
+        $bundlePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path "deploy\$bundleFilename"))
+        if (-not (Test-Path -LiteralPath $bundlePath -PathType Leaf)) {
+          throw "MSIX bundle was not created at '$bundlePath'."
+        }
+        $bundleArchive = [System.IO.Compression.ZipFile]::OpenRead($bundlePath)
         try {
           $bundleManifestEntry = $bundleArchive.GetEntry("AppxMetadata/AppxBundleManifest.xml")
           if (-not $bundleManifestEntry) {
@@ -360,14 +367,25 @@ jobs:
             Write-Output "Attempting to sign with timestamp server: $tsServer"
             $job = Start-Job -ScriptBlock {
               param($tool, $tsUrl, $pfx, $pwd, $bundle)
-              & $tool sign /fd SHA256 /tr $tsUrl /td SHA256 /f $pfx /p $pwd $bundle
-              return $LASTEXITCODE
-            } -ArgumentList $signtool, $tsServer, $pfxPath, $env:LUMIERE_SIGNING_PFX_PASSWORD, "deploy\$bundleFilename"
+              $output = (& $tool sign /fd SHA256 /tr $tsUrl /td SHA256 /f $pfx /p $pwd $bundle 2>&1 | Out-String)
+              $exitCode = $LASTEXITCODE
+              if ($null -eq $exitCode) {
+                $exitCode = 1
+              }
+              [pscustomobject]@{
+                ExitCode = $exitCode
+                Output = $output
+              }
+            } -ArgumentList $signtool, $tsServer, $pfxPath, $env:LUMIERE_SIGNING_PFX_PASSWORD, $bundlePath
 
             $completed = Wait-Job $job -Timeout 60
             if ($completed) {
-              $exitCode = Receive-Job $job
+              $result = Receive-Job $job
               Remove-Job $job -Force
+              $exitCode = [int]$result.ExitCode
+              if (-not [string]::IsNullOrWhiteSpace($result.Output)) {
+                Write-Output $result.Output.TrimEnd()
+              }
               if ($exitCode -eq 0) {
                 Write-Output "Successfully signed with timestamp server: $tsServer"
                 $signed = $true
@@ -384,7 +402,7 @@ jobs:
 
           if (-not $signed) {
             Write-Warning "All timestamp servers failed or timed out. Signing without a timestamp (sideload-only release)."
-            & $signtool sign /fd SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD "deploy\$bundleFilename"
+            & $signtool sign /fd SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD $bundlePath
             if ($LASTEXITCODE -ne 0) {
               throw "signtool failed to sign the MSIX bundle without a timestamp (exit code $LASTEXITCODE)."
             }
@@ -409,7 +427,7 @@ jobs:
               $verificationRootStore.Add($publishedCertificate)
             }
 
-            & $signtool verify /pa /all /v "deploy\$bundleFilename"
+            & $signtool verify /pa /all /v $bundlePath
             if ($LASTEXITCODE -ne 0) {
               throw "signtool could not verify the signed MSIX bundle (exit code $LASTEXITCODE)."
             }
