@@ -95,7 +95,7 @@ public static class SampleMediaLibrary
         try
         {
             var folder = Windows.Storage.ApplicationData.Current.LocalFolder;
-            var file = await folder.CreateFileAsync("library_cache.json", Windows.Storage.CreationCollisionOption.ReplaceExisting);
+            var tmpFile = await folder.CreateFileAsync("library_cache.tmp", Windows.Storage.CreationCollisionOption.ReplaceExisting);
             
             List<MediaItem> tracksToSave;
             lock (_lock)
@@ -104,7 +104,8 @@ public static class SampleMediaLibrary
             }
 
             var json = JsonSerializer.Serialize(tracksToSave);
-            await Windows.Storage.FileIO.WriteTextAsync(file, json);
+            await Windows.Storage.FileIO.WriteTextAsync(tmpFile, json);
+            await tmpFile.RenameAsync("library_cache.json", Windows.Storage.NameCollisionOption.ReplaceExisting);
         }
         catch (Exception ex)
         {
@@ -133,17 +134,20 @@ public static class SampleMediaLibrary
                     lock (_lock)
                     {
                         var validTracks = loadedTracks.Where(t => !t.IsFolder).ToList();
-                        var uniqueTracks = new List<MediaItem>();
+                        var uniqueTracks = new List<MediaItem>(validTracks.Count);
+                        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                         foreach (var track in validTracks)
                         {
                             bool isDuplicate = false;
                             if (!string.IsNullOrEmpty(track.SourcePath))
                             {
-                                isDuplicate = uniqueTracks.Any(t => t.SourcePath == track.SourcePath);
+                                isDuplicate = !seenPaths.Add(track.SourcePath);
                             }
                             else if (!string.IsNullOrEmpty(track.Id))
                             {
-                                isDuplicate = uniqueTracks.Any(t => t.Id == track.Id);
+                                isDuplicate = !seenIds.Add(track.Id);
                             }
 
                             if (!isDuplicate)

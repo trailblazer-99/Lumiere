@@ -29,28 +29,35 @@ namespace LumiereMediaPlayer.Pages
 
         protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
         {
-            base.OnNavigatedTo(e);
-            
-            // Refresh library items in case we are returning from Details Page where they changed
-            RefreshLibraryList();
-            
-            if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+            try
             {
-                // Preserve search results, active filters, and pivot tabs when returning from Details Page
-                return;
-            }
+                base.OnNavigatedTo(e);
+                
+                // Refresh library items in case we are returning from Details Page where they changed
+                RefreshLibraryList();
+                
+                if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+                {
+                    // Preserve search results, active filters, and pivot tabs when returning from Details Page
+                    return;
+                }
 
-            ViewModel.ResetState();
+                ViewModel.ResetState();
 
-            if (MainPivot != null)
-            {
-                MainPivot.SelectedIndex = 0;
+                if (MainPivot != null)
+                {
+                    MainPivot.SelectedIndex = 0;
+                }
+                if (SearchBox != null)
+                {
+                    SearchBox.Text = string.Empty;
+                }
+                await ViewModel.InitializeAndLoadAsync();
             }
-            if (SearchBox != null)
+            catch (Exception ex)
             {
-                SearchBox.Text = string.Empty;
+                System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
             }
-            await ViewModel.InitializeAndLoadAsync();
         }
 
         private async void OnSearchBoxTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)

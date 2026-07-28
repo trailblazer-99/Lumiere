@@ -7,7 +7,7 @@ namespace LumiereMediaPlayer.Services
 {
     public static class HttpHelper
     {
-        private static readonly HttpClient _httpClient = new();
+        private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
         /// <summary>
         /// Sends a GET request. If proxy is active and configured, it routes via proxy.

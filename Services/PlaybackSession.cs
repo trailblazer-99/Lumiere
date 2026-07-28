@@ -577,42 +577,56 @@ public sealed class PlaybackSession
 
     public async void PlayTrack(MediaItem track)
     {
-        var requestVersion = BeginPlaybackRequest();
-        var index = _queue.FindIndex(t => t.Id == track.Id);
-        if (index >= 0)
+        try
         {
-            _currentIndex = index;
+            var requestVersion = BeginPlaybackRequest();
+            var index = _queue.FindIndex(t => t.Id == track.Id);
+            if (index >= 0)
+            {
+                _currentIndex = index;
+            }
+            else
+            {
+                _queue.Add(track);
+                _currentIndex = _queue.Count - 1;
+            }
+
+            CurrentTrack = track;
+
+            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
         }
-        else
+        catch (Exception ex)
         {
-            _queue.Add(track);
-            _currentIndex = _queue.Count - 1;
+            Log($"PlayTrack error: {ex.Message}");
         }
-
-        CurrentTrack = track;
-
-        await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
     }
 
     public async void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
     {
-        var requestVersion = BeginPlaybackRequest();
-        _queue.Clear();
-        _queue.AddRange(items);
-        _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
-        CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
-
-        if (CurrentTrack is not null)
+        try
         {
-            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
-            return;
-        }
-        else
-        {
-            _mediaPlayer.Source = null;
-        }
+            var requestVersion = BeginPlaybackRequest();
+            _queue.Clear();
+            _queue.AddRange(items);
+            _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
+            CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
 
-        StateChanged?.Invoke(this, EventArgs.Empty);
+            if (CurrentTrack is not null)
+            {
+                await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
+                return;
+            }
+            else
+            {
+                _mediaPlayer.Source = null;
+            }
+
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Log($"SetQueue error: {ex.Message}");
+        }
     }
 
     public void AddToQueue(MediaItem track)
@@ -652,16 +666,23 @@ public sealed class PlaybackSession
 
     public async void PlayQueueItemAt(int index)
     {
-        if (index < 0 || index >= _queue.Count)
+        try
         {
-            return;
+            if (index < 0 || index >= _queue.Count)
+            {
+                return;
+            }
+
+            var requestVersion = BeginPlaybackRequest();
+            _currentIndex = index;
+            CurrentTrack = _queue[_currentIndex];
+
+            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
         }
-
-        var requestVersion = BeginPlaybackRequest();
-        _currentIndex = index;
-        CurrentTrack = _queue[_currentIndex];
-
-        await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
+        catch (Exception ex)
+        {
+            Log($"PlayQueueItemAt error: {ex.Message}");
+        }
     }
 
     public void Previous()
@@ -1408,6 +1429,7 @@ public sealed class PlaybackSession
                 var sourceToDispose = playbackItem.Source;
                 try
                 {
+                    sourceToDispose?.Reset();
                     sourceToDispose?.Dispose();
                 }
                 catch { }

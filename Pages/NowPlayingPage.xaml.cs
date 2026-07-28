@@ -374,11 +374,6 @@ public sealed partial class NowPlayingPage : Page
             {
                 ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
             }
-
-            // Force GC collection immediately to clean up album art images and visualizer resources
-            System.GC.Collect();
-            System.GC.WaitForPendingFinalizers();
-            System.GC.Collect();
         };
     }
 
@@ -392,6 +387,24 @@ public sealed partial class NowPlayingPage : Page
         catch { }
 
         var isPlaying = AppServices.PlaybackViewModel.IsPlaying;
+        if (!isPlaying)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                if (Math.Abs(_currentHeights[i] - 6.0) > 0.1)
+                {
+                    _currentHeights[i] = 6.0;
+                    _targetHeights[i] = 6.0;
+                    var bar = FindBarControl(i);
+                    if (bar != null)
+                    {
+                        bar.Height = 6.0;
+                    }
+                }
+            }
+            return;
+        }
+
         var volume = AppServices.PlaybackViewModel.Volume / 100.0;
         if (volume < 0.1) volume = 0.1;
 
@@ -399,32 +412,25 @@ public sealed partial class NowPlayingPage : Page
 
         for (int i = 0; i < 16; i++)
         {
-            if (isPlaying)
+            double sineWave = Math.Sin(_visualizerPhase + (i * 0.5)) * Math.Cos(_visualizerPhase * 0.7 - (i * 0.3));
+            double noise = _random.NextDouble();
+            double frequencyWeight;
+
+            if (i < 4)
             {
-                double sineWave = Math.Sin(_visualizerPhase + (i * 0.5)) * Math.Cos(_visualizerPhase * 0.7 - (i * 0.3));
-                double noise = _random.NextDouble();
-                double frequencyWeight;
-
-                if (i < 4)
-                {
-                    frequencyWeight = 48.0 + (noise * 12.0);
-                }
-                else if (i < 10)
-                {
-                    frequencyWeight = 32.0 + (noise * 24.0);
-                }
-                else
-                {
-                    frequencyWeight = 16.0 + (noise * 36.0);
-                }
-
-                double target = 6.0 + Math.Max(0.0, (sineWave + 1.0) / 2.0 * frequencyWeight * volume);
-                _targetHeights[i] = Math.Min(60.0, target);
+                frequencyWeight = 48.0 + (noise * 12.0);
+            }
+            else if (i < 10)
+            {
+                frequencyWeight = 32.0 + (noise * 24.0);
             }
             else
             {
-                _targetHeights[i] = 6.0;
+                frequencyWeight = 16.0 + (noise * 36.0);
             }
+
+            double target = 6.0 + Math.Max(0.0, (sineWave + 1.0) / 2.0 * frequencyWeight * volume);
+            _targetHeights[i] = Math.Min(60.0, target);
 
             _currentHeights[i] += (_targetHeights[i] - _currentHeights[i]) * 0.22;
 

@@ -14,7 +14,7 @@ namespace LumiereMediaPlayer.Services.Streaming
         private static string ApiKey => "";
         private const string BaseUrl = "https://api.tmdb.org/3";
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
-        private readonly HttpClient _httpClient = new();
+        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
         public async Task<List<TmdbGenre>> GetMovieGenresAsync() 
             => await FetchGenresAsync("tmdb/genre/movie/list", $"{BaseUrl}/genre/movie/list?api_key={ApiKey}");

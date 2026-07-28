@@ -2545,24 +2545,29 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    #region Window Presenter Management (Thread-Safe)
     public void SetFullScreenMode(bool isFullScreen)
     {
-        try
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
-            if (isFullScreen)
+            try
             {
-                AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
+                if (isFullScreen)
+                {
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
+                }
+                else
+                {
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                System.Diagnostics.Debug.WriteLine($"[SetFullScreenMode] SetPresenter failed: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[SetFullScreenMode] SetPresenter failed: {ex.Message}");
-        }
+        });
     }
+    #endregion
 
     private void OnNavigationPaneOpened(NavigationView sender, object args)
     {
@@ -2787,7 +2792,9 @@ public sealed partial class MainWindow : Window
     private void OnRootGridKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
-        if (focused is TextBox || focused is AutoSuggestBox || focused is PasswordBox)
+        if (focused is TextBox || focused is AutoSuggestBox || focused is PasswordBox ||
+            focused is RichEditBox || focused is ComboBox || e.OriginalSource is TextBox ||
+            e.OriginalSource is RichEditBox || e.OriginalSource is PasswordBox)
         {
             return;
         }

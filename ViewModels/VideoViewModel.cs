@@ -393,10 +393,29 @@ public partial class VideoViewModel : ObservableObject
             _ => filtered
         };
         
-        FilteredVideos.Clear();
-        foreach (var item in filtered)
+        var newItems = filtered.ToList();
+        if (FilteredVideos.SequenceEqual(newItems))
         {
-            FilteredVideos.Add(item);
+            return;
+        }
+
+        if (FilteredVideos.Count == newItems.Count)
+        {
+            for (int i = 0; i < newItems.Count; i++)
+            {
+                if (!ReferenceEquals(FilteredVideos[i], newItems[i]))
+                {
+                    FilteredVideos[i] = newItems[i];
+                }
+            }
+        }
+        else
+        {
+            FilteredVideos.Clear();
+            foreach (var item in newItems)
+            {
+                FilteredVideos.Add(item);
+            }
         }
     }
 

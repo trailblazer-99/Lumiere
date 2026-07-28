@@ -40,7 +40,13 @@ public sealed partial class MediaCard : UserControl
             var url = e.NewValue as string;
             if (!string.IsNullOrEmpty(url))
             {
-                try { card.PosterImageElement.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(url)); } catch { card.PosterImageElement.Source = null; }
+                try
+                {
+                    var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(url));
+                    bmp.DecodePixelWidth = 240;
+                    card.PosterImageElement.Source = bmp;
+                }
+                catch { card.PosterImageElement.Source = null; }
             }
             else
             {

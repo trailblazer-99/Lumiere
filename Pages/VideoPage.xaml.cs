@@ -62,10 +62,7 @@ public sealed partial class VideoPage : Page
             LocalVideoPlayer.SetMediaPlayer(null);
         }
 
-        // Force GC collection immediately to release visual tree, page components, and decoder allocations
-        System.GC.Collect();
-        System.GC.WaitForPendingFinalizers();
-        System.GC.Collect();
+        // Event handlers and references detached; allow normal GC reclamation without UI thread stutter.
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

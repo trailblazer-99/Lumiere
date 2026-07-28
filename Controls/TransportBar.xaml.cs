@@ -954,6 +954,7 @@ public sealed partial class TransportBar : UserControl
                     if (token.IsCancellationRequested || stream == null) return;
 
                     var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    bitmap.DecodePixelWidth = 120;
                     await bitmap.SetSourceAsync(stream);
 
                     if (token.IsCancellationRequested) return;

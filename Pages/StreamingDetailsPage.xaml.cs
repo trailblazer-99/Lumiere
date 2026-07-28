@@ -40,29 +40,36 @@ namespace LumiereMediaPlayer.Pages
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
-            base.OnNavigatedTo(e);
+            try
+            {
+                base.OnNavigatedTo(e);
 
-            if (e.Parameter is int id)
-            {
-                _watchmodeId = id;
-                _selectedRegion = "";
-            }
-            else if (e.Parameter is (int tupleId, string region))
-            {
-                _watchmodeId = tupleId;
-                _selectedRegion = region;
-            }
+                if (e.Parameter is int id)
+                {
+                    _watchmodeId = id;
+                    _selectedRegion = "";
+                }
+                else if (e.Parameter is (int tupleId, string region))
+                {
+                    _watchmodeId = tupleId;
+                    _selectedRegion = region;
+                }
 
-            if (string.IsNullOrEmpty(_selectedRegion))
-            {
-                _selectedRegion = AppServices.StreamingMoviesViewModel?.SelectedRegion ?? "";
-            }
-            if (string.IsNullOrEmpty(_selectedRegion))
-            {
-                _selectedRegion = await RegionHelper.GetCurrentRegionAsync();
-            }
+                if (string.IsNullOrEmpty(_selectedRegion))
+                {
+                    _selectedRegion = AppServices.StreamingMoviesViewModel?.SelectedRegion ?? "";
+                }
+                if (string.IsNullOrEmpty(_selectedRegion))
+                {
+                    _selectedRegion = await RegionHelper.GetCurrentRegionAsync();
+                }
 
-            await LoadDetailsAsync();
+                await LoadDetailsAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnNavigatedTo error: {ex.Message}");
+            }
         }
 
         private async Task LoadDetailsAsync()
