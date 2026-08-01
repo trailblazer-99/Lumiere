@@ -252,14 +252,20 @@ jobs:
           )
 
           # Use Start-Process so stdout/stderr flow directly to the GitHub
-          # Actions console log. The previous implementation redirected both
-          # streams via ProcessStartInfo and consumed them with
-          # ReadToEndAsync().Result — a classic pipe-buffer deadlock in
-          # PowerShell 5.1: the child process blocks writing to the full
-          # 4 KB pipe while .Result blocks waiting for the process to exit.
+          # Actions console log, avoiding the pipe-buffer deadlock that the
+          # previous ProcessStartInfo + ReadToEndAsync().Result approach caused
+          # in PowerShell 5.1.
+          #
+          # Start-Process -ArgumentList needs a single pre-joined string when
+          # arguments contain spaces; passing an array can mis-split tokens.
+          $escapedArgs = ($ArgumentList | ForEach-Object {
+            if ($_ -match '\s') { "`"$_`"" } else { $_ }
+          }) -join ' '
+
           Write-Output "Starting $([System.IO.Path]::GetFileName($FilePath)) (timeout: ${TimeoutSeconds}s)."
+          Write-Output "  Command: $FilePath $escapedArgs"
           $process = Start-Process -FilePath $FilePath `
-            -ArgumentList $ArgumentList `
+            -ArgumentList $escapedArgs `
             -NoNewWindow -PassThru
 
           if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
@@ -268,8 +274,13 @@ jobs:
             throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
           }
 
-          if ($process.ExitCode -ne 0) {
-            throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $($process.ExitCode)."
+          # In PowerShell 5.1, ExitCode is not populated until the
+          # parameterless WaitForExit() is called after the timed overload.
+          $process.WaitForExit()
+          $code = $process.ExitCode
+
+          if ($code -ne 0) {
+            throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $code."
           }
           Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
         }
