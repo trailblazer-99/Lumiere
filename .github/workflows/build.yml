@@ -251,38 +251,46 @@ jobs:
             [Parameter(Mandatory = $true)][int]$TimeoutSeconds
           )
 
-          # Use Start-Process so stdout/stderr flow directly to the GitHub
-          # Actions console log, avoiding the pipe-buffer deadlock that the
-          # previous ProcessStartInfo + ReadToEndAsync().Result approach caused
-          # in PowerShell 5.1.
-          #
-          # Start-Process -ArgumentList needs a single pre-joined string when
-          # arguments contain spaces; passing an array can mis-split tokens.
-          $escapedArgs = ($ArgumentList | ForEach-Object {
-            if ($_ -match '\s') { "`"$_`"" } else { $_ }
+          $quotedArguments = ($ArgumentList | ForEach-Object {
+            $arg = [string]$_
+            if ($arg -match '\s') {
+              '"' + $arg.Replace('"', '""') + '"'
+            } else {
+              $arg
+            }
           }) -join ' '
 
           Write-Output "Starting $([System.IO.Path]::GetFileName($FilePath)) (timeout: ${TimeoutSeconds}s)."
-          Write-Output "  Command: $FilePath $escapedArgs"
-          $process = Start-Process -FilePath $FilePath `
-            -ArgumentList $escapedArgs `
-            -NoNewWindow -PassThru
+          Write-Output "  Command: $FilePath $quotedArguments"
 
-          if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            try { $process | Stop-Process -Force } catch { }
-            Start-Sleep -Milliseconds 500
-            throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $FilePath
+          $startInfo.Arguments = $quotedArguments
+          $startInfo.WorkingDirectory = (Get-Location).Path
+          $startInfo.UseShellExecute = $false
+          $startInfo.CreateNoWindow = $true
+
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          try {
+            if (-not $process.Start()) {
+              throw "Could not start '$FilePath'."
+            }
+
+            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+              try { $process.Kill() } catch { }
+              $process.WaitForExit()
+              throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
+            }
+
+            $code = $process.ExitCode
+            if ($code -ne 0) {
+              throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $code."
+            }
+            Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
+          } finally {
+            $process.Dispose()
           }
-
-          # In PowerShell 5.1, ExitCode is not populated until the
-          # parameterless WaitForExit() is called after the timed overload.
-          $process.WaitForExit()
-          $code = $process.ExitCode
-
-          if ($code -ne 0) {
-            throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $code."
-          }
-          Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
         }
 
         # 2. Stage packages for bundling
