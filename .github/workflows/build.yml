@@ -251,56 +251,27 @@ jobs:
             [Parameter(Mandatory = $true)][int]$TimeoutSeconds
           )
 
-          # Build argument string with proper Windows quoting: only wrap
-          # arguments that contain whitespace, and use the standard "" doubling
-          # convention for embedded quotes.
-          $quotedArguments = ($ArgumentList | ForEach-Object {
-            $arg = [string]$_
-            if ($arg -match '\s') {
-              '"' + $arg.Replace('"', '""') + '"'
-            } else {
-              $arg
-            }
-          }) -join ' '
-          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-          $startInfo.FileName = $FilePath
-          $startInfo.Arguments = $quotedArguments
-          $startInfo.WorkingDirectory = (Get-Location).Path
-          $startInfo.UseShellExecute = $false
-          $startInfo.CreateNoWindow = $true
-          $startInfo.RedirectStandardOutput = $true
-          $startInfo.RedirectStandardError = $true
+          # Use Start-Process so stdout/stderr flow directly to the GitHub
+          # Actions console log. The previous implementation redirected both
+          # streams via ProcessStartInfo and consumed them with
+          # ReadToEndAsync().Result — a classic pipe-buffer deadlock in
+          # PowerShell 5.1: the child process blocks writing to the full
+          # 4 KB pipe while .Result blocks waiting for the process to exit.
+          Write-Output "Starting $([System.IO.Path]::GetFileName($FilePath)) (timeout: ${TimeoutSeconds}s)."
+          $process = Start-Process -FilePath $FilePath `
+            -ArgumentList $ArgumentList `
+            -NoNewWindow -PassThru
 
-          $process = [System.Diagnostics.Process]::new()
-          $process.StartInfo = $startInfo
-          try {
-            Write-Output "Starting $([System.IO.Path]::GetFileName($FilePath)) (timeout: ${TimeoutSeconds}s)."
-            if (-not $process.Start()) {
-              throw "Could not start '$FilePath'."
-            }
-            $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-            $stderrTask = $process.StandardError.ReadToEndAsync()
-            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-              try { $process.Kill() } catch { }
-              $process.WaitForExit()
-              throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
-            }
-
-            $stdout = $stdoutTask.Result
-            $stderr = $stderrTask.Result
-            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-              Write-Output $stdout.TrimEnd()
-            }
-            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
-              Write-Warning $stderr.TrimEnd()
-            }
-            if ($process.ExitCode -ne 0) {
-              throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $($process.ExitCode)."
-            }
-            Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
-          } finally {
-            $process.Dispose()
+          if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            try { $process | Stop-Process -Force } catch { }
+            Start-Sleep -Milliseconds 500
+            throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
           }
+
+          if ($process.ExitCode -ne 0) {
+            throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $($process.ExitCode)."
+          }
+          Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
         }
 
         # 2. Stage packages for bundling
