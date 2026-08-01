@@ -133,15 +133,30 @@ namespace LumiereMediaPlayer.Helpers
                         return new Uri($"plutotv://vod/{match.Groups[1].Value}");
                     }
                 }
-                else if (host.Contains("tv.apple.com") || host.Contains("itunes.apple.com"))
+                else if (host.Contains("tv.apple.com"))
                 {
-                    // Clean tracking query parameters (e.g., ?itscg=30200&itsct=watchmode) from Apple TV URLs
-                    // because they cause Apple's web router to fail and redirect to generic pages,
-                    // but preserve search query terms (?term=...) for search fallback links.
-                    if (!string.IsNullOrEmpty(uri.Query) && !uri.AbsolutePath.Contains("/search", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return new Uri(uri.GetLeftPart(UriPartial.Path));
-                    }
+                    // The Apple TV Windows app registers the custom protocol scheme 'videos://'
+                    // Replaces https:// with videos:// so the app navigates directly to the designated title page
+                    string cleanUrl = CleanFallbackUrl(webLink);
+                    string nativeUrl = cleanUrl.Replace("https://", "videos://", StringComparison.OrdinalIgnoreCase)
+                                               .Replace("http://", "videos://", StringComparison.OrdinalIgnoreCase);
+                    return new Uri(nativeUrl);
+                }
+                else if (host.Contains("music.apple.com"))
+                {
+                    // The Apple Music Windows app registers the custom protocol scheme 'musics://'
+                    string cleanUrl = CleanFallbackUrl(webLink);
+                    string nativeUrl = cleanUrl.Replace("https://", "musics://", StringComparison.OrdinalIgnoreCase)
+                                               .Replace("http://", "musics://", StringComparison.OrdinalIgnoreCase);
+                    return new Uri(nativeUrl);
+                }
+                else if (host.Contains("itunes.apple.com"))
+                {
+                    // The Apple Music/iTunes Windows app registers the custom protocol scheme 'itunes://'
+                    string cleanUrl = CleanFallbackUrl(webLink);
+                    string nativeUrl = cleanUrl.Replace("https://", "itunes://", StringComparison.OrdinalIgnoreCase)
+                                               .Replace("http://", "itunes://", StringComparison.OrdinalIgnoreCase);
+                    return new Uri(nativeUrl);
                 }
 
                 return uri;
@@ -149,6 +164,32 @@ namespace LumiereMediaPlayer.Helpers
             catch
             {
                 return new Uri(webLink);
+            }
+        }
+
+        public static string CleanFallbackUrl(string webLink)
+        {
+            if (string.IsNullOrEmpty(webLink))
+                return webLink;
+
+            try
+            {
+                var uri = new Uri(webLink);
+                var host = uri.Host.ToLower();
+
+                if (host.Contains("tv.apple.com") || host.Contains("music.apple.com") || host.Contains("itunes.apple.com"))
+                {
+                    if (!string.IsNullOrEmpty(uri.Query) && !uri.AbsolutePath.Contains("/search", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return uri.GetLeftPart(UriPartial.Path);
+                    }
+                }
+
+                return webLink;
+            }
+            catch
+            {
+                return webLink;
             }
         }
     }

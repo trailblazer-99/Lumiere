@@ -401,10 +401,19 @@ namespace LumiereMediaPlayer.Pages
                 .Select(g => g.OrderByDescending(s => GetFormatPriority(s.Format)).First())
                 .ToList();
 
-            // Group sources by access type
-            var subSources = deduped.Where(s => s.Type == "sub").ToList();
-            var freeSources = deduped.Where(s => s.Type == "free").ToList();
-            var purchaseSources = deduped.Where(s => s.Type == "purchase" || s.Type == "rent").ToList();
+            // Group sources by access type and sort according to provider priority
+            var subSources = deduped.Where(s => s.Type == "sub")
+                                    .OrderBy(s => GetProviderPriority(s.Name))
+                                    .ThenBy(s => s.Name)
+                                    .ToList();
+            var freeSources = deduped.Where(s => s.Type == "free")
+                                     .OrderBy(s => GetProviderPriority(s.Name))
+                                     .ThenBy(s => s.Name)
+                                     .ToList();
+            var purchaseSources = deduped.Where(s => s.Type == "purchase" || s.Type == "rent")
+                                         .OrderBy(s => GetProviderPriority(s.Name))
+                                         .ThenBy(s => s.Name)
+                                         .ToList();
 
             if (subSources.Count > 0)
             {
@@ -434,6 +443,27 @@ namespace LumiereMediaPlayer.Pages
                 "SD" => 1,
                 _ => 0
             };
+        }
+
+        private static int GetProviderPriority(string? name)
+        {
+            if (string.IsNullOrEmpty(name)) return 100;
+            var lower = name.ToLowerInvariant();
+            if (lower.Contains("netflix")) return 1;
+            if (lower.Contains("prime") || lower.Contains("amazon")) return 2;
+            if (lower.Contains("apple")) return 3;
+            if (lower.Contains("disney")) return 4;
+            if (lower.Contains("hulu")) return 5;
+            if (lower.Contains("max") || lower.Contains("hbo")) return 6;
+            if (lower.Contains("paramount")) return 7;
+            if (lower.Contains("peacock")) return 8;
+            if (lower.Contains("youtube") || lower.Contains("google")) return 9;
+            if (lower.Contains("vudu") || lower.Contains("fandango")) return 10;
+            if (lower.Contains("tubi")) return 11;
+            if (lower.Contains("pluto")) return 12;
+            if (lower.Contains("roku")) return 13;
+            if (lower.Contains("plex")) return 14;
+            return 50;
         }
 
         private FrameworkElement BuildProviderWrapPanel(List<WatchmodeSource> sourcesList, string labelType)
@@ -533,19 +563,20 @@ namespace LumiereMediaPlayer.Pages
                     {
                         try
                         {
-                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(url);
+                            string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(url);
+                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                             var launcherOptions = new Windows.System.LauncherOptions
                             {
-                                FallbackUri = new Uri(url)
+                                FallbackUri = new Uri(cleanUrl)
                             };
-                            AntiGravityLogger.Log($"Launching provider URI (Native): {nativeUri}, Fallback: {url}");
-                            if (nativeUri != null)
+                            AntiGravityLogger.Log($"Launching provider URI (Native): {nativeUri}, Fallback: {cleanUrl}");
+                            if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
                             {
                                 await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
                             }
                             else
                             {
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                             }
                         }
                         catch (Exception ex)
@@ -553,7 +584,8 @@ namespace LumiereMediaPlayer.Pages
                             AntiGravityLogger.Log($"Failed to launch URI: {ex.Message}");
                             try
                             {
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(url);
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                             }
                             catch (Exception fallbackEx)
                             {
@@ -576,38 +608,10 @@ namespace LumiereMediaPlayer.Pages
 
             if (name.Contains("apple"))
             {
-                bool isAmazonUrl = webUrl.Contains("amazon", StringComparison.OrdinalIgnoreCase) 
-                                || webUrl.Contains("primevideo", StringComparison.OrdinalIgnoreCase);
-
-                // 1. If webUrl is an Amazon URL (e.g. Apple TV Channel on Prime Video), check if ios_url provides a direct Apple link
-                if (isAmazonUrl)
-                {
-                    if (!string.IsNullOrEmpty(source.IosUrl) && 
-                        (source.IosUrl.Contains("apple.com", StringComparison.OrdinalIgnoreCase) || 
-                         source.IosUrl.Contains("apple.co", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        webUrl = source.IosUrl;
-                    }
-                    else if (_details != null && !string.IsNullOrEmpty(_details.Title))
-                    {
-                        string regionPath = "us";
-                        try
-                        {
-                            string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
-                            if (!string.IsNullOrEmpty(osRegion))
-                            {
-                                regionPath = osRegion;
-                            }
-                        }
-                        catch { }
-
-                        return $"https://tv.apple.com/{regionPath}/search?term={Uri.EscapeDataString(_details.Title)}";
-                    }
-                }
-
-                // 2. Rewrite any tv.apple.com or itunes.apple.com URL to be region-aware based on local OS storefront region
-                if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || 
-                    webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
+                // Rewrite any tv.apple.com or itunes.apple.com URL to be region-aware based on local OS storefront region
+                if ((webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || 
+                     webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase)) &&
+                    !webUrl.Contains("/search", StringComparison.OrdinalIgnoreCase))
                 {
                     string targetRegion = "us";
                     try
@@ -636,6 +640,18 @@ namespace LumiereMediaPlayer.Pages
                                        .Replace("itunes.apple.com/", $"itunes.apple.com/{targetRegion}/");
                         AntiGravityLogger.Log($"Apple TV: Inserted region '{targetRegion}'. Result: {webUrl}");
                     }
+                }
+
+                // If this is a series page, try to deep link directly to the first season's episodes
+                if (webUrl.Contains("/show/", StringComparison.OrdinalIgnoreCase) && !webUrl.Contains("/season/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sep = webUrl.EndsWith("/") ? "" : "/";
+                    webUrl = $"{webUrl}{sep}season/1";
+                }
+                // Append action=play to trigger direct playback for Apple TV content
+                if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) && !webUrl.Contains("?action=play"))
+                {
+                    webUrl = webUrl.Contains("?") ? $"{webUrl}&action=play" : $"{webUrl}?action=play";
                 }
             }
 

@@ -5,8 +5,8 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>LumiereMediaPlayer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Platforms>x86;x64;ARM64</Platforms>
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
@@ -76,7 +76,7 @@
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">True</WindowsAppSDKSelfContained>
     <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)' != 'Debug'">False</WindowsAppSdkDeploymentManagerInitialize>
-    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
+    <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
@@ -84,7 +84,7 @@
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
     <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
     <MsPdbCmfExeFullpath Condition="'$(MsPdbCmfExeFullpath)' == '' and '$(AppxSymbolPackageEnabled)' == 'False'">$(MSBuildProjectDirectory)\__symbols_disabled__.exe</MsPdbCmfExeFullpath>
-    <AppxBundle>Auto</AppxBundle>
+    <AppxBundle>Never</AppxBundle>
     <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>

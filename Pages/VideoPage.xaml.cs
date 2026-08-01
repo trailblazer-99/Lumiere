@@ -396,12 +396,12 @@ public sealed partial class VideoPage : Page
                                 case "apple tv plus":
                                 case "apple tv":
                                 case "apple tv store":
-                                    deepLinkUrl = $"appletv://search?term={q}";
+                                    deepLinkUrl = $"videos://tv.apple.com/search?term={q}";
                                     searchWebUrl = $"https://tv.apple.com/search?term={q}";
                                     break;
                                 case "itunes":
                                 case "apple itunes":
-                                    deepLinkUrl = $"itms://itunes.apple.com/search?term={q}";
+                                    deepLinkUrl = $"itunes://itunes.apple.com/search?term={q}";
                                     searchWebUrl = $"https://itunes.apple.com/WebObjects/MZStore.woa/wa/search?term={q}";
                                     break;
                                 case "hulu":

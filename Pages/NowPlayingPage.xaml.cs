@@ -290,7 +290,7 @@ public sealed partial class NowPlayingPage : Page
                     searchWebUrl = $"https://open.spotify.com/search/{q}";
                     break;
                 case "apple music":
-                    deepLinkUrl = $"applemusic://search?term={q}";
+                    deepLinkUrl = $"musics://music.apple.com/search?term={q}";
                     searchWebUrl = $"https://music.apple.com/search?term={q}";
                     break;
                 case "youtube music":

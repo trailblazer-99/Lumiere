@@ -79,14 +79,212 @@ public static class SampleMediaLibrary
 
     public static async Task ScanFolderAsync(Windows.Storage.StorageFolder folder)
     {
-        // Your logic here
-        await Task.CompletedTask;
+        try
+        {
+            if (folder == null) return;
+            if (await SynchronizeDirectoryAsync(folder.Path))
+            {
+                LibraryChanged?.Invoke(null, EventArgs.Empty);
+                _ = SaveLibraryAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ScanFolderAsync] Error scanning folder: {ex.Message}");
+        }
     }
 
     public static async Task ScanAllLibraryFoldersAsync()
     {
-        // Your logic here
-        await Task.CompletedTask;
+        await SynchronizeLibraryMediaAsync();
+    }
+
+    public static async Task SynchronizeLibraryMediaAsync()
+    {
+        try
+        {
+            bool wasModified = false;
+            List<MediaItem> snapshot;
+            lock (_lock)
+            {
+                snapshot = _allTracks.ToList();
+            }
+
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var toRemove = new List<MediaItem>();
+
+            // 1. Check existing tracks for DELETION and UPDATION/CHANGE
+            foreach (var track in snapshot)
+            {
+                if (track.IsFolder) continue;
+
+                if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath))
+                {
+                    if (!File.Exists(track.SourcePath))
+                    {
+                        // DELETION: File was removed from disk
+                        toRemove.Add(track);
+                        wasModified = true;
+                        continue;
+                    }
+
+                    seenPaths.Add(track.SourcePath);
+
+                    try
+                    {
+                        var fileInfo = new FileInfo(track.SourcePath);
+                        // Check if file was modified since LastModifiedUtc or size changed
+                        if (track.LastModifiedUtc == default)
+                        {
+                            track.LastModifiedUtc = fileInfo.LastWriteTimeUtc;
+                            wasModified = true;
+                        }
+                        else if (fileInfo.LastWriteTimeUtc > track.LastModifiedUtc || fileInfo.Length != track.FileSize)
+                        {
+                            track.FileSize = fileInfo.Length;
+                            track.LastModifiedUtc = fileInfo.LastWriteTimeUtc;
+                            _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(track);
+                            wasModified = true;
+                        }
+                    }
+                    catch { }
+                }
+                else if (!string.IsNullOrEmpty(track.SourcePath))
+                {
+                    seenPaths.Add(track.SourcePath);
+                }
+            }
+
+            if (toRemove.Count > 0)
+            {
+                lock (_lock)
+                {
+                    foreach (var item in toRemove)
+                    {
+                        _allTracks.Remove(item);
+                    }
+                }
+            }
+
+            // 2. Check monitored library folders & parent directories for ADDITION
+            var directoriesToScan = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var libraryFolders = AppServices.Settings.Current.LibraryFolders;
+                if (libraryFolders != null)
+                {
+                    foreach (var dir in libraryFolders)
+                    {
+                        if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+                        {
+                            directoriesToScan.Add(dir);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Include unique parent directories of existing tracks to detect newly added files
+            foreach (var track in snapshot)
+            {
+                if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath))
+                {
+                    var parentDir = Path.GetDirectoryName(track.SourcePath);
+                    if (!string.IsNullOrEmpty(parentDir) && Directory.Exists(parentDir))
+                    {
+                        directoriesToScan.Add(parentDir);
+                    }
+                }
+            }
+
+            foreach (var dirPath in directoriesToScan)
+            {
+                wasModified |= await SynchronizeDirectoryAsync(dirPath, seenPaths);
+            }
+
+            if (wasModified)
+            {
+                LibraryChanged?.Invoke(null, EventArgs.Empty);
+                _ = SaveLibraryAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynchronizeLibraryMediaAsync] Error: {ex.Message}");
+        }
+    }
+
+    private static async Task<bool> SynchronizeDirectoryAsync(string dirPath, HashSet<string>? seenPaths = null)
+    {
+        bool wasModified = false;
+        try
+        {
+            if (!Directory.Exists(dirPath)) return false;
+
+            if (seenPaths == null)
+            {
+                lock (_lock)
+                {
+                    seenPaths = new HashSet<string>(
+                        _allTracks.Where(t => !string.IsNullOrEmpty(t.SourcePath)).Select(t => t.SourcePath!),
+                        StringComparer.OrdinalIgnoreCase);
+                }
+            }
+
+            var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".mp4", ".mkv", ".avi", ".mov", ".wmv",
+                ".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".wma"
+            };
+
+            var files = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.TopDirectoryOnly);
+            foreach (var filePath in files)
+            {
+                var ext = Path.GetExtension(filePath);
+                if (string.IsNullOrEmpty(ext) || !extensions.Contains(ext)) continue;
+
+                if (seenPaths.Add(filePath))
+                {
+                    // ADDITION: New media file found in directory
+                    try
+                    {
+                        var fileInfo = new FileInfo(filePath);
+                        bool isVideo = string.Equals(ext, ".mp4", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(ext, ".mkv", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(ext, ".avi", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(ext, ".mov", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(ext, ".wmv", StringComparison.OrdinalIgnoreCase);
+
+                        var item = new MediaItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Title = Path.GetFileNameWithoutExtension(filePath),
+                            SourcePath = filePath,
+                            Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
+                            FileSize = fileInfo.Length,
+                            DateCreated = fileInfo.CreationTime,
+                            LastModifiedUtc = fileInfo.LastWriteTimeUtc,
+                            DateAdded = DateTime.Now,
+                            IsFolder = false,
+                            FileExtension = ext
+                        };
+
+                        lock (_lock)
+                        {
+                            _allTracks.Add(item);
+                        }
+                        _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
+                        wasModified = true;
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynchronizeDirectoryAsync] Error: {ex.Message}");
+        }
+        return await Task.FromResult(wasModified);
     }
 
     public static async Task SaveLibraryAsync()
@@ -168,6 +366,10 @@ public static class SampleMediaLibrary
                     if (wasModified)
                     {
                         _ = SaveLibraryAsync();
+                    }
+                    if (AppServices.Settings.Current.AutomaticLibraryScan)
+                    {
+                        _ = SynchronizeLibraryMediaAsync();
                     }
                 }
             }

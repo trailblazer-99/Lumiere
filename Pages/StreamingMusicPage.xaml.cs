@@ -450,14 +450,23 @@ namespace LumiereMediaPlayer.Pages
                     var linkUrl = link.Url;
                     btn.Click += async (s, args) => { 
                         try {
-                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(linkUrl);
+                            string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
+                            var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                             var launcherOptions = new Windows.System.LauncherOptions
                             {
-                                FallbackUri = new Uri(linkUrl)
+                                FallbackUri = new Uri(cleanUrl)
                             };
-                            await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
+                            if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
+                            }
+                            else
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
+                            }
                         } catch {
-                            await Windows.System.Launcher.LaunchUriAsync(new Uri(linkUrl));
+                            string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
+                            await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                         }
                     };
 
@@ -518,14 +527,23 @@ namespace LumiereMediaPlayer.Pages
                         if (!string.IsNullOrEmpty(searchUrl))
                         {
                             try {
-                                var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(searchUrl);
+                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
+                                var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                                 var launcherOptions = new Windows.System.LauncherOptions
                                 {
-                                    FallbackUri = new Uri(searchUrl)
+                                    FallbackUri = new Uri(cleanUrl)
                                 };
-                                await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
+                                if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
+                                }
+                                else
+                                {
+                                    await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
+                                }
                             } catch {
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(searchUrl));
+                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                             }
                         }
                     };

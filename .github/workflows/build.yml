@@ -15,6 +15,7 @@ jobs:
     name: Verify Build (x64 Release)
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master')
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
     - name: Checkout Source Code
@@ -26,7 +27,7 @@ jobs:
         dotnet-version: '10.0.x'
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v3
+      uses: microsoft/setup-msbuild@v2
 
     - name: Create Config File from Template
       run: copy appsettings.json.example appsettings.json
@@ -65,7 +66,7 @@ jobs:
         dotnet-version: '10.0.x'
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v3
+      uses: microsoft/setup-msbuild@v2
 
     - name: Create Release Config File
       shell: powershell
@@ -243,6 +244,65 @@ jobs:
         $makeappx = Join-Path $sdkBinPath "makeappx.exe"
         Write-Output "Found SDK Bin Folder: $sdkBinPath"
 
+        function Invoke-ProcessWithTimeout {
+          param(
+            [Parameter(Mandatory = $true)][string]$FilePath,
+            [Parameter(Mandatory = $true)][string[]]$ArgumentList,
+            [Parameter(Mandatory = $true)][int]$TimeoutSeconds
+          )
+
+          # Build argument string with proper Windows quoting: only wrap
+          # arguments that contain whitespace, and use the standard "" doubling
+          # convention for embedded quotes.
+          $quotedArguments = ($ArgumentList | ForEach-Object {
+            $arg = [string]$_
+            if ($arg -match '\s') {
+              '"' + $arg.Replace('"', '""') + '"'
+            } else {
+              $arg
+            }
+          }) -join ' '
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $FilePath
+          $startInfo.Arguments = $quotedArguments
+          $startInfo.WorkingDirectory = (Get-Location).Path
+          $startInfo.UseShellExecute = $false
+          $startInfo.CreateNoWindow = $true
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          try {
+            Write-Output "Starting $([System.IO.Path]::GetFileName($FilePath)) (timeout: ${TimeoutSeconds}s)."
+            if (-not $process.Start()) {
+              throw "Could not start '$FilePath'."
+            }
+            $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+            $stderrTask = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+              try { $process.Kill() } catch { }
+              $process.WaitForExit()
+              throw "$([System.IO.Path]::GetFileName($FilePath)) timed out after $TimeoutSeconds seconds."
+            }
+
+            $stdout = $stdoutTask.Result
+            $stderr = $stderrTask.Result
+            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+              Write-Output $stdout.TrimEnd()
+            }
+            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+              Write-Warning $stderr.TrimEnd()
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "$([System.IO.Path]::GetFileName($FilePath)) failed with exit code $($process.ExitCode)."
+            }
+            Write-Output "$([System.IO.Path]::GetFileName($FilePath)) completed successfully."
+          } finally {
+            $process.Dispose()
+          }
+        }
+
         # 2. Stage packages for bundling
         New-Item -ItemType Directory -Force -Path AppPackages\BundleSources
         
@@ -293,15 +353,15 @@ jobs:
         # 3. Create MSIXBundle
         New-Item -ItemType Directory -Force -Path deploy
         $bundleFilename = "LumiereMediaPlayer_1.0.1.$($env:GITHUB_RUN_NUMBER)_x64_arm64.msixbundle"
-        Write-Output "Bundling packages to: deploy\$bundleFilename"
-        & $makeappx bundle /d "AppPackages\BundleSources" /p "deploy\$bundleFilename" /bv $packageVersion /o
-        if ($LASTEXITCODE -ne 0) {
-          throw "makeappx failed to create the MSIX bundle (exit code $LASTEXITCODE)."
-        }
+        $bundleInputPath = [System.IO.Path]::GetFullPath("AppPackages\BundleSources")
+        $bundlePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path "deploy\$bundleFilename"))
+        Write-Output "Bundling packages to: $bundlePath"
+        Invoke-ProcessWithTimeout -FilePath $makeappx -ArgumentList @(
+          "bundle", "/d", $bundleInputPath, "/p", $bundlePath, "/bv", $packageVersion, "/o"
+        ) -TimeoutSeconds 300
 
         # Use an absolute path for every operation after bundling so SignTool
         # and verification always address the file that was just created.
-        $bundlePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path "deploy\$bundleFilename"))
         if (-not (Test-Path -LiteralPath $bundlePath -PathType Leaf)) {
           throw "MSIX bundle was not created at '$bundlePath'."
         }
@@ -361,10 +421,9 @@ jobs:
           # optional. Sign locally without /tr to keep the build independent of
           # external timestamp services and their network timeouts.
           Write-Output "Signing bundle without an RFC 3161 timestamp: $bundlePath"
-          & $signtool sign /fd SHA256 /f $pfxPath /p $env:LUMIERE_SIGNING_PFX_PASSWORD $bundlePath
-          if ($LASTEXITCODE -ne 0) {
-            throw "signtool failed to sign the MSIX bundle (exit code $LASTEXITCODE)."
-          }
+          Invoke-ProcessWithTimeout -FilePath $signtool -ArgumentList @(
+            "sign", "/fd", "SHA256", "/f", $pfxPath, "/p", $env:LUMIERE_SIGNING_PFX_PASSWORD, $bundlePath
+          ) -TimeoutSeconds 120
           Write-Output "Bundle signed successfully (no timestamp)."
 
           # GitHub-hosted runners do not trust the self-signed release
@@ -385,10 +444,9 @@ jobs:
               $verificationRootStore.Add($publishedCertificate)
             }
 
-            & $signtool verify /pa /all /v $bundlePath
-            if ($LASTEXITCODE -ne 0) {
-              throw "signtool could not verify the signed MSIX bundle (exit code $LASTEXITCODE)."
-            }
+            Invoke-ProcessWithTimeout -FilePath $signtool -ArgumentList @(
+              "verify", "/pa", "/all", "/v", $bundlePath
+            ) -TimeoutSeconds 120
           } finally {
             if (-not $certificateAlreadyTrusted) {
               $verificationRootStore.Remove($publishedCertificate)
@@ -401,7 +459,7 @@ jobs:
 
     # Create a GitHub Release and upload the msixbundle (GitHub Releases allows files > 100MB)
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v3
+      uses: softprops/action-gh-release@v2
       with:
         files: deploy/*.msixbundle
         tag_name: v1.0.1.${{ github.run_number }}

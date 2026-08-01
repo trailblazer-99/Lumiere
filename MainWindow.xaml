@@ -295,6 +295,52 @@
                     </StackPanel>
                 </StackPanel>
             </Border>
+
+            <!-- Fullscreen Edge Seek Overlays (10s & Exponential Skip) -->
+            <Grid x:Name="FullscreenSeekOverlayHost" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" IsHitTestVisible="False">
+                <!-- Seek Backward Overlay (Left) -->
+                <Border
+                    x:Name="FullscreenSeekBackOverlay"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="64,0,0,0"
+                    Padding="28,20"
+                    CornerRadius="32"
+                    Background="#B31A1A1A"
+                    BorderBrush="#33FFFFFF"
+                    BorderThickness="1"
+                    Visibility="Collapsed"
+                    Opacity="0">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                            <FontIcon Glyph="&#xED3C;" FontSize="28" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock x:Name="FullscreenSeekBackText" Text="-10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock x:Name="FullscreenSeekBackSubtext" Text="Seek Backward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <!-- Seek Forward Overlay (Right) -->
+                <Border
+                    x:Name="FullscreenSeekForwardOverlay"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Margin="0,0,64,0"
+                    Padding="28,20"
+                    CornerRadius="32"
+                    Background="#B31A1A1A"
+                    BorderBrush="#33FFFFFF"
+                    BorderThickness="1"
+                    Visibility="Collapsed"
+                    Opacity="0">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                            <TextBlock x:Name="FullscreenSeekForwardText" Text="+10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                            <FontIcon Glyph="&#xED3D;" FontSize="28" Foreground="White" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock x:Name="FullscreenSeekForwardSubtext" Text="Seek Forward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Grid>
 
         <controls:TransportBar

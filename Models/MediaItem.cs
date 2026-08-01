@@ -46,6 +46,7 @@ public sealed class MediaItem : INotifyPropertyChanged
     }
     public DateTime DateAdded { get; init; }
     public DateTime DateCreated { get; init; }
+    public DateTime LastModifiedUtc { get; set; }
     public bool IsFolder { get; init; }
     public string? FileExtension { get; init; }
 

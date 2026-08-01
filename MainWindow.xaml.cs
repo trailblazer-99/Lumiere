@@ -41,6 +41,10 @@ public sealed partial class MainWindow : Window
     private bool _isCleanedUp;
     private int _videoTapClickCount = 0;
     private System.Threading.CancellationTokenSource? _videoTapCts;
+    private int _edgeSeekStreak = 0;
+    private bool? _lastEdgeSeekForward = null;
+    private DateTime _lastEdgeSeekTime = DateTime.MinValue;
+    private DispatcherTimer? _edgeSeekFeedbackTimer;
     private bool _isCursorHidden = false;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -1669,6 +1673,8 @@ public sealed partial class MainWindow : Window
             if (FullscreenVideoContainer != null)
             {
                 FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                _edgeSeekFeedbackTimer?.Stop();
+                _edgeSeekStreak = 0;
                 if (GlobalVideoPlayer.MediaPlayer != null)
                     GlobalVideoPlayer.MediaPlayer.MediaOpened -= OnFullscreenMediaOpened;
                 GlobalVideoPlayer.SetMediaPlayer(null);
@@ -2847,19 +2853,47 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Left:
-                SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
+                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                {
+                    TriggerIncrementalSeek(false);
+                }
+                else
+                {
+                    SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
+                }
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Right:
-                SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                {
+                    TriggerIncrementalSeek(true);
+                }
+                else
+                {
+                    SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                }
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.J:
-                SeekRelative(-10);
+                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                {
+                    TriggerIncrementalSeek(false);
+                }
+                else
+                {
+                    SeekRelative(-10);
+                }
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.L:
-                SeekRelative(10);
+                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                {
+                    TriggerIncrementalSeek(true);
+                }
+                else
+                {
+                    SeekRelative(10);
+                }
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Up:
@@ -2949,9 +2983,181 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    // ── Fullscreen Edge Seek & Arrow Key Seek (10s Incremental Skip) ─────────────────
+    private void TriggerIncrementalSeek(bool isForward)
+    {
+        try
+        {
+            NotifyActivityInFullscreen();
+
+            var now = DateTime.UtcNow;
+            if (_lastEdgeSeekForward == isForward && (now - _lastEdgeSeekTime).TotalMilliseconds < 1500)
+            {
+                _edgeSeekStreak++;
+            }
+            else
+            {
+                _edgeSeekStreak = 1;
+            }
+            _lastEdgeSeekForward = isForward;
+            _lastEdgeSeekTime = now;
+
+            double stepSeconds = 10.0;
+            double accumulatedSeconds = 10.0 * _edgeSeekStreak;
+            double seekSeconds = isForward ? stepSeconds : -stepSeconds;
+
+            SeekRelative(seekSeconds);
+            ShowFullscreenEdgeSeekFeedback(isForward, accumulatedSeconds, _edgeSeekStreak);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TriggerIncrementalSeek] Error: {ex.Message}");
+        }
+    }
+
+    private bool TryHandleFullscreenEdgeTap(Windows.Foundation.Point position)
+    {
+        try
+        {
+            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+            if (!isFullScreen || FullscreenVideoContainer == null || FullscreenVideoContainer.Visibility != Visibility.Visible)
+            {
+                return false;
+            }
+
+            double width = FullscreenVideoContainer.ActualWidth;
+            if (width <= 0)
+            {
+                width = AppWindow?.Size.Width ?? 0;
+            }
+            if (width <= 0) return false;
+
+            double edgeRatio = 0.22; // left 22% and right 22%
+            bool isLeftEdge = position.X < (width * edgeRatio);
+            bool isRightEdge = position.X > (width * (1.0 - edgeRatio));
+
+            if (!isLeftEdge && !isRightEdge)
+            {
+                return false;
+            }
+
+            // Cancel any pending play/pause single-tap timer
+            _videoTapClickCount = 0;
+            _videoTapCts?.Cancel();
+
+            TriggerIncrementalSeek(isRightEdge);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TryHandleFullscreenEdgeTap] Error: {ex.Message}");
+            return false;
+        }
+    }
+
+    private void ShowFullscreenEdgeSeekFeedback(bool isForward, double seconds, int streak)
+    {
+        try
+        {
+            if (FullscreenSeekBackOverlay == null || FullscreenSeekForwardOverlay == null ||
+                FullscreenSeekBackText == null || FullscreenSeekForwardText == null ||
+                FullscreenSeekBackSubtext == null || FullscreenSeekForwardSubtext == null)
+            {
+                return;
+            }
+
+            int displaySeconds = (int)Math.Round(seconds);
+
+            if (isForward)
+            {
+                FullscreenSeekForwardText.Text = $"+{displaySeconds}s";
+                FullscreenSeekForwardSubtext.Text = "Seek Forward";
+                FadeSeekOverlay(FullscreenSeekForwardOverlay, 1.0, 150);
+                FadeSeekOverlay(FullscreenSeekBackOverlay, 0.0, 100);
+            }
+            else
+            {
+                FullscreenSeekBackText.Text = $"-{displaySeconds}s";
+                FullscreenSeekBackSubtext.Text = "Seek Backward";
+                FadeSeekOverlay(FullscreenSeekBackOverlay, 1.0, 150);
+                FadeSeekOverlay(FullscreenSeekForwardOverlay, 0.0, 100);
+            }
+
+            if (_edgeSeekFeedbackTimer == null)
+            {
+                _edgeSeekFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+                _edgeSeekFeedbackTimer.Tick += (s, e) =>
+                {
+                    _edgeSeekFeedbackTimer.Stop();
+                    FadeSeekOverlay(FullscreenSeekBackOverlay, 0.0, 300);
+                    FadeSeekOverlay(FullscreenSeekForwardOverlay, 0.0, 300);
+                };
+            }
+
+            _edgeSeekFeedbackTimer.Stop();
+            _edgeSeekFeedbackTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ShowFullscreenEdgeSeekFeedback] Error: {ex.Message}");
+        }
+    }
+
+    private void FadeSeekOverlay(Microsoft.UI.Xaml.UIElement? element, double targetOpacity, double durationMs = 200)
+    {
+        try
+        {
+            if (element == null) return;
+
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(element);
+            var compositor = visual.Compositor;
+
+            if (targetOpacity > 0)
+            {
+                element.Visibility = Visibility.Visible;
+            }
+            element.IsHitTestVisible = false;
+
+            var animation = compositor.CreateScalarKeyFrameAnimation();
+            animation.Duration = TimeSpan.FromMilliseconds(durationMs);
+            var easing = compositor.CreateCubicBezierEasingFunction(
+                new System.Numerics.Vector2(0.25f, 0.1f), 
+                new System.Numerics.Vector2(0.25f, 1.0f)
+            );
+            animation.InsertKeyFrame(1f, (float)targetOpacity, easing);
+            visual.StartAnimation("Opacity", animation);
+
+            if (targetOpacity > 0)
+            {
+                var size = element.RenderSize;
+                if (size.Width > 0 && size.Height > 0)
+                {
+                    visual.CenterPoint = new System.Numerics.Vector3((float)(size.Width / 2), (float)(size.Height / 2), 0f);
+                }
+                visual.Scale = new System.Numerics.Vector3(0.92f, 0.92f, 1.0f);
+                var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
+                scaleAnimation.Duration = TimeSpan.FromMilliseconds(durationMs);
+                var scaleEasing = compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), 
+                    new System.Numerics.Vector2(0.2f, 1.0f)
+                );
+                scaleAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f), scaleEasing);
+                visual.StartAnimation("Scale", scaleAnimation);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FadeSeekOverlay] Error: {ex.Message}");
+        }
+    }
+
     private void OnVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         e.Handled = true;
+        if (FullscreenVideoContainer != null && TryHandleFullscreenEdgeTap(e.GetPosition(FullscreenVideoContainer)))
+        {
+            return;
+        }
         _videoTapClickCount = 0;
         _videoTapCts?.Cancel();
         ToggleFullscreen();
@@ -3116,6 +3322,10 @@ public sealed partial class MainWindow : Window
     private void OnGlobalVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         e.Handled = true;
+        if (FullscreenVideoContainer != null && TryHandleFullscreenEdgeTap(e.GetPosition(FullscreenVideoContainer)))
+        {
+            return;
+        }
         _videoTapClickCount = 0;
         _videoTapCts?.Cancel();
         ToggleFullscreen();
