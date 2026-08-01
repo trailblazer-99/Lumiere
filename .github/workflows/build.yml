@@ -214,7 +214,7 @@ jobs:
     # Bundle the individual architecture packages into an MSIXBundle and sign them
     - name: Bundle and Sign Packages
       shell: powershell
-      timeout-minutes: 10
+      timeout-minutes: 20
       env:
         LUMIERE_SIGNING_PFX_BASE64: ${{ secrets.LUMIERE_SIGNING_PFX_BASE64 }}
         LUMIERE_SIGNING_PFX_PASSWORD: ${{ secrets.LUMIERE_SIGNING_PFX_PASSWORD }}
