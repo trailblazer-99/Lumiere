@@ -419,10 +419,13 @@ jobs:
           # GitHub-hosted runners do not trust the self-signed release
           # certificate. Authenticode policy verification requires a trusted
           # root, so add the already-validated public certificate to the
-          # disposable runner's current-user Root store only for this check.
+          # disposable runner's LocalMachine Root store only for this check
+          # (CurrentUser Root triggers a modal Windows Security warning dialog
+          # that hangs automated CI runners).
           # It is removed before the job exits; end-user instructions continue
           # to use the narrower Trusted People store.
-          $verificationRootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("Root", "CurrentUser")
+          Write-Output "Adding certificate to LocalMachine Root store for automated verification..."
+          $verificationRootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("Root", "LocalMachine")
           $certificateAlreadyTrusted = $false
           $verificationRootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
           try {
@@ -434,6 +437,7 @@ jobs:
               $verificationRootStore.Add($publishedCertificate)
             }
 
+            Write-Output "Verifying signed bundle..."
             Invoke-ProcessWithTimeout -FilePath $signtool -ArgumentList @(
               "verify", "/pa", "/all", "/v", $bundlePath
             ) -TimeoutSeconds 120
