@@ -88,6 +88,25 @@ If your download includes `Add-AppDevPackage.ps1`:
 
 ---
 
+## Method 3: Downloading & Tracking CI/CD Build Packages (For QA & Developers)
+
+Every automated GitHub Actions build tracks its generated MSIX/MSIXBundle packages with integrity checksums and downloadable artifacts:
+
+1. Open the **Actions** tab in the GitHub repository and click on any workflow run.
+2. In the **Summary** tab, review the **📦 Build Package Tracking Summary** table to inspect:
+   - Package filenames and target architecture (`x64` / `ARM64`)
+   - Package sizes (MB)
+   - SHA256 integrity checksums
+3. Scroll to the bottom of the run page to the **Artifacts** section and download:
+   - `LumiereMediaPlayer-PR-Packages-<run_number>` — Sideload packages for PR/dev branch verification.
+   - `LumiereMediaPlayer-Release-Bundle-<run_number>` — The signed `.msixbundle` and `LumiereMediaPlayer.cer` certificate for release builds.
+4. To verify integrity locally in PowerShell:
+   ```powershell
+   Get-FileHash -Path "LumiereMediaPlayer_*.msixbundle" -Algorithm SHA256
+   ```
+
+---
+
 ## Launching the App
 
 Once installed, **Lumière Media Player** will appear in your **Start Menu** and **Search**. You can pin it to your Taskbar for quick access!
