@@ -57,10 +57,20 @@ public sealed partial class VideoPage : Page
         AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
         AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged;
         
-        if (LocalVideoPlayer.MediaPlayer != null)
+        try
         {
-            LocalVideoPlayer.SetMediaPlayer(null);
+            (this.Resources["AmbientAnimation"] as Microsoft.UI.Xaml.Media.Animation.Storyboard)?.Stop();
         }
+        catch { }
+
+        try
+        {
+            if (LocalVideoPlayer.MediaPlayer != null)
+            {
+                LocalVideoPlayer.SetMediaPlayer(null);
+            }
+        }
+        catch { }
 
         // Event handlers and references detached; allow normal GC reclamation without UI thread stutter.
     }
@@ -310,11 +320,11 @@ public sealed partial class VideoPage : Page
                 if (!string.IsNullOrEmpty(bestMatch.PosterPath))
                 {
                     var posterUri = new Uri($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}");
-                    InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri);
+                    InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
                     InternetMetadataPoster.Visibility = Visibility.Visible;
                     if (mainWin != null)
                     {
-                        mainWin.FullscreenInternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri);
+                        mainWin.FullscreenInternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
                         mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Visible;
                     }
                 }
@@ -435,27 +445,8 @@ public sealed partial class VideoPage : Page
 
                             btn.Click += async (s, args) =>
                             {
-                                bool launched = false;
-                                if (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri))
-                                {
-                                    try
-                                     {
-                                         var support = await Windows.System.Launcher.QueryUriSupportAsync(uri, Windows.System.LaunchQuerySupportType.Uri);
-                                         if (support == Windows.System.LaunchQuerySupportStatus.Available)
-                                         {
-                                             launched = await Windows.System.Launcher.LaunchUriAsync(uri);
-                                         }
-                                     }
-                                     catch { }
-                                }
-                                if (!launched && !string.IsNullOrEmpty(searchWebUrl) && Uri.TryCreate(searchWebUrl, UriKind.Absolute, out var webUri))
-                                {
-                                    try
-                                    {
-                                        await Windows.System.Launcher.LaunchUriAsync(webUri);
-                                    }
-                                    catch { }
-                                }
+                                Uri? nativeUri = (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri)) ? uri : null;
+                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
                             };
 
                             Grid.SetColumn(btn, col);
@@ -473,27 +464,8 @@ public sealed partial class VideoPage : Page
                                 };
                                 fsBtn.Click += async (s, args) =>
                                 {
-                                    bool launched = false;
-                                    if (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri))
-                                    {
-                                        try
-                                         {
-                                             var support = await Windows.System.Launcher.QueryUriSupportAsync(uri, Windows.System.LaunchQuerySupportType.Uri);
-                                             if (support == Windows.System.LaunchQuerySupportStatus.Available)
-                                             {
-                                                 launched = await Windows.System.Launcher.LaunchUriAsync(uri);
-                                             }
-                                         }
-                                         catch { }
-                                    }
-                                    if (!launched && !string.IsNullOrEmpty(searchWebUrl) && Uri.TryCreate(searchWebUrl, UriKind.Absolute, out var webUri))
-                                    {
-                                        try
-                                        {
-                                            await Windows.System.Launcher.LaunchUriAsync(webUri);
-                                        }
-                                        catch { }
-                                    }
+                                    Uri? nativeUri = (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri)) ? uri : null;
+                                    await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
                                 };
                                 Grid.SetColumn(fsBtn, col);
                                 Grid.SetRow(fsBtn, row);

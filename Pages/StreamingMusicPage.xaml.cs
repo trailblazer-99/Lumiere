@@ -330,6 +330,9 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task ShowTrackDetailsDialogAsync(MusicApiTrack track, bool isFromLibrary = false)
         {
+            // Guard against double-open: WinUI only allows one ContentDialog at a time
+            if (_currentDialog != null) return;
+
             bool isLight = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light || 
                            (AppServices.Settings.Current.Theme == Models.AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
             var dialog = new ContentDialog
@@ -438,7 +441,7 @@ namespace LumiereMediaPlayer.Pages
 
                     var img = new Image 
                     { 
-                        Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(link.IconUrl)),
+                        Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(link.IconUrl)) { DecodePixelWidth = 48 },
                         Width = 48, Height = 48, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                     };
                     
@@ -452,18 +455,7 @@ namespace LumiereMediaPlayer.Pages
                         try {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
-                            var launcherOptions = new Windows.System.LauncherOptions
-                            {
-                                FallbackUri = new Uri(cleanUrl)
-                            };
-                            if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
-                            {
-                                await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
-                            }
-                            else
-                            {
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
-                            }
+                            await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
                         } catch {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
                             await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
@@ -505,7 +497,7 @@ namespace LumiereMediaPlayer.Pages
 
                     var img = new Image 
                     { 
-                        Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)),
+                        Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)) { DecodePixelWidth = 48 },
                         Width = 48, Height = 48, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                     };
                     
@@ -529,18 +521,7 @@ namespace LumiereMediaPlayer.Pages
                             try {
                                 string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
                                 var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
-                                var launcherOptions = new Windows.System.LauncherOptions
-                                {
-                                    FallbackUri = new Uri(cleanUrl)
-                                };
-                                if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
-                                }
-                                else
-                                {
-                                    await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
-                                }
+                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
                             } catch {
                                 string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
                                 await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
@@ -559,6 +540,15 @@ namespace LumiereMediaPlayer.Pages
 
             mainPanel.Children.Add(grid);
             dialog.Content = mainPanel;
+
+            try
+            {
+                await dialogTask;
+            }
+            finally
+            {
+                _currentDialog = null;
+            }
         }
 
         private void OnSaveMusicClicked(object sender, RoutedEventArgs e)

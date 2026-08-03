@@ -13,7 +13,7 @@ namespace LumiereMediaPlayer.Services;
 
 public static class AiAssistantService
 {
-    private static readonly HttpClient _httpClient = new();
+    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
     private static readonly Dictionary<string, List<string>> _translationCache = new();
     private static readonly object _cacheLock = new();
 

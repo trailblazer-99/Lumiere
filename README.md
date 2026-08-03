@@ -37,9 +37,9 @@ Lumière operates on a **Zero-Trust Cloud Architecture**: all local playback and
 - **Aspect Ratio Selector**: Auto, 16:9, 4:3, 21:9, and Stretch/Fill modes.
 
 ### 🌐 3. Streaming & Provider Discovery Engine
-- **Native Deep-Link Router**: Seamlessly launches native Windows storefront apps for major streaming providers including **Netflix**, **Spotify**, **Disney+**, **Prime Video**, **Hulu**, **Max (HBO)**, **Paramount+**, **Peacock**, **Tubi**, **Pluto TV**, and **Apple TV**. Rent & Buy links and channel add-ons preserve clean HTTPS URLs with automatic browser fallbacks.
+- **Native Deep-Link Router**: Seamlessly launches native Windows storefront apps for major streaming providers including **Netflix**, **Spotify**, **Disney+**, **Prime Video**, **Hulu**, **Max (HBO)**, **Paramount+**, **Peacock**, **Tubi**, **Pluto TV**, **Apple TV**, **Crunchyroll**, **Vudu (Fandango)**, **Discovery+**, **BBC iPlayer**, **JioCinema**, **Hotstar**, **YouTube TV**, **Tidal**, **Amazon Music**, **Deezer**, and **Plex**. Rent & Buy links and channel add-ons preserve clean HTTPS URLs with automatic browser fallbacks.
 - **Movie & TV Discovery**: Explore trending, top-rated, and upcoming titles powered by Watchmode, TMDB, and Movie of the Night metadata.
-- **Region-Aware Provider Catalog**: Displays subscription, rent, buy, and free streaming availability tailored by region (US, GB, CA, AU, etc.).
+- **Region-Aware Provider Catalog**: Displays subscription, rent, buy, and free streaming availability tailored by region (US, GB, CA, AU, IN, etc.).
 - **WebView2 Integration**: Embedded YouTube and Twitch browsing portals powered by Microsoft Edge WebView2 Runtime.
 - **Persistent Local Watchlists**: Categorize titles into **Watchlist**, **Plan to Watch**, **Watching**, **Completed**, and **Favorites**, backed by local JSON persistence.
 - **Music Search**: Integrated song search powered by the optional `LumiereProxy` API with iTunes fallback.

@@ -260,7 +260,7 @@ public sealed partial class NowPlayingPage : Page
             
             var img = new Image 
             { 
-                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)),
+                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)) { DecodePixelWidth = 48 },
                 Width = 48,
                 Height = 48,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
@@ -322,23 +322,8 @@ public sealed partial class NowPlayingPage : Page
             
             btn.Click += async (s, args) => 
             { 
-                bool launched = false;
-                if (!string.IsNullOrEmpty(deepLinkUrl))
-                {
-                    try
-                    {
-                        launched = await Windows.System.Launcher.LaunchUriAsync(new Uri(deepLinkUrl));
-                    }
-                    catch { }
-                }
-                if (!launched && !string.IsNullOrEmpty(searchWebUrl))
-                {
-                    try
-                    {
-                        await Windows.System.Launcher.LaunchUriAsync(new Uri(searchWebUrl));
-                    }
-                    catch { }
-                }
+                Uri? nativeUri = !string.IsNullOrEmpty(deepLinkUrl) ? new Uri(deepLinkUrl) : null;
+                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
             };
 
             Grid.SetColumn(btn, col);
@@ -362,7 +347,7 @@ public sealed partial class NowPlayingPage : Page
     {
         _visualizerTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(20)
+            Interval = TimeSpan.FromMilliseconds(33)
         };
         _visualizerTimer.Tick += OnVisualizerTimerTick;
         _visualizerTimer.Start();
@@ -379,13 +364,6 @@ public sealed partial class NowPlayingPage : Page
 
     private void OnVisualizerTimerTick(object? sender, object e)
     {
-        try
-        {
-            var position = AppServices.PlaybackViewModel.Session.MediaPlayer.Position;
-            UpdateLyricsHighlight(position);
-        }
-        catch { }
-
         var isPlaying = AppServices.PlaybackViewModel.IsPlaying;
         if (!isPlaying)
         {
@@ -404,6 +382,13 @@ public sealed partial class NowPlayingPage : Page
             }
             return;
         }
+
+        try
+        {
+            var position = AppServices.PlaybackViewModel.Session.MediaPlayer.Position;
+            UpdateLyricsHighlight(position);
+        }
+        catch { }
 
         var volume = AppServices.PlaybackViewModel.Volume / 100.0;
         if (volume < 0.1) volume = 0.1;
@@ -435,7 +420,7 @@ public sealed partial class NowPlayingPage : Page
             _currentHeights[i] += (_targetHeights[i] - _currentHeights[i]) * 0.22;
 
             var rect = FindBarControl(i);
-            if (rect != null)
+            if (rect != null && Math.Abs(rect.Height - _currentHeights[i]) > 0.5)
             {
                 rect.Height = _currentHeights[i];
             }

@@ -233,24 +233,6 @@ public sealed class PlaybackSession
             source = _preloadedNextSource;
             _preloadedNextSource = null;
             _preloadedTrackId = null;
-
-        if (_crossfadeCheckTimer != null)
-        {
-            _crossfadeCheckTimer.Stop();
-            _crossfadeCheckTimer = null;
-        }
-
-        if (_sleepCheckTimer != null)
-        {
-            _sleepCheckTimer.Stop();
-            _sleepCheckTimer = null;
-        }
-
-        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
-        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
-        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
-        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
-        _mediaPlayer.Dispose();
             Log("LoadCurrentTrackSourceAsync: Using preloaded source (Gapless playback achieved).");
         }
         else
@@ -737,7 +719,13 @@ public sealed class PlaybackSession
     public void Stop()
     {
         BeginPlaybackRequest();
-        _mediaPlayer.Source = null;
+        try
+        {
+            _mediaPlayer.Pause();
+            _mediaPlayer.Source = null;
+        }
+        catch { }
+
         CurrentTrack = null;
         _currentIndex = -1;
 
@@ -752,6 +740,7 @@ public sealed class PlaybackSession
             CleanupPlaybackSource(_preloadedNextSource);
             _preloadedNextSource = null;
             _preloadedTrackId = null;
+        }
 
         if (_crossfadeCheckTimer != null)
         {
@@ -763,13 +752,6 @@ public sealed class PlaybackSession
         {
             _sleepCheckTimer.Stop();
             _sleepCheckTimer = null;
-        }
-
-        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
-        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
-        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
-        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
-        _mediaPlayer.Dispose();
         }
 
         try
@@ -793,9 +775,8 @@ public sealed class PlaybackSession
         StateChanged?.Invoke(this, EventArgs.Empty);
 
         // Force GC collection immediately to free up decoders and video buffers from RAM
-        System.GC.Collect();
-        System.GC.WaitForPendingFinalizers();
-        System.GC.Collect();
+        // Allow .NET generational GC to reclaim memory asynchronously (Rule 4)
+        // Do not call GC.Collect() synchronously on the UI thread
     }
 
     private async void RestoreLastPlayedTrack()
@@ -855,6 +836,7 @@ public sealed class PlaybackSession
             CleanupPlaybackSource(_preloadedNextSource);
             _preloadedNextSource = null;
             _preloadedTrackId = null;
+        }
 
         if (_crossfadeCheckTimer != null)
         {
@@ -866,13 +848,6 @@ public sealed class PlaybackSession
         {
             _sleepCheckTimer.Stop();
             _sleepCheckTimer = null;
-        }
-
-        _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
-        _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
-        _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
-        _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
-        _mediaPlayer.Dispose();
         }
 
         try
@@ -902,7 +877,11 @@ public sealed class PlaybackSession
         }
         catch { }
 
-        _mediaPlayer.Dispose();
+        try
+        {
+            _mediaPlayer.Dispose();
+        }
+        catch { }
     }
 
     public void ApplyAudioEffects()
@@ -1141,6 +1120,7 @@ public sealed class PlaybackSession
 
     private void OnCrossfadeCheckTimerTick(object sender, object e)
     {
+        if (!IsPlaying) return; // Rule 5: conserve CPU/battery when paused
         var settings = AppServices.Settings.Current;
         var track = CurrentTrack;
         if (track == null || _isChangingSource || _isCrossfading) return;
@@ -1279,6 +1259,10 @@ public sealed class PlaybackSession
         {
             _videoThumbnailCache.RemoveAll(x => Math.Abs((x.Time - time).TotalSeconds) < 0.2);
             _videoThumbnailCache.Add((time, image));
+            while (_videoThumbnailCache.Count > 50)
+            {
+                _videoThumbnailCache.RemoveAt(0);
+            }
         }
     }
 

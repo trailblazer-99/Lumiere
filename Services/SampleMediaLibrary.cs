@@ -14,6 +14,10 @@ public static class SampleMediaLibrary
     private static List<Playlist> _playlists = new();
     private static readonly object _lock = new();
     private static readonly System.Threading.SemaphoreSlim _saveSemaphore = new(1, 1);
+    // O(1) deduplication sets (Rule 5)
+    private static readonly HashSet<string> _seenPaths = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> _seenIds = new(StringComparer.OrdinalIgnoreCase);
+    private static System.Threading.CancellationTokenSource? _saveDebounceCts;
 
     public static event EventHandler? LibraryChanged;
 
@@ -36,6 +40,8 @@ public static class SampleMediaLibrary
         {
             _allTracks.Clear();
             _playlists.Clear();
+            _seenPaths.Clear();
+            _seenIds.Clear();
         }
         LibraryChanged?.Invoke(null, EventArgs.Empty);
     }
@@ -44,12 +50,14 @@ public static class SampleMediaLibrary
     {
         lock (_lock)
         {
-            if (!string.IsNullOrEmpty(item.SourcePath) && _allTracks.Any(t => t.SourcePath == item.SourcePath))
+            if (!string.IsNullOrEmpty(item.SourcePath) && !_seenPaths.Add(item.SourcePath))
             {
                 return null;
             }
-            if (!string.IsNullOrEmpty(item.Id) && _allTracks.Any(t => t.Id == item.Id))
+            if (!string.IsNullOrEmpty(item.Id) && !_seenIds.Add(item.Id))
             {
+                // Roll back path add if ID is duplicate
+                if (!string.IsNullOrEmpty(item.SourcePath)) _seenPaths.Remove(item.SourcePath);
                 return null;
             }
             _allTracks.Add(item);
@@ -287,6 +295,26 @@ public static class SampleMediaLibrary
         return await Task.FromResult(wasModified);
     }
 
+    public static void RequestDebouncedSave()
+    {
+        System.Threading.CancellationTokenSource? cts;
+        lock (_lock)
+        {
+            _saveDebounceCts?.Cancel();
+            _saveDebounceCts = new System.Threading.CancellationTokenSource();
+            cts = _saveDebounceCts;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(1000, cts.Token);
+                await SaveLibraryAsync();
+            }
+            catch (OperationCanceledException) { }
+        });
+    }
+
     public static async Task SaveLibraryAsync()
     {
         await _saveSemaphore.WaitAsync();
@@ -360,6 +388,11 @@ public static class SampleMediaLibrary
 
                         _allTracks.Clear();
                         _allTracks.AddRange(uniqueTracks);
+                        // Sync class-level dedup sets with loaded data
+                        _seenPaths.Clear();
+                        _seenIds.Clear();
+                        foreach (var p in seenPaths) _seenPaths.Add(p);
+                        foreach (var id in seenIds) _seenIds.Add(id);
                     }
                     try { LibraryChanged?.Invoke(null, EventArgs.Empty); } catch { }
 

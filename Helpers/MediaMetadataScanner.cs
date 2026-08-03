@@ -168,31 +168,38 @@ public static class MediaMetadataScanner
             }
 
             // Apply results on main dispatcher to update UI cleanly
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
             {
-                if (string.IsNullOrEmpty(item.Resolution) || item.Resolution == "Unknown")
+                try
                 {
-                    item.Resolution = resolution;
-                }
-                if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown")
-                {
-                    item.Codec = codec;
-                }
-                if (item.Bitrate == 0)
-                {
-                    item.Bitrate = bitrate;
-                }
-                if (item.FrameRate == 0)
-                {
-                    item.FrameRate = frameRate;
-                }
-                if (item.FileSize == 0)
-                {
-                    item.FileSize = fileSize;
-                }
+                    if (string.IsNullOrEmpty(item.Resolution) || item.Resolution == "Unknown")
+                    {
+                        item.Resolution = resolution;
+                    }
+                    if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown")
+                    {
+                        item.Codec = codec;
+                    }
+                    if (item.Bitrate == 0)
+                    {
+                        item.Bitrate = bitrate;
+                    }
+                    if (item.FrameRate == 0)
+                    {
+                        item.FrameRate = frameRate;
+                    }
+                    if (item.FileSize == 0)
+                    {
+                        item.FileSize = fileSize;
+                    }
 
-                // Auto save changes back to cache json
-                await Services.SampleMediaLibrary.SaveLibraryAsync();
+                    // Auto save changes back to cache json debounced
+                    Services.SampleMediaLibrary.RequestDebouncedSave();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] UI update error: {ex.Message}");
+                }
             });
         }
         catch (Exception ex)

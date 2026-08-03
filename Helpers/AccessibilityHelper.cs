@@ -104,7 +104,7 @@ public static class AccessibilityHelper
                 From = 0.82,
                 To = 1.0,
                 Duration = TimeSpan.FromMilliseconds(180),
-                EnableDependentAnimation = true
+                EnableDependentAnimation = false
             };
 
             var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();

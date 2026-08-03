@@ -158,6 +158,90 @@ namespace LumiereMediaPlayer.Helpers
                                                .Replace("http://", "itunes://", StringComparison.OrdinalIgnoreCase);
                     return new Uri(nativeUrl);
                 }
+                else if (host.Contains("crunchyroll.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:series|watch)/([a-zA-Z0-9_-]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"crunchyroll://series/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("vudu.com") || host.Contains("fandango.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:content|movies|watch)/[a-zA-Z0-9_-]+/([0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"vudu://watch/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("discoveryplus.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:show|video)/([a-zA-Z0-9_-]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"discoveryplus://show/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("bbc.co.uk") && uri.AbsolutePath.Contains("iplayer"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/episode/([a-zA-Z0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"bbc-iplayer://episode/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("jiocinema.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:watch|movies|tv)/[a-zA-Z0-9_-]+/([a-zA-Z0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"jiocinema://watch/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("hotstar.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:watch|movies|shows)/[a-zA-Z0-9_-]+/([0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"hotstar://watch/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("tv.youtube.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/watch/([a-zA-Z0-9_-]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"youtubetv://watch/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("tidal.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:track|album)/([0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"tidal://{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("music.amazon.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/albums/([a-zA-Z0-9_]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"amzn-music://play?asin={match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("deezer.com"))
+                {
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:track|album)/([0-9]+)");
+                    if (match.Success)
+                    {
+                        return new Uri($"deezer://www.deezer.com/track/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("plex.tv"))
+                {
+                    return new Uri("plex://");
+                }
 
                 return uri;
             }
@@ -190,6 +274,38 @@ namespace LumiereMediaPlayer.Helpers
             catch
             {
                 return webLink;
+            }
+        }
+
+        public static async System.Threading.Tasks.Task LaunchStreamUriAsync(Uri? nativeUri, string fallbackCleanUrl)
+        {
+            bool launched = false;
+            if (nativeUri != null && !string.Equals(nativeUri.ToString(), fallbackCleanUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var support = await Windows.System.Launcher.QueryUriSupportAsync(nativeUri, Windows.System.LaunchQuerySupportType.Uri);
+                    if (support == Windows.System.LaunchQuerySupportStatus.Available)
+                    {
+                        launched = await Windows.System.Launcher.LaunchUriAsync(nativeUri);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StreamingRouter] QueryUriSupportAsync failed: {ex.Message}");
+                }
+            }
+
+            if (!launched && !string.IsNullOrEmpty(fallbackCleanUrl))
+            {
+                try
+                {
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri(fallbackCleanUrl));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StreamingRouter] Fallback HTTPS launch failed: {ex.Message}");
+                }
             }
         }
     }

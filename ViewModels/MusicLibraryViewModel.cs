@@ -100,10 +100,26 @@ public partial class MusicLibraryViewModel : ObservableObject
     {
         App.MainDispatcher?.TryEnqueue(() =>
         {
-            Tracks.Clear();
-            foreach (var t in SampleMediaLibrary.AudioTracks)
+            var newItems = SampleMediaLibrary.AudioTracks;
+            // Rule 5: In-place slot updating to avoid destroying visual containers
+            if (Tracks.Count == newItems.Count && Tracks.SequenceEqual(newItems))
+                return;
+
+            if (Tracks.Count == newItems.Count)
             {
-                Tracks.Add(t);
+                for (int i = 0; i < newItems.Count; i++)
+                {
+                    if (!ReferenceEquals(Tracks[i], newItems[i]))
+                        Tracks[i] = newItems[i];
+                }
+            }
+            else
+            {
+                Tracks.Clear();
+                foreach (var t in newItems)
+                {
+                    Tracks.Add(t);
+                }
             }
         });
     }

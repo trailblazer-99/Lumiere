@@ -402,18 +402,29 @@ namespace LumiereMediaPlayer.Pages
                 .ToList();
 
             // Group sources by access type and sort according to provider priority
-            var subSources = deduped.Where(s => s.Type == "sub")
+            var subSources = deduped.Where(s => s.Type == "sub" || s.Type == "sub_addon" || s.Type == "tve" || s.Type == "subscription")
                                     .OrderBy(s => GetProviderPriority(s.Name))
                                     .ThenBy(s => s.Name)
                                     .ToList();
-            var freeSources = deduped.Where(s => s.Type == "free")
+            var freeSources = deduped.Where(s => s.Type == "free" || s.Type == "free_with_ads" || s.Type == "avod")
                                      .OrderBy(s => GetProviderPriority(s.Name))
                                      .ThenBy(s => s.Name)
                                      .ToList();
-            var purchaseSources = deduped.Where(s => s.Type == "purchase" || s.Type == "rent")
+            var purchaseSources = deduped.Where(s => s.Type == "purchase" || s.Type == "rent" || s.Type == "buy" || s.Type == "tvod")
                                          .OrderBy(s => GetProviderPriority(s.Name))
                                          .ThenBy(s => s.Name)
                                          .ToList();
+
+            // Catch-all: if Watchmode returns a source with an unexpected access type, include it in Subscription Streaming
+            var accounted = new HashSet<WatchmodeSource>(subSources.Concat(freeSources).Concat(purchaseSources));
+            var remaining = deduped.Where(s => !accounted.Contains(s))
+                                   .OrderBy(s => GetProviderPriority(s.Name))
+                                   .ThenBy(s => s.Name)
+                                   .ToList();
+            if (remaining.Count > 0)
+            {
+                subSources.AddRange(remaining);
+            }
 
             if (subSources.Count > 0)
             {
@@ -463,6 +474,14 @@ namespace LumiereMediaPlayer.Pages
             if (lower.Contains("pluto")) return 12;
             if (lower.Contains("roku")) return 13;
             if (lower.Contains("plex")) return 14;
+            if (lower.Contains("crunchyroll")) return 15;
+            if (lower.Contains("discovery")) return 16;
+            if (lower.Contains("bbc") || lower.Contains("iplayer")) return 17;
+            if (lower.Contains("hotstar") || lower.Contains("jiocinema")) return 18;
+            if (lower.Contains("crave")) return 19;
+            if (lower.Contains("binge")) return 20;
+            if (lower.Contains("tidal")) return 21;
+            if (lower.Contains("deezer")) return 22;
             return 50;
         }
 
@@ -565,19 +584,9 @@ namespace LumiereMediaPlayer.Pages
                         {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(url);
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
-                            var launcherOptions = new Windows.System.LauncherOptions
-                            {
-                                FallbackUri = new Uri(cleanUrl)
-                            };
                             AntiGravityLogger.Log($"Launching provider URI (Native): {nativeUri}, Fallback: {cleanUrl}");
-                            if (nativeUri != null && !string.Equals(nativeUri.ToString(), cleanUrl, StringComparison.OrdinalIgnoreCase))
-                            {
-                                await Windows.System.Launcher.LaunchUriAsync(nativeUri, launcherOptions);
-                            }
-                            else
-                            {
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
-                            }
+                            
+                            await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
                         }
                         catch (Exception ex)
                         {

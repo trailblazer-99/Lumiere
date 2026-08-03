@@ -18,15 +18,18 @@
             <DoubleAnimation
                 Storyboard.TargetName="AmbientRotation"
                 Storyboard.TargetProperty="Angle"
-                From="-10" To="10" Duration="0:1:15" />
+                From="-10" To="10" Duration="0:1:15"
+                EnableDependentAnimation="False" />
             <DoubleAnimation
                 Storyboard.TargetName="AmbientScale"
                 Storyboard.TargetProperty="ScaleX"
-                From="1.3" To="1.6" Duration="0:1:0" />
+                From="1.3" To="1.6" Duration="0:1:0"
+                EnableDependentAnimation="False" />
             <DoubleAnimation
                 Storyboard.TargetName="AmbientScale"
                 Storyboard.TargetProperty="ScaleY"
-                From="1.3" To="1.6" Duration="0:1:0" />
+                From="1.3" To="1.6" Duration="0:1:0"
+                EnableDependentAnimation="False" />
         </Storyboard>
     </Page.Resources>
 

@@ -143,6 +143,12 @@ public sealed partial class TransportBar : UserControl
             TrackArtistText.Text = "Select a track to begin";
             TotalTimeText.Text = "0:00";
             ProgressSlider.Maximum = 100;
+            if (ArtImage != null)
+            {
+                ArtImage.Source = null;
+                ArtImage.Visibility = Visibility.Collapsed;
+                if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Visible;
+            }
             return;
         }
 
@@ -150,6 +156,17 @@ public sealed partial class TransportBar : UserControl
         TrackArtistText.Text = CurrentTrack.Artist;
         TotalTimeText.Text = CurrentTrack.DurationText;
         ProgressSlider.Maximum = CurrentTrack.Duration.TotalSeconds > 0 ? CurrentTrack.Duration.TotalSeconds : 100;
+
+        if (ArtImage != null)
+        {
+            var imgSource = Helpers.ImageBindHelper.SafeImageFromUrl(CurrentTrack.PosterUrl);
+            ArtImage.Source = imgSource;
+            ArtImage.Visibility = imgSource != null ? Visibility.Visible : Visibility.Collapsed;
+            if (FallbackIcon != null)
+            {
+                FallbackIcon.Visibility = imgSource != null ? Visibility.Collapsed : Visibility.Visible;
+            }
+        }
     }
 
     private void ObserveCurrentTrack(MediaItem? oldTrack, MediaItem? newTrack)
@@ -332,6 +349,11 @@ public sealed partial class TransportBar : UserControl
         if (ArtImage != null)
         {
             ArtImage.Source = source;
+            ArtImage.Visibility = source != null ? Visibility.Visible : Visibility.Collapsed;
+            if (FallbackIcon != null)
+            {
+                FallbackIcon.Visibility = source != null ? Visibility.Collapsed : Visibility.Visible;
+            }
         }
     }
 
@@ -358,22 +380,9 @@ public sealed partial class TransportBar : UserControl
     {
         try
         {
-            var uri = new Uri("microsoft-clipchamp://");
-            await Windows.System.Launcher.LaunchUriAsync(uri);
+            await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(new Uri("microsoft-clipchamp://"), "https://clipchamp.com/");
         }
-        catch
-        {
-            try
-            {
-                var uri = new Uri("clipchamp://");
-                await Windows.System.Launcher.LaunchUriAsync(uri);
-            }
-            catch
-            {
-                var uri = new Uri("https://clipchamp.com/");
-                await Windows.System.Launcher.LaunchUriAsync(uri);
-            }
-        }
+        catch { }
     }
 
     private async void OnEqualiserClick(object sender, RoutedEventArgs e)

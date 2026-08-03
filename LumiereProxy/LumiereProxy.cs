@@ -108,12 +108,24 @@ namespace Lumiere.Proxy
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Proxy Error: {ex.Message}");
-                return new BadRequestObjectResult($"Proxy Error: {ex.Message}");
+                return new BadRequestObjectResult("Proxy request failed.");
             }
         }
 
+        private static string? _cachedMusicJwt;
+        private static DateTimeOffset _musicJwtExpiry = DateTimeOffset.MinValue;
+        private static readonly object _jwtLock = new();
+
         private string GenerateMusicApiJwt()
         {
+            lock (_jwtLock)
+            {
+                if (!string.IsNullOrEmpty(_cachedMusicJwt) && DateTimeOffset.UtcNow < _musicJwtExpiry)
+                {
+                    return _cachedMusicJwt;
+                }
+            }
+
             string clientId = Environment.GetEnvironmentVariable("MUSIC_CLIENT_ID") ?? "";
             string keyId = Environment.GetEnvironmentVariable("MUSIC_KEY_ID") ?? "";
             string privateKeyPem = Environment.GetEnvironmentVariable("MUSIC_PRIVATE_KEY_PEM") ?? "";
@@ -148,7 +160,13 @@ namespace Lumiere.Proxy
                 System.Security.Cryptography.DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
             string signatureBase64 = Base64UrlEncode(signatureBytes);
 
-            return $"{stringToSign}.{signatureBase64}";
+            string jwt = $"{stringToSign}.{signatureBase64}";
+            lock (_jwtLock)
+            {
+                _cachedMusicJwt = jwt;
+                _musicJwtExpiry = DateTimeOffset.UtcNow.AddMinutes(50); // Refresh 10 mins before expiry
+            }
+            return jwt;
         }
 
         private static string Base64UrlEncode(byte[] input)

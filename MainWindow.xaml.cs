@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     private DateTime _lastEdgeSeekTime = DateTime.MinValue;
     private DispatcherTimer? _edgeSeekFeedbackTimer;
     private bool _isCursorHidden = false;
+    private bool? _lastVideoLayoutMode = null;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int ShowCursor(bool bShow);
@@ -596,6 +597,9 @@ public sealed partial class MainWindow : Window
                         }
                         RestoreHwndBackground();
                     }
+
+                    _lastVideoLayoutMode = null;
+                    UpdateLayoutForVideoMode();
                 }
                 catch (Exception ex)
                 {
@@ -615,9 +619,6 @@ public sealed partial class MainWindow : Window
                     ShowVideoControls();
                 }
             }
-
-            // Ensure video layout and opaque black backgrounds are fully reapplied after presenter changes
-            UpdateLayoutForVideoMode();
         }
     }
 
@@ -1234,7 +1235,14 @@ public sealed partial class MainWindow : Window
 
         if (ContentFrame.CanGoBack)
         {
-            ContentFrame.GoBack();
+            try
+            {
+                ContentFrame.GoBack();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Navigation] GoBack failed: {ex.Message}");
+            }
         }
     }
 
@@ -1438,9 +1446,13 @@ public sealed partial class MainWindow : Window
         SetCursorVisibility(true);
         _positionTimer.Stop();
         _videoControlsTimer.Stop();
+        _miniPlayerInteractionTimer.Stop();
         _positionTimer.Tick -= OnPositionTimerTick;
         _videoControlsTimer.Tick -= OnVideoControlsTimerTick;
+        _miniPlayerInteractionTimer.Tick -= OnMiniPlayerInteractionTimerTick;
         _playback.PropertyChanged -= OnPlaybackPropertyChanged;
+
+        try { AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged; } catch { }
 
         try
         {
@@ -1568,6 +1580,16 @@ public sealed partial class MainWindow : Window
         bool isFullScreen  = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         bool isVideoActive = _playback.CurrentTrack is { IsVideo: true };
         bool isVideoMode   = isVideoActive && isFullScreen && _playback.IsVideoPlayerActive;
+
+        if (_lastVideoLayoutMode == isVideoMode)
+        {
+            if (isVideoMode)
+            {
+                UpdateFullscreenPlayerLayout();
+            }
+            return;
+        }
+        _lastVideoLayoutMode = isVideoMode;
 
         if (isVideoMode)
         {
@@ -1919,14 +1941,25 @@ public sealed partial class MainWindow : Window
             _playback.Session.MediaPlayer.Pause();
             _playback.IsVideoPlayerActive = false;
             
-            if (ContentFrame.CanGoBack)
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
-                ContentFrame.GoBack();
-            }
-            else
-            {
-                NavigateTo(typeof(Pages.HomePage));
-            }
+                try
+                {
+                    if (ContentFrame?.CanGoBack == true)
+                    {
+                        ContentFrame.GoBack();
+                    }
+                    else
+                    {
+                        NavigateTo(typeof(Pages.HomePage));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ExitVideoPlayback] Navigation failed: {ex.Message}");
+                    try { NavigateTo(typeof(Pages.HomePage)); } catch { }
+                }
+            });
         }
     }
 
@@ -2936,7 +2969,7 @@ public sealed partial class MainWindow : Window
                 }
                 else if (ContentFrame.CanGoBack)
                 {
-                    ContentFrame.GoBack();
+                    try { ContentFrame.GoBack(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Navigation] GoBack failed: {ex.Message}"); }
                     e.Handled = true;
                 }
                 break;
@@ -3258,12 +3291,12 @@ public sealed partial class MainWindow : Window
             {
                 if (ContentFrame.CanGoBack)
                 {
-                    ContentFrame.GoBack();
+                    try { ContentFrame.GoBack(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Swipe] GoBack failed: {ex.Message}"); }
                 }
             }
             else if (deltaX < 0 && ContentFrame.CanGoForward)
             {
-                ContentFrame.GoForward();
+                try { ContentFrame.GoForward(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Swipe] GoForward failed: {ex.Message}"); }
             }
         }
         

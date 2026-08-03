@@ -582,7 +582,8 @@ jobs:
         $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="' + $packageVersion + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
         $xml += "`n" + '  <MainBundle Name="' + $packageIdentityName + '" Version="' + $packageVersion + '" Publisher="' + $packagePublisher + '" Uri="' + $releaseDownloadUrl + '" />'
         $xml += "`n" + '  <UpdateSettings>'
-        $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true" />'
+        $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="24" ShowPrompt="true" UpdateBlocksActivation="false" />'
+        $xml += "`n" + '    <AutomaticBackgroundTask />'
         $xml += "`n" + '  </UpdateSettings>'
         $xml += "`n" + '</AppInstaller>'
         

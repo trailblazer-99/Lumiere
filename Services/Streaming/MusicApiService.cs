@@ -20,12 +20,11 @@ namespace LumiereMediaPlayer.Services.Streaming
     {
         private const string BaseUrl = "https://api.musicapi.com/public";
         
-        private readonly HttpClient _httpClient;
+        private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         public MusicApiService()
         {
-            _httpClient = new HttpClient();
         }
 
         public async Task<List<MusicApiTrack>> SearchTracksAsync(string query, string filter, int limit = 50)

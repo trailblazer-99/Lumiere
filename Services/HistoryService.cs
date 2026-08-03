@@ -54,23 +54,38 @@ namespace LumiereMediaPlayer.Services
         {
             if (item == null) return;
 
-
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            // Await UI thread update before serializing to ensure data consistency
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var dispatched = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
             {
-                var existing = RecentlyPlayed.FirstOrDefault(x => x.Id == item.Id || x.SourcePath == item.SourcePath);
-                if (existing != null)
+                try
                 {
-                    RecentlyPlayed.Remove(existing);
+                    var existing = RecentlyPlayed.FirstOrDefault(x => x.Id == item.Id || x.SourcePath == item.SourcePath);
+                    if (existing != null)
+                    {
+                        RecentlyPlayed.Remove(existing);
+                    }
+
+                    RecentlyPlayed.Insert(0, item);
+
+                    while (RecentlyPlayed.Count > MaxHistoryItems)
+                    {
+                        RecentlyPlayed.RemoveAt(RecentlyPlayed.Count - 1);
+                    }
+                    tcs.TrySetResult(true);
                 }
-
-                RecentlyPlayed.Insert(0, item);
-
-                while (RecentlyPlayed.Count > MaxHistoryItems)
+                catch (Exception ex)
                 {
-                    RecentlyPlayed.RemoveAt(RecentlyPlayed.Count - 1);
+                    tcs.TrySetException(ex);
                 }
             });
-            
+
+            if (dispatched != true)
+            {
+                tcs.TrySetResult(false);
+            }
+
+            await tcs.Task;
             await SaveHistoryAsync();
         }
 

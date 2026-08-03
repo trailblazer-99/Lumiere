@@ -20,6 +20,7 @@ public partial class VideoViewModel : ObservableObject
 {
     private readonly PlaybackViewModel _playback;
     private readonly TmdbService _tmdbService = new();
+    private static readonly System.Threading.SemaphoreSlim _tmdbSemaphore = new(3, 3);
     private List<MediaItem> _rawVideos = new();
 
     [ObservableProperty] public partial ObservableCollection<MediaItem> FilteredVideos { get; set; } = new();
@@ -73,12 +74,12 @@ public partial class VideoViewModel : ObservableObject
         SampleMediaLibrary.LibraryChanged += (s, e) =>
         {
             _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
-            foreach (var v in _rawVideos) { _ = PopulateTmdbDataAsync(v); }
+            _ = PopulateAllTmdbDataAsync(_rawVideos);
             ApplySortAndFilter();
         };
 
         _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
-        foreach (var v in _rawVideos) { _ = PopulateTmdbDataAsync(v); }
+        _ = PopulateAllTmdbDataAsync(_rawVideos);
         ApplySortAndFilter();
     }
 
@@ -268,9 +269,32 @@ public partial class VideoViewModel : ObservableObject
             .FirstOrDefault();
     }
 
-    private async Task PopulateTmdbDataAsync(MediaItem item)
+    private async Task PopulateAllTmdbDataAsync(List<MediaItem> items)
     {
-        if (item.IsFolder) return;
+        bool anyModified = false;
+        var tasks = items.Select(async item =>
+        {
+            await _tmdbSemaphore.WaitAsync();
+            try
+            {
+                bool modified = await PopulateTmdbDataAsync(item);
+                if (modified) anyModified = true;
+            }
+            finally
+            {
+                _tmdbSemaphore.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
+        if (anyModified)
+        {
+            await SampleMediaLibrary.SaveLibraryAsync();
+        }
+    }
+
+    private async Task<bool> PopulateTmdbDataAsync(MediaItem item)
+    {
+        if (item.IsFolder) return false;
 
         string? year = null;
         var yearRegex = new Regex(@"\b((?:19|20)\d{2})\b");
@@ -294,7 +318,7 @@ public partial class VideoViewModel : ObservableObject
             }
             else
             {
-                return;
+                return false;
             }
         }
         
@@ -310,7 +334,7 @@ public partial class VideoViewModel : ObservableObject
             {
                 var tvResults = await _tmdbService.SearchTvShowsAsync(episodeLookup.SeriesTitle);
                 var show = SelectBestMatch(tvResults, episodeLookup.SeriesTitle, year);
-                if (show == null) return;
+                if (show == null) return false;
 
                 var episode = await _tmdbService.GetTvEpisodeAsync(show.Id, episodeLookup.SeasonNumber, episodeLookup.EpisodeNumber);
 
@@ -333,13 +357,12 @@ public partial class VideoViewModel : ObservableObject
 
                 item.Genre = !string.IsNullOrWhiteSpace(episode?.Overview) ? episode.Overview : show.Overview;
 
-                await SampleMediaLibrary.SaveLibraryAsync();
-                return;
+                return true;
             }
 
             var filename = Path.GetFileNameWithoutExtension(item.Title);
             var cleanTitle = CleanVideoTitle(filename);
-            if (string.IsNullOrWhiteSpace(cleanTitle)) return;
+            if (string.IsNullOrWhiteSpace(cleanTitle)) return false;
 
             var results = await _tmdbService.SearchMoviesAsync(cleanTitle);
             
@@ -367,10 +390,11 @@ public partial class VideoViewModel : ObservableObject
                     item.Genre = bestMatch.Overview; // Store description in Genre for tooltip/info fallback
                 }
 
-                await SampleMediaLibrary.SaveLibraryAsync();
+                return true;
             }
         }
         catch { }
+        return false;
     }
 
     private void ApplySortAndFilter()

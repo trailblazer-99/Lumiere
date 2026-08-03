@@ -90,7 +90,7 @@
     <MsPdbCmfExeFullpath Condition="'$(MsPdbCmfExeFullpath)' == '' and '$(AppxSymbolPackageEnabled)' == 'False'">$(MSBuildProjectDirectory)\__symbols_disabled__.exe</MsPdbCmfExeFullpath>
     <AppxBundle>Never</AppxBundle>
     <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
-    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    <HoursBetweenUpdateChecks>24</HoursBetweenUpdateChecks>
   </PropertyGroup>
 
   <ItemGroup>
