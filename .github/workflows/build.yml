@@ -52,7 +52,8 @@ jobs:
       shell: powershell
       run: |
         $summaryPath = $env:GITHUB_STEP_SUMMARY
-        "### 📦 Build Package Tracking Summary`n" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "### Build Package Tracking Summary" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "| Package File | Architecture | Size (MB) | SHA256 Checksum |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "| :--- | :---: | :---: | :--- |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         
@@ -61,9 +62,10 @@ jobs:
           $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
           $arch = "x64"
           if ($_.Name -like "*arm64*") { $arch = "ARM64" }
-          "| **$($_.Name)** | `$arch` | ${sizeMb} MB | `$hash` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **$($_.Name)** | $arch | $sizeMb MB | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         }
-        "`n> **Note:** Packages are unsigned sideload builds for PR/dev verification. Download from the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "> **Note:** Packages are unsigned sideload builds for PR/dev verification. Download from the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
 
     # Upload compiled packages as a downloadable GitHub Artifact
     - name: Upload Build Package Artifact
@@ -512,16 +514,18 @@ jobs:
           $sizeMb = [math]::Round($bundleFile.Length / 1MB, 2)
           $hash = (Get-FileHash -Path $bundleFile.FullName -Algorithm SHA256).Hash
           
-          "### 🚀 Lumière Media Player Release Package Tracking`n" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "### Lumiere Media Player Release Package Tracking" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| Property | Value |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| :--- | :--- |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Package Bundle** | `$($bundleFile.Name)` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Version** | `v1.0.1.$env:GITHUB_RUN_NUMBER` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Total Size** | **${sizeMb} MB** |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **SHA256 Checksum** | `$hash` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Signing Certificate** | `Signing/LumiereMediaPlayer.cer` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Package Bundle** | $($bundleFile.Name) |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Version** | v1.0.1.$env:GITHUB_RUN_NUMBER |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Total Size** | **$sizeMb MB** |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **SHA256 Checksum** | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Signing Certificate** | Signing/LumiereMediaPlayer.cer |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| **Release Asset URL** | [GitHub Release Download](https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v1.0.1.$env:GITHUB_RUN_NUMBER) |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "`n> ✅ This signed `.msixbundle` has been verified and published to GitHub Releases and is available in the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "> [Note] This signed .msixbundle has been verified and published to GitHub Releases and is available in the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
         }
 
     # Upload signed bundle and certificate as a downloadable GitHub Artifact
