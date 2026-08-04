@@ -36,15 +36,17 @@ jobs:
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
 
-    - name: Build Verification
+    - name: Build Verification (x64 Package)
       run: |
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=x64 `
+          /p:AppxBundle=Never `
           /p:GenerateAppxPackageOnBuild=true `
-          /p:AppxPackageDir="${{ github.workspace }}\AppPackages" `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64\" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
-          /p:AppxBundle=Never
+          /p:GenerateAppinstallerFile=false `
+          /p:AppxPackageSigningEnabled=false
       shell: powershell
 
     # Output a structured package summary table to GITHUB_STEP_SUMMARY for tracking
@@ -57,12 +59,16 @@ jobs:
         "| Package File | Architecture | Size (MB) | SHA256 Checksum |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "| :--- | :---: | :---: | :--- |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         
-        Get-ChildItem -Path AppPackages\*.msix -Recurse | ForEach-Object {
-          $sizeMb = [math]::Round($_.Length / 1MB, 2)
-          $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
-          $arch = "x64"
-          if ($_.Name -like "*arm64*") { $arch = "ARM64" }
-          "| **$($_.Name)** | $arch | $sizeMb MB | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        if (Test-Path "AppPackages") {
+          Get-ChildItem -Path AppPackages\*.msix -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $sizeMb = [math]::Round($_.Length / 1MB, 2)
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+            $arch = "x64"
+            if ($_.Name -like "*arm64*") { $arch = "ARM64" }
+            "| **$($_.Name)** | $arch | $sizeMb MB | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          }
+        } else {
+          "| *(No MSIX found in AppPackages)* | - | - | - |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         }
         "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "> **Note:** Packages are unsigned sideload builds for PR/dev verification. Download from the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
@@ -509,7 +515,7 @@ jobs:
       shell: powershell
       run: |
         $summaryPath = $env:GITHUB_STEP_SUMMARY
-        $bundleFile = Get-ChildItem -Path deploy\*.msixbundle | Select-Object -First 1
+        $bundleFile = Get-ChildItem -Path deploy\*.msixbundle -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($bundleFile) {
           $sizeMb = [math]::Round($bundleFile.Length / 1MB, 2)
           $hash = (Get-FileHash -Path $bundleFile.FullName -Algorithm SHA256).Hash
