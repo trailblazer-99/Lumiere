@@ -36,15 +36,17 @@ jobs:
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
 
-    - name: Build Verification
+    - name: Build Verification (x64 Package)
       run: |
         msbuild LumiereMediaPlayer.csproj `
           /p:Configuration=Release `
           /p:Platform=x64 `
+          /p:AppxBundle=Never `
           /p:GenerateAppxPackageOnBuild=true `
-          /p:AppxPackageDir="${{ github.workspace }}\AppPackages" `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64\" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
-          /p:AppxBundle=Never
+          /p:GenerateAppinstallerFile=false `
+          /p:AppxPackageSigningEnabled=false
       shell: powershell
 
     # Output a structured package summary table to GITHUB_STEP_SUMMARY for tracking
@@ -52,18 +54,24 @@ jobs:
       shell: powershell
       run: |
         $summaryPath = $env:GITHUB_STEP_SUMMARY
-        "### 📦 Build Package Tracking Summary`n" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "### Build Package Tracking Summary" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "| Package File | Architecture | Size (MB) | SHA256 Checksum |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         "| :--- | :---: | :---: | :--- |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         
-        Get-ChildItem -Path AppPackages\*.msix -Recurse | ForEach-Object {
-          $sizeMb = [math]::Round($_.Length / 1MB, 2)
-          $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
-          $arch = "x64"
-          if ($_.Name -like "*arm64*") { $arch = "ARM64" }
-          "| **$($_.Name)** | `$arch` | ${sizeMb} MB | `$hash` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        if (Test-Path "AppPackages") {
+          Get-ChildItem -Path AppPackages\*.msix -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $sizeMb = [math]::Round($_.Length / 1MB, 2)
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+            $arch = "x64"
+            if ($_.Name -like "*arm64*") { $arch = "ARM64" }
+            "| **$($_.Name)** | $arch | $sizeMb MB | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          }
+        } else {
+          "| *(No MSIX found in AppPackages)* | - | - | - |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
         }
-        "`n> **Note:** Packages are unsigned sideload builds for PR/dev verification. Download from the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+        "> **Note:** Packages are unsigned sideload builds for PR/dev verification. Download from the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
 
     # Upload compiled packages as a downloadable GitHub Artifact
     - name: Upload Build Package Artifact
@@ -507,21 +515,23 @@ jobs:
       shell: powershell
       run: |
         $summaryPath = $env:GITHUB_STEP_SUMMARY
-        $bundleFile = Get-ChildItem -Path deploy\*.msixbundle | Select-Object -First 1
+        $bundleFile = Get-ChildItem -Path deploy\*.msixbundle -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($bundleFile) {
           $sizeMb = [math]::Round($bundleFile.Length / 1MB, 2)
           $hash = (Get-FileHash -Path $bundleFile.FullName -Algorithm SHA256).Hash
           
-          "### 🚀 Lumière Media Player Release Package Tracking`n" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "### Lumiere Media Player Release Package Tracking" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| Property | Value |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| :--- | :--- |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Package Bundle** | `$($bundleFile.Name)` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Version** | `v1.0.1.$env:GITHUB_RUN_NUMBER` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Total Size** | **${sizeMb} MB** |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **SHA256 Checksum** | `$hash` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "| **Signing Certificate** | `Signing/LumiereMediaPlayer.cer` |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Package Bundle** | $($bundleFile.Name) |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Version** | v1.0.1.$env:GITHUB_RUN_NUMBER |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Total Size** | **$sizeMb MB** |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **SHA256 Checksum** | $hash |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "| **Signing Certificate** | Signing/LumiereMediaPlayer.cer |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
           "| **Release Asset URL** | [GitHub Release Download](https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v1.0.1.$env:GITHUB_RUN_NUMBER) |" | Out-File -FilePath $summaryPath -Append -Encoding utf8
-          "`n> ✅ This signed `.msixbundle` has been verified and published to GitHub Releases and is available in the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "" | Out-File -FilePath $summaryPath -Append -Encoding utf8
+          "> [Note] This signed .msixbundle has been verified and published to GitHub Releases and is available in the Artifacts section below." | Out-File -FilePath $summaryPath -Append -Encoding utf8
         }
 
     # Upload signed bundle and certificate as a downloadable GitHub Artifact

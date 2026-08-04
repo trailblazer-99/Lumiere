@@ -22,6 +22,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"netflix://title/{match.Groups[1].Value}");
                     }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"netflix:search?q={qMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("spotify.com"))
                 {
@@ -43,6 +48,11 @@ namespace LumiereMediaPlayer.Helpers
                     if (match.Success)
                     {
                         return new Uri($"disneyplus://video/{match.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"disneyplus://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("primevideo.com") || host.Contains("amazon.com") || host.Contains("amazon."))
@@ -74,6 +84,11 @@ namespace LumiereMediaPlayer.Helpers
                         {
                             return new Uri($"amazonvideo://watch?asin={asin}");
                         }
+                        var q = query["q"] ?? query["k"];
+                        if (!string.IsNullOrEmpty(q))
+                        {
+                            return new Uri($"primevideo://search?q={Uri.EscapeDataString(q)}");
+                        }
                     }
                 }
                 else if (host.Contains("hulu.com"))
@@ -88,17 +103,27 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"hulu://series/{matchSeries.Groups[1].Value}");
                     }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"hulu://search?q={qMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("max.com") || host.Contains("hbomax.com"))
                 {
                     var match = Regex.Match(uri.AbsolutePath, @"/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|[a-zA-Z0-9]+)$");
-                    if (match.Success)
+                    if (match.Success && !uri.AbsolutePath.Contains("search"))
                     {
                         var id = match.Groups[1].Value;
                         if (host.Contains("hbomax"))
                             return new Uri($"hbomax://page/urn:hbo:page:{id}");
                         else
                             return new Uri($"max://page/{id}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"max://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("paramountplus.com"))
@@ -108,6 +133,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"paramountplus://movies/{matchMovie.Groups[1].Value}");
                     }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"paramountplus://search/?q={qMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("peacocktv.com"))
                 {
@@ -115,6 +145,11 @@ namespace LumiereMediaPlayer.Helpers
                     if (match.Success)
                     {
                         return new Uri($"peacock://watch/{match.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"peacock://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("tubitv.com"))
@@ -160,10 +195,20 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("crunchyroll.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/(?:series|watch)/([a-zA-Z0-9_-]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:[a-z]{2}(?:-[a-z]{2})?/)?(?:series|watch)/([a-zA-Z0-9_-]+)", RegexOptions.IgnoreCase);
                     if (match.Success)
                     {
                         return new Uri($"crunchyroll://series/{match.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"crunchyroll://search?q={qMatch.Groups[1].Value}");
+                    }
+                    var slug = uri.AbsolutePath.Trim('/').Split('/').LastOrDefault();
+                    if (!string.IsNullOrEmpty(slug) && slug.Length > 2 && !slug.Equals("search", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new Uri($"crunchyroll://search?q={Uri.EscapeDataString(slug.Replace('-', ' '))}");
                     }
                 }
                 else if (host.Contains("vudu.com") || host.Contains("fandango.com"))
@@ -172,6 +217,45 @@ namespace LumiereMediaPlayer.Helpers
                     if (match.Success)
                     {
                         return new Uri($"vudu://watch/{match.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("hotstar.com"))
+                {
+                    var qMatch = Regex.Match(uri.Query, @"[?&](?:q|search_query)=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"hotstar://search?q={qMatch.Groups[1].Value}");
+                    }
+                    var idMatch = Regex.Match(uri.AbsolutePath, @"(?:/in)?/(?:movies|shows|sports)/[^/]+/(\d+)");
+                    if (idMatch.Success)
+                    {
+                        return new Uri($"hotstar://content/{idMatch.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("jiocinema.com"))
+                {
+                    var searchMatch = Regex.Match(uri.AbsolutePath, @"/search/(.+)");
+                    if (searchMatch.Success)
+                    {
+                        return new Uri($"jiocinema://search?q={searchMatch.Groups[1].Value}");
+                    }
+                    var idMatch = Regex.Match(uri.AbsolutePath, @"/(?:movies|tv-shows|watch)/[^/]+/(\d+)");
+                    if (idMatch.Success)
+                    {
+                        return new Uri($"jiocinema://content/{idMatch.Groups[1].Value}");
+                    }
+                }
+                else if (host.Contains("youtube.com") || host.Contains("youtu.be"))
+                {
+                    var vMatch = Regex.Match(uri.Query, @"[?&]v=([^&]+)", RegexOptions.IgnoreCase);
+                    if (vMatch.Success)
+                    {
+                        return new Uri($"vnd.youtube://{vMatch.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&](?:q|search_query)=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"vnd.youtube://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("discoveryplus.com"))

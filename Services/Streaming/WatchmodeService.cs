@@ -34,12 +34,13 @@ namespace LumiereMediaPlayer.Services.Streaming
             return null;
         }
 
-        public async Task<List<WatchmodeTitle>> ListMoviesAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "")
+        public async Task<List<WatchmodeTitle>> ListMoviesAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "")
         {
             var query = $"types=movie&page={page}&limit={limit}";
             if (!string.IsNullOrEmpty(region)) query += $"&region={region}";
             if (!string.IsNullOrEmpty(sourceTypes)) query += $"&source_types={sourceTypes}";
             if (!string.IsNullOrEmpty(genres)) query += $"&genres={genres}";
+            if (!string.IsNullOrEmpty(sourceIds)) query += $"&source_ids={sourceIds}";
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
@@ -60,12 +61,14 @@ namespace LumiereMediaPlayer.Services.Streaming
             return new List<WatchmodeTitle>();
         }
 
-        public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "")
+        public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "", string networkIds = "")
         {
             var query = $"types=tv_series&page={page}&limit={limit}";
             if (!string.IsNullOrEmpty(region)) query += $"&region={region}";
             if (!string.IsNullOrEmpty(sourceTypes)) query += $"&source_types={sourceTypes}";
             if (!string.IsNullOrEmpty(genres)) query += $"&genres={genres}";
+            if (!string.IsNullOrEmpty(sourceIds)) query += $"&source_ids={sourceIds}";
+            if (!string.IsNullOrEmpty(networkIds)) query += $"&network_ids={networkIds}";
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
@@ -86,6 +89,19 @@ namespace LumiereMediaPlayer.Services.Streaming
             return new List<WatchmodeTitle>();
         }
 
+        private (int tmdbId, string? mediaType) ResolveTmdbId(int id)
+        {
+            if (IdMap.TryGetValue(id, out var ids))
+            {
+                var cleaned = GetCleanTmdbId(ids.TmdbId);
+                if (cleaned.HasValue)
+                {
+                    return (cleaned.Value, ids.Type);
+                }
+            }
+            return (id, null);
+        }
+
         public async Task<WatchmodeDetails?> GetDetailsAsync(int watchmodeId)
         {
             var servicePath = $"watchmode/title/{watchmodeId}/details/";
@@ -93,13 +109,58 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<WatchmodeDetails>(response, _jsonOptions);
+                var res = JsonSerializer.Deserialize<WatchmodeDetails>(response, _jsonOptions);
+                if (res != null && (!string.IsNullOrEmpty(res.Title) || res.Id > 0))
+                {
+                    return res;
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetDetails Error: {ex.Message}");
-                return null;
             }
+
+            // Fallback: If Watchmode fails or ID is a TMDB ID, query TMDB for details
+            try
+            {
+                var (tmdbId, knownType) = ResolveTmdbId(watchmodeId);
+
+                if (knownType == "tv" || knownType == "tv_series" || knownType == "tv_miniseries")
+                {
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
+                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                    {
+                        return tvDetails.MapToWatchmodeDetails();
+                    }
+                }
+                else if (knownType == "movie")
+                {
+                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tmdbId}");
+                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                    {
+                        return movieDetails.MapToWatchmodeDetails();
+                    }
+                }
+                else
+                {
+                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tmdbId}");
+                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                    {
+                        return movieDetails.MapToWatchmodeDetails();
+                    }
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
+                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                    {
+                        return tvDetails.MapToWatchmodeDetails();
+                    }
+                }
+            }
+            catch (Exception tmdbEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"TMDB GetDetails Fallback Error: {tmdbEx.Message}");
+            }
+
+            return null;
         }
 
         public async Task<List<WatchmodeSource>> GetSourcesAsync(int watchmodeId, string region = "")
@@ -120,13 +181,50 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions) ?? new List<WatchmodeSource>();
+                var sources = JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions);
+                if (sources != null && sources.Count > 0)
+                {
+                    return sources;
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetSources Error: {ex.Message}");
-                return new List<WatchmodeSource>();
             }
+
+            // Fallback directly to TMDB API for watch providers when Watchmode is empty or unavailable
+            if (int.TryParse(titleId, out int watchmodeId))
+            {
+                try
+                {
+                    var (tmdbId, knownType) = ResolveTmdbId(watchmodeId);
+                    string mediaType = (knownType == "tv" || knownType == "tv_series" || knownType == "tv_miniseries") ? "tv" : "movie";
+                    var providerData = await QueryTmdbAsync<TmdbProviderResponse>($"{mediaType}/{tmdbId}/watch/providers");
+                    if (providerData == null && string.IsNullOrEmpty(knownType))
+                    {
+                        // Try TV if movie failed
+                        providerData = await QueryTmdbAsync<TmdbProviderResponse>($"tv/{tmdbId}/watch/providers");
+                    }
+                    if (providerData?.Results != null)
+                    {
+                        TmdbProviderRegion? targetRegionObj = null;
+                        if (!providerData.Results.TryGetValue(region.ToUpperInvariant(), out targetRegionObj))
+                        {
+                            targetRegionObj = providerData.Results.Values.FirstOrDefault();
+                        }
+                        if (targetRegionObj != null)
+                        {
+                            return targetRegionObj.MapToWatchmodeSources(region);
+                        }
+                    }
+                }
+                catch (Exception fallbackEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TMDB GetSources Fallback Error: {fallbackEx.Message}");
+                }
+            }
+
+            return new List<WatchmodeSource>();
         }
 
         public async Task<List<WatchmodeSeason>> GetSeasonsAsync(int watchmodeId)
@@ -216,24 +314,6 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetCastCrew Error: {ex.Message}");
-                
-                // Fallback directly to TMDB API for cast/crew when Watchmode is unavailable
-                if (IdMap.TryGetValue(watchmodeId, out var ids))
-                {
-                    var tmdbIdOpt = GetCleanTmdbId(ids.TmdbId);
-                    if (tmdbIdOpt.HasValue)
-                    {
-                        int tmdbId = tmdbIdOpt.Value;
-                        string type = ids.Type ?? "";
-                        string typeEndpoint = (type == "tv" || type == "series" || type == "tv_series") ? "tv" : "movie";
-                        var tmdbCredits = await QueryTmdbAsync<TmdbCreditsResponse>($"{typeEndpoint}/{tmdbId}/credits");
-                        if (tmdbCredits != null)
-                        {
-                            return tmdbCredits.MapToWatchmodeCastCrew();
-                        }
-                    }
-                }
-
                 return new List<WatchmodeCastCrew>();
             }
         }
@@ -301,6 +381,180 @@ namespace LumiereMediaPlayer.Services.Streaming
                 IdMap[title.Id] = (title.ImdbId, title.TmdbId?.ToString(), title.Type);
             }
             return list;
+        }
+
+        public async Task<List<WatchmodeTitle>> GetSimilarTitlesAsync(int watchmodeId, string? expectedType = null)
+        {
+            var servicePath = $"watchmode/title/{watchmodeId}/similar/";
+            var url = $"{BaseUrl}/title/{watchmodeId}/similar/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var results = JsonSerializer.Deserialize<List<WatchmodeTitle>>(response, _jsonOptions);
+                if (results != null && results.Count > 0)
+                {
+                    if (!string.IsNullOrEmpty(expectedType))
+                    {
+                        bool wantTv = expectedType == "tv" || expectedType == "tv_series" || expectedType == "tv_miniseries";
+                        results = results.Where(t =>
+                        {
+                            if (string.IsNullOrEmpty(t.Type)) return true;
+                            bool isTv = t.Type == "tv" || t.Type == "tv_series" || t.Type == "tv_miniseries";
+                            return wantTv ? isTv : !isTv;
+                        }).ToList();
+                    }
+                    return results;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetSimilarTitles Error: {ex.Message}");
+            }
+
+            return new List<WatchmodeTitle>();
+        }
+
+        public async Task<List<WatchmodeProviderInfo>> GetAvailableProvidersAsync(string region = "")
+        {
+            if (string.IsNullOrEmpty(region))
+            {
+                region = await AntiGravityLocationEngine.GetCountryCodeAsync();
+            }
+            if (string.IsNullOrEmpty(region)) region = "US";
+
+            var servicePath = $"watchmode/sources/?region={region}";
+            var url = $"{BaseUrl}/sources/?apiKey={ApiKey}&region={region}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<List<WatchmodeProviderInfo>>(response, _jsonOptions) ?? new List<WatchmodeProviderInfo>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetAvailableProviders Error: {ex.Message}");
+                return new List<WatchmodeProviderInfo>();
+            }
+        }
+
+        public async Task<WatchmodeScores?> GetScoresAsync(int watchmodeId)
+        {
+            var servicePath = $"watchmode/title/{watchmodeId}/scores/";
+            var url = $"{BaseUrl}/title/{watchmodeId}/scores/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<WatchmodeScores>(response, _jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetScores Error: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<WatchmodeRelease>> GetReleasesAsync(int watchmodeId)
+        {
+            var servicePath = $"watchmode/title/{watchmodeId}/releases/";
+            var url = $"{BaseUrl}/title/{watchmodeId}/releases/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<List<WatchmodeRelease>>(response, _jsonOptions) ?? new List<WatchmodeRelease>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetReleases Error: {ex.Message}");
+                return new List<WatchmodeRelease>();
+            }
+        }
+
+        public async Task<WatchmodePersonDetails?> GetPersonDetailsAsync(int personId, string? fullName = null)
+        {
+            var servicePath = $"watchmode/person/{personId}/";
+            var url = $"{BaseUrl}/person/{personId}/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var raw = JsonSerializer.Deserialize<WatchmodePersonRawResponse>(response, _jsonOptions);
+                if (raw != null)
+                {
+                    var details = new WatchmodePersonDetails
+                    {
+                        Id = raw.Id,
+                        FullName = raw.FullName ?? fullName,
+                        HeadshotUrl = raw.HeadshotUrl
+                    };
+
+                    if (raw.KnownFor != null && raw.KnownFor.Count > 0)
+                    {
+                        var idsToFetch = raw.KnownFor.Take(20).ToList();
+                        var tasks = idsToFetch.Select(id => GetDetailsAsync(id));
+                        var results = await Task.WhenAll(tasks);
+                        foreach (var res in results)
+                        {
+                            if (res != null && !string.IsNullOrEmpty(res.Title))
+                            {
+                                details.KnownFor.Add(new WatchmodeTitle
+                                {
+                                    Id = res.Id,
+                                    Title = res.Title,
+                                    Year = res.Year,
+                                    Type = res.Type,
+                                    ImdbId = res.ImdbId,
+                                    TmdbId = res.TmdbId,
+                                    JsonPosterUrl = res.DisplayPoster
+                                });
+                            }
+                        }
+                    }
+                    return details;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetPersonDetails Error: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public async Task<List<WatchmodeNetwork>> GetNetworksAsync()
+        {
+            var servicePath = "watchmode/networks/";
+            var url = $"{BaseUrl}/networks/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<List<WatchmodeNetwork>>(response, _jsonOptions) ?? new List<WatchmodeNetwork>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetNetworks Error: {ex.Message}");
+                return new List<WatchmodeNetwork>();
+            }
+        }
+
+        public async Task<List<WatchmodeGenre>> GetGenresAsync()
+        {
+            var servicePath = "watchmode/genres/";
+            var url = $"{BaseUrl}/genres/?apiKey={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<List<WatchmodeGenre>>(response, _jsonOptions) ?? new List<WatchmodeGenre>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watchmode GetGenres Error: {ex.Message}");
+                return new List<WatchmodeGenre>();
+            }
+        }
+
+        private static int? ParseYear(string? dateStr)
+        {
+            if (string.IsNullOrEmpty(dateStr) || dateStr.Length < 4) return null;
+            if (int.TryParse(dateStr.Substring(0, 4), out int year)) return year;
+            return null;
         }
 
         private async Task<T?> QueryTmdbAsync<T>(string endpoint)

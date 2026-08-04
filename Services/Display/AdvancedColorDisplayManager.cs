@@ -50,6 +50,12 @@ public sealed class AdvancedColorDisplayManager
     public bool CanStreamHdr => _canStreamHdr;
 
     /// <summary>
+    /// True for Windows laptops whose display is not HDR-graded for desktop HDR
+    /// (<c>IsHdrActive == false</c>) but nevertheless supports streaming HDR video.
+    /// </summary>
+    public bool IsHdrStreamingCapableOnly => !_isHdrActive && _canStreamHdr;
+
+    /// <summary>
     /// SDR reference white level reported by the display driver.
     /// Read this on the UI thread only — it is a non-atomic float.
     /// </summary>
@@ -59,7 +65,7 @@ public sealed class AdvancedColorDisplayManager
     /// True when the display is HDR10-capable for the purposes of pipeline configuration.
     /// Covers both active HDR desktop mode and "Stream HDR video" laptop screens.
     /// </summary>
-    public bool SupportsHdr10 => _supportsHdr10;
+    public bool SupportsHdr10 => _supportsHdr10 || _canStreamHdr;
 
     /// <summary>True when the display supports WCG but not full HDR luminance.</summary>
     public bool SupportsWcg   => _supportsWcg;
@@ -110,14 +116,15 @@ public sealed class AdvancedColorDisplayManager
             // HDR10 / HDR10+ capable: covers active HDR desktop AND "Stream HDR video" laptops.
             _supportsHdr10 = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.HighDynamicRange
                           || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10)
-                          || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10Plus);
+                          || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10Plus)
+                          || _canStreamHdr;
 
             // WCG: wide gamut but not full HDR luminance range.
             _supportsWcg = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.WideColorGamut;
 
             System.Diagnostics.Debug.WriteLine(
-                $"[HDR Display] HDR Active: {_isHdrActive}, Stream: {_canStreamHdr}, " +
-                $"SupportsHdr10: {_supportsHdr10}, SupportsWcg: {_supportsWcg}, " +
+                $"[HDR Display] HDR Active: {_isHdrActive}, Stream: {_canStreamHdr} (StreamOnly: {IsHdrStreamingCapableOnly}), " +
+                $"SupportsHdr10: {SupportsHdr10}, SupportsWcg: {_supportsWcg}, " +
                 $"SDR White Level: {_sdrWhiteLevelInNits} nits");
 
             // Raise on the UI thread so subscribers don't need to marshal.

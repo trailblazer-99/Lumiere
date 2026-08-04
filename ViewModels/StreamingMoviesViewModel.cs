@@ -76,6 +76,37 @@ namespace LumiereMediaPlayer.ViewModels
         public ObservableCollection<string> AccessTypeOptions { get; } = new() { "All Access Types", "Subscription", "Free", "Rent or Buy" };
         [ObservableProperty] public partial string SelectedAccessType { get; set; } = "All Access Types";
 
+        private static readonly Dictionary<string, string> ProviderIdMap = new()
+        {
+            { "Netflix", "203" },
+            { "Prime Video", "26" },
+            { "Disney+", "372" },
+            { "Crunchyroll", "376" },
+            { "Hotstar", "122" },
+            { "JioCinema", "445" },
+            { "Apple TV+", "371" },
+            { "Hulu", "157" },
+            { "Max", "387" },
+            { "Paramount+", "444" },
+            { "Peacock", "389" }
+        };
+
+        public ObservableCollection<string> ProviderOptions { get; } = new()
+        {
+            "All Services", "Netflix", "Prime Video", "Disney+", "Crunchyroll", "Hotstar", "JioCinema", "Apple TV+", "Hulu", "Max", "Paramount+", "Peacock"
+        };
+        [ObservableProperty] public partial string SelectedProvider { get; set; } = "All Services";
+
+        partial void OnSelectedProviderChanged(string value)
+        {
+            if (_initialized && value != null)
+            {
+                CurrentPage = 1;
+                if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadMoviesAsync();
+                else _ = PerformSearchAsync(ActiveSearchQuery);
+            }
+        }
+
         partial void OnSelectedAccessTypeChanged(string value)
         {
             if (_initialized && value != null)
@@ -187,7 +218,12 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     genres = genreId.ToString();
                 }
-                var response = await _watchmodeService.ListMoviesAsync(CurrentPage, 20, SelectedRegion, sourceTypes, genres);
+                string sourceIds = "";
+                if (SelectedProvider != "All Services" && ProviderIdMap.TryGetValue(SelectedProvider, out string? pId))
+                {
+                    sourceIds = pId;
+                }
+                var response = await _watchmodeService.ListMoviesAsync(CurrentPage, 20, SelectedRegion, sourceTypes, genres, sourceIds);
                 AntiGravityLogger.Log($"LoadMoviesAsync finished API. Version: {requestVersion}, Count: {response?.Count ?? 0}");
 
                 if (requestVersion == _contentRequestVersion)

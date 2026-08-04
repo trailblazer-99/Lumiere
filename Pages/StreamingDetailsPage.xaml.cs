@@ -80,14 +80,20 @@ namespace LumiereMediaPlayer.Pages
             var seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
             var episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
             var sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
+            var similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
+            var scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
+            var releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
 
-            await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask);
+            await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask, similarTask, scoresTask, releasesTask);
 
             _details = await detailsTask;
             var cast = await castTask;
             var seasons = await seasonsTask;
             var episodes = await episodesTask;
             var sources = await sourcesTask;
+            var similarTitles = await similarTask;
+            var scores = await scoresTask;
+            var releases = await releasesTask;
 
             if (_details == null)
             {
@@ -114,6 +120,44 @@ namespace LumiereMediaPlayer.Pages
                 GenresText.Text = string.Join(" • ", _details.GenreNames);
             }
 
+            // Bind multi-platform scores
+            bool anyScore = false;
+            if (scores != null)
+            {
+                if (scores.RottenTomatoesScore != null && scores.RottenTomatoesScore > 0)
+                {
+                    RtScoreText.Text = $"{scores.RottenTomatoesScore}%";
+                    RtScoreBorder.Visibility = Visibility.Visible;
+                    anyScore = true;
+                }
+                else { RtScoreBorder.Visibility = Visibility.Collapsed; }
+
+                if (scores.ImdbScore != null && scores.ImdbScore > 0)
+                {
+                    ImdbScoreText.Text = scores.ImdbVotes != null ? $"{scores.ImdbScore:F1} ({scores.ImdbVotes:N0})" : $"{scores.ImdbScore:F1}";
+                    ImdbScoreBorder.Visibility = Visibility.Visible;
+                    anyScore = true;
+                }
+                else { ImdbScoreBorder.Visibility = Visibility.Collapsed; }
+
+                if (scores.CriticScore != null && scores.CriticScore > 0)
+                {
+                    CriticScoreText.Text = $"{scores.CriticScore}";
+                    CriticScoreBorder.Visibility = Visibility.Visible;
+                    anyScore = true;
+                }
+                else { CriticScoreBorder.Visibility = Visibility.Collapsed; }
+
+                if (scores.AudienceScore != null && scores.AudienceScore > 0)
+                {
+                    AudienceScoreText.Text = $"{scores.AudienceScore}%";
+                    AudienceScoreBorder.Visibility = Visibility.Visible;
+                    anyScore = true;
+                }
+                else { AudienceScoreBorder.Visibility = Visibility.Collapsed; }
+            }
+            ScoresPanel.Visibility = anyScore ? Visibility.Visible : Visibility.Collapsed;
+
             OverviewText.Text = _details.PlotOverview ?? "No synopsis available.";
 
             // Poster
@@ -138,11 +182,72 @@ namespace LumiereMediaPlayer.Pages
             RegionDetailComboBox.ItemsSource = RegionHelper.GetAllRegions();
             RegionDetailComboBox.SelectedValue = _selectedRegion;
 
-            // Bind cast
-            CastGridView.ItemsSource = cast.OrderBy(c => c.Order ?? 999).Take(30).ToList();
+            // Bind cast & crew separately
+            var castMembers = cast
+                .Where(c => string.Equals(c.Type, "Cast", StringComparison.OrdinalIgnoreCase) || string.Equals(c.Type, "Actor", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(c => c.Order ?? 999)
+                .Take(50)
+                .ToList();
+            CastGridView.ItemsSource = castMembers;
+
+            var crewMembers = cast
+                .Where(c => !(string.Equals(c.Type, "Cast", StringComparison.OrdinalIgnoreCase) || string.Equals(c.Type, "Actor", StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(c => GetCrewPriority(c))
+                .ThenBy(c => c.Order ?? 999)
+                .Take(50)
+                .ToList();
+            CrewGridView.ItemsSource = crewMembers;
+            if (crewMembers.Count == 0)
+            {
+                DetailsPivot.Items.Remove(CrewPivotItem);
+            }
+            else if (!DetailsPivot.Items.Contains(CrewPivotItem))
+            {
+                int castIndex = DetailsPivot.Items.IndexOf(CastPivotItem);
+                DetailsPivot.Items.Insert(castIndex >= 0 ? castIndex + 1 : 1, CrewPivotItem);
+            }
+
+            // Bind similar titles (filter so movies only show movies and tv shows only show tv shows)
+            if (similarTitles != null && similarTitles.Count > 0 && _details != null)
+            {
+                bool isTv = _details.Type == "tv" || _details.Type == "tv_series" || _details.Type == "tv_miniseries";
+                similarTitles = similarTitles.Where(t =>
+                {
+                    if (string.IsNullOrEmpty(t.Type)) return true;
+                    bool itemTv = t.Type == "tv" || t.Type == "tv_series" || t.Type == "tv_miniseries";
+                    return isTv ? itemTv : !itemTv;
+                }).ToList();
+            }
+
+            if (similarTitles != null && similarTitles.Count > 0)
+            {
+                SimilarTitlesGridView.ItemsSource = similarTitles;
+                if (!DetailsPivot.Items.Contains(SimilarPivotItem))
+                {
+                    DetailsPivot.Items.Add(SimilarPivotItem);
+                }
+            }
+            else
+            {
+                DetailsPivot.Items.Remove(SimilarPivotItem);
+            }
+
+            // Bind release dates and windows
+            if (releases != null && releases.Count > 0)
+            {
+                ReleasesListView.ItemsSource = releases.OrderByDescending(r => r.ReleaseDate).ToList();
+                if (!DetailsPivot.Items.Contains(ReleasesPivotItem))
+                {
+                    DetailsPivot.Items.Add(ReleasesPivotItem);
+                }
+            }
+            else
+            {
+                DetailsPivot.Items.Remove(ReleasesPivotItem);
+            }
 
             // TV show hierarchy TreeView
-            if (_details.Type == "tv_series" || _details.Type == "tv_miniseries")
+            if (_details?.Type == "tv_series" || _details?.Type == "tv_miniseries")
             {
                 if (!DetailsPivot.Items.Contains(EpisodesPivotItem))
                 {
@@ -384,6 +489,17 @@ namespace LumiereMediaPlayer.Pages
                 .Where(s => string.Equals(s.Region, targetRegion, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
+            // Global anime service fallback: Crunchyroll operates globally across over 200 countries and territories.
+            // If Watchmode only tagged Crunchyroll under US/JP, ensure it is still available in regionalSources.
+            if (!regionalSources.Any(s => (s.Name?.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase) ?? false)))
+            {
+                var globalCrunchyroll = sources.Where(s => (s.Name?.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+                if (globalCrunchyroll.Any())
+                {
+                    regionalSources.AddRange(globalCrunchyroll);
+                }
+            }
+
             if (regionalSources.Count == 0)
             {
                 ProvidersContainer.Children.Add(new TextBlock 
@@ -497,7 +613,8 @@ namespace LumiereMediaPlayer.Pages
 
             foreach (var source in sourcesList)
             {
-                if (string.IsNullOrEmpty(source.WebUrl)) continue;
+                var resolvedUrl = ResolveProviderUrl(source);
+                if (string.IsNullOrEmpty(resolvedUrl)) continue;
 
                 var btn = new Button
                 {
@@ -615,6 +732,20 @@ namespace LumiereMediaPlayer.Pages
             string webUrl = source.WebUrl ?? "";
             string name = source.Name?.ToLowerInvariant() ?? "";
 
+            if (name.Contains("crunchyroll"))
+            {
+                if (string.IsNullOrWhiteSpace(webUrl) ||
+                    webUrl.Equals("https://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
+                    webUrl.Equals("http://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
+                    webUrl.Equals("https://crunchyroll.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    string searchQuery = !string.IsNullOrWhiteSpace(_details?.Title) ? _details.Title : "";
+                    webUrl = !string.IsNullOrWhiteSpace(searchQuery)
+                        ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(searchQuery)}"
+                        : "https://www.crunchyroll.com";
+                }
+            }
+
             if (name.Contains("apple"))
             {
                 // Rewrite any tv.apple.com or itunes.apple.com URL to be region-aware based on local OS storefront region
@@ -662,6 +793,41 @@ namespace LumiereMediaPlayer.Pages
                 {
                     webUrl = webUrl.Contains("?") ? $"{webUrl}&action=play" : $"{webUrl}?action=play";
                 }
+            }
+
+            if (string.IsNullOrWhiteSpace(webUrl) || (Uri.TryCreate(webUrl, UriKind.Absolute, out var parsedUri) && string.IsNullOrEmpty(parsedUri.AbsolutePath.Trim('/')) && string.IsNullOrEmpty(parsedUri.Query)))
+            {
+                string query = !string.IsNullOrWhiteSpace(_details?.Title) ? _details.Title : "";
+                string encoded = Uri.EscapeDataString(query);
+
+                if (name.Contains("netflix"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.netflix.com/search?q={encoded}" : "https://www.netflix.com";
+                else if (name.Contains("prime") || name.Contains("amazon"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.amazon.com/s?k={encoded}&i=instant-video" : "https://www.primevideo.com";
+                else if (name.Contains("disney") && !name.Contains("hotstar"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.disneyplus.com/search?q={encoded}" : "https://www.disneyplus.com";
+                else if (name.Contains("hotstar"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.hotstar.com/in/explore?search_query={encoded}" : "https://www.hotstar.com";
+                else if (name.Contains("jiocinema") || name.Contains("jio cinema"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.jiocinema.com/search/{encoded}" : "https://www.jiocinema.com";
+                else if (name.Contains("hulu"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.hulu.com/search?q={encoded}" : "https://www.hulu.com";
+                else if (name.Contains("max") || name.Contains("hbo"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://play.max.com/search?q={encoded}" : "https://play.max.com";
+                else if (name.Contains("paramount"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.paramountplus.com/search/?q={encoded}" : "https://www.paramountplus.com";
+                else if (name.Contains("peacock"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.peacocktv.com/watch/search?q={encoded}" : "https://www.peacocktv.com";
+                else if (name.Contains("youtube"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.youtube.com/results?search_query={encoded}" : "https://www.youtube.com";
+                else if (name.Contains("crunchyroll"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.crunchyroll.com/search?q={encoded}" : "https://www.crunchyroll.com";
+                else if (name.Contains("vudu") || name.Contains("fandango"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.vudu.com/content/movies/search?minVisible=0&returnUrl=%252F&searchString={encoded}" : "https://www.vudu.com";
+                else if (name.Contains("apple") || name.Contains("itunes"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://tv.apple.com/search?term={encoded}" : "https://tv.apple.com";
+                else if (!string.IsNullOrEmpty(query))
+                    webUrl = $"https://www.google.com/search?q={Uri.EscapeDataString(query + " watch on " + source.Name)}";
             }
 
             return webUrl;
@@ -862,6 +1028,124 @@ namespace LumiereMediaPlayer.Pages
                     }
                 }
             }
+        }
+
+        private void SimilarTitlesGridView_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (e.ClickedItem is WatchmodeTitle clickedTitle)
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+            }
+        }
+
+        private int GetCrewPriority(WatchmodeCastCrew c)
+        {
+            if (string.Equals(c.Type, "Cast", StringComparison.OrdinalIgnoreCase)) return 0;
+            string role = c.Role ?? "";
+            if (role.Contains("Director", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (role.Contains("Writer", StringComparison.OrdinalIgnoreCase) || role.Contains("Screenplay", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (role.Contains("Producer", StringComparison.OrdinalIgnoreCase)) return 3;
+            return 10;
+        }
+
+        private bool _isPersonDialogOpen = false;
+
+        private async void CastGridView_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
+                return;
+
+            try
+            {
+                _isPersonDialogOpen = true;
+
+                var progressRing = new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Center, Width = 36, Height = 36, Margin = new Thickness(0, 24, 0, 24) };
+                var container = new StackPanel { Spacing = 12 };
+                container.Children.Add(progressRing);
+
+                var dialog = new ContentDialog
+                {
+                    Title = $"{person.FullName} — Filmography",
+                    Content = container,
+                    CloseButtonText = "Close",
+                    XamlRoot = this.XamlRoot
+                };
+
+                _ = Task.Run(async () =>
+                {
+                    var details = await _watchmodeService.GetPersonDetailsAsync(person.PersonId, person.FullName);
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                    {
+                        container.Children.Clear();
+                        if (details?.KnownFor != null && details.KnownFor.Count > 0)
+                        {
+                            var titleBlock = new TextBlock
+                            {
+                                Text = $"Known for ({details.KnownFor.Count} titles):",
+                                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                                Margin = new Thickness(0, 0, 0, 8)
+                            };
+                            container.Children.Add(titleBlock);
+
+                            var listView = new ListView
+                            {
+                                SelectionMode = ListViewSelectionMode.None,
+                                IsItemClickEnabled = true,
+                                MaxHeight = 350
+                            };
+
+                            listView.ItemTemplate = CreateFilmographyItemTemplate();
+                            listView.ItemsSource = details.KnownFor;
+
+                            listView.ItemClick += (s, args) =>
+                            {
+                                if (args.ClickedItem is WatchmodeTitle clickedTitle)
+                                {
+                                    dialog.Hide();
+                                    Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+                                }
+                            };
+
+                            container.Children.Add(listView);
+                        }
+                        else
+                        {
+                            container.Children.Add(new TextBlock
+                            {
+                                Text = "No filmography information available.",
+                                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                                Margin = new Thickness(0, 12, 0, 12)
+                            });
+                        }
+                    });
+                });
+
+                await dialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CastGridView_ItemClick Error: {ex.Message}");
+            }
+            finally
+            {
+                _isPersonDialogOpen = false;
+            }
+        }
+
+        private DataTemplate CreateFilmographyItemTemplate()
+        {
+            var xaml = @"<DataTemplate xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"">
+                            <Grid Padding=""8"" Margin=""0,0,0,6"">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width=""*"" />
+                                    <ColumnDefinition Width=""Auto"" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text=""{Binding DisplayTitle}"" FontWeight=""SemiBold"" FontSize=""14"" VerticalAlignment=""Center"" />
+                                <TextBlock Grid.Column=""1"" Text=""{Binding DisplayYear}"" FontSize=""12"" Foreground=""Gray"" VerticalAlignment=""Center"" Margin=""8,0,0,0"" />
+                            </Grid>
+                         </DataTemplate>";
+            return (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
         }
     }
 }
