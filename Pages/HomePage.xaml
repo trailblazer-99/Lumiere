@@ -16,7 +16,7 @@
     <Grid>
         <!-- Scrollable normal page content -->
         <ScrollViewer>
-            <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="36" Opacity="1">
+            <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Padding="0,0,0,40" Spacing="36" Opacity="1">
 
                 <!-- Header Grid containing Brand/Greeting and Open file(s) button -->
                 <Grid x:Name="HeaderGrid" Margin="0,0,0,12">
@@ -106,7 +106,7 @@
                         <ItemsRepeater.Layout>
                             <UniformGridLayout
                                 MinColumnSpacing="16"
-                                MinItemHeight="225"
+                                MinItemHeight="290"
                                 MinItemWidth="150"
                                 MinRowSpacing="16"
                                 Orientation="Horizontal" />

@@ -374,67 +374,58 @@ public sealed partial class VideoPage : Page
                             string searchWebUrl = "";
                             string deepLinkUrl = "";
 
-                            switch (provider.ProviderName.ToLower())
+                            string nameLower = provider.ProviderName.ToLowerInvariant();
+                            switch (nameLower)
                             {
-                                case "netflix":
+                                case var n when n.Contains("netflix"):
                                     deepLinkUrl = $"netflix:search?q={q}";
                                     searchWebUrl = $"https://www.netflix.com/search?q={q}";
                                     break;
-                                case "amazon prime video":
-                                case "amazon prime":
-                                case "amazon":
+                                case var n when n.Contains("prime") || n.Contains("amazon"):
                                     deepLinkUrl = $"primevideo://search?q={q}";
                                     searchWebUrl = $"https://www.amazon.com/s?k={q}&i=instant-video";
                                     break;
-                                case "disney plus":
-                                case "disney+":
-                                    deepLinkUrl = $"disneyplus://search?q={q}";
-                                    searchWebUrl = $"https://www.disneyplus.com/search?q={q}";
-                                    break;
-                                case "jiohotstar":
-                                case "hotstar":
-                                case "disney+ hotstar":
-                                case "disney plus hotstar":
+                                case var n when n.Contains("hotstar"):
                                     deepLinkUrl = $"hotstar://search?q={q}";
                                     searchWebUrl = $"https://www.hotstar.com/in/explore?search_query={q}";
                                     break;
-                                case "jiocinema":
-                                case "jio cinema":
+                                case var n when n.Contains("disney"):
+                                    deepLinkUrl = $"disneyplus://search?q={q}";
+                                    searchWebUrl = $"https://www.disneyplus.com/search?q={q}";
+                                    break;
+                                case var n when n.Contains("jiocinema") || n.Contains("jio cinema"):
                                     deepLinkUrl = $"jiocinema://search?q={q}";
                                     searchWebUrl = $"https://www.jiocinema.com/search/{q}";
                                     break;
-                                case "apple tv plus":
-                                case "apple tv":
-                                case "apple tv store":
+                                case var n when n.Contains("apple tv"):
                                     deepLinkUrl = $"videos://tv.apple.com/search?term={q}";
                                     searchWebUrl = $"https://tv.apple.com/search?term={q}";
                                     break;
-                                case "itunes":
-                                case "apple itunes":
+                                case var n when n.Contains("itunes"):
                                     deepLinkUrl = $"itunes://itunes.apple.com/search?term={q}";
                                     searchWebUrl = $"https://itunes.apple.com/WebObjects/MZStore.woa/wa/search?term={q}";
                                     break;
-                                case "hulu":
+                                case var n when n.Contains("hulu"):
                                     deepLinkUrl = $"hulu://search?q={q}";
                                     searchWebUrl = $"https://www.hulu.com/search?q={q}";
                                     break;
-                                case "max":
+                                case var n when n.Contains("max") || n.Contains("hbo"):
                                     deepLinkUrl = $"max://search?q={q}";
                                     searchWebUrl = $"https://play.max.com/search?q={q}";
                                     break;
-                                case "paramount plus":
+                                case var n when n.Contains("paramount"):
                                     deepLinkUrl = $"paramountplus://search/?q={q}";
                                     searchWebUrl = $"https://www.paramountplus.com/search/?q={q}";
                                     break;
-                                case "peacock":
+                                case var n when n.Contains("peacock"):
                                     deepLinkUrl = $"peacock://search?q={q}";
                                     searchWebUrl = $"https://www.peacocktv.com/watch/search?q={q}";
                                     break;
-                                case "crunchyroll":
+                                case var n when n.Contains("crunchyroll"):
                                     deepLinkUrl = $"crunchyroll://search?q={q}";
                                     searchWebUrl = $"https://www.crunchyroll.com/search?q={q}";
                                     break;
-                                case "youtube":
+                                case var n when n.Contains("youtube"):
                                     deepLinkUrl = $"vnd.youtube://search?q={q}";
                                     searchWebUrl = $"https://www.youtube.com/results?search_query={q}";
                                     break;

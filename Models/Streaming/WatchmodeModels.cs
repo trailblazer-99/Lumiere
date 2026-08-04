@@ -53,11 +53,19 @@ namespace LumiereMediaPlayer.Models.Streaming
             }
         }
 
+        [JsonPropertyName("poster")]
+        public string? JsonPoster { get; set; }
+
+        [JsonPropertyName("poster_url")]
+        public string? JsonPosterUrl { get; set; }
+
         public string DisplayTitle => Title ?? string.Empty;
         public string DisplayYear => Year?.ToString() ?? string.Empty;
         
-        // We'll use Details?.PosterLarge if available, else a placeholder
-        public string? PosterUrl => Details?.DisplayPoster;
+        public string? PosterUrl => Details?.DisplayPoster
+            ?? (string.IsNullOrEmpty(JsonPosterUrl) ? null : JsonPosterUrl)
+            ?? (string.IsNullOrEmpty(JsonPoster) ? null : JsonPoster)
+            ?? (TmdbId.HasValue ? $"https://image.tmdb.org/t/p/w342/{TmdbId}.jpg" : null);
         
         public string WatchmodeUrl => $"https://v2.watchmode.com/title/{Id}";
     }
@@ -96,6 +104,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("backdrop")]
         public string? Backdrop { get; set; }
+
+        [JsonPropertyName("imdb_id")]
+        public string? ImdbId { get; set; }
+
+        [JsonPropertyName("tmdb_id")]
+        public int? TmdbId { get; set; }
 
         [JsonPropertyName("trailer")]
         public string? Trailer { get; set; }
@@ -278,6 +292,33 @@ namespace LumiereMediaPlayer.Models.Streaming
         public List<WatchmodeChangeItem> Changes { get; set; } = new();
     }
 
+    public class TmdbSimilarResponse
+    {
+        [JsonPropertyName("results")]
+        public List<TmdbSimilarItem>? Results { get; set; }
+    }
+
+    public class TmdbSimilarItem
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("first_air_date")]
+        public string? FirstAirDate { get; set; }
+
+        [JsonPropertyName("poster_path")]
+        public string? PosterPath { get; set; }
+    }
+
     public class TmdbCreditsResponse
     {
         [JsonPropertyName("cast")]
@@ -314,10 +355,55 @@ namespace LumiereMediaPlayer.Models.Streaming
         public string? Job { get; set; }
     }
 
+    public class TmdbMovieDetails
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("overview")]
+        public string? Overview { get; set; }
+
+        [JsonPropertyName("runtime")]
+        public int? Runtime { get; set; }
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("vote_average")]
+        public double? VoteAverage { get; set; }
+
+        [JsonPropertyName("poster_path")]
+        public string? PosterPath { get; set; }
+
+        [JsonPropertyName("backdrop_path")]
+        public string? BackdropPath { get; set; }
+    }
+
     public class TmdbTvDetails
     {
         [JsonPropertyName("id")]
         public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("overview")]
+        public string? Overview { get; set; }
+
+        [JsonPropertyName("first_air_date")]
+        public string? FirstAirDate { get; set; }
+
+        [JsonPropertyName("vote_average")]
+        public double? VoteAverage { get; set; }
+
+        [JsonPropertyName("poster_path")]
+        public string? PosterPath { get; set; }
+
+        [JsonPropertyName("backdrop_path")]
+        public string? BackdropPath { get; set; }
 
         [JsonPropertyName("seasons")]
         public List<TmdbTvSeasonSummary>? Seasons { get; set; }
@@ -444,6 +530,281 @@ namespace LumiereMediaPlayer.Models.Streaming
             }
             return results;
         }
+
+        public static List<WatchmodeSource> MapToWatchmodeSources(this TmdbProviderRegion region, string regionCode, string? title = null)
+        {
+            var results = new List<WatchmodeSource>();
+            if (region == null) return results;
+
+            int idCounter = 1;
+
+            void AddProviders(IEnumerable<TmdbProvider>? providers, string type)
+            {
+                if (providers == null) return;
+                foreach (var p in providers)
+                {
+                    string webUrl = region.Link ?? "";
+                    if (p.ProviderName.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title) 
+                            ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}" 
+                            : "https://www.crunchyroll.com";
+                    }
+                    results.Add(new WatchmodeSource
+                    {
+                        SourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++,
+                        Name = p.ProviderName,
+                        Type = type,
+                        Region = regionCode.ToUpperInvariant(),
+                        WebUrl = webUrl,
+                        Format = "4K"
+                    });
+                }
+            }
+
+            AddProviders(region.Flatrate, "sub");
+            AddProviders(region.Free, "free");
+            AddProviders(region.Ads, "free_with_ads");
+            AddProviders(region.Rent, "rent");
+            AddProviders(region.Buy, "purchase");
+
+            return results;
+        }
+
+        public static WatchmodePersonDetails MapToWatchmodePersonDetails(this TmdbCombinedCreditsResponse credits, string fullName)
+        {
+            var details = new WatchmodePersonDetails { FullName = fullName };
+            var allItems = new List<TmdbCreditItem>();
+            if (credits.Cast != null) allItems.AddRange(credits.Cast);
+            if (credits.Crew != null) allItems.AddRange(credits.Crew);
+
+            var topTitles = allItems
+                .Where(x => !string.IsNullOrWhiteSpace(x.Title ?? x.Name))
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .OrderByDescending(x => x.Popularity)
+                .Take(25)
+                .Select(x =>
+                {
+                    string year = "";
+                    string dateStr = x.ReleaseDate ?? x.FirstAirDate ?? "";
+                    if (!string.IsNullOrEmpty(dateStr) && dateStr.Length >= 4)
+                        year = dateStr.Substring(0, 4);
+
+                    return new WatchmodeTitle
+                    {
+                        Id = x.Id,
+                        Title = x.Title ?? x.Name ?? "Untitled",
+                        Year = int.TryParse(year, out int y) ? y : (int?)null,
+                        Type = x.MediaType == "tv" ? "tv_series" : "movie"
+                    };
+                })
+                .ToList();
+
+            details.KnownFor = topTitles;
+            return details;
+        }
+
+        public static WatchmodeDetails MapToWatchmodeDetails(this TmdbMovieDetails movie)
+        {
+            string yearStr = movie.ReleaseDate ?? "";
+            int.TryParse(yearStr.Length >= 4 ? yearStr.Substring(0, 4) : "", out int year);
+
+            return new WatchmodeDetails
+            {
+                Id = movie.Id,
+                Title = movie.Title ?? "Unknown Title",
+                PlotOverview = movie.Overview,
+                Type = "movie",
+                RuntimeMinutes = movie.Runtime,
+                Year = year > 0 ? year : (int?)null,
+                UserRating = movie.VoteAverage,
+                Poster = !string.IsNullOrEmpty(movie.PosterPath) ? $"https://image.tmdb.org/t/p/w342{movie.PosterPath}" : null,
+                PosterLarge = !string.IsNullOrEmpty(movie.PosterPath) ? $"https://image.tmdb.org/t/p/w780{movie.PosterPath}" : null,
+                Backdrop = !string.IsNullOrEmpty(movie.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{movie.BackdropPath}" : null
+            };
+        }
+
+        public static WatchmodeDetails MapToWatchmodeDetails(this TmdbTvDetails tv)
+        {
+            string yearStr = tv.FirstAirDate ?? "";
+            int.TryParse(yearStr.Length >= 4 ? yearStr.Substring(0, 4) : "", out int year);
+
+            return new WatchmodeDetails
+            {
+                Id = tv.Id,
+                Title = tv.Name ?? "Unknown TV Show",
+                PlotOverview = tv.Overview,
+                Type = "tv_series",
+                Year = year > 0 ? year : (int?)null,
+                UserRating = tv.VoteAverage,
+                Poster = !string.IsNullOrEmpty(tv.PosterPath) ? $"https://image.tmdb.org/t/p/w342{tv.PosterPath}" : null,
+                PosterLarge = !string.IsNullOrEmpty(tv.PosterPath) ? $"https://image.tmdb.org/t/p/w780{tv.PosterPath}" : null,
+                Backdrop = !string.IsNullOrEmpty(tv.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{tv.BackdropPath}" : null
+            };
+        }
+    }
+
+    public class WatchmodeProviderInfo
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = string.Empty;
+
+        [JsonPropertyName("logo_100px")]
+        public string? Logo100px { get; set; }
+
+        [JsonPropertyName("regions")]
+        public List<string>? Regions { get; set; }
+    }
+
+    public class WatchmodeScores
+    {
+        [JsonPropertyName("imdb_score")]
+        public double? ImdbScore { get; set; }
+
+        [JsonPropertyName("imdb_votes")]
+        public int? ImdbVotes { get; set; }
+
+        [JsonPropertyName("tmdb_score")]
+        public double? TmdbScore { get; set; }
+
+        [JsonPropertyName("critic_score")]
+        public int? CriticScore { get; set; }
+
+        [JsonPropertyName("audience_score")]
+        public int? AudienceScore { get; set; }
+
+        [JsonPropertyName("rotten_tomatoes_score")]
+        public int? RottenTomatoesScore { get; set; }
+    }
+
+    public class WatchmodeRelease
+    {
+        [JsonPropertyName("type")]
+        public int Type { get; set; } // 1 = Theatrical, 2 = Digital, 3 = Physical, 4 = TV Broadcast
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("region")]
+        public string? Region { get; set; }
+
+        [JsonPropertyName("platform")]
+        public string? Platform { get; set; }
+
+        public string DisplayType => Type switch
+        {
+            1 => "Theatrical",
+            2 => "Digital / Streaming",
+            3 => "Physical (Blu-ray/DVD)",
+            4 => "TV Broadcast",
+            _ => "Release"
+        };
+    }
+
+    public class WatchmodePersonRawResponse
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("full_name")]
+        public string? FullName { get; set; }
+
+        [JsonPropertyName("headshot_url")]
+        public string? HeadshotUrl { get; set; }
+
+        [JsonPropertyName("known_for")]
+        public List<int>? KnownFor { get; set; }
+    }
+
+    public class WatchmodePersonDetails
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("full_name")]
+        public string? FullName { get; set; }
+
+        [JsonPropertyName("headshot_url")]
+        public string? HeadshotUrl { get; set; }
+
+        [JsonPropertyName("known_for")]
+        public List<WatchmodeTitle> KnownFor { get; set; } = new();
+    }
+
+    public class WatchmodeNetwork
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("country")]
+        public string? Country { get; set; }
+    }
+
+    public class WatchmodeGenre
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class TmdbPersonSearchResponse
+    {
+        [JsonPropertyName("results")]
+        public List<TmdbPersonSearchResult>? Results { get; set; }
+    }
+
+    public class TmdbPersonSearchResult
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+    }
+
+    public class TmdbCombinedCreditsResponse
+    {
+        [JsonPropertyName("cast")]
+        public List<TmdbCreditItem>? Cast { get; set; }
+
+        [JsonPropertyName("crew")]
+        public List<TmdbCreditItem>? Crew { get; set; }
+    }
+
+    public class TmdbCreditItem
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("media_type")]
+        public string? MediaType { get; set; }
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("first_air_date")]
+        public string? FirstAirDate { get; set; }
+
+        [JsonPropertyName("popularity")]
+        public double Popularity { get; set; }
     }
 }
 

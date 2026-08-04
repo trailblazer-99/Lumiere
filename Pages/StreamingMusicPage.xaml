@@ -51,7 +51,7 @@
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="models:MusicApiTrack">
-                                    <Border Width="200" Height="200" CornerRadius="8" Translation="0,0,8"
+                                    <Border Width="200" Height="200" CornerRadius="12" Translation="0,0,8"
                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                            PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
@@ -60,7 +60,7 @@
                                         </Border.Shadow>
                                         <Grid>
                                              <Image Source="{Binding HighResArtworkUrl}" Stretch="UniformToFill" />
-                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
+                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                                  <Border.Background>
                                                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                          <GradientStop Color="#00000000" Offset="0.0"/>
@@ -113,7 +113,7 @@
                 <GridView x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
                     <GridView.ItemTemplate>
                         <DataTemplate x:DataType="services:SavedStreamingItem">
-                            <Border Width="200" Height="200" Margin="0,0,16,16" CornerRadius="8" Translation="0,0,8"
+                            <Border Width="200" Height="200" Margin="0,0,16,16" CornerRadius="12" Translation="0,0,8"
                                   Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                   BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                   PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
@@ -122,7 +122,7 @@
                                 </Border.Shadow>
                                 <Grid>
                                     <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
-                                    <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
+                                    <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                 <GradientStop Color="#00000000" Offset="0.0"/>

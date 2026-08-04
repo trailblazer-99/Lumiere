@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Management;
+using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 using Windows.Media.Playback;
@@ -47,6 +50,12 @@ public sealed class HdrPipelineService
     private HdrContentFormat _contentFormat = HdrContentFormat.None;
     private bool _hdrActive;
 
+    // ── Multi-GPU / Hybrid Graphics environment state ───────────────
+
+    private bool _isDualGpuPresent;
+    private string _gpuEnvironmentDescription = "Single GPU Environment";
+    private bool _gpuDetectionComplete;
+
     // ── Content-format cache ─────────────────────────────────────────
     // Avoids re-inspecting all video tracks on fullscreen toggling when the
     // media source hasn't changed.
@@ -69,6 +78,12 @@ public sealed class HdrPipelineService
     public DisplayHdrCapability DisplayCapability => _displayCapability;
     public HdrContentFormat ContentFormat => _contentFormat;
 
+    /// <summary>True when a multi-GPU / hybrid graphics environment (e.g. AMD Radeon + NVIDIA GTX/RTX) is detected.</summary>
+    public bool IsDualGpuEnvironment => _isDualGpuPresent;
+
+    /// <summary>Human-readable summary of detected video adapters.</summary>
+    public string GpuEnvironmentDescription => _gpuEnvironmentDescription;
+
     /// <summary>
     /// Evaluates if the current display configuration supports HDR output.
     /// This forces a real-time capability refresh.
@@ -79,7 +94,8 @@ public sealed class HdrPipelineService
         {
             RefreshDisplayCapability();
             return _displayCapability == DisplayHdrCapability.Hdr10 ||
-                   _displayCapability == DisplayHdrCapability.DolbyVision;
+                   _displayCapability == DisplayHdrCapability.DolbyVision ||
+                   AppServices.DisplayManager.CanStreamHdr;
         }
     }
     public bool IsHdrActive => _hdrActive;
@@ -97,7 +113,7 @@ public sealed class HdrPipelineService
         DisplayHdrCapability.Hdr10       => "HDR10 Display",
         DisplayHdrCapability.DolbyVision => "Dolby Vision Display",
         DisplayHdrCapability.Wcg         => "WCG Display",
-        _                                => "SDR Display"
+        _                                => AppServices.DisplayManager.CanStreamHdr ? "HDR Streaming Capable Display" : "SDR Display"
     };
 
     // ── Initialise ───────────────────────────────────────────────────
@@ -121,12 +137,60 @@ public sealed class HdrPipelineService
             // by listening to the single shared display manager event.
             AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) => RefreshDisplayCapability();
 
+            // Perform non-blocking WMI scan to detect dual-GPU hybrid graphics setups
+            // (e.g. integrated AMD Radeon + discrete Nvidia RTX/GTX).
+            _ = EnsureGpuEnvironmentDetectedAsync();
+
             Debug.WriteLine("[HDR] Initialized — display tracking via AdvancedColorDisplayManager");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[HDR] Initialize error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Asynchronously inspects WMI Win32_VideoController on a thread-pool task to detect
+    /// multi-GPU / hybrid graphics environments without blocking the UI thread.
+    /// </summary>
+    private async Task EnsureGpuEnvironmentDetectedAsync()
+    {
+        if (_gpuDetectionComplete) return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                var gpuNames = new List<string>();
+                using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    if (obj["Name"] is string name && !string.IsNullOrWhiteSpace(name))
+                    {
+                        gpuNames.Add(name.Trim());
+                    }
+                }
+
+                if (gpuNames.Count > 1)
+                {
+                    _isDualGpuPresent = true;
+                    _gpuEnvironmentDescription = $"Dual GPU Environment ({string.Join(" + ", gpuNames)})";
+                    Debug.WriteLine($"[HDR Dual-GPU] Multi-GPU environment detected: {_gpuEnvironmentDescription}. Configured direct DXGI shared-surface MPO pipeline for 10-bit HDR color preservation across adapters.");
+                }
+                else if (gpuNames.Count == 1)
+                {
+                    _isDualGpuPresent = false;
+                    _gpuEnvironmentDescription = $"Single GPU ({gpuNames[0]})";
+                }
+
+                _gpuDetectionComplete = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[HDR Dual-GPU] GPU detection scan failed: {ex.Message}");
+                _gpuDetectionComplete = true;
+            }
+        });
     }
 
     // ── Display detection ────────────────────────────────────────────
@@ -149,7 +213,7 @@ public sealed class HdrPipelineService
             else
                 _displayCapability = DisplayHdrCapability.Sdr;
 
-            Debug.WriteLine($"[HDR] Display capability: {_displayCapability}");
+            Debug.WriteLine($"[HDR] Display capability: {_displayCapability} (StreamOnly={dm.IsHdrStreamingCapableOnly})");
         }
         catch (Exception ex)
         {
@@ -333,48 +397,66 @@ public sealed class HdrPipelineService
         //
         //    ForceOn  — user explicitly opted in; always boost regardless of display or content.
         //    ForceSdr — user explicitly opted out; always tone-map down to SDR.
-        //    Auto     — unconditionally enable so the brightness boost fires on every display,
-        //               including laptops that support "Stream HDR video" but report an SDR desktop.
-        //               This is the safest fallback for heterogeneous hardware.
+        //    Auto     — enable only when playing detected HDR content on an HDR-capable screen
+        //               (including laptops that support "Stream HDR video" but report an SDR desktop).
+        bool isDisplayHdrCapable = _displayCapability == DisplayHdrCapability.Hdr10 ||
+                                   _displayCapability == DisplayHdrCapability.DolbyVision ||
+                                   AppServices.DisplayManager.CanStreamHdr;
+        bool isContentHdr = format != HdrContentFormat.None;
+
         bool shouldEnableHdr = settings.HdrMode switch
         {
             HdrMode.ForceOn  => true,   // always boost — user's explicit choice
             HdrMode.ForceSdr => false,  // always SDR   — user's explicit choice
-            _                => true    // Auto: unconditional (covers all display configurations)
+            _                => isContentHdr && isDisplayHdrCapable
         };
 
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
-        TryConfigureNativePipeline(player);
+        TryConfigureNativePipeline(player, shouldEnableHdr, _isDualGpuPresent);
 
         _hdrActive = shouldEnableHdr;
         UpdateBrightnessOverride();
 
         var args = new HdrStateChangedEventArgs
         {
-            IsHdrActive        = _hdrActive,
-            ContentFormat      = _contentFormat,
-            DisplayCapability  = _displayCapability,
-            ToneMappingMode    = settings.ToneMappingMode,
-            PeakBrightnessNits = settings.PeakBrightnessNits
+            IsHdrActive               = _hdrActive,
+            ContentFormat             = _contentFormat,
+            DisplayCapability         = _displayCapability,
+            ToneMappingMode           = settings.ToneMappingMode,
+            PeakBrightnessNits        = settings.PeakBrightnessNits,
+            IsDualGpuEnvironment      = _isDualGpuPresent,
+            IsHdrStreamingCapableOnly = AppServices.DisplayManager.IsHdrStreamingCapableOnly
         };
 
         Debug.WriteLine($"[HDR] Pipeline — active={_hdrActive}, " +
-                        $"content={_contentFormat}, display={_displayCapability}, " +
-                        $"toneMap={settings.ToneMappingMode}, peak={settings.PeakBrightnessNits} nits");
+                        $"content={_contentFormat}, display={_displayCapability} (StreamOnly={AppServices.DisplayManager.IsHdrStreamingCapableOnly}), " +
+                        $"dualGpu={_isDualGpuPresent}, toneMap={settings.ToneMappingMode}, peak={settings.PeakBrightnessNits} nits");
 
         HdrStateChanged?.Invoke(this, args);
     }
 
     // ── Native MPO pipeline ───────────────────────────────────────────
 
-    private static void TryConfigureNativePipeline(MediaPlayer player)
+    private static void TryConfigureNativePipeline(MediaPlayer player, bool isHdrActive, bool isDualGpu)
     {
         try
         {
+            // Always disable VideoFrameServer mode for HDR or Dual GPU environments so Media Foundation
+            // uses native DXGI shared-surface Multi-Plane Overlay (MPO) and preserves 10-bit P010 HDR
+            // color metadata across GPU adapters without PCIe system-memory readback.
             if (player.IsVideoFrameServerEnabled)
             {
                 player.IsVideoFrameServerEnabled = false;
                 Debug.WriteLine("[HDR] Disabled VideoFrameServer — native MPO pipeline active");
+            }
+
+            // On dual-GPU laptops (e.g. AMD Radeon iGPU + Nvidia GTX/RTX dGPU), ensure RealTimePlayback
+            // is enabled during HDR playback so the presentation engine presents directly to DWM MPO
+            // without composition queue latency across adapters.
+            if (isDualGpu && isHdrActive && !player.RealTimePlayback)
+            {
+                player.RealTimePlayback = true;
+                Debug.WriteLine("[HDR Dual-GPU] Enabled RealTimePlayback for direct cross-adapter MPO presentation");
             }
         }
         catch (Exception ex)
@@ -453,4 +535,6 @@ public sealed class HdrStateChangedEventArgs : EventArgs
     public DisplayHdrCapability DisplayCapability { get; init; }
     public ToneMappingMode ToneMappingMode { get; init; }
     public int PeakBrightnessNits { get; init; }
+    public bool IsDualGpuEnvironment { get; init; }
+    public bool IsHdrStreamingCapableOnly { get; init; }
 }

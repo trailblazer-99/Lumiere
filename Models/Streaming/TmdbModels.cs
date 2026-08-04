@@ -121,6 +121,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("buy")]
         public List<TmdbProvider> Buy { get; set; } = new();
+
+        [JsonPropertyName("free")]
+        public List<TmdbProvider> Free { get; set; } = new();
+
+        [JsonPropertyName("ads")]
+        public List<TmdbProvider> Ads { get; set; } = new();
     }
 
     public class TmdbProvider
