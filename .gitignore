@@ -63,6 +63,15 @@ deploy/
 
 ## Agent / AI Rules & Customizations
 .agents/
+.github/agents/
+*.agent.md
 AGENTS.md
 Agent.md
 AGENTS.override.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.windsurf/
+.clonerules
+.copilot/
