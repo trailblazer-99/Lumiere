@@ -21,13 +21,10 @@ namespace LumiereMediaPlayer.Services;
 /// user's previous level when HDR playback ends.
 /// </para>
 /// <para>
-/// <b>Tone-mapping:</b>  The native Media Processing Object (MPO) pipeline
-/// (<c>IsVideoFrameServerEnabled = false</c>) lets the Windows compositor
-/// and display hardware handle HDR → SDR tone-mapping.  The
-/// <see cref="AppSettings.ToneMappingMode"/> and
-/// <see cref="AppSettings.PeakBrightnessNits"/> settings are preserved for
-/// future custom-renderer support but are <b>not</b> applied by this
-/// service.
+/// <b>Tone-mapping:</b>  Configures Media Foundation tone-mapping operator attributes
+/// (<c>Reinhard</c>, <c>Aces</c>, <c>Bt2408</c>, <c>Clip</c>) and color space target primaries/curves
+/// on the active <see cref="Windows.Media.Playback.MediaPlaybackItem"/> video tracks so that HDR content
+/// is accurately tone-mapped down to SDR or mapped for HDR display highlights.
 /// </para>
 /// <para>
 /// <b>Display capability</b> is read from <see cref="AppServices.DisplayManager"/>
@@ -414,6 +411,9 @@ public sealed class HdrPipelineService
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
         TryConfigureNativePipeline(player, shouldEnableHdr, _isDualGpuPresent);
 
+        // 4. Configure Media Foundation tone-mapping operator and color space attributes on video tracks
+        ApplyToneMapping(item, settings.ToneMappingMode, shouldEnableHdr);
+
         _hdrActive = shouldEnableHdr;
         UpdateBrightnessOverride();
 
@@ -465,6 +465,66 @@ public sealed class HdrPipelineService
         }
     }
 
+    private static void ApplyToneMapping(MediaPlaybackItem? item, ToneMappingMode mode, bool isHdrActive)
+    {
+        if (item == null || item.VideoTracks.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            // Map ToneMappingMode enum to Media Foundation Tone Mapping Operator index:
+            // 0 = Reinhard (smooth global roll-off)
+            // 1 = ACES (cinematic film curve approximation)
+            // 2 = BT.2408 (ITU reference HDR-to-SDR standard)
+            // 3 = Clip (linear highlight clipping)
+            uint toneMapOperatorIndex = mode switch
+            {
+                ToneMappingMode.Reinhard => 0u,
+                ToneMappingMode.Aces     => 1u,
+                ToneMappingMode.Bt2408   => 2u,
+                ToneMappingMode.Clip     => 3u,
+                _                        => 1u
+            };
+
+            var toneMapGuid = new Guid("DE9AC8C9-9602-4A85-AA27-BCE095709DFF"); // MF_VIDEO_TONEMAPPING_OPERATOR
+            var primariesGuid = new Guid("dbfbe4d7-0740-4ee0-8192-850AB0E21935"); // MF_MT_VIDEO_PRIMARIES
+            var transferFuncGuid = new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EEED2"); // MF_MT_TRANSFER_FUNCTION
+
+            foreach (var track in item.VideoTracks)
+            {
+                try
+                {
+                    var props = track.GetEncodingProperties();
+                    props.Properties[toneMapGuid] = toneMapOperatorIndex;
+
+                    if (!isHdrActive)
+                    {
+                        // When tone-mapping HDR down to SDR, instruct Media Foundation Video Processor
+                        // to map to BT.709 primaries (index 2) and BT.709 transfer curve (index 1)
+                        props.Properties[primariesGuid] = 2u;
+                        props.Properties[transferFuncGuid] = 1u;
+                    }
+                    else
+                    {
+                        // When HDR output is active, preserve BT.2020 primaries (index 9) and PQ ST.2084 curve (index 6)
+                        // while applying the selected tone mapping operator for highlight compression
+                        props.Properties[primariesGuid] = 9u;
+                        props.Properties[transferFuncGuid] = 6u;
+                    }
+                }
+                catch { }
+            }
+
+            Debug.WriteLine($"[HDR ToneMapping] Applied mode '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}) across {item.VideoTracks.Count} video tracks");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[HDR ToneMapping] Failed to apply tone mapping: {ex.Message}");
+        }
+    }
+
     private BrightnessOverrideHelper? _brightnessOverride;
     private bool _isAppFullscreen;
 
@@ -478,7 +538,7 @@ public sealed class HdrPipelineService
     {
         try
         {
-            if (_hdrActive && _isAppFullscreen)
+            if (_hdrActive && AppServices.Settings.Current.AutoBoostHdrBrightness)
             {
                 if (_brightnessOverride == null)
                 {

@@ -1567,7 +1567,7 @@ public sealed partial class MainWindow : Window
 
             if (ContentFrame?.Content is VideoPage vp)
             {
-                vp.SyncMediaPlayer();
+                vp.SyncMediaPlayer(true);
             }
         }
     }
@@ -1702,7 +1702,7 @@ public sealed partial class MainWindow : Window
                 GlobalVideoPlayer.SetMediaPlayer(null);
 
                 if (ContentFrame?.Content is VideoPage vp)
-                    vp.SyncMediaPlayer();
+                    vp.SyncMediaPlayer(true);
             }
 
             // Restore RowDefinitions for normal windowed layout
@@ -2560,6 +2560,10 @@ public sealed partial class MainWindow : Window
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    if (ContentFrame?.Content is VideoPage vp)
+                    {
+                        vp.SyncMediaPlayer(true);
+                    }
                 }
                 else
                 {

@@ -51,6 +51,8 @@ public sealed class AppSettings
     // ── HDR & Color Pipeline ───────────────────────────────────────
     /// <summary>Controls when HDR output is engaged.</summary>
     public HdrMode HdrMode { get; set; } = HdrMode.Auto;
+    /// <summary>Automatically boost screen brightness to 100% when HDR playback is active.</summary>
+    public bool AutoBoostHdrBrightness { get; set; } = true;
     /// <summary>Tone-mapping operator used for HDR→SDR conversion or highlight roll-off.</summary>
     public ToneMappingMode ToneMappingMode { get; set; } = ToneMappingMode.Aces;
     /// <summary>Target peak brightness in nits for tone-mapping output (100–10000).</summary>

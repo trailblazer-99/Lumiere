@@ -528,6 +528,23 @@
                     </Grid>
                 </Border>
 
+                <!-- Auto Brightness Boost -->
+                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto brightness boost in HDR"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically boost monitor or laptop brightness to 100% when HDR playback starts, and restore when finished."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoBoostHdrBrightness, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
                 <!-- Tone Mapping -->
                 <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
                     <Grid ColumnSpacing="16">
@@ -547,31 +564,6 @@
                             <ComboBoxItem Content="BT.2408 (ITU)"/>
                             <ComboBoxItem Content="Clip (none)"/>
                         </ComboBox>
-                    </Grid>
-                </Border>
-
-                <!-- Peak Brightness -->
-                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
-                    <Grid ColumnSpacing="16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
-                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Peak brightness (nits)"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Target luminance for HDR highlights. Match to your display's peak brightness."/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="140" Minimum="100" Maximum="4000" StepFrequency="100"
-                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
-                                    VerticalAlignment="Center"
-                                    Value="{x:Bind ViewModel.PeakBrightnessNits, Mode=TwoWay}"/>
-                            <TextBlock Text="{x:Bind ViewModel.PeakBrightnessText, Mode=OneWay}"
-                                       Width="60" TextAlignment="Right" VerticalAlignment="Center"
-                                       FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
                     </Grid>
                 </Border>
 
