@@ -45,6 +45,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial HdrMode SelectedHdrMode { get; set; }
     [ObservableProperty] public partial ToneMappingMode SelectedToneMappingMode { get; set; }
     [ObservableProperty] public partial int PeakBrightnessNits { get; set; }
+    [ObservableProperty] public partial bool AutoBoostHdrBrightness { get; set; }
     [ObservableProperty] public partial bool HdrRealTimePlayback { get; set; }
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
@@ -444,6 +445,14 @@ public partial class SettingsViewModel : ObservableObject
         TryReapplyHdrPipeline();
     }
 
+    partial void OnAutoBoostHdrBrightnessChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.AutoBoostHdrBrightness = value;
+        _settingsService.Save();
+        TryReapplyHdrPipeline();
+    }
+
     partial void OnHdrRealTimePlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HdrRealTimePlayback = value; _settingsService.Save(); } }
     partial void OnShowHdrBadgeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHdrBadge = value; _settingsService.Save(); } }
 
@@ -694,6 +703,7 @@ public partial class SettingsViewModel : ObservableObject
         AutoRotateVideo = c.AutoRotateVideo;
 
         SelectedHdrMode = c.HdrMode;
+        AutoBoostHdrBrightness = c.AutoBoostHdrBrightness;
         SelectedToneMappingMode = c.ToneMappingMode;
         PeakBrightnessNits = c.PeakBrightnessNits;
         HdrRealTimePlayback = c.HdrRealTimePlayback;

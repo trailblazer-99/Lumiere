@@ -43,7 +43,7 @@ public sealed partial class VideoPage : Page
         // Ensure we catch the unload event to prevent memory leaks
         this.Unloaded += OnUnloaded;
 
-        SyncMediaPlayer();
+        SyncMediaPlayer(true);
         UpdateUiLuminance();
     }
 
@@ -78,10 +78,10 @@ public sealed partial class VideoPage : Page
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(VideoViewModel.CurrentVideo)
-            or nameof(VideoViewModel.IsPlaying)
             or nameof(VideoViewModel.HasSource))
         {
-            DispatcherQueue.TryEnqueue(SyncMediaPlayer);
+            bool force = e.PropertyName == nameof(VideoViewModel.CurrentVideo);
+            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
         }
     }
 
@@ -89,7 +89,7 @@ public sealed partial class VideoPage : Page
     {
         if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
         {
-            DispatcherQueue.TryEnqueue(SyncMediaPlayer);
+            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio)
                  || e.PropertyName == nameof(PlaybackViewModel.VideoStretch))
@@ -100,7 +100,7 @@ public sealed partial class VideoPage : Page
         {
             DispatcherQueue.TryEnqueue(async () =>
             {
-                SyncMediaPlayer();
+                SyncMediaPlayer(true);
                 if (ViewModel.CurrentVideo != null)
                 {
                     bool isFsVisible = App.MainWindowInstance != null && App.MainWindowInstance.FullscreenMetadataOverlay.Visibility == Visibility.Visible;
@@ -114,15 +114,27 @@ public sealed partial class VideoPage : Page
         }
     }
 
-    public void SyncMediaPlayer()
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+    }
+
+    public void SyncMediaPlayer(bool forceRefresh = false)
     {
         bool isPip = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay;
+        bool isFullscreen = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
 
-        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive && !isPip)
+        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive && !isPip && !isFullscreen)
         {
-            if (LocalVideoPlayer.MediaPlayer == null)
+            var sessionPlayer = AppServices.PlaybackViewModel.Session.MediaPlayer;
+            if (LocalVideoPlayer.MediaPlayer != sessionPlayer || forceRefresh)
             {
-                LocalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
+                if (LocalVideoPlayer.MediaPlayer != null)
+                {
+                    LocalVideoPlayer.SetMediaPlayer(null);
+                }
+                LocalVideoPlayer.SetMediaPlayer(sessionPlayer);
             }
             UpdatePlayerLayout();
         }
