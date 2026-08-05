@@ -15,7 +15,6 @@ namespace LumiereMediaPlayer.Services.Streaming
         private const string BaseUrl = "https://api.watchmode.com/v1";
         
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
-        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
 
         private static readonly Dictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
 

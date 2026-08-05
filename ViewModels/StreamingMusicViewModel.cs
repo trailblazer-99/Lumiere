@@ -71,7 +71,9 @@ namespace LumiereMediaPlayer.ViewModels
 
                 if (requestVersion == _contentRequestVersion)
                 {
-                    Tracks = new ObservableCollection<MusicApiTrack>(results);
+                    if (Tracks == null) Tracks = new ObservableCollection<MusicApiTrack>();
+                    for (int i = 0; i < results.Count; i++) { if (i < Tracks.Count) Tracks[i] = results[i]; else Tracks.Add(results[i]); }
+                    while (Tracks.Count > results.Count) Tracks.RemoveAt(Tracks.Count - 1);
                 }
             }
             finally

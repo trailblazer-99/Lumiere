@@ -10,6 +10,7 @@ namespace LumiereMediaPlayer.Pages
     public sealed partial class StreamingTwitchPage : Page
     {
         private WebView2? _webView;
+        private bool _isInitialized = false;
 
         public StreamingTwitchPage()
         {
@@ -58,9 +59,13 @@ namespace LumiereMediaPlayer.Pages
                     
                     // Enable full screen support from within the Twitch web player
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
+                    _isInitialized = true;
                 }
 
-                _webView.CoreWebView2.Navigate("https://www.twitch.tv");
+                if (_isInitialized)
+                {
+                    _webView.CoreWebView2.Navigate("https://www.twitch.tv");
+                }
             }
             catch (Exception ex)
             {
@@ -76,7 +81,7 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
-                    if (_webView.CoreWebView2 != null)
+                    if (_isInitialized)
                     {
                         _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
                     }

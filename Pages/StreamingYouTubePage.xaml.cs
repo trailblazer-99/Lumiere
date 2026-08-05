@@ -7,6 +7,7 @@ namespace LumiereMediaPlayer.Pages
     public sealed partial class StreamingYouTubePage : Page
     {
         private WebView2? _webView;
+        private bool _isInitialized = false;
 
         private string _targetUrl = "https://www.youtube.com";
 
@@ -28,7 +29,7 @@ namespace LumiereMediaPlayer.Pages
                 _targetUrl = "https://www.youtube.com";
             }
 
-            if (_webView?.CoreWebView2 != null)
+            if (_isInitialized && _webView?.CoreWebView2 != null)
             {
                 try
                 {
@@ -67,9 +68,13 @@ namespace LumiereMediaPlayer.Pages
                     
                     // Enable full screen support from within the YouTube web player
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
+                    _isInitialized = true;
                 }
 
-                _webView.CoreWebView2.Navigate(_targetUrl);
+                if (_isInitialized)
+                {
+                    _webView.CoreWebView2.Navigate(_targetUrl);
+                }
             }
             catch (Exception ex)
             {
@@ -103,11 +108,14 @@ namespace LumiereMediaPlayer.Pages
                 try
                 {
                     App.MainWindowInstance?.SetFullScreenMode(false);
-                    if (_webView.CoreWebView2 != null)
+                    if (_webView != null)
                     {
-                        _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
+                        if (_isInitialized)
+                        {
+                            _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
+                        }
+                        _webView.Close();
                     }
-                    _webView.Close();
                 }
                 catch (Exception ex)
                 {

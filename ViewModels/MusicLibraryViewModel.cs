@@ -137,7 +137,15 @@ public partial class MusicLibraryViewModel : ObservableObject
 
         if (useAi)
         {
-            filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
+            try
+            {
+                filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] SemanticSearchAsync threw unhandled exception: {ex.Message}");
+                filtered = new List<MediaItem>();
+            }
         }
         else
         {

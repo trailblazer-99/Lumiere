@@ -836,8 +836,10 @@ public sealed partial class TransportBar : UserControl
         if (!isInteractive)
         {
             BarGridTapped?.Invoke(this, EventArgs.Empty);
-            e.Handled = true;
         }
+
+        // Always mark as handled to prevent bubbling up to the video player (which toggles play/pause)
+        e.Handled = true;
     }
 
     private CancellationTokenSource? _exactThumbnailCts;
@@ -850,6 +852,13 @@ public sealed partial class TransportBar : UserControl
             var slider = ProgressSlider;
             if (slider == null || slider.ActualWidth <= 0) return;
 
+            var playback = AppServices.PlaybackViewModel;
+            if (playback.CurrentTrack == null)
+            {
+                HoverPreviewPopup.IsOpen = false;
+                return;
+            }
+
             var pt = e.GetCurrentPoint(slider);
             
             double trackPadding = 8.0;
@@ -858,7 +867,6 @@ public sealed partial class TransportBar : UserControl
             double percent = Math.Clamp(relativeX / usableWidth, 0.0, 1.0);
 
             double totalSeconds = slider.Maximum;
-            var playback = AppServices.PlaybackViewModel;
             
             if (totalSeconds <= 100.0)
             {

@@ -10,52 +10,53 @@
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
-    <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="24" MaxWidth="1040" HorizontalAlignment="Left" Opacity="1">
+    <Page.Resources>
+        <DataTemplate x:Key="SettingSearchItemTemplate" x:DataType="local:SettingSearchItem">
+            <Grid Padding="6,8" RowSpacing="3">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0"
+                           Text="{x:Bind Title}"
+                           FontWeight="SemiBold"
+                           FontSize="14"
+                           TextWrapping="Wrap"
+                           TextTrimming="None" />
+                <TextBlock Grid.Row="1"
+                           Text="{x:Bind Subtitle}"
+                           Style="{StaticResource SubtleCaptionTextStyle}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           TextTrimming="None" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
 
-            <!-- Page Title & Search Header -->
-            <StackPanel Spacing="16">
-                <StackPanel Spacing="4">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <FontIcon FontSize="24" Glyph="&#xE713;" VerticalAlignment="Center"/>
-                        <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Settings" VerticalAlignment="Center"/>
+    <Grid>
+        <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="24" MaxWidth="1040" HorizontalAlignment="Center" Opacity="1">
+
+                <!-- Page Title & Search Header -->
+                <StackPanel x:Name="MainHeaderPanel" Spacing="16">
+                    <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon FontSize="24" Glyph="&#xE713;" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Settings" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource PageSubtitleTextStyle}"
+                                   Text="Customize every aspect of your media experience."/>
                     </StackPanel>
-                    <TextBlock Style="{StaticResource PageSubtitleTextStyle}"
-                               Text="Customize every aspect of your media experience."/>
-                </StackPanel>
 
-                <AutoSuggestBox x:Name="SettingsSearchBox"
-                                PlaceholderText="Search settings (e.g. HDR, Theme, Audio, Subtitles, AI)..."
-                                QueryIcon="Find"
-                                Width="680"
-                                HorizontalAlignment="Left"
-                                TextChanged="OnSettingsSearchTextChanged"
-                                SuggestionChosen="OnSettingsSearchSuggestionChosen"
-                                QuerySubmitted="OnSettingsSearchQuerySubmitted">
-                    <AutoSuggestBox.ItemTemplate>
-                        <DataTemplate x:DataType="local:SettingSearchItem">
-                            <Grid Padding="6,8" RowSpacing="3">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0"
-                                           Text="{x:Bind Title}"
-                                           FontWeight="SemiBold"
-                                           FontSize="14"
-                                           TextWrapping="Wrap"
-                                           TextTrimming="None" />
-                                <TextBlock Grid.Row="1"
-                                           Text="{x:Bind Subtitle}"
-                                           Style="{StaticResource SubtleCaptionTextStyle}"
-                                           FontSize="12"
-                                           TextWrapping="Wrap"
-                                           TextTrimming="None" />
-                            </Grid>
-                        </DataTemplate>
-                    </AutoSuggestBox.ItemTemplate>
-                </AutoSuggestBox>
-            </StackPanel>
+                    <AutoSuggestBox x:Name="SettingsSearchBox"
+                                    PlaceholderText="Search settings (e.g. HDR, Theme, Audio, Subtitles, AI)..."
+                                    QueryIcon="Find"
+                                    HorizontalAlignment="Stretch"
+                                    TextChanged="OnSettingsSearchTextChanged"
+                                    SuggestionChosen="OnSettingsSearchSuggestionChosen"
+                                    QuerySubmitted="OnSettingsSearchQuerySubmitted"
+                                    ItemTemplate="{StaticResource SettingSearchItemTemplate}" />
+                </StackPanel>
 
             <!-- 1. PLAYBACK -->
             <StackPanel x:Name="PlaybackSection" Spacing="2">
@@ -1331,5 +1332,7 @@
                 </Border>
             </StackPanel>
         </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+
+    </Grid>
 </Page>

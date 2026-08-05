@@ -19,7 +19,7 @@
             <StackPanel Padding="24,0,24,24" Spacing="24">
 
                 <!-- Top Info Section: Backdrop Overlay & Basic Meta -->
-                <Grid CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <Grid Margin="0,16,0,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>

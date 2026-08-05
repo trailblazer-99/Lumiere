@@ -507,11 +507,23 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    private DispatcherTimer _saveBoundsTimer;
+
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (args.DidSizeChange || args.DidPositionChange)
         {
-            SaveWindowBounds();
+            if (_saveBoundsTimer == null)
+            {
+                _saveBoundsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _saveBoundsTimer.Tick += (s, e) =>
+                {
+                    _saveBoundsTimer.Stop();
+                    SaveWindowBounds();
+                };
+            }
+            _saveBoundsTimer.Stop();
+            _saveBoundsTimer.Start();
         }
 
         if (args.DidPresenterChange)
@@ -3058,7 +3070,10 @@ public sealed partial class MainWindow : Window
                 {
                     try
                     {
-                        AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                        {
+                            try { AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped); } catch { }
+                        });
                     }
                     catch {}
                     e.Handled = true;
@@ -3472,9 +3487,37 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private DispatcherTimer _resizePerformanceTimer;
+
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         UpdateFullscreenPlayerLayout();
+
+        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen) return;
+
+        if (_resizePerformanceTimer == null)
+        {
+            _resizePerformanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _resizePerformanceTimer.Tick += (s, args) =>
+            {
+                _resizePerformanceTimer.Stop();
+                if (AppServices.Settings.Current.BackdropType != AppThemeBackdrop.Solid && AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen)
+                {
+                    RootGrid.Background = null;
+                }
+            };
+        }
+
+        if (AppServices.Settings.Current.BackdropType != AppThemeBackdrop.Solid)
+        {
+            var isDark = AppServices.Settings.Current.Theme == AppThemeOption.Dark || 
+                         (AppServices.Settings.Current.Theme == AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Dark);
+            RootGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32) : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243));
+        }
+
+        _resizePerformanceTimer.Stop();
+        _resizePerformanceTimer.Start();
     }
 
     private void OnFullscreenVideoContainerSizeChanged(object sender, SizeChangedEventArgs e)

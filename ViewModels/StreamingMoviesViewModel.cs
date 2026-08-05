@@ -229,7 +229,9 @@ namespace LumiereMediaPlayer.ViewModels
                 if (requestVersion == _contentRequestVersion)
                 {
                     var movieList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
-                    Movies = new ObservableCollection<WatchmodeTitle>(movieList);
+                    if (Movies == null) Movies = new ObservableCollection<WatchmodeTitle>();
+                    for (int i = 0; i < movieList.Count; i++) { if (i < Movies.Count) Movies[i] = movieList[i]; else Movies.Add(movieList[i]); }
+                    while (Movies.Count > movieList.Count) Movies.RemoveAt(Movies.Count - 1);
                     _ = LoadMoviesDetailsBackgroundAsync(movieList, requestVersion);
                 }
             }
@@ -292,7 +294,9 @@ namespace LumiereMediaPlayer.ViewModels
                 if (requestVersion == _contentRequestVersion)
                 {
                     var movieList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
-                    Movies = new ObservableCollection<WatchmodeTitle>(movieList);
+                    if (Movies == null) Movies = new ObservableCollection<WatchmodeTitle>();
+                    for (int i = 0; i < movieList.Count; i++) { if (i < Movies.Count) Movies[i] = movieList[i]; else Movies.Add(movieList[i]); }
+                    while (Movies.Count > movieList.Count) Movies.RemoveAt(Movies.Count - 1);
                     _ = LoadMoviesDetailsBackgroundAsync(movieList, requestVersion);
                 }
             }

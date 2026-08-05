@@ -24,16 +24,34 @@ namespace LumiereMediaPlayer.Services
             // Build proxy URL (e.g. "https://lumiere-proxy.azurewebsites.net/api/tmdb/movie/popular")
             string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
             
-            using var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-            request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+            int maxRetries = 3;
+            int delayMs = 1000;
 
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
+            for (int i = 0; i < maxRetries; i++)
             {
-                return await response.Content.ReadAsStringAsync(cancellationToken);
-            }
+                using var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
 
-            throw new HttpRequestException($"Proxy request failed with status code: {response.StatusCode} for {servicePath}");
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadAsStringAsync(cancellationToken);
+                }
+                
+                if (response.StatusCode == (System.Net.HttpStatusCode)429 && i < maxRetries - 1)
+                {
+                    await Task.Delay(delayMs, cancellationToken);
+                    delayMs *= 2; // exponential backoff
+                    continue;
+                }
+
+                if (i == maxRetries - 1 || response.StatusCode != (System.Net.HttpStatusCode)429)
+                {
+                    throw new HttpRequestException($"Proxy request failed with status code: {response.StatusCode} for {servicePath}");
+                }
+            }
+            
+            return string.Empty;
         }
     }
 }

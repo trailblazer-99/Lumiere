@@ -266,7 +266,9 @@ namespace LumiereMediaPlayer.ViewModels
                 if (requestVersion == _contentRequestVersion)
                 {
                     var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
-                    TvShows = new ObservableCollection<WatchmodeTitle>(showList);
+                    if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
+                    for (int i = 0; i < showList.Count; i++) { if (i < TvShows.Count) TvShows[i] = showList[i]; else TvShows.Add(showList[i]); }
+                    while (TvShows.Count > showList.Count) TvShows.RemoveAt(TvShows.Count - 1);
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }
@@ -329,7 +331,9 @@ namespace LumiereMediaPlayer.ViewModels
                 if (requestVersion == _contentRequestVersion)
                 {
                     var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
-                    TvShows = new ObservableCollection<WatchmodeTitle>(showList);
+                    if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
+                    for (int i = 0; i < showList.Count; i++) { if (i < TvShows.Count) TvShows[i] = showList[i]; else TvShows.Add(showList[i]); }
+                    while (TvShows.Count > showList.Count) TvShows.RemoveAt(TvShows.Count - 1);
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }

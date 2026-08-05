@@ -229,26 +229,54 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "About Lumière Media Player", Description = "Version info, license, and update status", Section = "Reset & About", Keywords = "about, version, update, license, author", TargetElement = AboutSection });
     }
 
-    private void OnSettingsSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    private int _searchRevision = 0;
+
+    private async void OnSettingsSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        try
         {
-            var query = sender.Text?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(query))
+            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
             {
-                sender.ItemsSource = null;
-                return;
+                var query = sender.Text?.Trim() ?? "";
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    sender.ItemsSource = null;
+                    return;
+                }
+
+                int currentRevision = System.Threading.Interlocked.Increment(ref _searchRevision);
+
+                // First pass: instant local search
+                var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var localResults = new System.Collections.ObjectModel.ObservableCollection<SettingSearchItem>(
+                    _allSearchItems.Where(item => terms.All(term => 
+                                   ContainsIgnoreCase(item.Title, term) ||
+                                   ContainsIgnoreCase(item.Keywords, term) ||
+                                   ContainsIgnoreCase(item.Section, term) ||
+                                   ContainsIgnoreCase(item.Description, term)))
+                );
+
+                if (currentRevision != _searchRevision) return;
+                sender.ItemsSource = localResults;
+
+                // Second pass: background AI search for better semantic matching
+                var aiResults = await LumiereMediaPlayer.Services.AiAssistantService.SemanticSearchSettingsAsync(query, _allSearchItems);
+                if (currentRevision == _searchRevision && aiResults != null && aiResults.Count > 0)
+                {
+                    // Dynamically append AI results to the existing observable collection
+                    foreach (var item in aiResults)
+                    {
+                        if (!localResults.Contains(item))
+                        {
+                            localResults.Add(item);
+                        }
+                    }
+                }
             }
-
-            var results = _allSearchItems
-                .Where(item => ContainsIgnoreCase(item.Title, query) ||
-                               ContainsIgnoreCase(item.Keywords, query) ||
-                               ContainsIgnoreCase(item.Section, query) ||
-                               ContainsIgnoreCase(item.Description, query))
-                .Take(8)
-                .ToList();
-
-            sender.ItemsSource = results;
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsPage] OnSettingsSearchTextChanged Error: {ex.Message}");
         }
     }
 

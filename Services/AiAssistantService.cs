@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Pages;
 
 namespace LumiereMediaPlayer.Services;
 
@@ -295,34 +296,113 @@ public static class AiAssistantService
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Content = content;
-        if (useProxy)
+        try
         {
-            request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Content = content;
+            if (useProxy)
+            {
+                request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+            }
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseJson);
+            var textResponse = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(textResponse)) return new List<MediaItem>();
+
+            var indices = JsonSerializer.Deserialize<List<int>>(textResponse);
+            if (indices == null) return new List<MediaItem>();
+
+            return indices
+                .Where(i => i >= 0 && i < tracks.Count)
+                .Select(i => tracks[i])
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AiAssistant] SemanticSearchAsync failed: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
+    public static async Task<List<SettingSearchItem>> SemanticSearchSettingsAsync(string query, IReadOnlyList<SettingSearchItem> settings)
+    {
+        if (string.IsNullOrWhiteSpace(query) || settings == null || settings.Count == 0) return new List<SettingSearchItem>();
+
+        var config = ConfigService.Config;
+        string apiKey = AppServices.Settings.Current.GeminiApiKey;
+        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
+
+        if (!useProxy && string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new List<SettingSearchItem>(); // Handled by fallback in SettingsPage
         }
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        string url = useProxy 
+            ? $"{config.ProxyBaseUrl.TrimEnd('/')}/gemini/v1beta/models/gemini-2.5-flash:generateContent"
+            : $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(responseJson);
-        var textResponse = doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
+        var promptBuilder = new StringBuilder();
+        promptBuilder.AppendLine("You are an AI Settings Assistant. Filter and sort application settings based on the user's natural language request.");
+        promptBuilder.AppendLine($"User prompt: \"{query}\"");
+        promptBuilder.AppendLine("Return ONLY a JSON array of integers containing the indices of highly relevant settings items (best match first).");
+        promptBuilder.AppendLine("If the user's request is very specific and no setting strongly matches, return an empty array []. Do not guess or return loosely related settings.");
+        promptBuilder.AppendLine("Do not include markdown like ```json.");
+        promptBuilder.AppendLine("Settings list:");
+        
+        var minimalSettings = settings.Select((s, index) => new { Index = index, s.Title, s.Description, s.Keywords }).ToList();
+        promptBuilder.AppendLine(JsonSerializer.Serialize(minimalSettings));
 
-        if (string.IsNullOrWhiteSpace(textResponse)) return new List<MediaItem>();
+        var requestBody = new
+        {
+            contents = new[] { new { parts = new[] { new { text = promptBuilder.ToString() } } } },
+            generationConfig = new { responseMimeType = "application/json" }
+        };
 
-        var indices = JsonSerializer.Deserialize<List<int>>(textResponse);
-        if (indices == null) return new List<MediaItem>();
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-        return indices
-            .Where(i => i >= 0 && i < tracks.Count)
-            .Select(i => tracks[i])
-            .ToList();
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Content = content;
+            if (useProxy)
+            {
+                request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+            }
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseJson);
+            var textResponse = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(textResponse)) return new List<SettingSearchItem>();
+
+            var indices = JsonSerializer.Deserialize<List<int>>(textResponse);
+            if (indices == null) return new List<SettingSearchItem>();
+
+            return indices.Where(i => i >= 0 && i < settings.Count).Select(i => settings[i]).ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AiAssistant] SemanticSearchSettingsAsync failed: {ex.Message}");
+            return new List<SettingSearchItem>();
+        }
     }
 
     private static List<MediaItem> SemanticSearchLocal(string query, IReadOnlyList<MediaItem> tracks)
