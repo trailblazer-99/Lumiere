@@ -40,14 +40,7 @@
 
                     <GridView x:Name="MusicGridView" Grid.Row="1" ItemsSource="{x:Bind ViewModel.Tracks, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnTrackClicked">
                         <GridView.ItemContainerStyle>
-                            <Style TargetType="GridViewItem">
-                                <Setter Property="Margin" Value="0"/>
-                                <Setter Property="Padding" Value="12"/>
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                            </Style>
+                            <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="models:MusicApiTrack">
@@ -58,7 +51,7 @@
                                         <Border.Shadow>
                                             <ThemeShadow />
                                         </Border.Shadow>
-                                        <Grid>
+                                        <Grid CornerRadius="12">
                                              <Image Source="{Binding HighResArtworkUrl}" Stretch="UniformToFill" />
                                              <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                                  <Border.Background>
@@ -76,7 +69,7 @@
                                                      </Border>
                                                  </Grid>
                                              </Border>
-                                             <Border VerticalAlignment="Bottom" Height="80">
+                                             <Border VerticalAlignment="Bottom" Height="80" CornerRadius="0,0,12,12">
                                                  <Border.Background>
                                                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                          <GradientStop Color="Transparent" Offset="0"/>
@@ -111,6 +104,9 @@
             </PivotItem>
             <PivotItem Header="Library">
                 <GridView x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
+                    <GridView.ItemContainerStyle>
+                        <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
+                    </GridView.ItemContainerStyle>
                     <GridView.ItemTemplate>
                         <DataTemplate x:DataType="services:SavedStreamingItem">
                             <Border Width="200" Height="200" Margin="0,0,16,16" CornerRadius="12" Translation="0,0,8"
@@ -120,7 +116,7 @@
                                 <Border.Shadow>
                                     <ThemeShadow />
                                 </Border.Shadow>
-                                <Grid>
+                                <Grid CornerRadius="12">
                                     <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
                                     <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                         <Border.Background>
@@ -135,7 +131,7 @@
                                             </Border>
                                         </Grid>
                                      </Border>
-                                     <Border VerticalAlignment="Bottom" Height="80">
+                                     <Border VerticalAlignment="Bottom" Height="80" CornerRadius="0,0,12,12">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                 <GradientStop Color="Transparent" Offset="0"/>

@@ -387,7 +387,9 @@ public sealed partial class TransportBar : UserControl
 
     private async void OnEqualiserClick(object sender, RoutedEventArgs e)
     {
-        var settings = AppServices.Settings.Current;
+        try
+        {
+            var settings = AppServices.Settings.Current;
         
         var stack = new StackPanel { Spacing = 16, Width = 520 };
 
@@ -555,6 +557,11 @@ public sealed partial class TransportBar : UserControl
             await dialog.ShowAsync();
         }
         catch { }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnEqualiserClick] Failed: {ex.Message}");
+        }
     }
 
     private void OnCastToDeviceClick(object sender, RoutedEventArgs e)

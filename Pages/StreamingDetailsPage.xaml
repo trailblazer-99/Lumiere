@@ -4,7 +4,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:LumiereMediaPlayer.Pages"
-    Loaded="OnPageLoaded">
+    Loaded="OnPageLoaded"
+    Unloaded="OnPageUnloaded">
 
     <Grid x:Name="PageContent">
         <Grid.RowDefinitions>
@@ -143,15 +144,7 @@
                     <PivotItem x:Name="CastPivotItem" Header="Cast">
                         <GridView x:Name="CastGridView" SelectionMode="None" IsItemClickEnabled="True" ItemClick="CastGridView_ItemClick" Margin="0,12,0,0">
                             <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem">
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="Padding" Value="6"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="BorderThickness" Value="0"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="CornerRadius" Value="12"/>
-                                </Style>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate>
@@ -170,15 +163,7 @@
                     <PivotItem x:Name="CrewPivotItem" Header="Crew">
                         <GridView x:Name="CrewGridView" SelectionMode="None" IsItemClickEnabled="True" ItemClick="CastGridView_ItemClick" Margin="0,12,0,0">
                             <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem">
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="Padding" Value="6"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="BorderThickness" Value="0"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="CornerRadius" Value="12"/>
-                                </Style>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate>
@@ -215,21 +200,13 @@
                                   IsItemClickEnabled="True"
                                   ItemClick="SimilarTitlesGridView_ItemClick">
                             <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem">
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="Padding" Value="6"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="BorderThickness" Value="0"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="CornerRadius" Value="12"/>
-                                </Style>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Width="140" Height="240" Margin="0">
                                         <Border CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <Grid>
+                                            <Grid CornerRadius="12">
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="*" />
                                                     <RowDefinition Height="Auto" />
@@ -239,7 +216,7 @@
                                                         <BitmapImage UriSource="{Binding PosterUrl}" DecodePixelWidth="140" />
                                                     </Image.Source>
                                                 </Image>
-                                                <StackPanel Grid.Row="1" Padding="8" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                                                <StackPanel Grid.Row="1" Padding="8" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" CornerRadius="0,0,12,12">
                                                     <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                                     <TextBlock Text="{Binding DisplayYear}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                                 </StackPanel>

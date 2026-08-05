@@ -487,21 +487,24 @@ public sealed partial class MainWindow : Window
 
     private void TogglePipMode()
     {
-        try
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
-            if (AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay)
+            try
             {
-                AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                if (AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay)
+                {
+                    AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
+                else
+                {
+                    AppWindow.SetPresenter(AppWindowPresenterKind.CompactOverlay);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                AppWindow.SetPresenter(AppWindowPresenterKind.CompactOverlay);
+                System.Diagnostics.Debug.WriteLine($"[TogglePipMode] SetPresenter failed: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[TogglePipMode] SetPresenter failed: {ex.Message}");
-        }
+        });
     }
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
@@ -717,15 +720,58 @@ public sealed partial class MainWindow : Window
                 _lastVideoFrameCaptureTime = DateTime.UtcNow;
             }
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TriggerVideoFrameCapture] Failed: {ex.Message}");
+        }
         finally
         {
             _isVideoFrameCaptureInProgress = false;
         }
     }
 
-    private void NavigateTo(System.Type pageType)
+    public void NavigateToYouTube(string? initialUrl = null)
     {
-        if (ContentFrame.CurrentSourcePageType != pageType)
+        void DoNavigate()
+        {
+            try
+            {
+                _isNavigating = true;
+                if (RootNavigationView?.MenuItems != null)
+                {
+                    var ytItem = RootNavigationView.MenuItems.OfType<NavigationViewItem>()
+                        .FirstOrDefault(i => i.Tag?.ToString() == "streamYouTube");
+                    if (ytItem != null)
+                    {
+                        RootNavigationView.SelectedItem = ytItem;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] NavigateToYouTube nav select error: {ex.Message}");
+            }
+            finally
+            {
+                _isNavigating = false;
+            }
+
+            NavigateTo(typeof(Pages.StreamingYouTubePage), initialUrl);
+        }
+
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            DoNavigate();
+        }
+        else
+        {
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, DoNavigate);
+        }
+    }
+
+    private void NavigateTo(System.Type pageType, object? parameter = null)
+    {
+        if (ContentFrame.CurrentSourcePageType != pageType || parameter != null)
         {
             Microsoft.UI.Xaml.Media.Animation.NavigationTransitionInfo transitionInfo;
 
@@ -742,9 +788,10 @@ public sealed partial class MainWindow : Window
                     Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight
                 };
             }
-            ContentFrame.Navigate(pageType, null, transitionInfo);
+            ContentFrame.Navigate(pageType, parameter, transitionInfo);
         }
     }
+
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
@@ -1290,6 +1337,10 @@ public sealed partial class MainWindow : Window
         {
             RootNavigationView.SelectedItem = FindNavItem("streamYouTube");
         }
+        else if (ContentFrame.Content is StreamingDetailsPage detailsPage)
+        {
+            SelectStreamingTabForTitleType(detailsPage.CurrentTitleType);
+        }
 
         bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
         RootNavigationView.IsBackEnabled = isVideo || ContentFrame.CanGoBack;
@@ -1297,6 +1348,39 @@ public sealed partial class MainWindow : Window
         UpdateLayoutForVideoMode();
 
         _isNavigating = false;
+    }
+
+    public void SelectStreamingTabForTitleType(string? type)
+    {
+        if (string.IsNullOrEmpty(type)) return;
+        _isNavigating = true;
+        try
+        {
+            if (string.Equals(type, "tv_series", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "tv_miniseries", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "tv", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "tv_show", StringComparison.OrdinalIgnoreCase))
+            {
+                var item = FindNavItem("streamTvShows");
+                if (item != null && !ReferenceEquals(RootNavigationView.SelectedItem, item))
+                {
+                    RootNavigationView.SelectedItem = item;
+                }
+            }
+            else if (string.Equals(type, "movie", StringComparison.OrdinalIgnoreCase))
+            {
+                var item = FindNavItem("streamMovies");
+                if (item != null && !ReferenceEquals(RootNavigationView.SelectedItem, item))
+                {
+                    RootNavigationView.SelectedItem = item;
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            _isNavigating = false;
+        }
     }
 
     private bool _isClosingAnimated;
@@ -1344,24 +1428,37 @@ public sealed partial class MainWindow : Window
                 AppWindow.Move(new Windows.Graphics.PointInt32(x, y));
             }
 
-            if (localSettings.ContainsKey("IsWindowMaximized") && (bool)localSettings["IsWindowMaximized"])
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
-                presenter?.Maximize();
-            }
-            else
-            {
-                AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
-            }
+                try
+                {
+                    if (localSettings.ContainsKey("IsWindowMaximized") && (bool)localSettings["IsWindowMaximized"])
+                    {
+                        presenter?.Maximize();
+                    }
+                    else
+                    {
+                        AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    }
+                }
+                catch (Exception exInner)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RestoreWindowBounds] Inner Failed: {exInner.Message}");
+                }
+            });
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[RestoreWindowBounds] Failed: {ex.Message}");
-            try
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
-                AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
-                AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
-            }
-            catch {}
+                try
+                {
+                    AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
+                    AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
+                catch {}
+            });
         }
     }
 

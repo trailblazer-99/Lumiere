@@ -148,7 +148,7 @@ internal sealed class BrightnessOverrideHelper : IDisposable
             try
             {
                 // Fire-and-forget restore — same reasoning as the override path.
-                _ = Task.Run(() => SetWmiBrightness(_savedWmiBrightness));
+                _ = Task.Run(() => { try { SetWmiBrightness(_savedWmiBrightness); } catch { } });
                 Debug.WriteLine($"[HDR Brightness] WMI laptop brightness restore queued → {_savedWmiBrightness}");
             }
             catch (Exception ex)

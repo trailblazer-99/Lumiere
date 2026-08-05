@@ -363,6 +363,18 @@ namespace LumiereMediaPlayer.Helpers
 
         public static async System.Threading.Tasks.Task LaunchStreamUriAsync(Uri? nativeUri, string fallbackCleanUrl)
         {
+            if (!string.IsNullOrEmpty(fallbackCleanUrl) &&
+                (fallbackCleanUrl.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                 fallbackCleanUrl.Contains("youtu.be", StringComparison.OrdinalIgnoreCase)))
+            {
+                try
+                {
+                    App.MainWindowInstance?.NavigateToYouTube(fallbackCleanUrl);
+                    return;
+                }
+                catch { }
+            }
+
             bool launched = false;
             if (nativeUri != null && !string.Equals(nativeUri.ToString(), fallbackCleanUrl, StringComparison.OrdinalIgnoreCase))
             {
@@ -394,3 +406,4 @@ namespace LumiereMediaPlayer.Helpers
         }
     }
 }
+

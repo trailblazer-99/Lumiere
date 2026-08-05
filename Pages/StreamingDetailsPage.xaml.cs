@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services.Streaming;
 using LumiereMediaPlayer.Services;
 
@@ -33,9 +34,12 @@ namespace LumiereMediaPlayer.Pages
         private WatchmodeDetails? _details;
         private bool _isSaved;
 
+        public string? CurrentTitleType => _details?.Type;
+
         public StreamingDetailsPage()
         {
             this.InitializeComponent();
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -115,6 +119,8 @@ namespace LumiereMediaPlayer.Pages
                 _ => _details.Type?.ToUpperInvariant() ?? "UNKNOWN"
             };
 
+            App.MainWindowInstance?.SelectStreamingTabForTitleType(_details.Type);
+
             if (_details.GenreNames != null)
             {
                 GenresText.Text = string.Join(" • ", _details.GenreNames);
@@ -163,7 +169,10 @@ namespace LumiereMediaPlayer.Pages
             // Poster
             if (!string.IsNullOrEmpty(_details.DisplayPoster))
             {
-                PosterImage.Source = new BitmapImage(new Uri(_details.DisplayPoster));
+                var bmp = new BitmapImage();
+                bmp.DecodePixelWidth = 360;
+                bmp.UriSource = new Uri(_details.DisplayPoster);
+                PosterImage.Source = bmp;
             }
 
             // Library status
@@ -352,11 +361,20 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
-                    await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
+                    if (_details.Trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                        _details.Trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                    {
+                        App.MainWindowInstance?.NavigateToYouTube(_details.Trailer);
+                    }
+                    else
+                    {
+                        await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
+                    }
                 }
                 catch { }
             }
         }
+
 
         private Border CreateBadge(string text, string tooltip = "")
         {
@@ -469,6 +487,14 @@ namespace LumiereMediaPlayer.Pages
         {
             ProvidersContainer.Children.Clear();
 
+            // Check if title is available locally in the user's media library or disk
+            string? targetTitle = _details?.Title;
+            if (string.IsNullOrWhiteSpace(targetTitle))
+            {
+                targetTitle = TitleText.Text;
+            }
+            CheckAndBuildLocalMediaSection(targetTitle);
+
             // Populate Video/Audio Quality Badges
             PopulateQualityBadges(sources);
 
@@ -476,36 +502,54 @@ namespace LumiereMediaPlayer.Pages
             {
                 ProvidersContainer.Children.Add(new TextBlock 
                 { 
-                    Text = "No streaming options found.", 
+                    Text = "Streaming Not Available", 
                     FontStyle = Windows.UI.Text.FontStyle.Italic,
+                    FontSize = 15,
                     Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
                 });
                 return;
             }
 
-            // Filter sources by the selected region first to avoid displaying options from other regions
+            // Strictly filter sources by the selected region
             string targetRegion = (!string.IsNullOrEmpty(_selectedRegion) ? _selectedRegion : "US").ToUpperInvariant();
             var regionalSources = sources
                 .Where(s => string.Equals(s.Region, targetRegion, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // Global anime service fallback: Crunchyroll operates globally across over 200 countries and territories.
-            // If Watchmode only tagged Crunchyroll under US/JP, ensure it is still available in regionalSources.
-            if (!regionalSources.Any(s => (s.Name?.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase) ?? false)))
+            // Synthesize Native Original Platform source if omitted by API (e.g. Apple TV Original like Presumed Innocent)
+            if (IsAppleOriginal(_details))
             {
-                var globalCrunchyroll = sources.Where(s => (s.Name?.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
-                if (globalCrunchyroll.Any())
+                bool hasDirectAppleTvSub = regionalSources.Any(s =>
+                    s.Name != null &&
+                    (string.Equals(s.Name, "Apple TV+", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(s.Name, "Apple TV", StringComparison.OrdinalIgnoreCase)) &&
+                    string.Equals(s.Type, "sub", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Amazon", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Channel", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Roku", StringComparison.OrdinalIgnoreCase));
+
+                if (!hasDirectAppleTvSub)
                 {
-                    regionalSources.AddRange(globalCrunchyroll);
+                    regionalSources.Add(new WatchmodeSource
+                    {
+                        SourceId = 350,
+                        Name = "Apple TV+",
+                        Type = "sub",
+                        Region = targetRegion,
+                        WebUrl = "https://tv.apple.com",
+                        Format = "4K"
+                    });
                 }
             }
+
 
             if (regionalSources.Count == 0)
             {
                 ProvidersContainer.Children.Add(new TextBlock 
                 { 
-                    Text = $"No streaming options found in {targetRegion}.", 
+                    Text = "Streaming Not Available", 
                     FontStyle = Windows.UI.Text.FontStyle.Italic,
+                    FontSize = 15,
                     Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
                 });
                 return;
@@ -519,22 +563,22 @@ namespace LumiereMediaPlayer.Pages
 
             // Group sources by access type and sort according to provider priority
             var subSources = deduped.Where(s => s.Type == "sub" || s.Type == "sub_addon" || s.Type == "tve" || s.Type == "subscription")
-                                    .OrderBy(s => GetProviderPriority(s.Name))
+                                    .OrderBy(s => GetProviderPriority(s, _details))
                                     .ThenBy(s => s.Name)
                                     .ToList();
             var freeSources = deduped.Where(s => s.Type == "free" || s.Type == "free_with_ads" || s.Type == "avod")
-                                     .OrderBy(s => GetProviderPriority(s.Name))
+                                     .OrderBy(s => GetProviderPriority(s, _details))
                                      .ThenBy(s => s.Name)
                                      .ToList();
             var purchaseSources = deduped.Where(s => s.Type == "purchase" || s.Type == "rent" || s.Type == "buy" || s.Type == "tvod")
-                                         .OrderBy(s => GetProviderPriority(s.Name))
+                                         .OrderBy(s => GetProviderPriority(s, _details))
                                          .ThenBy(s => s.Name)
                                          .ToList();
 
             // Catch-all: if Watchmode returns a source with an unexpected access type, include it in Subscription Streaming
             var accounted = new HashSet<WatchmodeSource>(subSources.Concat(freeSources).Concat(purchaseSources));
             var remaining = deduped.Where(s => !accounted.Contains(s))
-                                   .OrderBy(s => GetProviderPriority(s.Name))
+                                   .OrderBy(s => GetProviderPriority(s, _details))
                                    .ThenBy(s => s.Name)
                                    .ToList();
             if (remaining.Count > 0)
@@ -544,8 +588,8 @@ namespace LumiereMediaPlayer.Pages
 
             if (subSources.Count > 0)
             {
-                ProvidersContainer.Children.Add(new TextBlock { Text = "Subscription Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 });
-                ProvidersContainer.Children.Add(BuildProviderWrapPanel(subSources, "Stream"));
+                ProvidersContainer.Children.Add(new TextBlock { Text = "Subscription Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 0, 0, 0) });
+                ProvidersContainer.Children.Add(BuildProviderWrapPanel(subSources, "Subscription"));
             }
 
             if (freeSources.Count > 0)
@@ -561,6 +605,252 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
+        private void CheckAndBuildLocalMediaSection(string? title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return;
+            string cleanTarget = CleanTitleForComparison(title);
+            if (string.IsNullOrEmpty(cleanTarget)) return;
+
+            var allLocalItems = AppServices.VideoViewModel.RawVideos
+                .Concat(SampleMediaLibrary.AllTracks)
+                .Concat(SampleMediaLibrary.VideoTracks)
+                .Concat(SampleMediaLibrary.AudioTracks)
+                .Distinct()
+                .ToList();
+
+            MediaItem? match = null;
+            foreach (var item in allLocalItems)
+            {
+                if (item == null) continue;
+                string sourcePath = item.SourcePath ?? "";
+
+                if (IsTitleMatch(title, item.Title) ||
+                    IsTitleMatch(title, System.IO.Path.GetFileNameWithoutExtension(sourcePath)) ||
+                    IsTitleMatch(title, GetParentDirectoryName(sourcePath)) ||
+                    IsTitleMatch(title, GetGrandparentDirectoryName(sourcePath)))
+                {
+                    match = item;
+                    break;
+                }
+            }
+
+            // On-the-fly recursive disk scan fallback if title is on disk but not yet indexed in library memory
+            if (match == null)
+            {
+                try
+                {
+                    var foldersToCheck = new List<string>();
+                    try { foldersToCheck.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)); } catch { }
+                    try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")); } catch { }
+                    try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos")); } catch { }
+                    try
+                    {
+                        if (AppServices.Settings.Current.LibraryFolders != null)
+                        {
+                            foreach (var f in AppServices.Settings.Current.LibraryFolders)
+                            {
+                                if (!string.IsNullOrEmpty(f) && !foldersToCheck.Contains(f, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    foldersToCheck.Add(f);
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    foreach (var folder in foldersToCheck)
+                    {
+                        if (string.IsNullOrEmpty(folder) || !System.IO.Directory.Exists(folder)) continue;
+                        var files = SafeEnumerateVideoFiles(folder, maxDepth: 3);
+                        foreach (var filePath in files)
+                        {
+                            string fileNameNoExt = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                            if (IsTitleMatch(title, fileNameNoExt) ||
+                                IsTitleMatch(title, GetParentDirectoryName(filePath)) ||
+                                IsTitleMatch(title, GetGrandparentDirectoryName(filePath)))
+                            {
+                                var fileInfo = new System.IO.FileInfo(filePath);
+                                string ext = System.IO.Path.GetExtension(filePath);
+                                match = new MediaItem
+                                {
+                                    Id = Guid.NewGuid().ToString(),
+                                    Title = fileNameNoExt,
+                                    SourcePath = filePath,
+                                    Kind = MediaKind.Video,
+                                    FileSize = fileInfo.Length,
+                                    DateCreated = fileInfo.CreationTime,
+                                    LastModifiedUtc = fileInfo.LastWriteTimeUtc,
+                                    DateAdded = DateTime.Now,
+                                    IsFolder = false,
+                                    FileExtension = ext
+                                };
+                                _ = SampleMediaLibrary.AddTrackAsync(match);
+                                break;
+                            }
+                        }
+                        if (match != null) break;
+                    }
+                }
+                catch { }
+            }
+
+            if (match != null)
+            {
+                var card = new Microsoft.UI.Xaml.Controls.Button
+                {
+                    Style = (Style)Application.Current.Resources["DefaultButtonStyle"],
+                    Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                    Padding = new Thickness(16, 12, 16, 12),
+                    CornerRadius = new CornerRadius(6),
+                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    BorderThickness = new Thickness(1),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left
+                };
+
+                var rowPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                rowPanel.Children.Add(new FontIcon
+                {
+                    Glyph = "\uE768",
+                    FontSize = 24,
+                    Margin = new Thickness(0, 0, 14, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                });
+
+                var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                textCol.Children.Add(new TextBlock
+                {
+                    Text = "Play Local Copy",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    FontSize = 14
+                });
+
+                string subText = !string.IsNullOrEmpty(match.Resolution) ? $"{match.Resolution} · In Library" : "In Library";
+                textCol.Children.Add(new TextBlock
+                {
+                    Text = subText,
+                    FontSize = 12,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                });
+
+                rowPanel.Children.Add(textCol);
+                card.Content = rowPanel;
+
+                var capturedItem = match;
+                card.Click += (_, _) =>
+                {
+                    AppServices.PlaybackViewModel.PlayTrack(capturedItem);
+                };
+
+                ProvidersContainer.Children.Add(card);
+                ProvidersContainer.Children.Add(new Microsoft.UI.Xaml.Controls.Border { Height = 16 });
+            }
+        }
+
+        private static IEnumerable<string> SafeEnumerateVideoFiles(string rootPath, int maxDepth = 3)
+        {
+            var validExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm" };
+            var list = new List<string>();
+            SafeEnumerateRecursive(rootPath, 0, maxDepth, validExtensions, list);
+            return list;
+        }
+
+        private static void SafeEnumerateRecursive(string currentDir, int currentDepth, int maxDepth, HashSet<string> validExtensions, List<string> results)
+        {
+            if (string.IsNullOrEmpty(currentDir) || currentDepth > maxDepth) return;
+            try
+            {
+                foreach (var file in System.IO.Directory.EnumerateFiles(currentDir))
+                {
+                    string ext = System.IO.Path.GetExtension(file);
+                    if (!string.IsNullOrEmpty(ext) && validExtensions.Contains(ext))
+                    {
+                        results.Add(file);
+                    }
+                }
+                foreach (var subDir in System.IO.Directory.EnumerateDirectories(currentDir))
+                {
+                    SafeEnumerateRecursive(subDir, currentDepth + 1, maxDepth, validExtensions, results);
+                }
+            }
+            catch { }
+        }
+
+        private static string GetParentDirectoryName(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(filePath)) return "";
+                string? dir = System.IO.Path.GetDirectoryName(filePath);
+                return !string.IsNullOrEmpty(dir) ? (System.IO.Path.GetFileName(dir) ?? "") : "";
+            }
+            catch { return ""; }
+        }
+
+        private static string GetGrandparentDirectoryName(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(filePath)) return "";
+                string? dir = System.IO.Path.GetDirectoryName(filePath);
+                if (string.IsNullOrEmpty(dir)) return "";
+                string? grandDir = System.IO.Path.GetDirectoryName(dir);
+                return !string.IsNullOrEmpty(grandDir) ? (System.IO.Path.GetFileName(grandDir) ?? "") : "";
+            }
+            catch { return ""; }
+        }
+
+        private static bool IsTitleMatch(string? targetTitle, string? candidateTitle)
+        {
+            string cleanTarget = CleanTitleForComparison(targetTitle);
+            string cleanCandidate = CleanTitleForComparison(candidateTitle);
+
+            if (string.IsNullOrEmpty(cleanTarget) || string.IsNullOrEmpty(cleanCandidate))
+                return false;
+
+            if (string.Equals(cleanTarget, cleanCandidate, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (cleanTarget.Length >= 3 && cleanCandidate.StartsWith(cleanTarget + " ", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (cleanCandidate.Length >= 3 && cleanTarget.StartsWith(cleanCandidate + " ", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (cleanTarget.Length >= 4 && (cleanCandidate.StartsWith(cleanTarget, StringComparison.OrdinalIgnoreCase) ||
+                                            cleanTarget.StartsWith(cleanCandidate, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
+        }
+
+        private static string CleanTitleForComparison(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            string cleaned = text.Replace("'", "").Replace("’", "").Replace("&", " and ");
+            cleaned = cleaned.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ').Replace(':', ' ').Replace(';', ' ')
+                             .Replace('(', ' ').Replace(')', ' ').Replace('[', ' ').Replace(']', ' ')
+                             .Replace('{', ' ').Replace('}', ' ').Replace(',', ' ');
+            var chars = cleaned.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray();
+            cleaned = new string(chars).Trim().ToLowerInvariant();
+
+            var tokensToStrip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "1080p", "720p", "2160p", "480p", "4k", "8k", "hdr", "hdr10", "dolby", "vision", "atmos",
+                "web", "webdl", "webrip", "bluray", "brrip", "xvid", "divx", "x264", "h264", "x265", "h265", "hevc",
+                "aac", "dts", "flac", "mp3", "ac3", "eac3", "ddp5", "remux", "dual", "audio", "sub", "subs", "multi",
+                "season", "episode", "pilot"
+            };
+
+            var words = cleaned.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                               .Where(w => !tokensToStrip.Contains(w))
+                               .Where(w => !(w.Length == 4 && int.TryParse(w, out int yr) && yr >= 1900 && yr <= 2100))
+                               .Where(w => !(w.Length >= 4 && (w.StartsWith("s0") || w.StartsWith("s1") || w.StartsWith("s2") || w.StartsWith("s3")) && w.Contains("e0")))
+                               .ToArray();
+
+            return string.Join(" ", words);
+        }
+
         private static int GetFormatPriority(string? format)
         {
             return (format?.ToUpperInvariant()) switch
@@ -572,33 +862,90 @@ namespace LumiereMediaPlayer.Pages
             };
         }
 
-        private static int GetProviderPriority(string? name)
+        private static bool IsAppleOriginal(WatchmodeDetails? details)
         {
-            if (string.IsNullOrEmpty(name)) return 100;
-            var lower = name.ToLowerInvariant();
-            if (lower.Contains("netflix")) return 1;
-            if (lower.Contains("prime") || lower.Contains("amazon")) return 2;
-            if (lower.Contains("apple")) return 3;
-            if (lower.Contains("disney")) return 4;
-            if (lower.Contains("hulu")) return 5;
-            if (lower.Contains("max") || lower.Contains("hbo")) return 6;
-            if (lower.Contains("paramount")) return 7;
-            if (lower.Contains("peacock")) return 8;
-            if (lower.Contains("youtube") || lower.Contains("google")) return 9;
-            if (lower.Contains("vudu") || lower.Contains("fandango")) return 10;
-            if (lower.Contains("tubi")) return 11;
-            if (lower.Contains("pluto")) return 12;
-            if (lower.Contains("roku")) return 13;
-            if (lower.Contains("plex")) return 14;
-            if (lower.Contains("crunchyroll")) return 15;
-            if (lower.Contains("discovery")) return 16;
-            if (lower.Contains("bbc") || lower.Contains("iplayer")) return 17;
-            if (lower.Contains("hotstar") || lower.Contains("jiocinema")) return 18;
-            if (lower.Contains("crave")) return 19;
-            if (lower.Contains("binge")) return 20;
-            if (lower.Contains("tidal")) return 21;
-            if (lower.Contains("deezer")) return 22;
-            return 50;
+            if (details == null) return false;
+            if (details.NetworkNames?.Any(n => n != null && n.Contains("apple", StringComparison.OrdinalIgnoreCase)) == true)
+                return true;
+            if (details.StudioNames?.Any(s => s != null && s.Contains("apple", StringComparison.OrdinalIgnoreCase)) == true)
+                return true;
+
+            string clean = details.Title?.Trim() ?? "";
+            var knownAppleOriginals = new[]
+            {
+                "Presumed Innocent", "Ted Lasso", "Severance", "The Morning Show", "For All Mankind",
+                "Slow Horses", "Shrinking", "Silo", "Foundation", "Bad Monkey", "Pachinko",
+                "Hijack", "Black Bird", "Dark Matter", "Sugar", "Masters of the Air",
+                "Monarch: Legacy of Monsters", "See", "Servant", "Mythic Quest", "Dickinson",
+                "Physical", "Invasion", "Lady in the Lake", "Defending Jacob", "Platonic",
+                "Palm Royale", "The Afterparty", "Schmigadoon!", "Trying", "Loot",
+                "Wolfs", "The Instigators", "Argylle", "Napoleon", "Killers of the Flower Moon",
+                "CODA", "Greyhound", "Finch", "Spirited", "Tetris", "Ghosted", "The Family Plan",
+                "Fly Me to the Moon", "Sharper", "The Banker", "Cherry"
+            };
+
+            return knownAppleOriginals.Any(t => string.Equals(clean, t, StringComparison.OrdinalIgnoreCase) ||
+                                                clean.StartsWith(t, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static int GetProviderPriority(WatchmodeSource source, WatchmodeDetails? details)
+
+        {
+            if (source == null || string.IsNullOrEmpty(source.Name)) return 100;
+            var lower = source.Name.ToLowerInvariant();
+
+            bool isAddOnOrChannel = lower.Contains("channel") || lower.Contains("add-on") || lower.Contains("addon") || 
+                                    lower.Contains("on prime") || lower.Contains("on roku") || lower.Contains("on apple") ||
+                                    string.Equals(source.Type, "addon", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(source.Type, "sub_addon", StringComparison.OrdinalIgnoreCase);
+
+            if (!isAddOnOrChannel && details != null)
+            {
+                bool isAppleOriginal = IsAppleOriginal(details);
+
+                bool isNetflixOriginal = (details.NetworkNames?.Any(n => n.Contains("netflix", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                                         (details.StudioNames?.Any(s => s.Contains("netflix", StringComparison.OrdinalIgnoreCase)) ?? false);
+                bool isPrimeOriginal = (details.NetworkNames?.Any(n => n.Contains("amazon", StringComparison.OrdinalIgnoreCase) || n.Contains("prime", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                                       (details.StudioNames?.Any(s => s.Contains("amazon", StringComparison.OrdinalIgnoreCase) || s.Contains("prime", StringComparison.OrdinalIgnoreCase)) ?? false);
+                bool isDisneyOriginal = (details.NetworkNames?.Any(n => n.Contains("disney", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                                        (details.StudioNames?.Any(s => s.Contains("disney", StringComparison.OrdinalIgnoreCase)) ?? false);
+                bool isMaxOriginal = (details.NetworkNames?.Any(n => n.Contains("hbo", StringComparison.OrdinalIgnoreCase) || n.Contains("max", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                                     (details.StudioNames?.Any(s => s.Contains("hbo", StringComparison.OrdinalIgnoreCase) || s.Contains("max", StringComparison.OrdinalIgnoreCase)) ?? false);
+
+                if (isAppleOriginal && lower.Contains("apple")) return 0;
+                if (isNetflixOriginal && lower.Contains("netflix")) return 0;
+                if (isPrimeOriginal && (lower.Contains("prime") || lower.Contains("amazon"))) return 0;
+                if (isDisneyOriginal && lower.Contains("disney")) return 0;
+                if (isMaxOriginal && (lower.Contains("max") || lower.Contains("hbo"))) return 0;
+            }
+
+            int tierOffset = isAddOnOrChannel ? 50 : 0;
+            if (string.Equals(source.Type, "rent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(source.Type, "buy", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(source.Type, "purchase", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(source.Type, "tvod", StringComparison.OrdinalIgnoreCase))
+            {
+                tierOffset = 80;
+            }
+
+            int baseRank = 40;
+            if (lower.Contains("apple")) baseRank = 1;
+            else if (lower.Contains("netflix")) baseRank = 2;
+            else if (lower.Contains("prime") || lower.Contains("amazon")) baseRank = 3;
+            else if (lower.Contains("disney")) baseRank = 4;
+            else if (lower.Contains("max") || lower.Contains("hbo")) baseRank = 5;
+            else if (lower.Contains("hulu")) baseRank = 6;
+            else if (lower.Contains("paramount")) baseRank = 7;
+            else if (lower.Contains("peacock")) baseRank = 8;
+            else if (lower.Contains("youtube") || lower.Contains("google")) baseRank = 9;
+            else if (lower.Contains("vudu") || lower.Contains("fandango")) baseRank = 10;
+            else if (lower.Contains("tubi")) baseRank = 11;
+            else if (lower.Contains("pluto")) baseRank = 12;
+            else if (lower.Contains("roku")) baseRank = 13;
+            else if (lower.Contains("plex")) baseRank = 14;
+            else if (lower.Contains("crunchyroll")) baseRank = 15;
+
+            return tierOffset + baseRank;
         }
 
         private FrameworkElement BuildProviderWrapPanel(List<WatchmodeSource> sourcesList, string labelType)
@@ -619,7 +966,7 @@ namespace LumiereMediaPlayer.Pages
                 var btn = new Button
                 {
                     Padding = new Thickness(8),
-                    CornerRadius = new CornerRadius(8),
+                    CornerRadius = new CornerRadius(12),
                     Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
                     BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
                     BorderThickness = new Thickness(1),
@@ -631,9 +978,12 @@ namespace LumiereMediaPlayer.Pages
                 
                 // Icon
                 var iconUrl = GetProviderIconUrl(source);
+                var bmp = new BitmapImage();
+                bmp.DecodePixelWidth = 48;
+                bmp.UriSource = new Uri(iconUrl);
                 var logo = new Image
                 {
-                    Source = new BitmapImage(new Uri(iconUrl)),
+                    Source = bmp,
                     Width = 40,
                     Height = 40,
                     Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
@@ -1146,6 +1496,26 @@ namespace LumiereMediaPlayer.Pages
                             </Grid>
                          </DataTemplate>";
             return (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
+        }
+
+        private void OnPageUnloaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (PosterImage != null) PosterImage.Source = null;
+                if (CastGridView != null) CastGridView.ItemsSource = null;
+                if (CrewGridView != null) CrewGridView.ItemsSource = null;
+                if (SimilarTitlesGridView != null) SimilarTitlesGridView.ItemsSource = null;
+                if (ReleasesListView != null) ReleasesListView.ItemsSource = null;
+                if (ProvidersContainer != null) ProvidersContainer.Children.Clear();
+                if (EpisodesTreeView != null) EpisodesTreeView.RootNodes.Clear();
+
+                _details = null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnPageUnloaded error: {ex.Message}");
+            }
         }
     }
 }

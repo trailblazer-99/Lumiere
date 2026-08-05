@@ -151,10 +151,21 @@ public partial class MusicLibraryViewModel : ObservableObject
 
         App.MainDispatcher?.TryEnqueue(() =>
         {
-            Tracks.Clear();
-            foreach (var t in filtered)
+            if (Tracks.Count == filtered.Count)
             {
-                Tracks.Add(t);
+                for (int i = 0; i < filtered.Count; i++)
+                {
+                    if (!ReferenceEquals(Tracks[i], filtered[i]))
+                        Tracks[i] = filtered[i];
+                }
+            }
+            else
+            {
+                Tracks.Clear();
+                foreach (var t in filtered)
+                {
+                    Tracks.Add(t);
+                }
             }
         });
     }

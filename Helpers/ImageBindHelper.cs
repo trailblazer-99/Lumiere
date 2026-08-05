@@ -6,12 +6,17 @@ namespace LumiereMediaPlayer.Helpers;
 
 public static class ImageBindHelper
 {
-    public static ImageSource? SafeImageFromUrl(string? url)
+    public static ImageSource? SafeImageFromUrl(string? url) => SafeImageFromUrl(url, 360);
+
+    public static ImageSource? SafeImageFromUrl(string? url, int decodeWidth)
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
         try
         {
-            return new BitmapImage(new Uri(url));
+            var bmp = new BitmapImage();
+            if (decodeWidth > 0) bmp.DecodePixelWidth = decodeWidth;
+            bmp.UriSource = new Uri(url);
+            return bmp;
         }
         catch
         {

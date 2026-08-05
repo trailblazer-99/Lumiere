@@ -125,11 +125,11 @@
     <!-- ═══════════════════════════════════════════════════════════════
          CORNER RADIUS SCALE
     ═══════════════════════════════════════════════════════════════ -->
-    <x:Double x:Key="CardCornerRadius">8</x:Double>
-    <CornerRadius x:Key="CardCornerRadiusFull">8</CornerRadius>
+    <x:Double x:Key="CardCornerRadius">12</x:Double>
+    <CornerRadius x:Key="CardCornerRadiusFull">12</CornerRadius>
     <CornerRadius x:Key="SmallCornerRadius">4</CornerRadius>
-    <x:Double x:Key="AlbumArtCornerRadius">8</x:Double>
-    <CornerRadius x:Key="AlbumArtCornerRadiusFull">8</CornerRadius>
+    <x:Double x:Key="AlbumArtCornerRadius">12</x:Double>
+    <CornerRadius x:Key="AlbumArtCornerRadiusFull">12</CornerRadius>
     <CornerRadius x:Key="LargeCornerRadius">12</CornerRadius>
     <CornerRadius x:Key="RoundCornerRadius">9999</CornerRadius>
 
@@ -153,10 +153,11 @@
     </Style>
 
     <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="LineHeight" Value="24" />
-        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="4,6,0,8" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
     </Style>
 
@@ -205,11 +206,12 @@
 
     <!-- Settings card style — matches Win11 Settings app pattern -->
     <Style x:Key="SettingsCardStyle" TargetType="Border">
-        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadiusFull}" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="16,12" />
+        <Setter Property="MinHeight" Value="64" />
     </Style>
 
     <!-- Implicit style for ToggleSwitches to keep them aligned uniformly on the right with MinWidth="0" -->
@@ -431,6 +433,41 @@
                         Padding="{TemplateBinding Padding}"
                         HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                         VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ROUNDED CARD GRIDVIEW ITEM STYLE
+         Eliminates default WinUI square hover/selection borders and 
+         ensures smooth rounded corners matching the home page cards.
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style x:Key="RoundedCardGridViewItemStyle" TargetType="GridViewItem">
+        <Setter Property="Margin" Value="6" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewItem">
+                    <GridViewItemPresenter
+                        Content="{TemplateBinding Content}"
+                        ContentTransitions="{TemplateBinding ContentTransitions}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}"
+                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                        Margin="{TemplateBinding Padding}"
+                        SelectionCheckMarkVisualEnabled="False"
+                        PointerOverBackground="Transparent"
+                        SelectedBackground="Transparent"
+                        SelectedForeground="{TemplateBinding Foreground}"
+                        FocusBorderBrush="Transparent"
+                        SelectedBorderThickness="0"
+                        CornerRadius="12" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

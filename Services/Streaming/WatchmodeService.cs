@@ -163,10 +163,57 @@ namespace LumiereMediaPlayer.Services.Streaming
             return null;
         }
 
+        public static void EnsureAppleOriginalSource(List<WatchmodeSource> sources, string? title, string? region = "US")
+        {
+            if (sources == null) return;
+            string clean = title?.Trim() ?? "";
+            var knownAppleOriginals = new[]
+            {
+                "Presumed Innocent", "Ted Lasso", "Severance", "The Morning Show", "For All Mankind",
+                "Slow Horses", "Shrinking", "Silo", "Foundation", "Bad Monkey", "Pachinko",
+                "Hijack", "Black Bird", "Dark Matter", "Sugar", "Masters of the Air",
+                "Monarch: Legacy of Monsters", "See", "Servant", "Mythic Quest", "Dickinson",
+                "Physical", "Invasion", "Lady in the Lake", "Defending Jacob", "Platonic",
+                "Palm Royale", "The Afterparty", "Schmigadoon!", "Trying", "Loot",
+                "Wolfs", "The Instigators", "Argylle", "Napoleon", "Killers of the Flower Moon",
+                "CODA", "Greyhound", "Finch", "Spirited", "Tetris", "Ghosted", "The Family Plan",
+                "Fly Me to the Moon", "Sharper", "The Banker", "Cherry"
+            };
+
+            bool isKnownApple = knownAppleOriginals.Any(t => string.Equals(clean, t, StringComparison.OrdinalIgnoreCase) ||
+                                                             clean.StartsWith(t, StringComparison.OrdinalIgnoreCase));
+            if (isKnownApple)
+            {
+                bool hasDirectSub = sources.Any(s =>
+                    s != null &&
+                    s.Name != null &&
+                    (string.Equals(s.Name, "Apple TV+", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(s.Name, "Apple TV", StringComparison.OrdinalIgnoreCase)) &&
+                    string.Equals(s.Type, "sub", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Amazon", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Channel", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Roku", StringComparison.OrdinalIgnoreCase));
+
+                if (!hasDirectSub)
+                {
+                    sources.Add(new WatchmodeSource
+                    {
+                        SourceId = 350,
+                        Name = "Apple TV+",
+                        Type = "sub",
+                        Region = string.IsNullOrEmpty(region) ? "US" : region.ToUpperInvariant(),
+                        WebUrl = "https://tv.apple.com",
+                        Format = "4K"
+                    });
+                }
+            }
+        }
+
         public async Task<List<WatchmodeSource>> GetSourcesAsync(int watchmodeId, string region = "")
         {
             return await GetSourcesAsync(watchmodeId.ToString(), region);
         }
+
 
         public async Task<List<WatchmodeSource>> GetSourcesAsync(string titleId, string region = "")
         {
@@ -207,14 +254,15 @@ namespace LumiereMediaPlayer.Services.Streaming
                     }
                     if (providerData?.Results != null)
                     {
-                        TmdbProviderRegion? targetRegionObj = null;
-                        if (!providerData.Results.TryGetValue(region.ToUpperInvariant(), out targetRegionObj))
+                        var regionalSources = new List<WatchmodeSource>();
+                        string targetRegionCode = (!string.IsNullOrEmpty(region) ? region : "US").ToUpperInvariant();
+                        if (providerData.Results.TryGetValue(targetRegionCode, out var regionalObj) && regionalObj != null)
                         {
-                            targetRegionObj = providerData.Results.Values.FirstOrDefault();
+                            regionalSources.AddRange(regionalObj.MapToWatchmodeSources(targetRegionCode));
                         }
-                        if (targetRegionObj != null)
+                        if (regionalSources.Count > 0)
                         {
-                            return targetRegionObj.MapToWatchmodeSources(region);
+                            return regionalSources;
                         }
                     }
                 }

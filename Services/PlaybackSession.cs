@@ -490,6 +490,12 @@ public sealed class PlaybackSession
                 Log($"CreatePlaybackSourceAsync: Failed to get StorageFile: {ex.Message}\n{ex.StackTrace}");
                 System.Diagnostics.Debug.WriteLine($"Failed to load media file: {ex.Message}");
                 
+                if (mediaSource != null)
+                {
+                    try { mediaSource.Reset(); mediaSource.Dispose(); } catch { }
+                    mediaSource = null;
+                }
+
                 // Fallback to stream in case GetFileFromPathAsync fails
                 try
                 {
@@ -1327,7 +1333,7 @@ public sealed class PlaybackSession
                                 {
                                     if (token.IsCancellationRequested) return;
 
-                                    var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                                    var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 120 };
                                     await bitmap.SetSourceAsync(stream);
                                     AddCachedThumbnail(time, bitmap);
                                 }

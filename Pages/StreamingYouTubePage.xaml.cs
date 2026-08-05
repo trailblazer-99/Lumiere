@@ -8,10 +8,37 @@ namespace LumiereMediaPlayer.Pages
     {
         private WebView2? _webView;
 
+        private string _targetUrl = "https://www.youtube.com";
+
         public StreamingYouTubePage()
         {
             this.InitializeComponent();
             _ = InitializeYouTubeWebViewAsync();
+        }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            base.OnNavigatedTo(e);
+            if (e.Parameter is string url && !string.IsNullOrWhiteSpace(url))
+            {
+                _targetUrl = url;
+            }
+            else
+            {
+                _targetUrl = "https://www.youtube.com";
+            }
+
+            if (_webView?.CoreWebView2 != null)
+            {
+                try
+                {
+                    _webView.CoreWebView2.Navigate(_targetUrl);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[YouTubePage] Navigate error: {ex.Message}");
+                }
+            }
         }
 
         private async System.Threading.Tasks.Task InitializeYouTubeWebViewAsync()
@@ -42,13 +69,14 @@ namespace LumiereMediaPlayer.Pages
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
                 }
 
-                _webView.CoreWebView2.Navigate("https://www.youtube.com");
+                _webView.CoreWebView2.Navigate(_targetUrl);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[YouTubePage] Failed to initialize dynamic WebView2: {ex.Message}");
             }
         }
+
 
         private void OnWebViewContainsFullScreenElementChanged(Microsoft.Web.WebView2.Core.CoreWebView2 sender, object args)
         {

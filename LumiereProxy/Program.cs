@@ -6,7 +6,10 @@ var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
     .ConfigureServices(services =>
     {
-        services.AddHttpClient();
+        services.AddHttpClient(Microsoft.Extensions.Options.Options.DefaultName, client => 
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
     })
     .Build();
 

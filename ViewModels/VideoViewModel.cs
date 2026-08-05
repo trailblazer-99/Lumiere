@@ -22,6 +22,7 @@ public partial class VideoViewModel : ObservableObject
     private readonly TmdbService _tmdbService = new();
     private static readonly System.Threading.SemaphoreSlim _tmdbSemaphore = new(3, 3);
     private List<MediaItem> _rawVideos = new();
+    public IReadOnlyList<MediaItem> RawVideos => _rawVideos;
 
     [ObservableProperty] public partial ObservableCollection<MediaItem> FilteredVideos { get; set; } = new();
 

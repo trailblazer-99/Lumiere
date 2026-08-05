@@ -55,15 +55,7 @@
                     <Grid Grid.Row="2">
                         <GridView x:Name="TvShowsGridView" ItemsSource="{x:Bind ViewModel.TvShows, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="OnTvShowClicked" SelectionMode="None">
                             <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem">
-                                     <Setter Property="Margin" Value="0"/>
-                                     <Setter Property="Padding" Value="12"/>
-                                     <Setter Property="Background" Value="Transparent"/>
-                                     <Setter Property="BorderThickness" Value="0"/>
-                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                     <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                                     <Setter Property="CornerRadius" Value="16"/>
-                                </Style>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:WatchmodeTitle">
@@ -74,7 +66,7 @@
                                         <Border.Shadow>
                                             <ThemeShadow />
                                         </Border.Shadow>
-                                        <Grid>
+                                        <Grid CornerRadius="12">
                                             <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                                 <Border.Background>
@@ -89,7 +81,7 @@
                                                     </Border>
                                                 </Grid>
                                             </Border>
-                                            <Border VerticalAlignment="Bottom" Height="100">
+                                            <Border VerticalAlignment="Bottom" Height="100" CornerRadius="0,0,12,12">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
@@ -143,14 +135,7 @@
 
                     <GridView Grid.Row="1" x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
                         <GridView.ItemContainerStyle>
-                            <Style TargetType="GridViewItem">
-                                <Setter Property="Margin" Value="0"/>
-                                <Setter Property="Padding" Value="12"/>
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                            </Style>
+                            <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="services:SavedStreamingItem">
@@ -161,9 +146,9 @@
                                     <Border.Shadow>
                                         <ThemeShadow />
                                     </Border.Shadow>
-                                    <Grid>
+                                    <Grid CornerRadius="12">
                                         <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
-                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
+                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                     <GradientStop Color="#44000000" Offset="0.0"/>
@@ -176,7 +161,7 @@
                                                 </Border>
                                             </Grid>
                                         </Border>
-                                        <Border VerticalAlignment="Bottom" Height="100">
+                                        <Border VerticalAlignment="Bottom" Height="100" CornerRadius="0,0,12,12">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                     <GradientStop Color="Transparent" Offset="0"/>

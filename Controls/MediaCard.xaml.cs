@@ -35,22 +35,23 @@ public sealed partial class MediaCard : UserControl
 
     private static void OnPosterUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is MediaCard card)
+        if (d is MediaCard card && card.PosterImageElement != null)
         {
             var url = e.NewValue as string;
             if (!string.IsNullOrEmpty(url))
             {
                 try
                 {
-                    var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(url));
+                    var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
                     bmp.DecodePixelWidth = 240;
+                    bmp.UriSource = new System.Uri(url);
                     card.PosterImageElement.Source = bmp;
                 }
-                catch { card.PosterImageElement.Source = null; }
+                catch { try { card.PosterImageElement.Source = null; } catch { } }
             }
             else
             {
-                card.PosterImageElement.Source = null;
+                try { card.PosterImageElement.Source = null; } catch { }
             }
         }
     }
@@ -162,56 +163,83 @@ public sealed partial class MediaCard : UserControl
 
     private void ApplyAccent(string hex)
     {
-        AlbumArtBackground.Background = new SolidColorBrush(ColorHelper.FromHex(hex));
+        if (AlbumArtBackground != null && !string.IsNullOrEmpty(hex))
+        {
+            try
+            {
+                AlbumArtBackground.Background = new SolidColorBrush(ColorHelper.FromHex(hex));
+            }
+            catch { }
+        }
     }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        AnimateOverlay(1.0);
-        AnimateScale(1.03);
-        AnimateShadow(0.55, 12f);
+        try
+        {
+            AnimateOverlay(1.0);
+            AnimateScale(1.03);
+            AnimateShadow(0.55, 12f);
+        }
+        catch { }
     }
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        AnimateOverlay(0.0);
-        AnimateScale(1.0);
-        AnimateShadow(0.0, 4f);
+        try
+        {
+            AnimateOverlay(0.0);
+            AnimateScale(1.0);
+            AnimateShadow(0.0, 4f);
+        }
+        catch { }
     }
 
     private void AnimateOverlay(double targetOpacity)
     {
-        var animation = new DoubleAnimation
+        if (PlayOverlay == null) return;
+        try
         {
-            To = targetOpacity,
-            Duration = new Duration(TimeSpan.FromMilliseconds(200)),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
+            var animation = new DoubleAnimation
+            {
+                To = targetOpacity,
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
 
-        var storyboard = new Storyboard();
-        Storyboard.SetTarget(animation, PlayOverlay);
-        Storyboard.SetTargetProperty(animation, "Opacity");
-        storyboard.Children.Add(animation);
-        storyboard.Begin();
+            var storyboard = new Storyboard();
+            Storyboard.SetTarget(animation, PlayOverlay);
+            Storyboard.SetTargetProperty(animation, "Opacity");
+            storyboard.Children.Add(animation);
+            storyboard.Begin();
+        }
+        catch { }
     }
 
     private void AnimateScale(double targetScale)
     {
-        var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
-        var overlayVisual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
+        if (AlbumArtBackground == null || PlayOverlay == null) return;
+        try
+        {
+            var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
+            var overlayVisual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
+            if (artVisual == null || overlayVisual == null) return;
 
-        artVisual.CenterPoint = new System.Numerics.Vector3(
-            (float)(AlbumArtBackground.ActualWidth / 2),
-            (float)(AlbumArtBackground.ActualHeight / 2),
-            0);
-        overlayVisual.CenterPoint = artVisual.CenterPoint;
+            artVisual.CenterPoint = new System.Numerics.Vector3(
+                (float)(AlbumArtBackground.ActualWidth / 2),
+                (float)(AlbumArtBackground.ActualHeight / 2),
+                0);
+            overlayVisual.CenterPoint = artVisual.CenterPoint;
 
-        var compositor = artVisual.Compositor;
-        var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-        scaleAnimation.InsertKeyFrame(1.0f, new System.Numerics.Vector3((float)targetScale));
-        scaleAnimation.Duration = TimeSpan.FromMilliseconds(200);
+            var compositor = artVisual.Compositor;
+            if (compositor == null) return;
+            var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
+            scaleAnimation.InsertKeyFrame(1.0f, new System.Numerics.Vector3((float)targetScale));
+            scaleAnimation.Duration = TimeSpan.FromMilliseconds(200);
 
-        artVisual.StartAnimation("Scale", scaleAnimation);
-        overlayVisual.StartAnimation("Scale", scaleAnimation);
+            artVisual.StartAnimation("Scale", scaleAnimation);
+            overlayVisual.StartAnimation("Scale", scaleAnimation);
+        }
+        catch { }
     }
 }
