@@ -419,6 +419,25 @@ public sealed partial class MainWindow : Window
         TransportControls.NextRequested += (_, _) => _playback.NextCommand.Execute(null);
         TransportControls.StopRequested += (_, _) => _playback.Stop();
         TransportControls.PositionChanged += (_, seconds) => _playback.Seek(seconds);
+        
+        bool _wasPlayingBeforeScrub = false;
+        TransportControls.ScrubbingPositionChanged += (_, seconds) => 
+        {
+            if (_playback.IsPlaying)
+            {
+                _wasPlayingBeforeScrub = true;
+                _playback.Session.Pause();
+            }
+            _playback.Seek(seconds);
+        };
+        TransportControls.ScrubbingEnded += (_, _) => 
+        {
+            if (_wasPlayingBeforeScrub)
+            {
+                _playback.Session.Play();
+                _wasPlayingBeforeScrub = false;
+            }
+        };
         TransportControls.VolumeChanged += (_, volume) => _playback.SetVolume(volume);
         TransportControls.QueueRequested += (_, _) =>
             _queueFlyout.ShowAt(TransportControls.QueueButtonControl);
@@ -507,7 +526,7 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private DispatcherTimer _saveBoundsTimer;
+    private DispatcherTimer? _saveBoundsTimer;
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
@@ -518,12 +537,12 @@ public sealed partial class MainWindow : Window
                 _saveBoundsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
                 _saveBoundsTimer.Tick += (s, e) =>
                 {
-                    _saveBoundsTimer.Stop();
+                    _saveBoundsTimer?.Stop();
                     SaveWindowBounds();
                 };
             }
-            _saveBoundsTimer.Stop();
-            _saveBoundsTimer.Start();
+            _saveBoundsTimer?.Stop();
+            _saveBoundsTimer?.Start();
         }
 
         if (args.DidPresenterChange)
@@ -715,31 +734,35 @@ public sealed partial class MainWindow : Window
 
     public async void TriggerVideoFrameCapture()
     {
-        if (_isVideoFrameCaptureInProgress ||
-            DateTime.UtcNow - _lastVideoFrameCaptureTime < VideoFrameCaptureInterval ||
-            ContentFrame.Content is not VideoPage videoPage)
-        {
-            return;
-        }
-
-        _isVideoFrameCaptureInProgress = true;
         try
         {
-            var imageSource = await videoPage.CaptureCurrentFrameAsync();
-            if (imageSource != null)
+            if (_isVideoFrameCaptureInProgress ||
+                DateTime.UtcNow - _lastVideoFrameCaptureTime < VideoFrameCaptureInterval ||
+                ContentFrame.Content is not VideoPage videoPage)
             {
-                TransportControls.SetArtImageSource(imageSource);
-                _lastVideoFrameCaptureTime = DateTime.UtcNow;
+                return;
+            }
+
+            _isVideoFrameCaptureInProgress = true;
+            try
+            {
+                var imageSource = await videoPage.CaptureCurrentFrameAsync();
+                if (imageSource != null)
+                {
+                    TransportControls.SetArtImageSource(imageSource);
+                    _lastVideoFrameCaptureTime = DateTime.UtcNow;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TriggerVideoFrameCapture] Failed: {ex.Message}");
+            }
+            finally
+            {
+                _isVideoFrameCaptureInProgress = false;
             }
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[TriggerVideoFrameCapture] Failed: {ex.Message}");
-        }
-        finally
-        {
-            _isVideoFrameCaptureInProgress = false;
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public void NavigateToYouTube(string? initialUrl = null)
@@ -1097,189 +1120,201 @@ public sealed partial class MainWindow : Window
 
     public async void OpenFilePickerAndPlay()
     {
-        var picker = new FileOpenPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.MusicLibrary,
-            ViewMode = PickerViewMode.List
-        };
-        picker.FileTypeFilter.Add(".mp3");
-        picker.FileTypeFilter.Add(".mp4");
-        picker.FileTypeFilter.Add(".wav");
-        picker.FileTypeFilter.Add(".wma");
-        picker.FileTypeFilter.Add(".m4a");
-        picker.FileTypeFilter.Add(".aac");
-        picker.FileTypeFilter.Add(".flac");
-        picker.FileTypeFilter.Add(".ogg");
-        picker.FileTypeFilter.Add(".opus");
-        picker.FileTypeFilter.Add(".alac");
-        picker.FileTypeFilter.Add(".mkv");
-        picker.FileTypeFilter.Add(".avi");
-        picker.FileTypeFilter.Add(".mov");
-        picker.FileTypeFilter.Add(".wmv");
-        picker.FileTypeFilter.Add(".webm");
+            var picker = new FileOpenPicker
+            {
+                SuggestedStartLocation = PickerLocationId.MusicLibrary,
+                ViewMode = PickerViewMode.List
+            };
+            picker.FileTypeFilter.Add(".mp3");
+            picker.FileTypeFilter.Add(".mp4");
+            picker.FileTypeFilter.Add(".wav");
+            picker.FileTypeFilter.Add(".wma");
+            picker.FileTypeFilter.Add(".m4a");
+            picker.FileTypeFilter.Add(".aac");
+            picker.FileTypeFilter.Add(".flac");
+            picker.FileTypeFilter.Add(".ogg");
+            picker.FileTypeFilter.Add(".opus");
+            picker.FileTypeFilter.Add(".alac");
+            picker.FileTypeFilter.Add(".mkv");
+            picker.FileTypeFilter.Add(".avi");
+            picker.FileTypeFilter.Add(".mov");
+            picker.FileTypeFilter.Add(".wmv");
+            picker.FileTypeFilter.Add(".webm");
 
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Helpers.WindowHelper.GetWindowHandle(this));
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, Helpers.WindowHelper.GetWindowHandle(this));
 
-        var file = await picker.PickSingleFileAsync();
-        if (file is not null)
-        {
-            PlayLocalFile(file);
+            var file = await picker.PickSingleFileAsync();
+            if (file is not null)
+            {
+                PlayLocalFile(file);
+            }
         }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private async void PlayLocalFile(StorageFile file)
     {
-        var title = file.DisplayName;
-        var artist = "Local File";
-        var duration = TimeSpan.Zero;
-        var kind = MediaKind.Audio;
-
-        var ext = file.FileType.ToLowerInvariant();
-        if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv")
-        {
-            kind = MediaKind.Video;
-            try
-            {
-                var props = await file.Properties.GetVideoPropertiesAsync();
-                duration = props.Duration;
-                if (string.IsNullOrEmpty(title)) title = file.Name;
-            }
-            catch { }
-        }
-        else
-        {
-            try
-            {
-                var props = await file.Properties.GetMusicPropertiesAsync();
-                duration = props.Duration;
-                if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
-                if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
-            }
-            catch { }
-        }
-
-        if (duration == TimeSpan.Zero)
-        {
-            duration = TimeSpan.FromMinutes(3); // fallback
-        }
-
-        long fileSize = 0;
         try
         {
-            var basicProps = await file.GetBasicPropertiesAsync();
-            fileSize = (long)basicProps.Size;
+            var title = file.DisplayName;
+            var artist = "Local File";
+            var duration = TimeSpan.Zero;
+            var kind = MediaKind.Audio;
+
+            var ext = file.FileType.ToLowerInvariant();
+            if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv")
+            {
+                kind = MediaKind.Video;
+                try
+                {
+                    var props = await file.Properties.GetVideoPropertiesAsync();
+                    duration = props.Duration;
+                    if (string.IsNullOrEmpty(title)) title = file.Name;
+                }
+                catch { }
+            }
+            else
+            {
+                try
+                {
+                    var props = await file.Properties.GetMusicPropertiesAsync();
+                    duration = props.Duration;
+                    if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
+                    if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
+                }
+                catch { }
+            }
+
+            if (duration == TimeSpan.Zero)
+            {
+                duration = TimeSpan.FromMinutes(3); // fallback
+            }
+
+            long fileSize = 0;
+            try
+            {
+                var basicProps = await file.GetBasicPropertiesAsync();
+                fileSize = (long)basicProps.Size;
+            }
+            catch { }
+
+            var item = new MediaItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = title,
+                Artist = artist,
+                Album = "Local Playback",
+                Duration = duration,
+                AccentColor = "#FFF76B1C",
+                Kind = kind,
+                SourcePath = file.Path,
+                FileSize = fileSize
+            };
+
+            try
+            {
+                Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
+            }
+            catch { }
+
+            await Services.SampleMediaLibrary.AddTrackAsync(item);
+            _playback.PlayTrack(item);
         }
-        catch { }
-
-        var item = new MediaItem
-        {
-            Id = Guid.NewGuid().ToString(),
-            Title = title,
-            Artist = artist,
-            Album = "Local Playback",
-            Duration = duration,
-            AccentColor = "#FFF76B1C",
-            Kind = kind,
-            SourcePath = file.Path,
-            FileSize = fileSize
-        };
-
-        try
-        {
-            Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
-        }
-        catch { }
-
-        await Services.SampleMediaLibrary.AddTrackAsync(item);
-        _playback.PlayTrack(item);
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public async void OnOpenFolderClick(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.MusicLibrary,
-            ViewMode = PickerViewMode.List
-        };
-        picker.FileTypeFilter.Add("*");
-
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Helpers.WindowHelper.GetWindowHandle(this));
-
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder is not null)
-        {
-            var files = await folder.GetFilesAsync();
-            var mediaItems = new List<MediaItem>();
-
-            foreach (var file in files)
+            var picker = new FolderPicker
             {
-                var ext = file.FileType.ToLowerInvariant();
-                var isAudio = ext is ".mp3" or ".wav" or ".wma" or ".m4a" or ".aac" or ".flac" or ".ogg" or ".opus" or ".alac";
-                var isVideo = ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".webm";
+                SuggestedStartLocation = PickerLocationId.MusicLibrary,
+                ViewMode = PickerViewMode.List
+            };
+            picker.FileTypeFilter.Add("*");
 
-                if (isAudio || isVideo)
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, Helpers.WindowHelper.GetWindowHandle(this));
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null)
+            {
+                var files = await folder.GetFilesAsync();
+                var mediaItems = new List<MediaItem>();
+
+                foreach (var file in files)
                 {
-                    var title = file.DisplayName;
-                    var artist = "Local File";
-                    var duration = TimeSpan.Zero;
-                    var kind = isVideo ? MediaKind.Video : MediaKind.Audio;
+                    var ext = file.FileType.ToLowerInvariant();
+                    var isAudio = ext is ".mp3" or ".wav" or ".wma" or ".m4a" or ".aac" or ".flac" or ".ogg" or ".opus" or ".alac";
+                    var isVideo = ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".webm";
 
-                    if (isVideo)
+                    if (isAudio || isVideo)
                     {
+                        var title = file.DisplayName;
+                        var artist = "Local File";
+                        var duration = TimeSpan.Zero;
+                        var kind = isVideo ? MediaKind.Video : MediaKind.Audio;
+
+                        if (isVideo)
+                        {
+                            try
+                            {
+                                var props = await file.Properties.GetVideoPropertiesAsync();
+                                duration = props.Duration;
+                                if (string.IsNullOrEmpty(title)) title = file.Name;
+                            }
+                            catch { }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                var props = await file.Properties.GetMusicPropertiesAsync();
+                                duration = props.Duration;
+                                if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
+                                if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
+                            }
+                            catch { }
+                        }
+
+                        if (duration == TimeSpan.Zero)
+                        {
+                            duration = TimeSpan.FromMinutes(3); // fallback
+                        }
+
+                        var item = new MediaItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Title = title,
+                            Artist = artist,
+                            Album = folder.Name,
+                            Duration = duration,
+                            AccentColor = "#FFF76B1C",
+                            Kind = kind,
+                            SourcePath = file.Path
+                        };
                         try
                         {
-                            var props = await file.Properties.GetVideoPropertiesAsync();
-                            duration = props.Duration;
-                            if (string.IsNullOrEmpty(title)) title = file.Name;
+                            Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
                         }
                         catch { }
+                        mediaItems.Add(item);
                     }
-                    else
-                    {
-                        try
-                        {
-                            var props = await file.Properties.GetMusicPropertiesAsync();
-                            duration = props.Duration;
-                            if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
-                            if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
-                        }
-                        catch { }
-                    }
-
-                    if (duration == TimeSpan.Zero)
-                    {
-                        duration = TimeSpan.FromMinutes(3); // fallback
-                    }
-
-                    var item = new MediaItem
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        Title = title,
-                        Artist = artist,
-                        Album = folder.Name,
-                        Duration = duration,
-                        AccentColor = "#FFF76B1C",
-                        Kind = kind,
-                        SourcePath = file.Path
-                    };
-                    try
-                    {
-                        Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.AddOrReplace(item.Id, file);
-                    }
-                    catch { }
-                    mediaItems.Add(item);
                 }
-            }
 
-            if (mediaItems.Count > 0)
-            {
-                foreach (var item in mediaItems)
+                if (mediaItems.Count > 0)
                 {
-                    await Services.SampleMediaLibrary.AddTrackAsync(item);
+                    foreach (var item in mediaItems)
+                    {
+                        await Services.SampleMediaLibrary.AddTrackAsync(item);
+                    }
+                    _playback.SetQueue(mediaItems, 0);
                 }
-                _playback.SetQueue(mediaItems, 0);
             }
         }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private void OnBackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
@@ -3314,28 +3349,32 @@ public sealed partial class MainWindow : Window
 
     private async void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        e.Handled = true;
-        NotifyActivityInFullscreen();
-        _videoTapClickCount++;
-        
-        if (_videoTapClickCount == 1)
+        try
         {
-            _videoTapCts = new System.Threading.CancellationTokenSource();
-            try
+            e.Handled = true;
+            NotifyActivityInFullscreen();
+            _videoTapClickCount++;
+            
+            if (_videoTapClickCount == 1)
             {
-                await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
-                TogglePlayPause();
-            }
-            catch (System.Threading.Tasks.TaskCanceledException)
-            {
-            }
-            finally
-            {
-                _videoTapClickCount = 0;
-                _videoTapCts?.Dispose();
-                _videoTapCts = null;
+                _videoTapCts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                    TogglePlayPause();
+                }
+                catch (System.Threading.Tasks.TaskCanceledException)
+                {
+                }
+                finally
+                {
+                    _videoTapClickCount = 0;
+                    _videoTapCts?.Dispose();
+                    _videoTapCts = null;
+                }
             }
         }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private void OnVideoPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -3444,28 +3483,32 @@ public sealed partial class MainWindow : Window
     // ── Input Handlers for GlobalVideoPlayer ──────────────────
     private async void OnGlobalVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        e.Handled = true;
-        NotifyActivityInFullscreen();
-        _videoTapClickCount++;
-        
-        if (_videoTapClickCount == 1)
+        try
         {
-            _videoTapCts = new System.Threading.CancellationTokenSource();
-            try
+            e.Handled = true;
+            NotifyActivityInFullscreen();
+            _videoTapClickCount++;
+            
+            if (_videoTapClickCount == 1)
             {
-                await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
-                TogglePlayPause();
-            }
-            catch (System.Threading.Tasks.TaskCanceledException)
-            {
-            }
-            finally
-            {
-                _videoTapClickCount = 0;
-                _videoTapCts?.Dispose();
-                _videoTapCts = null;
+                _videoTapCts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                    TogglePlayPause();
+                }
+                catch (System.Threading.Tasks.TaskCanceledException)
+                {
+                }
+                finally
+                {
+                    _videoTapClickCount = 0;
+                    _videoTapCts?.Dispose();
+                    _videoTapCts = null;
+                }
             }
         }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private void OnGlobalVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
@@ -3487,7 +3530,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private DispatcherTimer _resizePerformanceTimer;
+    private DispatcherTimer? _resizePerformanceTimer;
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -3516,8 +3559,8 @@ public sealed partial class MainWindow : Window
                 isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32) : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243));
         }
 
-        _resizePerformanceTimer.Stop();
-        _resizePerformanceTimer.Start();
+        _resizePerformanceTimer?.Stop();
+        _resizePerformanceTimer?.Start();
     }
 
     private void OnFullscreenVideoContainerSizeChanged(object sender, SizeChangedEventArgs e)

@@ -64,7 +64,7 @@ namespace LumiereMediaPlayer.Pages
                     await _webView.EnsureCoreWebView2Async(env);
 
                     // Spoof Safari on macOS User-Agent to bypass Google Account sign-in blocks on embedded browsers.
-                    _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
+                    // _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
                     
                     // Enable full screen support from within the YouTube web player
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;

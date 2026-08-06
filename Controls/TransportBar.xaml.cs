@@ -51,6 +51,8 @@ public sealed partial class TransportBar : UserControl
     public event EventHandler? PreviousRequested;
     public event EventHandler? NextRequested;
     public event EventHandler<double>? PositionChanged;
+    public event EventHandler<double>? ScrubbingPositionChanged;
+    public event EventHandler<double>? ScrubbingEnded;
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler? QueueRequested;
     public event EventHandler? PipRequested;
@@ -250,6 +252,7 @@ public sealed partial class TransportBar : UserControl
     {
         if (!_isSeeking) return;
         _isSeeking = false;
+        ScrubbingEnded?.Invoke(this, ProgressSlider.Value);
         PositionChanged?.Invoke(this, ProgressSlider.Value);
     }
 
@@ -260,6 +263,7 @@ public sealed partial class TransportBar : UserControl
         if (_isSeeking)
         {
             ElapsedTimeText.Text = TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
+            ScrubbingPositionChanged?.Invoke(this, e.NewValue);
         }
         else
         {
@@ -380,9 +384,16 @@ public sealed partial class TransportBar : UserControl
     {
         try
         {
+        try
+        {
             await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(new Uri("microsoft-clipchamp://"), "https://clipchamp.com/");
         }
         catch { }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+        }
     }
 
     private async void OnEqualiserClick(object sender, RoutedEventArgs e)
@@ -560,7 +571,7 @@ public sealed partial class TransportBar : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OnEqualiserClick] Failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 
@@ -595,6 +606,8 @@ public sealed partial class TransportBar : UserControl
 
     private async void OnAudioDevicesMenuOpening(object sender, object e)
     {
+        try
+        {
         AudioDevicesSubItem.Items.Clear();
         try
         {
@@ -636,6 +649,11 @@ public sealed partial class TransportBar : UserControl
         {
             var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
             AudioDevicesSubItem.Items.Add(errorItem);
+        }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 
@@ -928,6 +946,8 @@ public sealed partial class TransportBar : UserControl
 
     private async void UpdateExactThumbnailAsync(double seconds)
     {
+        try
+        {
         _exactThumbnailCts?.Cancel();
         _exactThumbnailCts = new CancellationTokenSource();
         var token = _exactThumbnailCts.Token;
@@ -999,6 +1019,11 @@ public sealed partial class TransportBar : UserControl
             }
         }
         catch { }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+        }
     }
 
     private void UpdateSleepTimerMenuChecks()

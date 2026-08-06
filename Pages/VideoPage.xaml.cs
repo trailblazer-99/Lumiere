@@ -219,19 +219,6 @@ public sealed partial class VideoPage : Page
         // Replace dots, underscores, hyphens with spaces
         title = title.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
 
-        // Regex patterns for common torrent release group/quality tags
-        string[] tags = new string[] {
-            "1080p", "720p", "480p", "2160p", "4k", "bluray", "bdrip", "brrip", "webrip", "web-rip",
-            "webdl", "web-dl", "dvdrip", "hdrip", "hdtv", "x264", "x265", "h264", "hevc", "aac",
-            "dts", "dd5", "ddp5", "ddp", "ac3", "yts", "yify", "axxo", "subbed", "dubbed",
-            "multi", "dual-audio", "dual audio", "dual", "criterion", "remastered", "extended",
-            "directors cut", "director's cut", "unrated", "proper", "repack"
-        };
-
-        foreach (var tag in tags)
-        {
-            title = System.Text.RegularExpressions.Regex.Replace(title, @"\b" + System.Text.RegularExpressions.Regex.Escape(tag) + @"\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        }
 
         // Clean up any year like 19xx or 20xx and strip everything after it
         var yearMatch = System.Text.RegularExpressions.Regex.Match(title, @"\b(19|20)\d{2}\b");
@@ -564,36 +551,43 @@ public sealed partial class VideoPage : Page
 
     private async void OnVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
+        try
         {
-            e.Handled = true;
-            _videoTapClickCount++;
-            
-            if (_videoTapClickCount == 1)
+            if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
             {
-                _videoTapCts = new System.Threading.CancellationTokenSource();
-                try
+                e.Handled = true;
+                _videoTapClickCount++;
+                
+                if (_videoTapClickCount == 1)
                 {
-                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
-                    if (AppServices.PlaybackViewModel.IsPlaying)
+                    _videoTapCts = new System.Threading.CancellationTokenSource();
+                    try
                     {
-                        AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                        await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                        if (AppServices.PlaybackViewModel.IsPlaying)
+                        {
+                            AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                        }
+                        else
+                        {
+                            AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
+                        }
                     }
-                    else
+                    catch (System.Threading.Tasks.TaskCanceledException)
                     {
-                        AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
                     }
-                }
-                catch (System.Threading.Tasks.TaskCanceledException)
-                {
-                }
-                finally
-                {
-                    _videoTapClickCount = 0;
-                    _videoTapCts?.Dispose();
-                    _videoTapCts = null;
+                    finally
+                    {
+                        _videoTapClickCount = 0;
+                        _videoTapCts?.Dispose();
+                        _videoTapCts = null;
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 

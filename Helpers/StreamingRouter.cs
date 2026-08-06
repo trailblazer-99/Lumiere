@@ -393,6 +393,39 @@ namespace LumiereMediaPlayer.Helpers
 
         public static async System.Threading.Tasks.Task LaunchStreamUriAsync(Uri? nativeUri, string fallbackCleanUrl)
         {
+            if (nativeUri != null && nativeUri.Scheme == "videos" && nativeUri.Query.Contains("term=", StringComparison.OrdinalIgnoreCase))
+            {
+                var qMatch = Regex.Match(nativeUri.Query, @"[?&]term=([^&]+)", RegexOptions.IgnoreCase);
+                if (qMatch.Success)
+                {
+                    string term = Uri.EscapeDataString(qMatch.Groups[1].Value);
+                    string itunesUrl = $"https://itunes.apple.com/search?term={term}&limit=1";
+                    try
+                    {
+                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                        var json = await client.GetStringAsync(itunesUrl);
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("results", out var results) && results.GetArrayLength() > 0)
+                        {
+                            var firstResult = results[0];
+                            if (firstResult.TryGetProperty("trackViewUrl", out var tvUrl))
+                            {
+                                string url = tvUrl.GetString() ?? "";
+                                if (url.Contains("tv.apple.com") || url.Contains("itunes.apple.com"))
+                                {
+                                    nativeUri = GetNativeUri(url);
+                                    fallbackCleanUrl = url;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[StreamingRouter] iTunes API resolve failed: {ex.Message}");
+                    }
+                }
+            }
+
             if (!string.IsNullOrEmpty(fallbackCleanUrl) &&
                 (fallbackCleanUrl.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
                  fallbackCleanUrl.Contains("youtu.be", StringComparison.OrdinalIgnoreCase)))

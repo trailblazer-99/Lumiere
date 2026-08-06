@@ -32,19 +32,26 @@ public sealed partial class SettingsPage : Page
 
     private async void OnAddFolderClick(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.MusicLibrary,
-            ViewMode = PickerViewMode.List
-        };
-        picker.FileTypeFilter.Add("*");
+            var picker = new FolderPicker
+            {
+                SuggestedStartLocation = PickerLocationId.MusicLibrary,
+                ViewMode = PickerViewMode.List
+            };
+            picker.FileTypeFilter.Add("*");
 
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHelper.GetWindowHandle(_hostWindow));
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHelper.GetWindowHandle(_hostWindow));
 
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder is not null)
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null)
+            {
+                ViewModel.AddFolder(folder.Path);
+            }
+        }
+        catch (Exception ex)
         {
-            ViewModel.AddFolder(folder.Path);
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 
@@ -274,9 +281,9 @@ public sealed partial class SettingsPage : Page
                 }
             }
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[SettingsPage] OnSettingsSearchTextChanged Error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 
@@ -338,7 +345,7 @@ public sealed partial class SettingsPage : Page
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error navigating to setting search item: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
         }
     }
 }

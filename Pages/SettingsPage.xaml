@@ -1022,6 +1022,34 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE9D9;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Send anonymous telemetry"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Share anonymous usage statistics to help improve Lumière. No personal data is collected."/>
+                            <HyperlinkButton Content="Privacy Policy" NavigateUri="https://github.com/trailblazer-99/Lumiere/blob/main/docs/PRIVACY_POLICY.md" Margin="-4,2,0,0"/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.SendTelemetry, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE946;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="API Data Attribution"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="This product uses the TMDB API but is not endorsed or certified by TMDB. Additional metadata and streaming availability is provided by Watchmode." TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE81C;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Remember recently played"/>

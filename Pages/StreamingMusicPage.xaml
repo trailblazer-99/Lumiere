@@ -44,7 +44,7 @@
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="models:MusicApiTrack">
-                                    <Border Width="200" Height="200" CornerRadius="12" Translation="0,0,8"
+                                    <Border Width="200" Height="200" Margin="0,0,16,16" CornerRadius="12" Translation="0,0,8"
                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                            PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">

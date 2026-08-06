@@ -31,53 +31,67 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                base.OnNavigatedTo(e);
-                
-                // Refresh library items in case we are returning from Details Page where they changed
-                RefreshLibraryList();
-                
-                if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+                try
                 {
-                    // Preserve search results, active filters, and pivot tabs when returning from Details Page
-                    return;
-                }
+                    base.OnNavigatedTo(e);
+                    
+                    // Refresh library items in case we are returning from Details Page where they changed
+                    RefreshLibraryList();
+                    
+                    if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+                    {
+                        // Preserve search results, active filters, and pivot tabs when returning from Details Page
+                        return;
+                    }
 
-                ViewModel.ResetState();
+                    ViewModel.ResetState();
 
-                if (MainPivot != null)
-                {
-                    MainPivot.SelectedIndex = 0;
+                    if (MainPivot != null)
+                    {
+                        MainPivot.SelectedIndex = 0;
+                    }
+                    if (SearchBox != null)
+                    {
+                        SearchBox.Text = string.Empty;
+                    }
+                    await ViewModel.InitializeAndLoadAsync();
                 }
-                if (SearchBox != null)
+                catch (Exception ex)
                 {
-                    SearchBox.Text = string.Empty;
+                    System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
                 }
-                await ViewModel.InitializeAndLoadAsync();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 
         private async void OnSearchBoxTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
-            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+            try
             {
-                string query = sender.Text;
-                if (query.Length >= 3)
+                if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
                 {
-                    try
+                    string query = sender.Text;
+                    if (query.Length >= 3)
                     {
-                        var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
-                        sender.ItemsSource = suggestions;
+                        try
+                        {
+                            var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
+                            sender.ItemsSource = suggestions;
+                        }
+                        catch { }
                     }
-                    catch { }
+                    else
+                    {
+                        sender.ItemsSource = null;
+                    }
                 }
-                else
-                {
-                    sender.ItemsSource = null;
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 
@@ -148,6 +162,11 @@ namespace LumiereMediaPlayer.Pages
         {
             if (e.ClickedItem is WatchmodeTitle tvShow)
             {
+                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
+                if (container != null)
+                {
+                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
+                }
                 Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion));
             }
         }
@@ -177,47 +196,139 @@ namespace LumiereMediaPlayer.Pages
 
         private async void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender != e.OriginalSource) return;
-            if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
+            try
             {
-                string header = pivotItem.Header?.ToString() ?? string.Empty;
-                if (header == "Library")
+                if (sender != e.OriginalSource) return;
+                if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
                 {
-                    RefreshLibraryList();
-                }
-                else if (header == "Catalog Changes")
-                {
-                    await LoadCatalogChangesAsync();
+                    string header = pivotItem.Header?.ToString() ?? string.Empty;
+                    if (header == "Library")
+                    {
+                        RefreshLibraryList();
+                    }
+                    else if (header == "Trending")
+                    {
+                        await LoadTrendingAsync();
+                    }
                 }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
 
-        private async System.Threading.Tasks.Task LoadCatalogChangesAsync()
+        private readonly TmdbService _tmdbService = new();
+
+        private DispatcherTimer? _heroTimer;
+
+        private async System.Threading.Tasks.Task LoadTrendingAsync()
         {
-            if (CatalogChangesListView == null) return;
+            if (TrendingGridView == null || TrendingHeroCarousel == null) return;
 
             try
             {
-                string startDate = DateTime.Today.AddDays(-5).ToString("yyyyMMdd");
-                string endDate = DateTime.Today.ToString("yyyyMMdd");
-                var changesResponse = await _watchmodeService.GetChangesAsync(startDate, endDate);
+                var popularTvShows = await _tmdbService.GetPopularTvShowsAsync(1);
+                var heroItems = popularTvShows.Take(5).ToList();
+                var gridItems = popularTvShows.Skip(5).ToList();
+                
+                TrendingHeroCarousel.ItemsSource = heroItems;
+                TrendingGridView.ItemsSource = gridItems;
 
-                if (changesResponse?.Changes != null)
+                if (_heroTimer == null)
                 {
-                    var filteredChanges = System.Linq.Enumerable.ToList(
-                        System.Linq.Enumerable.Where(changesResponse.Changes, c => c.Type == "tv")
-                    );
-                    CatalogChangesListView.ItemsSource = filteredChanges;
+                    _heroTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                    _heroTimer.Tick += (s, e) =>
+                    {
+                        if (TrendingHeroCarousel.Items.Count > 0)
+                        {
+                            TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % TrendingHeroCarousel.Items.Count;
+                        }
+                    };
                 }
+                _heroTimer.Start();
             }
             catch { }
         }
 
-        private void OnCatalogChangeItemClick(object sender, ItemClickEventArgs e)
+        private void OnHeroViewDetailsClick(object sender, RoutedEventArgs e)
         {
-            if (e.ClickedItem is WatchmodeChangeItem changeItem)
+            if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), (changeItem.Id, ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), (tmdbItem.Id, ViewModel.SelectedRegion));
+            }
+        }
+
+        private void OnHeroPlayTrailerClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
+            {
+                string query = $"{tmdbItem.Title} {tmdbItem.DisplayYear} tv trailer";
+                string url = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}";
+                Frame.Navigate(typeof(StreamingYouTubePage), url);
+            }
+        }
+
+        private void OnContextViewDetailsClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                if (fe.DataContext is WatchmodeTitle wm)
+                    Frame.Navigate(typeof(StreamingDetailsPage), (wm.Id, ViewModel.SelectedRegion));
+                else if (fe.DataContext is TmdbMedia tm)
+                    Frame.Navigate(typeof(StreamingDetailsPage), (tm.Id, ViewModel.SelectedRegion));
+                else if (fe.DataContext is SavedStreamingItem saved && int.TryParse(saved.Id, out int wid))
+                    Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion));
+            }
+        }
+
+        private void OnContextAddWatchlistClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                if (fe.DataContext is WatchmodeTitle wm)
+                {
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = wm.Id.ToString(), Title = wm.Title, Subtitle = $"({wm.Year})", PosterUrl = wm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                }
+                else if (fe.DataContext is TmdbMedia tm)
+                {
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = tm.Id.ToString(), Title = tm.DisplayTitle, Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                }
+            }
+        }
+
+        private void OnContextPlayTrailerClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                string title = "";
+                if (fe.DataContext is WatchmodeTitle wm) title = $"{wm.Title} {wm.Year} trailer";
+                else if (fe.DataContext is TmdbMedia tm) title = $"{tm.DisplayTitle} {tm.DisplayYear} trailer";
+
+                if (!string.IsNullOrEmpty(title))
+                {
+                    string url = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(title)}";
+                    Frame.Navigate(typeof(StreamingYouTubePage), url);
+                }
+            }
+        }
+
+        private void OnContextRemoveFromLibraryClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is SavedStreamingItem saved)
+            {
+                AppServices.StreamingLibrary.RemoveItem(saved.Id, Services.Streaming.StreamingItemType.TvShow);
+                RefreshLibraryList();
+            }
+        }
+
+        private void OnTrendingItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (e.ClickedItem is TmdbMedia tmdbItem)
+            {
+                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
+                if (container != null)
+                {
+                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
+                }
+                Frame.Navigate(typeof(StreamingDetailsPage), (tmdbItem.Id, ViewModel.SelectedRegion));
             }
         }
 
@@ -225,6 +336,11 @@ namespace LumiereMediaPlayer.Pages
         {
             if (e.ClickedItem is SavedStreamingItem item)
             {
+                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
+                if (container != null)
+                {
+                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
+                }
                 if (int.TryParse(item.Id, out int watchmodeId))
                 {
                     Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion));

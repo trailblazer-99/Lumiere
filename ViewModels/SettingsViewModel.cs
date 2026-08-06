@@ -77,6 +77,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AutoImportNewFiles { get; set; }
 
     // ── Privacy ────────────────────────────────────────────────────
+    [ObservableProperty] public partial bool SendTelemetry { get; set; }
     [ObservableProperty] public partial bool RememberRecentlyPlayed { get; set; }
     [ObservableProperty] public partial bool RememberPlaybackPositionPerTrack { get; set; }
 
@@ -530,6 +531,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAutoImportNewFilesChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoImportNewFiles = value; _settingsService.Save(); } }
 
     // Privacy
+    partial void OnSendTelemetryChanged(bool value) { if (!_isSyncing) { _settingsService.Current.SendTelemetry = value; _settingsService.Save(); } }
     partial void OnRememberRecentlyPlayedChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberRecentlyPlayed = value; _settingsService.Save(); } }
     partial void OnRememberPlaybackPositionPerTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberPlaybackPositionPerTrack = value; _settingsService.Save(); } }
 
@@ -733,6 +735,7 @@ public partial class SettingsViewModel : ObservableObject
         ShowHiddenFiles = c.ShowHiddenFiles;
         AutoImportNewFiles = c.AutoImportNewFiles;
 
+        SendTelemetry = c.SendTelemetry;
         RememberRecentlyPlayed = c.RememberRecentlyPlayed;
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;
 

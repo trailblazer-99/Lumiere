@@ -48,6 +48,12 @@ namespace LumiereMediaPlayer.Pages
             {
                 base.OnNavigatedTo(e);
 
+                var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("PosterAnimation");
+                if (animation != null)
+                {
+                    animation.TryStart(PosterImage);
+                }
+
                 if (e.Parameter is int id)
                 {
                     _watchmodeId = id;
@@ -72,7 +78,7 @@ namespace LumiereMediaPlayer.Pages
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnNavigatedTo error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 
@@ -357,21 +363,28 @@ namespace LumiereMediaPlayer.Pages
 
         private async void OnTrailerButtonClick(object sender, RoutedEventArgs e)
         {
-            if (_details != null && !string.IsNullOrEmpty(_details.Trailer))
+            try
             {
-                try
+                if (_details != null && !string.IsNullOrEmpty(_details.Trailer))
                 {
-                    if (_details.Trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
-                        _details.Trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        App.MainWindowInstance?.NavigateToYouTube(_details.Trailer);
+                        if (_details.Trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                            _details.Trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                        {
+                            App.MainWindowInstance?.NavigateToYouTube(_details.Trailer);
+                        }
+                        else
+                        {
+                            await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
+                        }
                     }
-                    else
-                    {
-                        await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
-                    }
+                    catch { }
                 }
-                catch { }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 
@@ -617,6 +630,8 @@ namespace LumiereMediaPlayer.Pages
 
         private async void CheckAndBuildLocalMediaSection(string? title)
         {
+            try
+            {
             if (string.IsNullOrWhiteSpace(title)) return;
             string cleanTarget = CleanTitleForComparison(title);
             if (string.IsNullOrEmpty(cleanTarget)) return;
@@ -759,6 +774,11 @@ namespace LumiereMediaPlayer.Pages
 
                 ProvidersContainer.Children.Add(card);
                 ProvidersContainer.Children.Add(new Microsoft.UI.Xaml.Controls.Border { Height = 16 });
+            }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 
@@ -1221,7 +1241,7 @@ namespace LumiereMediaPlayer.Pages
                 isRootDomain = string.IsNullOrEmpty(trimmedPath) || (trimmedPath.Length == 2 && name.Contains("apple"));
             }
 
-            if (string.IsNullOrWhiteSpace(webUrl) || (isRootDomain && string.IsNullOrEmpty(parsedUri.Query)))
+            if (string.IsNullOrWhiteSpace(webUrl) || (isRootDomain && string.IsNullOrEmpty(parsedUri?.Query)))
             {
                 string query = !string.IsNullOrWhiteSpace(_details?.Title) ? _details.Title : "";
                 string encoded = Uri.EscapeDataString(query);
@@ -1412,6 +1432,8 @@ namespace LumiereMediaPlayer.Pages
 
         private async void RegionDetailComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            try
+            {
             if (RegionDetailComboBox.SelectedValue is string newRegion && !string.IsNullOrEmpty(newRegion))
             {
                 if (newRegion != _selectedRegion)
@@ -1454,6 +1476,11 @@ namespace LumiereMediaPlayer.Pages
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+            }
         }
 
         private void SimilarTitlesGridView_ItemClick(object sender, ItemClickEventArgs e)
@@ -1478,6 +1505,8 @@ namespace LumiereMediaPlayer.Pages
 
         private async void CastGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
+            try
+            {
             if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
                 return;
 
@@ -1556,6 +1585,11 @@ namespace LumiereMediaPlayer.Pages
             finally
             {
                 _isPersonDialogOpen = false;
+            }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
 

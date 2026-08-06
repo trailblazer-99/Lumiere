@@ -90,6 +90,7 @@ public sealed class AppSettings
     public bool AutoImportNewFiles { get; set; } = true;
 
     // ── Privacy & History ──────────────────────────────────────────
+    public bool SendTelemetry { get; set; } = false;
     public bool RememberRecentlyPlayed { get; set; } = true;
     public bool RememberPlaybackPositionPerTrack { get; set; } = true;
 

@@ -545,76 +545,94 @@ public sealed class PlaybackSession
 
     public void TogglePlayPause()
     {
-        if (CurrentTrack is null)
+        if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
         {
-            return;
-        }
-
-        var state = _mediaPlayer.PlaybackSession.PlaybackState;
-        if (IsActivePlaybackState(state))
-        {
-            _mediaPlayer.Pause();
+            Pause();
         }
         else
         {
-            _mediaPlayer.Play();
+            Play();
         }
+    }
 
-        StateChanged?.Invoke(this, EventArgs.Empty);
+    public void Play()
+    {
+        if (_mediaPlayer.Source != null)
+        {
+            _mediaPlayer.Play();
+            UpdateDisplayRequestState();
+        }
+    }
+
+    public void Pause()
+    {
+        if (_mediaPlayer.Source != null)
+        {
+            _mediaPlayer.Pause();
+            UpdateDisplayRequestState();
+        }
     }
 
     public async void PlayTrack(MediaItem track)
     {
         try
         {
-            var requestVersion = BeginPlaybackRequest();
-            var index = _queue.FindIndex(t => t.Id == track.Id);
-            if (index >= 0)
+            try
             {
-                _currentIndex = index;
+                var requestVersion = BeginPlaybackRequest();
+                var index = _queue.FindIndex(t => t.Id == track.Id);
+                if (index >= 0)
+                {
+                    _currentIndex = index;
+                }
+                else
+                {
+                    _queue.Add(track);
+                    _currentIndex = _queue.Count - 1;
+                }
+
+                CurrentTrack = track;
+
+                await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
             }
-            else
+            catch (Exception ex)
             {
-                _queue.Add(track);
-                _currentIndex = _queue.Count - 1;
+                Log($"PlayTrack error: {ex.Message}");
             }
-
-            CurrentTrack = track;
-
-            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
         }
-        catch (Exception ex)
-        {
-            Log($"PlayTrack error: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public async void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
     {
         try
         {
-            var requestVersion = BeginPlaybackRequest();
-            _queue.Clear();
-            _queue.AddRange(items);
-            _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
-            CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
-
-            if (CurrentTrack is not null)
+            try
             {
-                await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
-                return;
-            }
-            else
-            {
-                _mediaPlayer.Source = null;
-            }
+                var requestVersion = BeginPlaybackRequest();
+                _queue.Clear();
+                _queue.AddRange(items);
+                _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
+                CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
 
-            StateChanged?.Invoke(this, EventArgs.Empty);
+                if (CurrentTrack is not null)
+                {
+                    await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
+                    return;
+                }
+                else
+                {
+                    _mediaPlayer.Source = null;
+                }
+
+                StateChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                Log($"SetQueue error: {ex.Message}");
+            }
         }
-        catch (Exception ex)
-        {
-            Log($"SetQueue error: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public void AddToQueue(MediaItem track)
@@ -656,21 +674,25 @@ public sealed class PlaybackSession
     {
         try
         {
-            if (index < 0 || index >= _queue.Count)
+            try
             {
-                return;
+                if (index < 0 || index >= _queue.Count)
+                {
+                    return;
+                }
+
+                var requestVersion = BeginPlaybackRequest();
+                _currentIndex = index;
+                CurrentTrack = _queue[_currentIndex];
+
+                await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
             }
-
-            var requestVersion = BeginPlaybackRequest();
-            _currentIndex = index;
-            CurrentTrack = _queue[_currentIndex];
-
-            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
+            catch (Exception ex)
+            {
+                Log($"PlayQueueItemAt error: {ex.Message}");
+            }
         }
-        catch (Exception ex)
-        {
-            Log($"PlayQueueItemAt error: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public void Previous()
@@ -789,36 +811,40 @@ public sealed class PlaybackSession
     {
         try
         {
-            if (!AppServices.Settings.Current.RememberLastPlayedTrack)
+            try
             {
-                return;
-            }
-
-            var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-            if (localSettings.Values["LastPlayedTrackId"] is string trackId)
-            {
-                var track = SampleMediaLibrary.AllTracks.FirstOrDefault(t => t.Id == trackId);
-                if (track != null)
+                if (!AppServices.Settings.Current.RememberLastPlayedTrack)
                 {
-                    var index = _queue.FindIndex(t => t.Id == track.Id);
-                    if (index >= 0)
-                    {
-                        _currentIndex = index;
-                    }
-                    else
-                    {
-                        _queue.Add(track);
-                        _currentIndex = _queue.Count - 1;
-                    }
+                    return;
+                }
 
-                    CurrentTrack = track;
+                var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+                if (localSettings.Values["LastPlayedTrackId"] is string trackId)
+                {
+                    var track = SampleMediaLibrary.AllTracks.FirstOrDefault(t => t.Id == trackId);
+                    if (track != null)
+                    {
+                        var index = _queue.FindIndex(t => t.Id == track.Id);
+                        if (index >= 0)
+                        {
+                            _currentIndex = index;
+                        }
+                        else
+                        {
+                            _queue.Add(track);
+                            _currentIndex = _queue.Count - 1;
+                        }
 
-                    var requestVersion = BeginPlaybackRequest();
-                    await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: false, saveLastPlayed: false);
+                        CurrentTrack = track;
+
+                        var requestVersion = BeginPlaybackRequest();
+                        await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: false, saveLastPlayed: false);
+                    }
                 }
             }
+            catch { }
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public void Dispose()
@@ -926,75 +952,79 @@ public sealed class PlaybackSession
 
     private async void RunAiEqualizerMatcher(MediaItem track)
     {
-        var settings = AppServices.Settings.Current;
-        if (!settings.AiEqualizerMatcherEnabled) return;
-
         try
         {
-            string genre = track.Genre ?? string.Empty;
-            string title = track.Title ?? string.Empty;
+            var settings = AppServices.Settings.Current;
+            if (!settings.AiEqualizerMatcherEnabled) return;
 
-            EqualizerPreset matchedPreset = EqualizerPreset.Flat;
+            try
+            {
+                string genre = track.Genre ?? string.Empty;
+                string title = track.Title ?? string.Empty;
 
-            // 1. Fast offline matching
-            if (genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || genre.Contains("Metal", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Rock;
-            }
-            else if (genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || genre.Contains("Dance", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Pop;
-            }
-            else if (genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || genre.Contains("Techno", StringComparison.OrdinalIgnoreCase) || genre.Contains("Club", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Electronic;
-            }
-            else if (genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || genre.Contains("Orchestral", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Classical;
-            }
-            else if (genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || genre.Contains("Blues", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Jazz;
-            }
-            else if (genre.Contains("Speech", StringComparison.OrdinalIgnoreCase) || genre.Contains("Podcast", StringComparison.OrdinalIgnoreCase) || genre.Contains("Vocal", StringComparison.OrdinalIgnoreCase))
-            {
-                matchedPreset = EqualizerPreset.Vocal;
-            }
-            
-            // 2. Cloud matching fallback (using proxy/Gemini) if UseProxy is enabled
-            var config = ConfigService.Config;
-            if (matchedPreset == EqualizerPreset.Flat && config.UseProxy)
-            {
-                try
+                EqualizerPreset matchedPreset = EqualizerPreset.Flat;
+
+                // 1. Fast offline matching
+                if (genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || genre.Contains("Metal", StringComparison.OrdinalIgnoreCase))
                 {
-                    string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
-                    var apiResult = await AiAssistantService.TranslateLyricsAsync(track.Id, new List<string> { prompt }, "English");
-                    if (apiResult != null && apiResult.Count > 0)
+                    matchedPreset = EqualizerPreset.Rock;
+                }
+                else if (genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || genre.Contains("Dance", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPreset = EqualizerPreset.Pop;
+                }
+                else if (genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || genre.Contains("Techno", StringComparison.OrdinalIgnoreCase) || genre.Contains("Club", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPreset = EqualizerPreset.Electronic;
+                }
+                else if (genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || genre.Contains("Orchestral", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPreset = EqualizerPreset.Classical;
+                }
+                else if (genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || genre.Contains("Blues", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPreset = EqualizerPreset.Jazz;
+                }
+                else if (genre.Contains("Speech", StringComparison.OrdinalIgnoreCase) || genre.Contains("Podcast", StringComparison.OrdinalIgnoreCase) || genre.Contains("Vocal", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedPreset = EqualizerPreset.Vocal;
+                }
+                
+                // 2. Cloud matching fallback (using proxy/Gemini) if UseProxy is enabled
+                var config = ConfigService.Config;
+                if (matchedPreset == EqualizerPreset.Flat && config.UseProxy)
+                {
+                    try
                     {
-                        string responseText = apiResult[0].Trim();
-                        if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
+                        string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
+                        var apiResult = await AiAssistantService.TranslateLyricsAsync(track.Id, new List<string> { prompt }, "English");
+                        if (apiResult != null && apiResult.Count > 0)
                         {
-                            matchedPreset = parsedPreset;
+                            string responseText = apiResult[0].Trim();
+                            if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
+                            {
+                                matchedPreset = parsedPreset;
+                            }
                         }
                     }
+                    catch { }
                 }
-                catch { }
-            }
 
-            if (settings.Equalizer != matchedPreset)
-            {
-                Log($"AI Equalizer Matcher: Autodetected and changed EQ preset to '{matchedPreset}' for track '{title}'");
-                App.MainDispatcher?.TryEnqueue(() =>
+                if (settings.Equalizer != matchedPreset)
                 {
-                    AppServices.SettingsViewModel.SelectedEqualizer = matchedPreset;
-                });
+                    Log($"AI Equalizer Matcher: Autodetected and changed EQ preset to '{matchedPreset}' for track '{title}'");
+                    App.MainDispatcher?.TryEnqueue(() =>
+                    {
+                        AppServices.SettingsViewModel.SelectedEqualizer = matchedPreset;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"RunAiEqualizerMatcher error: {ex.Message}");
             }
         }
-        catch (Exception ex)
-        {
-            Log($"RunAiEqualizerMatcher error: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private int GetNextTrackIndex()
@@ -1032,96 +1062,100 @@ public sealed class PlaybackSession
 
     private async void InitiateCrossfade(int nextIndex)
     {
-        if (_isCrossfading) return;
-
-        var nextTrack = _queue[nextIndex];
-        Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
-
         try
         {
-            var requestVersion = BeginPlaybackRequest();
-            _isCrossfading = true;
+            if (_isCrossfading) return;
 
-            _transitionPlayer = new MediaPlayer
+            var nextTrack = _queue[nextIndex];
+            Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
+
+            try
             {
-                AudioCategory = _mediaPlayer.AudioCategory,
-                AutoPlay = false
-            };
-            
-            _transitionPlayer.Source = _mediaPlayer.Source;
-            _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
-            _transitionPlayer.Volume = _mediaPlayer.Volume;
-            _transitionPlayer.Play();
+                var requestVersion = BeginPlaybackRequest();
+                _isCrossfading = true;
 
-            _currentIndex = nextIndex;
-            CurrentTrack = nextTrack;
-
-            IMediaPlaybackSource? nextSource = null;
-            if (_preloadedNextSource != null && _preloadedTrackId == nextTrack.Id)
-            {
-                nextSource = _preloadedNextSource;
-                _preloadedNextSource = null;
-                _preloadedTrackId = null;
-            }
-            else
-            {
-                nextSource = await CreatePlaybackSourceAsync(nextTrack);
-            }
-
-            if (nextSource != null)
-            {
-                _mediaPlayer.Source = nextSource;
-                _mediaPlayer.Volume = 0.0;
-                _mediaPlayer.Play();
-
-                StateChanged?.Invoke(this, EventArgs.Empty);
-                SaveLastPlayedTrack(nextTrack);
-
-                int durationMs = AppServices.Settings.Current.CrossfadeDuration * 1000;
-                int intervalMs = 50;
-                int steps = durationMs / intervalMs;
-                double initialTransitionVolume = _transitionPlayer.Volume;
-                double finalTargetVolume = Volume / 100.0;
-
-                int currentStep = 0;
-                var fadeTimer = App.MainDispatcher?.CreateTimer();
-                if (fadeTimer != null)
+                _transitionPlayer = new MediaPlayer
                 {
-                    fadeTimer.Interval = TimeSpan.FromMilliseconds(intervalMs);
-                    fadeTimer.Tick += (s, ev) =>
+                    AudioCategory = _mediaPlayer.AudioCategory,
+                    AutoPlay = false
+                };
+                
+                _transitionPlayer.Source = _mediaPlayer.Source;
+                _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+                _transitionPlayer.Volume = _mediaPlayer.Volume;
+                _transitionPlayer.Play();
+
+                _currentIndex = nextIndex;
+                CurrentTrack = nextTrack;
+
+                IMediaPlaybackSource? nextSource = null;
+                if (_preloadedNextSource != null && _preloadedTrackId == nextTrack.Id)
+                {
+                    nextSource = _preloadedNextSource;
+                    _preloadedNextSource = null;
+                    _preloadedTrackId = null;
+                }
+                else
+                {
+                    nextSource = await CreatePlaybackSourceAsync(nextTrack);
+                }
+
+                if (nextSource != null)
+                {
+                    _mediaPlayer.Source = nextSource;
+                    _mediaPlayer.Volume = 0.0;
+                    _mediaPlayer.Play();
+
+                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    SaveLastPlayedTrack(nextTrack);
+
+                    int durationMs = AppServices.Settings.Current.CrossfadeDuration * 1000;
+                    int intervalMs = 50;
+                    int steps = durationMs / intervalMs;
+                    double initialTransitionVolume = _transitionPlayer.Volume;
+                    double finalTargetVolume = Volume / 100.0;
+
+                    int currentStep = 0;
+                    var fadeTimer = App.MainDispatcher?.CreateTimer();
+                    if (fadeTimer != null)
                     {
-                        if (!_isCrossfading || _transitionPlayer == null)
+                        fadeTimer.Interval = TimeSpan.FromMilliseconds(intervalMs);
+                        fadeTimer.Tick += (s, ev) =>
                         {
-                            fadeTimer.Stop();
-                            return;
-                        }
+                            if (!_isCrossfading || _transitionPlayer == null)
+                            {
+                                fadeTimer.Stop();
+                                return;
+                            }
 
-                        currentStep++;
-                        double progress = (double)currentStep / steps;
+                            currentStep++;
+                            double progress = (double)currentStep / steps;
 
-                        _transitionPlayer.Volume = Math.Clamp(initialTransitionVolume * (1.0 - progress), 0.0, 1.0);
-                        _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
+                            _transitionPlayer.Volume = Math.Clamp(initialTransitionVolume * (1.0 - progress), 0.0, 1.0);
+                            _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
 
-                        if (currentStep >= steps)
-                        {
-                            fadeTimer.Stop();
-                            CancelActiveTransition();
-                        }
-                    };
-                    fadeTimer.Start();
+                            if (currentStep >= steps)
+                            {
+                                fadeTimer.Stop();
+                                CancelActiveTransition();
+                            }
+                        };
+                        fadeTimer.Start();
+                    }
+                }
+                else
+                {
+                    _isCrossfading = false;
+                    Log("InitiateCrossfade failed: Next track source is null.");
                 }
             }
-            else
+            catch (Exception ex)
             {
                 _isCrossfading = false;
-                Log("InitiateCrossfade failed: Next track source is null.");
+                Log($"InitiateCrossfade exception: {ex.Message}");
             }
         }
-        catch (Exception ex)
-        {
-            _isCrossfading = false;
-            Log($"InitiateCrossfade exception: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     private void OnCrossfadeCheckTimerTick(object sender, object e)
@@ -1231,24 +1265,28 @@ public sealed class PlaybackSession
     {
         try
         {
-            double startVol = _mediaPlayer.Volume;
-            int steps = 20;
-            int intervalMs = 100;
-            for (int i = 0; i <= steps; i++)
+            try
             {
-                double factor = 1.0 - ((double)i / steps);
-                _mediaPlayer.Volume = Math.Clamp(startVol * factor, 0.0, 1.0);
-                await Task.Delay(intervalMs);
+                double startVol = _mediaPlayer.Volume;
+                int steps = 20;
+                int intervalMs = 100;
+                for (int i = 0; i <= steps; i++)
+                {
+                    double factor = 1.0 - ((double)i / steps);
+                    _mediaPlayer.Volume = Math.Clamp(startVol * factor, 0.0, 1.0);
+                    await Task.Delay(intervalMs);
+                }
             }
-        }
-        catch { }
+            catch { }
 
-        Stop();
-        try
-        {
-            _mediaPlayer.Volume = Volume / 100.0;
+            Stop();
+            try
+            {
+                _mediaPlayer.Volume = Volume / 100.0;
+            }
+            catch { }
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
     public readonly object VideoThumbnailCacheLock = new();

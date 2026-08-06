@@ -70,6 +70,7 @@ public sealed class SettingsService
     private const string AutoImportNewFilesKey = "AutoImportNewFiles";
 
     // Privacy
+    private const string SendTelemetryKey = "SendTelemetry";
     private const string RememberRecentlyPlayedKey = "RememberRecentlyPlayed";
     private const string RememberPlaybackPositionPerTrackKey = "RememberPlaybackPositionPerTrack";
 
@@ -193,6 +194,7 @@ public sealed class SettingsService
             AutoImportNewFiles = ReadBool(settingsValues, AutoImportNewFilesKey, true),
 
             // Privacy
+            SendTelemetry = ReadBool(settingsValues, SendTelemetryKey, false),
             RememberRecentlyPlayed = ReadBool(settingsValues, RememberRecentlyPlayedKey, true),
             RememberPlaybackPositionPerTrack = ReadBool(settingsValues, RememberPlaybackPositionPerTrackKey, true),
 
@@ -289,6 +291,7 @@ public sealed class SettingsService
         s.Values[AutoImportNewFilesKey] = Current.AutoImportNewFiles;
 
         // Privacy
+        s.Values[SendTelemetryKey] = Current.SendTelemetry;
         s.Values[RememberRecentlyPlayedKey] = Current.RememberRecentlyPlayed;
         s.Values[RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack;
 
@@ -375,7 +378,7 @@ public sealed class SettingsService
             ShowFullscreenButtonKey, ShowPipButtonKey, ShowQueueInMoreMenuKey,
             ShowSpeedInMoreMenuKey, ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
             AutomaticLibraryScanKey, LibrarySortOrderKey, ShowHiddenFilesKey, AutoImportNewFilesKey,
-            RememberRecentlyPlayedKey, RememberPlaybackPositionPerTrackKey,
+            SendTelemetryKey, RememberRecentlyPlayedKey, RememberPlaybackPositionPerTrackKey,
             HighContrastModeKey, LargeTextModeKey, ReduceMotionKey,
             ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
             KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
