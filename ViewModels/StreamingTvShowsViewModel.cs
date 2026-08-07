@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LumiereMediaPlayer.Models.Streaming;
 using LumiereMediaPlayer.Services.Streaming;
+using LumiereMediaPlayer.Helpers;
 using System.Linq;
 
 namespace LumiereMediaPlayer.ViewModels
@@ -267,8 +268,7 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
                     if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
-                    for (int i = 0; i < showList.Count; i++) { if (i < TvShows.Count) TvShows[i] = showList[i]; else TvShows.Add(showList[i]); }
-                    while (TvShows.Count > showList.Count) TvShows.RemoveAt(TvShows.Count - 1);
+                    TvShows.UpdateInPlace(showList);
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }
@@ -332,8 +332,7 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
                     if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
-                    for (int i = 0; i < showList.Count; i++) { if (i < TvShows.Count) TvShows[i] = showList[i]; else TvShows.Add(showList[i]); }
-                    while (TvShows.Count > showList.Count) TvShows.RemoveAt(TvShows.Count - 1);
+                    TvShows.UpdateInPlace(showList);
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }

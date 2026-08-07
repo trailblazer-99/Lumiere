@@ -140,6 +140,8 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("web_url")]
         public string? WebUrl { get; set; }
 
+        public string? LogoUrl { get; set; }
+
         [JsonPropertyName("ios_url")]
         public string? IosUrl { get; set; }
 
@@ -584,23 +586,29 @@ namespace LumiereMediaPlayer.Models.Streaming
                     }
                     else if (providerName.Contains("apple", StringComparison.OrdinalIgnoreCase) || providerName.Contains("itunes", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://tv.apple.com";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://tv.apple.com/search?term={Uri.EscapeDataString(title)}"
+                            : "https://tv.apple.com";
                     }
                     else if (providerName.Contains("netflix", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.netflix.com";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.netflix.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.netflix.com";
                     }
                     else if (providerName.Contains("prime", StringComparison.OrdinalIgnoreCase) || providerName.Contains("amazon", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.primevideo.com";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
+                            : "https://www.primevideo.com";
                     }
                     else if (providerName.Contains("disney", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.disneyplus.com";
+                        webUrl = "https://www.disneyplus.com"; // Disney doesn't support direct search URL params well
                     }
                     else if (providerName.Contains("max", StringComparison.OrdinalIgnoreCase) || providerName.Contains("hbo", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.max.com";
+                        webUrl = "https://www.max.com"; 
                     }
                     else if (providerName.Contains("paramount", StringComparison.OrdinalIgnoreCase))
                     {
@@ -610,6 +618,30 @@ namespace LumiereMediaPlayer.Models.Streaming
                     {
                         webUrl = "https://www.hulu.com";
                     }
+                    else if (providerName.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(title)}"
+                            : "https://www.youtube.com";
+                    }
+                    else if (providerName.Contains("google play", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://play.google.com/store/search?q={Uri.EscapeDataString(title)}&c=movies"
+                            : "https://play.google.com/store/movies";
+                    }
+                    else if (providerName.Contains("hotstar", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.hotstar.com/in/explore?searchQuery={Uri.EscapeDataString(title)}"
+                            : "https://www.hotstar.com";
+                    }
+                    else if (providerName.Contains("jio", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.jiocinema.com/search/{Uri.EscapeDataString(title)}"
+                            : "https://www.jiocinema.com";
+                    }
                     results.Add(new WatchmodeSource
                     {
                         SourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++,
@@ -617,7 +649,8 @@ namespace LumiereMediaPlayer.Models.Streaming
                         Type = type,
                         Region = regionCode.ToUpperInvariant(),
                         WebUrl = webUrl,
-                        Format = "4K"
+                        Format = "4K",
+                        LogoUrl = !string.IsNullOrEmpty(p.LogoPath) ? $"https://image.tmdb.org/t/p/original{p.LogoPath}" : null
                     });
                 }
             }

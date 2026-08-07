@@ -18,11 +18,14 @@ public sealed partial class VideoPage : Page
 {
     public VideoViewModel ViewModel { get; } = AppServices.VideoViewModel;
     private readonly LumiereMediaPlayer.Services.Streaming.TmdbService _tmdbService = new();
+    private readonly LumiereMediaPlayer.Services.Streaming.WatchmodeService _watchmodeService = new();
     private readonly PropertyChangedEventHandler _viewModelPropertyChangedHandler;
     private readonly PropertyChangedEventHandler _playbackPropertyChangedHandler;
     private bool _eventHandlersDetached;
     private int _videoTapClickCount = 0;
     private System.Threading.CancellationTokenSource? _videoTapCts;
+    private RoutedEventHandler? _streamingClickHandler;
+    private RoutedEventHandler? _fullscreenStreamingClickHandler;
 
     public VideoPage()
     {
@@ -42,6 +45,13 @@ public sealed partial class VideoPage : Page
         
         // Ensure we catch the unload event to prevent memory leaks
         this.Unloaded += OnUnloaded;
+
+        CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
+        
+        if (App.MainWindowInstance != null)
+        {
+            App.MainWindowInstance.CloseFullscreenMetadataButton.Click += (_, _) => HideMetadataOverlay();
+        }
 
         SyncMediaPlayer(true);
         UpdateUiLuminance();
@@ -65,10 +75,7 @@ public sealed partial class VideoPage : Page
 
         try
         {
-            if (LocalVideoPlayer.MediaPlayer != null)
-            {
-                LocalVideoPlayer.SetMediaPlayer(null);
-            }
+            // Removed LocalVideoPlayer nulling
         }
         catch { }
 
@@ -94,7 +101,7 @@ public sealed partial class VideoPage : Page
         else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio)
                  || e.PropertyName == nameof(PlaybackViewModel.VideoStretch))
         {
-            DispatcherQueue.TryEnqueue(UpdatePlayerLayout);
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () => VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty));
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack))
         {
@@ -107,7 +114,7 @@ public sealed partial class VideoPage : Page
                     bool isNormalVisible = MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible;
                     if (isFsVisible || isNormalVisible)
                     {
-                        await FetchInternetMetadataAsync(ViewModel.CurrentVideo.Title);
+                        await FetchInternetMetadataAsync(ViewModel.CurrentVideo);
                     }
                 }
             });
@@ -120,31 +127,11 @@ public sealed partial class VideoPage : Page
         DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
     }
 
+    public event EventHandler? VideoPlayerHostLayoutChanged;
+
     public void SyncMediaPlayer(bool forceRefresh = false)
     {
-        bool isPip = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay;
-        bool isFullscreen = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
-
-        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive && !isPip && !isFullscreen)
-        {
-            var sessionPlayer = AppServices.PlaybackViewModel.Session.MediaPlayer;
-            if (LocalVideoPlayer.MediaPlayer != sessionPlayer || forceRefresh)
-            {
-                if (LocalVideoPlayer.MediaPlayer != null)
-                {
-                    LocalVideoPlayer.SetMediaPlayer(null);
-                }
-                LocalVideoPlayer.SetMediaPlayer(sessionPlayer);
-            }
-            UpdatePlayerLayout();
-        }
-        else
-        {
-            if (LocalVideoPlayer.MediaPlayer != null)
-            {
-                LocalVideoPlayer.SetMediaPlayer(null);
-            }
-        }
+        VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -195,26 +182,29 @@ public sealed partial class VideoPage : Page
         }
     }
 
-    public void ToggleMetadataOverlay()
-    {
-        if (MetadataOverlay != null)
-        {
-            MetadataOverlay.Visibility = MetadataOverlay.Visibility == Visibility.Visible 
-                ? Visibility.Collapsed 
-                : Visibility.Visible;
-                
-            if (MetadataOverlay.Visibility == Visibility.Visible && ViewModel.CurrentVideo != null)
-            {
-                _ = FetchInternetMetadataAsync(ViewModel.CurrentVideo.Title);
-            }
-        }
-    }
-
-    private string CleanVideoTitle(string rawTitle)
+    private string CleanVideoTitle(string rawTitle, string? sourcePath)
     {
         if (string.IsNullOrWhiteSpace(rawTitle)) return string.Empty;
 
         string title = System.IO.Path.GetFileNameWithoutExtension(rawTitle);
+
+        // If it looks like a TV episode, try to extract the series title from the parent directory
+        if (!string.IsNullOrEmpty(sourcePath))
+        {
+            var tvMatch = System.Text.RegularExpressions.Regex.Match(title, @"\bS(\d+)\s*E(\d+)\b|\bSeason\s*(\d+)\s*Episode\s*(\d+)\b|\bEpisode\s*(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (tvMatch.Success || title.StartsWith("Episode", StringComparison.OrdinalIgnoreCase))
+            {
+                var dir = System.IO.Path.GetDirectoryName(sourcePath);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    string parentFolder = System.IO.Path.GetFileName(dir);
+                    if (!string.IsNullOrEmpty(parentFolder) && parentFolder.ToLowerInvariant() != "video" && parentFolder.ToLowerInvariant() != "videos")
+                    {
+                        title = parentFolder;
+                    }
+                }
+            }
+        }
 
         // Replace dots, underscores, hyphens with spaces
         title = title.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
@@ -233,9 +223,9 @@ public sealed partial class VideoPage : Page
         return title;
     }
 
-    internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(string title)
+    internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(Models.MediaItem video)
     {
-        if (string.IsNullOrWhiteSpace(title) || InternetMetadataProvidersGrid == null) return;
+        if (video == null || string.IsNullOrWhiteSpace(video.Title)) return;
         
         var mainWin = App.MainWindowInstance;
 
@@ -244,11 +234,7 @@ public sealed partial class VideoPage : Page
         InternetMetadataPanel.Visibility = Visibility.Collapsed;
         InternetMetadataContent.Visibility = Visibility.Collapsed;
         InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-        InternetMetadataProvidersGrid.Children.Clear();
-        InternetMetadataProvidersGrid.RowDefinitions.Clear();
-        InternetMetadataProvidersGrid.ColumnDefinitions.Clear();
-        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
 
         if (mainWin != null)
         {
@@ -258,21 +244,17 @@ public sealed partial class VideoPage : Page
             mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
             mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
             mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
-            mainWin.FullscreenInternetMetadataProvidersGrid.Children.Clear();
-            mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Clear();
-            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Clear();
-            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            mainWin.FullscreenInternetMetadataProvidersGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
         }
 
         try
         {
-            var cleanTitle = CleanVideoTitle(title);
+            var cleanTitle = CleanVideoTitle(video.Title, video.SourcePath);
             if (string.IsNullOrWhiteSpace(cleanTitle)) return;
 
             // Search TV show first if it looks like a TV show, else Movie
             bool isTvShow = false;
-            var filename = System.IO.Path.GetFileNameWithoutExtension(title);
+            var filename = System.IO.Path.GetFileNameWithoutExtension(video.Title);
             var tvMatch = System.Text.RegularExpressions.Regex.Match(filename, @"\bS(\d+)\s*E(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!tvMatch.Success)
             {
@@ -287,11 +269,20 @@ public sealed partial class VideoPage : Page
             if (isTvShow)
             {
                 searchResults = await _tmdbService.SearchTvShowsAsync(cleanTitle);
+                if (searchResults == null || !searchResults.Any())
+                {
+                    searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle);
+                    if (searchResults != null && searchResults.Any()) isTvShow = false;
+                }
             }
-            
-            if (searchResults == null || !searchResults.Any())
+            else
             {
                 searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle);
+                if (searchResults == null || !searchResults.Any())
+                {
+                    searchResults = await _tmdbService.SearchTvShowsAsync(cleanTitle);
+                    if (searchResults != null && searchResults.Any()) isTvShow = true;
+                }
             }
 
             var bestMatch = searchResults?.FirstOrDefault();
@@ -335,200 +326,74 @@ public sealed partial class VideoPage : Page
                         mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Collapsed;
                     }
                 }
-
-                var providers = await _tmdbService.GetProvidersAsync(bestMatch.Id, isTvShow ? "tv" : "movie");
-                if (providers != null)
-                {
-                    var allProviders = providers.Flatrate.Concat(providers.Rent).Concat(providers.Buy)
-                        .GroupBy(p => p.ProviderId)
-                        .Select(g => g.First())
-                        .Take(6)
-                        .ToList();
-
-                    if (allProviders.Any())
-                    {
-                        InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
-                        InternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                        
-                        if (mainWin != null)
-                        {
-                            mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
-                            mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                        }
-
-                        int row = 0;
-                        int col = 0;
-                        
-                        foreach (var provider in allProviders)
-                        {
-                            var btn = new Button
-                            {
-                                Content = provider.ProviderName,
-                                Margin = new Thickness(0, 0, 8, 8),
-                                HorizontalAlignment = HorizontalAlignment.Stretch,
-                                Style = (Style)Application.Current.Resources["DefaultButtonStyle"]
-                            };
-
-                            var q = Uri.EscapeDataString(bestMatch.DisplayTitle);
-                            string searchWebUrl = "";
-                            string deepLinkUrl = "";
-
-                            string nameLower = provider.ProviderName.ToLowerInvariant();
-                            switch (nameLower)
-                            {
-                                case var n when n.Contains("netflix"):
-                                    deepLinkUrl = $"netflix:search?q={q}";
-                                    searchWebUrl = $"https://www.netflix.com/search?q={q}";
-                                    break;
-                                case var n when n.Contains("prime") || n.Contains("amazon"):
-                                    deepLinkUrl = $"primevideo://search?q={q}";
-                                    searchWebUrl = $"https://www.amazon.com/s?k={q}&i=instant-video";
-                                    break;
-                                case var n when n.Contains("hotstar"):
-                                    deepLinkUrl = $"hotstar://search?q={q}";
-                                    searchWebUrl = $"https://www.hotstar.com/in/explore?search_query={q}";
-                                    break;
-                                case var n when n.Contains("disney"):
-                                    deepLinkUrl = $"disneyplus://search?q={q}";
-                                    searchWebUrl = $"https://www.disneyplus.com/search?q={q}";
-                                    break;
-                                case var n when n.Contains("jiocinema") || n.Contains("jio cinema"):
-                                    deepLinkUrl = $"jiocinema://search?q={q}";
-                                    searchWebUrl = $"https://www.jiocinema.com/search/{q}";
-                                    break;
-                                case var n when n.Contains("apple tv"):
-                                    deepLinkUrl = $"videos://tv.apple.com/search?term={q}";
-                                    searchWebUrl = $"https://tv.apple.com/search?term={q}";
-                                    break;
-                                case var n when n.Contains("itunes"):
-                                    deepLinkUrl = $"itunes://itunes.apple.com/search?term={q}";
-                                    searchWebUrl = $"https://itunes.apple.com/WebObjects/MZStore.woa/wa/search?term={q}";
-                                    break;
-                                case var n when n.Contains("hulu"):
-                                    deepLinkUrl = $"hulu://search?q={q}";
-                                    searchWebUrl = $"https://www.hulu.com/search?q={q}";
-                                    break;
-                                case var n when n.Contains("max") || n.Contains("hbo"):
-                                    deepLinkUrl = $"max://search?q={q}";
-                                    searchWebUrl = $"https://play.max.com/search?q={q}";
-                                    break;
-                                case var n when n.Contains("paramount"):
-                                    deepLinkUrl = $"paramountplus://search/?q={q}";
-                                    searchWebUrl = $"https://www.paramountplus.com/search/?q={q}";
-                                    break;
-                                case var n when n.Contains("peacock"):
-                                    deepLinkUrl = $"peacock://search?q={q}";
-                                    searchWebUrl = $"https://www.peacocktv.com/watch/search?q={q}";
-                                    break;
-                                case var n when n.Contains("crunchyroll"):
-                                    deepLinkUrl = $"crunchyroll://search?q={q}";
-                                    searchWebUrl = $"https://www.crunchyroll.com/search?q={q}";
-                                    break;
-                                case var n when n.Contains("youtube"):
-                                    deepLinkUrl = $"vnd.youtube://search?q={q}";
-                                    searchWebUrl = $"https://www.youtube.com/results?search_query={q}";
-                                    break;
-                                default:
-                                    searchWebUrl = $"https://www.google.com/search?q={Uri.EscapeDataString(bestMatch.DisplayTitle + " watch on " + provider.ProviderName)}";
-                                    break;
-                            }
-
-                            btn.Click += async (s, args) =>
-                            {
-                                Uri? nativeUri = (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri)) ? uri : null;
-                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
-                            };
-
-                            Grid.SetColumn(btn, col);
-                            Grid.SetRow(btn, row);
-                            InternetMetadataProvidersGrid.Children.Add(btn);
-
-                            if (mainWin != null)
-                            {
-                                var fsBtn = new Button
-                                {
-                                    Content = provider.ProviderName,
-                                    Margin = new Thickness(0, 0, 6, 6),
-                                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                                    Style = (Style)Application.Current.Resources["DefaultButtonStyle"]
-                                };
-                                fsBtn.Click += async (s, args) =>
-                                {
-                                    Uri? nativeUri = (!string.IsNullOrEmpty(deepLinkUrl) && Uri.TryCreate(deepLinkUrl, UriKind.Absolute, out var uri)) ? uri : null;
-                                    await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
-                                };
-                                Grid.SetColumn(fsBtn, col);
-                                Grid.SetRow(fsBtn, row);
-                                mainWin.FullscreenInternetMetadataProvidersGrid.Children.Add(fsBtn);
-                            }
-
-                            col++;
-                            if (col > 1)
-                            {
-                                col = 0;
-                                row++;
-                                InternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                                if (mainWin != null)
-                                {
-                                    mainWin.FullscreenInternetMetadataProvidersGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                        if (mainWin != null)
-                        {
-                            mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                        }
-                    }
-                }
-                else
-                {
-                    InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                    if (mainWin != null)
-                    {
-                        mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                    }
-                }
             }
-            else
+
+            InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+            if (mainWin != null)
             {
-                InternetMetadataProgress.Visibility = Visibility.Collapsed;
-                InternetMetadataProgress.IsActive = false;
-                InternetMetadataPanel.Visibility = Visibility.Collapsed;
-                InternetMetadataContent.Visibility = Visibility.Collapsed;
-                InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-
-                if (mainWin != null)
-                {
-                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
-                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
-                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
-                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
-                    mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
-                }
+                mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
             }
-        }
-        catch
-        {
-            InternetMetadataProgress.Visibility = Visibility.Collapsed;
-            InternetMetadataProgress.IsActive = false;
-            InternetMetadataPanel.Visibility = Visibility.Collapsed;
-            InternetMetadataContent.Visibility = Visibility.Collapsed;
-            InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+
+            if (bestMatch == null) return;
+            string targetTmdbId = isTvShow ? $"tmdb_tv-{bestMatch.Id}" : $"tmdb_movie-{bestMatch.Id}";
+            
+            // Unsubscribe any previous handler to prevent accumulation
+            if (_streamingClickHandler != null)
+                StreamingDetailsButton.Click -= _streamingClickHandler;
+            
+            _streamingClickHandler = (s, args) =>
+            {
+                HideMetadataOverlay();
+                AppServices.Playback.Stop();
+                App.MainWindowInstance?.ContentFrame.Navigate(typeof(StreamingDetailsPage), targetTmdbId);
+            };
+            StreamingDetailsButton.Click += _streamingClickHandler;
+            StreamingDetailsButton.Visibility = Visibility.Visible;
+            InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
 
             if (mainWin != null)
             {
-                mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
-                mainWin.FullscreenInternetMetadataProgress.IsActive = false;
-                mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
-                mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
-                mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
-                mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
+                // Unsubscribe any previous handler to prevent accumulation
+                if (_fullscreenStreamingClickHandler != null)
+                    mainWin.FullscreenStreamingDetailsButton.Click -= _fullscreenStreamingClickHandler;
+                
+                _fullscreenStreamingClickHandler = (s, args) =>
+                {
+                    HideMetadataOverlay();
+                    AppServices.Playback.Stop();
+                    
+                    if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) mainWin.ToggleFullscreen();
+                    
+                    mainWin.ContentFrame.Navigate(typeof(StreamingDetailsPage), targetTmdbId);
+                };
+                mainWin.FullscreenStreamingDetailsButton.Click += _fullscreenStreamingClickHandler;
             }
+
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error fetching metadata: {ex.Message}");
+        }
+        finally
+        {
+            InternetMetadataProgress.IsActive = false;
+            InternetMetadataProgress.Visibility = Visibility.Collapsed;
+            if (mainWin != null)
+            {
+                mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    public bool IsMetadataOverlayVisible => MetadataOverlay.Visibility == Visibility.Visible;
+
+    public void HideMetadataOverlay()
+    {
+        MetadataOverlay.Visibility = Visibility.Collapsed;
+        if (App.MainWindowInstance != null)
+        {
+            App.MainWindowInstance.FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -555,15 +420,17 @@ public sealed partial class VideoPage : Page
         {
             if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
             {
+                HideMetadataOverlay();
                 e.Handled = true;
                 _videoTapClickCount++;
                 
                 if (_videoTapClickCount == 1)
                 {
-                    _videoTapCts = new System.Threading.CancellationTokenSource();
+                    var cts = new System.Threading.CancellationTokenSource();
+                    _videoTapCts = cts;
                     try
                     {
-                        await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                        await System.Threading.Tasks.Task.Delay(225, cts.Token);
                         if (AppServices.PlaybackViewModel.IsPlaying)
                         {
                             AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
@@ -579,8 +446,10 @@ public sealed partial class VideoPage : Page
                     finally
                     {
                         _videoTapClickCount = 0;
-                        _videoTapCts?.Dispose();
-                        _videoTapCts = null;
+                        // Only dispose if we still own the CTS (another tap may have replaced it)
+                        if (_videoTapCts == cts)
+                            _videoTapCts = null;
+                        cts.Dispose();
                     }
                 }
             }
@@ -616,69 +485,30 @@ public sealed partial class VideoPage : Page
             float sdrWhite = AppServices.DisplayManager.SdrWhiteLevelInNits;
             double scale = 80.0 / Math.Max(80.0, sdrWhite);
             
-            if (MetadataOverlay != null)
+            if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
             {
-                MetadataOverlay.Opacity = Math.Max(0.4, scale); 
+                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = Math.Max(0.4, scale); 
             }
         }
         else
         {
-            if (MetadataOverlay != null)
+            if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
             {
-                MetadataOverlay.Opacity = 1.0;
+                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = 1.0;
             }
         }
     }
 
     private void OnVideoPlayerHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        UpdatePlayerLayout();
+        // Prevent the properties flyout from bleeding off the bottom of the window
+        MetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 88); // 64 Top Margin + 24 Bottom Margin
+        VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void UpdatePlayerLayout()
+    private void OnVideoPlayerHostLayoutUpdated(object sender, object e)
     {
-        if (LocalVideoPlayer == null || VideoPlayerHost == null) return;
-        
-        double containerWidth = VideoPlayerHost.ActualWidth;
-        double containerHeight = VideoPlayerHost.ActualHeight;
-        if (containerWidth <= 0 || containerHeight <= 0) return;
-
-        var ratio = AppServices.PlaybackViewModel.SelectedAspectRatio;
-        var stretch = AppServices.PlaybackViewModel.VideoStretch;
-
-        if (ratio == AspectRatioOption.Auto)
-        {
-            LocalVideoPlayer.Stretch = stretch;
-            LocalVideoPlayer.Width = double.NaN; // Auto
-            LocalVideoPlayer.Height = double.NaN; // Auto
-            return;
-        }
-
-        double targetRatio = 16.0 / 9.0;
-        switch (ratio)
-        {
-            case AspectRatioOption.Ratio16x9: targetRatio = 16.0 / 9.0; break;
-            case AspectRatioOption.Ratio4x3: targetRatio = 4.0 / 3.0; break;
-            case AspectRatioOption.Ratio21x9: targetRatio = 21.0 / 9.0; break;
-            case AspectRatioOption.Fill:
-                LocalVideoPlayer.Stretch = Microsoft.UI.Xaml.Media.Stretch.Fill;
-                LocalVideoPlayer.Width = double.NaN;
-                LocalVideoPlayer.Height = double.NaN;
-                return;
-        }
-
-        // Fit targetRatio into containerWidth x containerHeight
-        double w = containerWidth;
-        double h = containerWidth / targetRatio;
-        if (h > containerHeight)
-        {
-            h = containerHeight;
-            w = containerHeight * targetRatio;
-        }
-
-        LocalVideoPlayer.Width = w;
-        LocalVideoPlayer.Height = h;
-        LocalVideoPlayer.Stretch = stretch;
+        VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnVideoItemTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)

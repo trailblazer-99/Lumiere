@@ -162,6 +162,68 @@ namespace LumiereMediaPlayer.Services.Streaming
             return null;
         }
 
+        public async Task<WatchmodeDetails?> GetDetailsAsync(string titleId)
+        {
+            int watchmodeId = await ResolveWatchmodeIdAsync(titleId);
+            if (watchmodeId > 0)
+            {
+                return await GetDetailsAsync(watchmodeId);
+            }
+
+            // Fallback directly to TMDB if Watchmode resolution fails
+            int parsedTmdbId = -1;
+            string knownMediaType = "";
+
+            if (titleId.StartsWith("tmdb_tv-"))
+            {
+                int.TryParse(titleId.Substring(8), out parsedTmdbId);
+                knownMediaType = "tv";
+            }
+            else if (titleId.StartsWith("tmdb_movie-"))
+            {
+                int.TryParse(titleId.Substring(11), out parsedTmdbId);
+                knownMediaType = "movie";
+            }
+            else if (titleId.StartsWith("tmdb_"))
+            {
+                int.TryParse(titleId.Substring(5), out parsedTmdbId);
+            }
+
+            if (parsedTmdbId <= 0) return null;
+
+            try
+            {
+                if (knownMediaType == "tv" || knownMediaType == "tv_series" || knownMediaType == "tv_miniseries")
+                {
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{parsedTmdbId}");
+                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                        return tvDetails.MapToWatchmodeDetails();
+                }
+                else if (knownMediaType == "movie")
+                {
+                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{parsedTmdbId}");
+                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                        return movieDetails.MapToWatchmodeDetails();
+                }
+                else
+                {
+                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{parsedTmdbId}");
+                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                        return movieDetails.MapToWatchmodeDetails();
+
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{parsedTmdbId}");
+                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                        return tvDetails.MapToWatchmodeDetails();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TMDB GetDetails String Fallback Error: {ex.Message}");
+            }
+
+            return null;
+        }
+
         public static void EnsureAppleOriginalSource(List<WatchmodeSource> sources, string? title, string? region = "US")
         {
             if (sources == null) return;
@@ -208,13 +270,36 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
         }
 
-        public async Task<List<WatchmodeSource>> GetSourcesAsync(int watchmodeId, string region = "")
+        public async Task<List<WatchmodeSource>> GetSourcesAsync(int watchmodeId, string region = "", string title = "")
         {
-            return await GetSourcesAsync(watchmodeId.ToString(), region);
+            return await GetSourcesAsync(watchmodeId.ToString(), region, title);
         }
 
 
-        public async Task<List<WatchmodeSource>> GetSourcesAsync(string titleId, string region = "")
+        public async Task<int> ResolveWatchmodeIdAsync(string titleId)
+        {
+            if (titleId.StartsWith("tmdb_"))
+            {
+                var idServicePath = $"watchmode/title/{titleId}/details/";
+                var idUrl = $"{BaseUrl}/title/{titleId}/details/?apiKey={ApiKey}";
+                try
+                {
+                    var idResponse = await HttpHelper.GetStringAsync(idServicePath, idUrl);
+                    var idDoc = System.Text.Json.JsonDocument.Parse(idResponse);
+                    if (idDoc.RootElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return idProp.GetInt32();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode ID Resolution Error: {ex.Message}");
+                }
+            }
+            return -1;
+        }
+
+        public async Task<List<WatchmodeSource>> GetSourcesAsync(string titleId, string region = "", string title = "")
         {
             if (string.IsNullOrEmpty(region))
             {
@@ -222,8 +307,12 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
             if (string.IsNullOrEmpty(region)) region = "us";
 
-            var servicePath = $"watchmode/title/{titleId}/sources/?region={region}";
-            var url = $"{BaseUrl}/title/{titleId}/sources/?apiKey={ApiKey}&region={region}";
+            int watchmodeIdToUse = await ResolveWatchmodeIdAsync(titleId);
+
+            string targetIdForSources = watchmodeIdToUse > 0 ? watchmodeIdToUse.ToString() : titleId;
+
+            var servicePath = $"watchmode/title/{targetIdForSources}/sources/?region={region}";
+            var url = $"{BaseUrl}/title/{targetIdForSources}/sources/?apiKey={ApiKey}&region={region}";
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
@@ -239,29 +328,54 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
 
             // Fallback directly to TMDB API for watch providers when Watchmode is empty or unavailable
-            if (int.TryParse(titleId, out int watchmodeId))
+            int parsedTmdbId = -1;
+            string knownMediaType = "";
+
+            if (titleId.StartsWith("tmdb_tv-"))
+            {
+                int.TryParse(titleId.Substring(8), out parsedTmdbId);
+                knownMediaType = "tv";
+            }
+            else if (titleId.StartsWith("tmdb_movie-"))
+            {
+                int.TryParse(titleId.Substring(11), out parsedTmdbId);
+                knownMediaType = "movie";
+            }
+
+            if (int.TryParse(titleId, out int watchmodeId) || parsedTmdbId != -1)
             {
                 try
                 {
-                    var (tmdbId, knownType) = ResolveTmdbId(watchmodeId);
-                    string mediaType = (knownType == "tv" || knownType == "tv_series" || knownType == "tv_miniseries") ? "tv" : "movie";
-                    var providerData = await QueryTmdbAsync<TmdbProviderResponse>($"{mediaType}/{tmdbId}/watch/providers");
-                    if (providerData == null && string.IsNullOrEmpty(knownType))
+                    int tmdbId = parsedTmdbId;
+                    string mediaType = knownMediaType;
+
+                    if (tmdbId == -1)
                     {
-                        // Try TV if movie failed
-                        providerData = await QueryTmdbAsync<TmdbProviderResponse>($"tv/{tmdbId}/watch/providers");
+                        var (resTmdbId, resMediaType) = ResolveTmdbId(watchmodeId);
+                        tmdbId = resTmdbId;
+                        mediaType = (resMediaType == "tv" || resMediaType == "tv_series" || resMediaType == "tv_miniseries") ? "tv" : "movie";
                     }
-                    if (providerData?.Results != null)
+
+                    if (tmdbId != -1)
                     {
-                        var regionalSources = new List<WatchmodeSource>();
-                        string targetRegionCode = (!string.IsNullOrEmpty(region) ? region : "US").ToUpperInvariant();
-                        if (providerData.Results.TryGetValue(targetRegionCode, out var regionalObj) && regionalObj != null)
+                        var providerData = await QueryTmdbAsync<TmdbProviderResponse>($"{mediaType}/{tmdbId}/watch/providers");
+                        if (providerData == null && string.IsNullOrEmpty(knownMediaType))
                         {
-                            regionalSources.AddRange(regionalObj.MapToWatchmodeSources(targetRegionCode));
+                            // Try TV if movie failed and we didn't explicitly know the type
+                            providerData = await QueryTmdbAsync<TmdbProviderResponse>($"tv/{tmdbId}/watch/providers");
                         }
-                        if (regionalSources.Count > 0)
+                        if (providerData?.Results != null)
                         {
-                            return regionalSources;
+                            var regionalSources = new List<WatchmodeSource>();
+                            string targetRegionCode = (!string.IsNullOrEmpty(region) ? region : "US").ToUpperInvariant();
+                            if (providerData.Results.TryGetValue(targetRegionCode, out var regionalObj) && regionalObj != null)
+                            {
+                                regionalSources.AddRange(regionalObj.MapToWatchmodeSources(targetRegionCode, title));
+                            }
+                            if (regionalSources.Count > 0)
+                            {
+                                return regionalSources;
+                            }
                         }
                     }
                 }

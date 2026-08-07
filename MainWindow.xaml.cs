@@ -24,7 +24,8 @@ public sealed partial class MainWindow : Window
     private readonly QueuePanel _queuePanel;
     private readonly Flyout _queueFlyout;
     private bool _isNavigating;
-    private double _previousVolume = 75;
+    private VideoPage? _activeVideoPage;
+    private double _previousVolume = 100;
     private bool _isMuted = false;
     private AccentColorOption _lastAccentColor = AppServices.Settings.Current.AccentColor;
     private AppThemeOption _lastTheme = AppServices.Settings.Current.Theme;
@@ -46,7 +47,9 @@ public sealed partial class MainWindow : Window
     private DateTime _lastEdgeSeekTime = DateTime.MinValue;
     private DispatcherTimer? _edgeSeekFeedbackTimer;
     private bool _isCursorHidden = false;
-    private bool? _lastVideoLayoutMode = null;
+    private bool _isFullscreenTransitioning = false;
+    private Microsoft.UI.Xaml.Media.SolidColorBrush? _cachedBlackBrush;
+    private Microsoft.UI.Xaml.Media.SolidColorBrush? _cachedTransparentBrush;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int ShowCursor(bool bShow);
@@ -247,14 +250,14 @@ public sealed partial class MainWindow : Window
             DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,
                 ref defaultColor, sizeof(uint));
 
-            // Restore title bar to transparent so WinUI/Mica can manage it
-            if (AppWindow?.TitleBar != null)
+            // Re-apply the configured theme to properly restore transparent caption buttons
+            // with the correct foreground colors (light/dark mode text).
+            UpdateWindowFrameTheme(AppServices.Settings.Current.Theme switch
             {
-                AppWindow.TitleBar.BackgroundColor        = null;
-                AppWindow.TitleBar.ButtonBackgroundColor  = null;
-                AppWindow.TitleBar.InactiveBackgroundColor = null;
-                AppWindow.TitleBar.ButtonInactiveBackgroundColor = null;
-            }
+                AppThemeOption.Light => ElementTheme.Light,
+                AppThemeOption.Dark => ElementTheme.Dark,
+                _ => ElementTheme.Default
+            });
         }
         catch (Exception ex)
         {
@@ -263,6 +266,7 @@ public sealed partial class MainWindow : Window
     }
 
     public Microsoft.UI.Xaml.Controls.MediaPlayerElement GlobalVideoPlayer { get; }
+    public Microsoft.UI.Xaml.Controls.Grid FloatingVideoContainer { get; }
 
     public MainWindow()
     {        InitializeComponent();
@@ -281,7 +285,15 @@ public sealed partial class MainWindow : Window
         GlobalVideoPlayer.PointerMoved += OnFullscreenPointerMoved;
         GlobalVideoPlayer.PointerWheelChanged += OnGlobalVideoPointerWheelChanged;
         FullscreenVideoContainer.PointerMoved += OnFullscreenPointerMoved;
-        FullscreenVideoContainer.Children.Insert(0, GlobalVideoPlayer);
+        FloatingVideoContainer = new Microsoft.UI.Xaml.Controls.Grid { Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FloatingVideoContainer, 2);
+        FloatingVideoContainer.Children.Add(GlobalVideoPlayer);
+        RootGrid.Children.Insert(RootGrid.Children.IndexOf(FullscreenVideoContainer), FloatingVideoContainer);
+        
+        FullscreenVideoContainer.Children.Remove(FullscreenMetadataOverlay);
+        RootGrid.Children.Add(FullscreenMetadataOverlay);
+        Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
+        GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
         AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
         RootGrid.SizeChanged += RootGrid_SizeChanged;
 
@@ -475,27 +487,22 @@ public sealed partial class MainWindow : Window
 
         TransportControls.InfoButtonClicked += (_, _) =>
         {
-            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
             bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
 
-            if (isFullScreen)
+            if (isVideoMode)
             {
                 if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
                 {
                     FullscreenMetadataOverlay.Visibility = Visibility.Visible;
-                    if (isVideoMode && ContentFrame?.Content is VideoPage videoPage && _playback.CurrentTrack != null)
+                    if (ContentFrame?.Content is VideoPage videoPage && _playback.CurrentTrack != null)
                     {
-                        _ = videoPage.FetchInternetMetadataAsync(_playback.CurrentTrack.Title);
+                        _ = videoPage.FetchInternetMetadataAsync(_playback.CurrentTrack);
                     }
                 }
                 else
                 {
                     FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
                 }
-            }
-            else if (ContentFrame?.Content is VideoPage videoPage)
-            {
-                videoPage.ToggleMetadataOverlay();
             }
             else if (ContentFrame?.Content is NowPlayingPage musicPage)
             {
@@ -548,6 +555,7 @@ public sealed partial class MainWindow : Window
         if (args.DidPresenterChange)
         {
             _lastPresenterChangeTime = DateTime.UtcNow;
+            _isFullscreenTransitioning = true;
 
             var isPip = sender.Presenter.Kind == AppWindowPresenterKind.CompactOverlay;
             TransportControls.IsInPipMode = isPip;
@@ -562,8 +570,18 @@ public sealed partial class MainWindow : Window
                 SetCursorVisibility(true);
             }
             
-            // Resolve fullscreen title bar bounds/caption rendering quirks
-            // Defer title bar changes to avoid COMException when native window is in the middle of presenter transition
+            // Safety: ensure the transitioning flag is always cleared even if UpdateLayoutForVideoMode
+            // takes an unexpected path. Check after a short delay at Low priority.
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (_isFullscreenTransitioning && (DateTime.UtcNow - _lastPresenterChangeTime).TotalMilliseconds > 400)
+                {
+                    System.Diagnostics.Debug.WriteLine("[OnAppWindowChanged] Safety reset of _isFullscreenTransitioning");
+                    _isFullscreenTransitioning = false;
+                }
+            });
+            
+            // All chrome visibility, layout, and video controls are centralized in UpdateLayoutForVideoMode.
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
                 try
@@ -575,35 +593,6 @@ public sealed partial class MainWindow : Window
                         {
                             ExtendsContentIntoTitleBar = false;
                         }
-                        if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
-                        {
-                            if (RootNavigationView != null)
-                            {
-                                RootNavigationView.Visibility = Visibility.Visible;
-                                RootNavigationView.IsPaneOpen = false;
-                                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
-                                RootNavigationView.IsPaneToggleButtonVisible = false;
-                            }
-                            if (AppTitleBar != null)
-                            {
-                                AppTitleBar.Visibility = Visibility.Collapsed;
-                                AppTitleBar.Opacity = 0;
-                            }
-                            if (TransportControls != null)
-                            {
-                                TransportControls.Visibility = Visibility.Collapsed;
-                            }
-                        }
-                        else
-                        {
-                            if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
-                            if (AppTitleBar != null)
-                            {
-                                AppTitleBar.Visibility = Visibility.Collapsed;
-                                AppTitleBar.Opacity = 0;
-                            }
-                        }
-                        SetHwndBackgroundBlack();
                     }
                     else
                     {
@@ -612,52 +601,38 @@ public sealed partial class MainWindow : Window
                             ExtendsContentIntoTitleBar = true;
                         }
                         SetTitleBar(DragRegion);
-                        if (RootNavigationView != null)
-                        {
-                            RootNavigationView.Visibility = Visibility.Visible;
-                            RootNavigationView.IsPaneVisible = true;
-                            RootNavigationView.IsPaneToggleButtonVisible = true;
-                            
-                            ForceRefreshNavigationViewLayout();
-                        }
-                        if (AppTitleBar != null)
-                        {
-                            AppTitleBar.Visibility = Visibility.Visible;
-                            AppTitleBar.Opacity = 1.0;
-                        }
-                        if (TransportControls != null)
-                        {
-                            TransportControls.Visibility = Visibility.Visible;
-                        }
-                        RestoreHwndBackground();
                     }
 
-                    _lastVideoLayoutMode = null;
                     UpdateLayoutForVideoMode();
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[OnAppWindowChanged] Title bar update failed: {ex.Message}");
+                    _isFullscreenTransitioning = false;
                 }
             });
-
-            bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
-            if (isVideoMode)
-            {
-                if (isFullScreen)
-                {
-                    HideVideoControls();
-                }
-                else
-                {
-                    ShowVideoControls();
-                }
-            }
         }
     }
 
     private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(PlaybackViewModel.Volume))
+        {
+            if (TransportControls.Volume != _playback.Volume)
+            {
+                TransportControls.Volume = _playback.Volume;
+            }
+            return;
+        }
+        else if (e.PropertyName == nameof(PlaybackViewModel.PositionSeconds))
+        {
+            if (TransportControls.Position != _playback.PositionSeconds)
+            {
+                TransportControls.Position = _playback.PositionSeconds;
+            }
+            return;
+        }
+
         SyncTransportBar();
         this.Bindings.Update();
 
@@ -1339,6 +1314,19 @@ public sealed partial class MainWindow : Window
             }
         }
     }
+    private void OnContentFrameNavigating(object sender, Microsoft.UI.Xaml.Navigation.NavigatingCancelEventArgs e)
+    {
+        if (e.SourcePageType == typeof(Pages.VideoPage) || ContentFrame.Content is Pages.VideoPage)
+        {
+            ContentFrame.ContentTransitions = null;
+        }
+        else
+        {
+            var transitionCollection = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
+            transitionCollection.Add(new Microsoft.UI.Xaml.Media.Animation.NavigationThemeTransition());
+            ContentFrame.ContentTransitions = transitionCollection;
+        }
+    }
 
     private void OnContentFrameNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
@@ -1389,12 +1377,34 @@ public sealed partial class MainWindow : Window
             SelectStreamingTabForTitleType(detailsPage.CurrentTitleType);
         }
 
+        if (_activeVideoPage != null)
+        {
+            _activeVideoPage.VideoPlayerHostLayoutChanged -= OnVideoPlayerHostLayoutChanged;
+            _activeVideoPage = null;
+        }
+
+        if (ContentFrame.Content is VideoPage vp)
+        {
+            _activeVideoPage = vp;
+            _activeVideoPage.VideoPlayerHostLayoutChanged += OnVideoPlayerHostLayoutChanged;
+        }
+
         bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
         RootNavigationView.IsBackEnabled = isVideo || ContentFrame.CanGoBack;
 
         UpdateLayoutForVideoMode();
 
         _isNavigating = false;
+    }
+
+    private void OnVideoPlayerHostLayoutChanged(object? sender, EventArgs e)
+    {
+        // Defer to the next UI tick to prevent "Layout cycle detected" COMExceptions
+        // since this is often triggered directly by SizeChanged/LayoutUpdated events.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+        {
+            SyncFloatingVideoPlayer();
+        });
     }
 
     public void SelectStreamingTabForTitleType(string? type)
@@ -1722,208 +1732,265 @@ public sealed partial class MainWindow : Window
         if (isPip) return;
 
         bool isFullScreen  = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        bool isVideoActive = _playback.CurrentTrack is { IsVideo: true };
-        bool isVideoMode   = isVideoActive && isFullScreen && _playback.IsVideoPlayerActive;
+        bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
 
-        if (_lastVideoLayoutMode == isVideoMode)
+        if (isVideoActive)
         {
-            if (isVideoMode)
+            if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Visible;
+            
+            if (isFullScreen)
             {
-                UpdateFullscreenPlayerLayout();
-            }
-            return;
-        }
-        _lastVideoLayoutMode = isVideoMode;
-
-        if (isVideoMode)
-        {
-            SetHwndBackgroundBrushBlack();
-            // ── Step 1: Kill DWM backdrop at Win32 level FIRST ───────────
-            // Must happen before SystemBackdrop = null so DWM never renders
-            // a single frame of Mica/Acrylic into the letterbox areas.
-            SetHwndBackgroundBlack();
-
-            // ── Step 2: Block the XAML layer with opaque black ────────────
-            // Set RootGrid before clearing SystemBackdrop so there is no
-            // transparent frame between the two operations.
-            if (RootGrid != null)
-            {
-                RootGrid.RequestedTheme = ElementTheme.Dark;
-                RootGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                    Windows.UI.Color.FromArgb(255, 0, 0, 0));
-            }
-
-            if (FullscreenVideoContainer != null)
-            {
-                FullscreenVideoContainer.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                    Windows.UI.Color.FromArgb(255, 0, 0, 0));
-            }
-
-            GlobalVideoPlayer.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                Windows.UI.Color.FromArgb(255, 0, 0, 0));
-            UpdateFullscreenPlayerLayout();
-
-            // ── Step 3: Clear the WinUI backdrop AFTER backgrounds are set ─
-            SystemBackdrop = null;
-
-            // ── Hide all chrome — video fills the entire window ──────────
-            if (RootNavigationView != null)
-                RootNavigationView.Visibility = Visibility.Collapsed;
-
-            // Title bar: completely hidden — the overlay has its own back button
-            if (AppTitleBar != null)
-            {
-                AppTitleBar.Visibility = Visibility.Collapsed;
-                AppTitleBar.Opacity = 0;
-            }
-
-            // Clear RowDefinitions to avoid fractional rounding gaps (white line) under DPI scaling
-            SaveAndClearRowDefinitions();
-
-            if (TransportControls != null)
-                TransportControls.Visibility = Visibility.Collapsed;
-
-            // Hide the old title-bar back button
-            if (VideoBackButton != null)
-                VideoBackButton.Visibility = Visibility.Collapsed;
-
-            // ── Show fullscreen video container ──────────────────────────
-            if (FullscreenVideoContainer != null)
-            {
-                FullscreenVideoContainer.Visibility = Visibility.Visible;
-
-                if (GlobalVideoPlayer.MediaPlayer != _playback.Session.MediaPlayer)
+                // ── 1. DWM first — ensure HWND is black before any WinUI visibility changes ──
+                SetHwndBackgroundBrushBlack();
+                SetHwndBackgroundBlack();
+                SystemBackdrop = null;
+                
+                // ── 2. Grid/row changes ──
+                if (RootGrid != null)
                 {
-                    if (GlobalVideoPlayer.MediaPlayer != null)
-                        GlobalVideoPlayer.MediaPlayer.MediaOpened -= OnFullscreenMediaOpened;
-
-                    GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
-
-                    if (_playback.Session.MediaPlayer != null)
-                    {
-                        _playback.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
-                    }
+                    RootGrid.RequestedTheme = ElementTheme.Dark;
+                    RootGrid.Background = _cachedBlackBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0));
                 }
-
+                SaveAndClearRowDefinitions();
+                
+                if (FullscreenVideoContainer != null)
+                {
+                    FullscreenVideoContainer.Visibility = Visibility.Visible;
+                    FullscreenVideoContainer.Background = _cachedTransparentBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                }
+                
+                // ── 3. Stretch the floating player to fill the screen ──
+                FloatingVideoContainer.Margin = new Thickness(0);
+                FloatingVideoContainer.Width = double.NaN;
+                FloatingVideoContainer.Height = double.NaN;
+                FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Stretch;
+                FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Stretch;
+                
+                UpdateFullscreenPlayerLayout();
+                
+                // ── 4. Reparent transport FIRST (before chrome fade, so it won't be collapsed) ──
+                MoveTransportControlsToFullscreenOverlay();
+                
+                // ── 5. Animate chrome fade-out — only collapse nav/title/back, NOT transport ──
+                AnimateChromeOut(() =>
+                {
+                    if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
+                    if (AppTitleBar != null) AppTitleBar.Visibility = Visibility.Collapsed;
+                    if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
+                    _isFullscreenTransitioning = false;
+                });
+                
+                // ── 6. Show fullscreen controls overlay with auto-hide timer ──
+                ShowVideoControls();
+                _videoControlsTimer.Stop();
+                _videoControlsTimer.Start();
+                
                 TryRunHdrPipelineOnFullscreenPlayer();
             }
-
-            // Show the overlay (back button + scrim + transport in overlay bottom)
-            // and start auto-hide
-            MoveTransportControlsToFullscreenOverlay();
-            ShowVideoControls();
-            _videoControlsTimer.Stop();
-            _videoControlsTimer.Start();
-        }
-        else
-        {
-            RestoreHwndBackgroundBrush();
-            RootGrid.RequestedTheme = ElementTheme.Default;
-
-            bool isWebViewFullScreen = isFullScreen 
-                                      && (ContentFrame?.Content is StreamingTwitchPage || ContentFrame?.Content is StreamingYouTubePage);
-
-            if (isFullScreen && !isWebViewFullScreen && (!isVideoActive || !_playback.IsVideoPlayerActive))
+            else
             {
-                try
+                // ── Windowed mode: exit fullscreen ──
+                
+                // 1. Stop the fullscreen auto-hide timer
+                _videoControlsTimer.Stop();
+                
+                // 2. Collapse fullscreen containers
+                if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                if (FullscreenControlsOverlay != null)
                 {
-                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                    FullscreenControlsOverlay.Opacity = 0;
                 }
-                catch (Exception ex)
+                
+                // 3. Restore grid rows and reparent transport controls
+                RestoreRowDefinitions();
+                MoveTransportControlsToNormalLayout();
+                
+                // 4. Restore chrome elements
+                if (RootNavigationView != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[UpdateLayoutForVideoMode] SetPresenter Overlapped failed: {ex.Message}");
-                }
-            }
-
-            // ── Tear down fullscreen video container ─────────────────────
-            if (FullscreenVideoContainer != null)
-            {
-                FullscreenVideoContainer.Visibility = Visibility.Collapsed;
-                _edgeSeekFeedbackTimer?.Stop();
-                _edgeSeekStreak = 0;
-                if (GlobalVideoPlayer.MediaPlayer != null)
-                    GlobalVideoPlayer.MediaPlayer.MediaOpened -= OnFullscreenMediaOpened;
-                GlobalVideoPlayer.SetMediaPlayer(null);
-
-                if (ContentFrame?.Content is VideoPage vp)
-                    vp.SyncMediaPlayer(true);
-            }
-
-            // Restore RowDefinitions for normal windowed layout
-            RestoreRowDefinitions();
-
-            MoveTransportControlsToNormalLayout();
-
-            // ── Restore navigation and title bar ─────────────────────────
-            if (RootNavigationView != null)
-            {
-                RootNavigationView.Visibility = Visibility.Visible;
-                if ((ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage) && AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
-                {
-                    RootNavigationView.IsPaneOpen = false;
-                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
-                    RootNavigationView.IsPaneToggleButtonVisible = false;
-                    if (TransportControls != null)
-                    {
-                        TransportControls.Visibility = Visibility.Collapsed;
-                    }
-                }
-                else
-                {
+                    RootNavigationView.Visibility = Visibility.Visible;
                     RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
                     RootNavigationView.IsPaneToggleButtonVisible = true;
                     RootNavigationView.IsPaneVisible = true;
-                    if (TransportControls != null)
-                    {
-                        TransportControls.Visibility = Visibility.Visible;
-                    }
-
-                    ForceRefreshNavigationViewLayout();
+                    RootNavigationView.IsPaneOpen = true;
+                    if (TransportControls != null) TransportControls.Visibility = Visibility.Visible;
+                    RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
+                    RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
+                    RootNavigationView.ClearValue(Control.BackgroundProperty);
                 }
+                
+                if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
+                if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
+                if (AppTitleBar != null)
+                {
+                    AppTitleBar.Visibility = Visibility.Visible;
+                    AppTitleBar.Background = null;
+                }
+                
+                ApplyConfiguredTheme();
+                UpdateRootGridBackground();
+                
+                // 5. Let the natural layout pass handle the video position sync via VideoPlayerHostLayoutChanged.
+                // We do not force RootGrid.UpdateLayout() because reparenting controls in the same tick causes COMExceptions.
+                ForceRefreshNavigationViewLayout();
+                
+                // 6. Animate chrome fade-in
+                AnimateChromeIn();
+                _isFullscreenTransitioning = false;
+                
+                // 7. Explicitly sync the floating video container position.
+                // Don't rely on a layout pass that may or may not fire in time.
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                {
+                    SyncFloatingVideoPlayer();
+                });
+                
+                // 8. Cosmetic DWM/backdrop restore at Low priority (not user-visible)
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    try
+                    {
+                        RestoreHwndBackgroundBrush();
+                        RestoreHwndBackground();
+                        ApplyBackdrop(AppServices.Settings.Current.BackdropType);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateLayout] DWM restore failed: {ex.Message}");
+                    }
+                });
+            }
+        }
+        else
+        {
+            // No video active
+            if (isFullScreen)
+            {
+                // We are still physically in fullscreen. Exit fullscreen first;
+                // the presenter change callback (OnAppWindowChanged) will call
+                // UpdateLayoutForVideoMode() again once isFullScreen is false,
+                // at which point the else-branch below will run and cleanly restore chrome.
+                _videoControlsTimer.Stop();
+                if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                if (FullscreenControlsOverlay != null)
+                {
+                    FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                    FullscreenControlsOverlay.Opacity = 0;
+                }
+                if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                SetFullScreenMode(false);
+                return;
+            }
+
+            // Windowed mode (or re-entry after presenter changed to Overlapped):
+            // fully restore the normal app chrome.
+            if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Collapsed;
+            if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+            
+            RestoreRowDefinitions();
+            MoveTransportControlsToNormalLayout();
+            
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.Visibility = Visibility.Visible;
+                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                RootNavigationView.IsPaneToggleButtonVisible = true;
+                RootNavigationView.IsPaneVisible = true;
+                RootNavigationView.IsPaneOpen = true;
+                if (TransportControls != null) TransportControls.Visibility = Visibility.Visible;
+                ForceRefreshNavigationViewLayout();
                 RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
                 RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
                 RootNavigationView.ClearValue(Control.BackgroundProperty);
             }
-
-            if (ContentFrame != null)
-                ContentFrame.ClearValue(Control.BackgroundProperty);
-
-            if (VideoBackButton != null)
-                VideoBackButton.Visibility = Visibility.Collapsed;
-
+            if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
+            if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
             if (AppTitleBar != null)
             {
                 AppTitleBar.Visibility = Visibility.Visible;
-                AppTitleBar.Opacity = 1.0;
                 AppTitleBar.Background = null;
-                var av = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
-                av.Opacity = 1.0f;
             }
-
-            // Hide overlay — it only belongs in fullscreen
             if (FullscreenControlsOverlay != null)
             {
                 FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
                 FullscreenControlsOverlay.Opacity = 0;
             }
-
+            
             ApplyConfiguredTheme();
             UpdateRootGridBackground();
-            ApplyBackdrop(AppServices.Settings.Current.BackdropType);
-
-            // Restore the HWND background so Mica/Acrylic can show through again
-            if (!isFullScreen)
+            AnimateChromeIn();
+            _isFullscreenTransitioning = false;
+            
+            // Cosmetic DWM/backdrop restore at Low priority
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
             {
-                RestoreHwndBackground();
-            }
-            else
+                try
+                {
+                    RestoreHwndBackgroundBrush();
+                    RestoreHwndBackground();
+                    ApplyBackdrop(AppServices.Settings.Current.BackdropType);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UpdateLayout] DWM restore (no-video) failed: {ex.Message}");
+                }
+            });
+        }
+    }
+
+    /// <summary>
+    /// Fades chrome elements (nav, title bar, transport) to opacity 0 using
+    /// XAML animations, then invokes <paramref name="onComplete"/>
+    /// to collapse them from the visual tree.
+    /// </summary>
+    private void AnimateChromeOut(Action? onComplete = null)
+    {
+        try
+        {
+            if (RootNavigationView != null) RootNavigationView.Opacity = 0.0;
+            if (AppTitleBar != null) AppTitleBar.Opacity = 0.0;
+            onComplete?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AnimateChromeOut] Failed: {ex.Message}");
+            onComplete?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Shows chrome elements instantly.
+    /// </summary>
+    private void AnimateChromeIn()
+    {
+        try
+        {
+            if (RootNavigationView != null)
             {
-                SetHwndBackgroundBlack();
+                RootNavigationView.Opacity = 1.0;
+                var v1 = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
+                v1.Opacity = 1.0f;
+                v1.StopAnimation("Opacity");
             }
-
-            // RootGrid.Background is restored by UpdateRootGridBackground above.
-
-            _videoControlsTimer.Stop();
+            if (AppTitleBar != null)
+            {
+                AppTitleBar.Opacity = 1.0;
+                var v2 = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                v2.Opacity = 1.0f;
+                v2.StopAnimation("Opacity");
+            }
+            if (TransportControls != null)
+            {
+                TransportControls.Opacity = 1.0;
+                var v3 = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TransportControls);
+                v3.Opacity = 1.0f;
+                v3.StopAnimation("Opacity");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AnimateChromeIn] Failed: {ex.Message}");
         }
     }
 
@@ -2181,6 +2248,7 @@ public sealed partial class MainWindow : Window
             FadeElement(FullscreenControlsOverlay, 0.0);
             _videoControlsTimer.Stop();
             SetCursorVisibility(false);
+            HideMetadataOverlayGlobal();
         }
     }
 
@@ -2272,6 +2340,34 @@ public sealed partial class MainWindow : Window
 
             uint pvAttribute = isDark ? 1u : 0u;
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref pvAttribute, sizeof(uint));
+
+            if (AppWindow?.TitleBar != null)
+            {
+                var fgColor = isDark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+                var bgColor = Microsoft.UI.Colors.Transparent;
+                
+                // Completely solid light/dark on hover
+                var hoverBgColor = isDark ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                var hoverFgColor = isDark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+                
+                var pressedBgColor = isDark ? Windows.UI.Color.FromArgb(255, 34, 34, 34) : Windows.UI.Color.FromArgb(255, 221, 221, 221);
+                var pressedFgColor = hoverFgColor;
+                
+                var inactiveFgColor = isDark ? Windows.UI.Color.FromArgb(255, 128, 128, 128) : Windows.UI.Color.FromArgb(255, 128, 128, 128);
+
+                AppWindow.TitleBar.ForegroundColor = fgColor;
+                AppWindow.TitleBar.BackgroundColor = bgColor;
+                AppWindow.TitleBar.ButtonForegroundColor = fgColor;
+                AppWindow.TitleBar.ButtonBackgroundColor = bgColor;
+                AppWindow.TitleBar.ButtonHoverForegroundColor = hoverFgColor;
+                AppWindow.TitleBar.ButtonHoverBackgroundColor = hoverBgColor;
+                AppWindow.TitleBar.ButtonPressedForegroundColor = pressedFgColor;
+                AppWindow.TitleBar.ButtonPressedBackgroundColor = pressedBgColor;
+                AppWindow.TitleBar.ButtonInactiveForegroundColor = inactiveFgColor;
+                AppWindow.TitleBar.ButtonInactiveBackgroundColor = bgColor;
+                AppWindow.TitleBar.InactiveForegroundColor = inactiveFgColor;
+                AppWindow.TitleBar.InactiveBackgroundColor = bgColor;
+            }
         }
         catch (Exception ex)
         {
@@ -2703,11 +2799,12 @@ public sealed partial class MainWindow : Window
             {
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
+                    // Keep RootGrid black during the DWM resize to prevent white flash
+                    if (RootGrid != null)
+                        RootGrid.Background = _cachedBlackBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0));
+                    
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
-                    if (ContentFrame?.Content is VideoPage vp)
-                    {
-                        vp.SyncMediaPlayer(true);
-                    }
+                    // OnAppWindowChanged → UpdateLayoutForVideoMode handles all layout/sync
                 }
                 else
                 {
@@ -2726,10 +2823,7 @@ public sealed partial class MainWindow : Window
         if (RootNavigationView != null)
             RootNavigationView.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         if (AppTitleBar != null)
-        {
             AppTitleBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-            AppTitleBar.Opacity = visible ? 1.0 : 0.0;
-        }
     }
 
     #region Window Presenter Management (Thread-Safe)
@@ -2954,21 +3048,43 @@ public sealed partial class MainWindow : Window
         ToggleFullscreen();
     }
 
+    public bool HideMetadataOverlayGlobal()
+    {
+        bool wasVisible = false;
+        if (FullscreenMetadataOverlay.Visibility == Visibility.Visible)
+        {
+            FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
+            wasVisible = true;
+        }
+        if (ContentFrame?.Content is VideoPage vp && vp.IsMetadataOverlayVisible)
+        {
+            vp.HideMetadataOverlay();
+            wasVisible = true;
+        }
+        return wasVisible;
+    }
+
     private void ToggleMetadataOverlayGlobal()
     {
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        if (isFullScreen)
+        bool isVideoMode = ContentFrame?.Content is VideoPage && AppServices.PlaybackViewModel.CurrentTrack is { IsVideo: true };
+
+        if (isVideoMode)
         {
             if (FullscreenMetadataOverlay != null)
             {
-                FullscreenMetadataOverlay.Visibility = FullscreenMetadataOverlay.Visibility == Visibility.Visible 
-                    ? Visibility.Collapsed 
-                    : Visibility.Visible;
+                if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
+                {
+                    FullscreenMetadataOverlay.Visibility = Visibility.Visible;
+                    if (ContentFrame?.Content is VideoPage videoPage && AppServices.PlaybackViewModel.CurrentTrack != null)
+                    {
+                        _ = videoPage.FetchInternetMetadataAsync(AppServices.PlaybackViewModel.CurrentTrack);
+                    }
+                }
+                else
+                {
+                    FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
+                }
             }
-        }
-        else if (ContentFrame?.Content is VideoPage videoPage)
-        {
-            videoPage.ToggleMetadataOverlay();
         }
         else if (ContentFrame?.Content is NowPlayingPage musicPage)
         {
@@ -3357,10 +3473,11 @@ public sealed partial class MainWindow : Window
             
             if (_videoTapClickCount == 1)
             {
-                _videoTapCts = new System.Threading.CancellationTokenSource();
+                var cts = new System.Threading.CancellationTokenSource();
+                _videoTapCts = cts;
                 try
                 {
-                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                    await System.Threading.Tasks.Task.Delay(225, cts.Token);
                     TogglePlayPause();
                 }
                 catch (System.Threading.Tasks.TaskCanceledException)
@@ -3369,8 +3486,9 @@ public sealed partial class MainWindow : Window
                 finally
                 {
                     _videoTapClickCount = 0;
-                    _videoTapCts?.Dispose();
-                    _videoTapCts = null;
+                    if (_videoTapCts == cts)
+                        _videoTapCts = null;
+                    cts.Dispose();
                 }
             }
         }
@@ -3486,15 +3604,20 @@ public sealed partial class MainWindow : Window
         try
         {
             e.Handled = true;
+            
+            // Smartly dismiss metadata overlay if it's visible, and ignore the play/pause toggle for this tap.
+            if (HideMetadataOverlayGlobal()) return;
+
             NotifyActivityInFullscreen();
             _videoTapClickCount++;
             
             if (_videoTapClickCount == 1)
             {
-                _videoTapCts = new System.Threading.CancellationTokenSource();
+                var cts = new System.Threading.CancellationTokenSource();
+                _videoTapCts = cts;
                 try
                 {
-                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+                    await System.Threading.Tasks.Task.Delay(225, cts.Token);
                     TogglePlayPause();
                 }
                 catch (System.Threading.Tasks.TaskCanceledException)
@@ -3503,8 +3626,9 @@ public sealed partial class MainWindow : Window
                 finally
                 {
                     _videoTapClickCount = 0;
-                    _videoTapCts?.Dispose();
-                    _videoTapCts = null;
+                    if (_videoTapCts == cts)
+                        _videoTapCts = null;
+                    cts.Dispose();
                 }
             }
         }
@@ -3536,7 +3660,8 @@ public sealed partial class MainWindow : Window
     {
         UpdateFullscreenPlayerLayout();
 
-        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen) return;
+        // During fullscreen transitions, don't interfere with the background management
+        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen || _isFullscreenTransitioning) return;
 
         if (_resizePerformanceTimer == null)
         {
@@ -3565,6 +3690,8 @@ public sealed partial class MainWindow : Window
 
     private void OnFullscreenVideoContainerSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        // Prevent the properties flyout from bleeding off the bottom of the screen
+        FullscreenMetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 48); // 24 Top Margin + 24 Bottom Margin
         UpdateFullscreenPlayerLayout();
     }
 
@@ -3572,5 +3699,61 @@ public sealed partial class MainWindow : Window
     {
         // Delegate to the existing key handler
         OnRootGridKeyDown(sender, e);
+    }
+
+    private void SyncFloatingVideoPlayer()
+    {
+        if (FloatingVideoContainer == null || GlobalVideoPlayer == null) return;
+        
+        // Guard: never sync during fullscreen transitions — the visual tree is mid-layout
+        // and TransformToVisual will return stale/incorrect coordinates.
+        if (_isFullscreenTransitioning) return;
+        
+        bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        
+        if (isPip || isFullScreen) return;
+
+        if (ContentFrame?.Content is VideoPage vp && vp.FindName("VideoPlayerHost") is Microsoft.UI.Xaml.FrameworkElement host)
+        {
+            try
+            {
+                // Skip sync if the host has zero dimensions (layout not ready yet)
+                if (host.ActualWidth <= 0 || host.ActualHeight <= 0) return;
+                
+                var transform = host.TransformToVisual(RootGrid);
+                var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                
+                // Validate coordinates: reject obviously wrong values from mid-transition layouts
+                if (point.X < 0 || point.Y < 0 || 
+                    host.ActualWidth > RootGrid.ActualWidth || 
+                    host.ActualHeight > RootGrid.ActualHeight)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SyncFloatingVideoPlayer] Suspicious coords: ({point.X:F0},{point.Y:F0}) " +
+                        $"size=({host.ActualWidth:F0}x{host.ActualHeight:F0}) " +
+                        $"rootGrid=({RootGrid.ActualWidth:F0}x{RootGrid.ActualHeight:F0}) — skipping");
+                    return;
+                }
+                
+                FloatingVideoContainer.Width = host.ActualWidth;
+                FloatingVideoContainer.Height = host.ActualHeight;
+                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(point.X, point.Y, 0, 0);
+                FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
+                FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
+                
+                GlobalVideoPlayer.Width = host.ActualWidth;
+                GlobalVideoPlayer.Height = host.ActualHeight;
+                GlobalVideoPlayer.Stretch = AppServices.PlaybackViewModel.VideoStretch;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SyncFloatingVideoPlayer] Failed: {ex.Message}");
+            }
+        }
+        else
+        {
+            FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        }
     }
 }

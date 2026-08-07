@@ -34,8 +34,8 @@
     </Page.Resources>
 
     <Grid>
-        <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="24" MaxWidth="1040" HorizontalAlignment="Center" Opacity="1">
+        <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" Margin="0,48,0,0">
+            <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="24" MaxWidth="1040" HorizontalAlignment="Center" Opacity="1">
 
                 <!-- Page Title & Search Header -->
                 <StackPanel x:Name="MainHeaderPanel" Spacing="16">

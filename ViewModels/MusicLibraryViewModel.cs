@@ -102,25 +102,7 @@ public partial class MusicLibraryViewModel : ObservableObject
         {
             var newItems = SampleMediaLibrary.AudioTracks;
             // Rule 5: In-place slot updating to avoid destroying visual containers
-            if (Tracks.Count == newItems.Count && Tracks.SequenceEqual(newItems))
-                return;
-
-            if (Tracks.Count == newItems.Count)
-            {
-                for (int i = 0; i < newItems.Count; i++)
-                {
-                    if (!ReferenceEquals(Tracks[i], newItems[i]))
-                        Tracks[i] = newItems[i];
-                }
-            }
-            else
-            {
-                Tracks.Clear();
-                foreach (var t in newItems)
-                {
-                    Tracks.Add(t);
-                }
-            }
+            Tracks.UpdateInPlace(newItems);
         });
     }
 
@@ -159,22 +141,7 @@ public partial class MusicLibraryViewModel : ObservableObject
 
         App.MainDispatcher?.TryEnqueue(() =>
         {
-            if (Tracks.Count == filtered.Count)
-            {
-                for (int i = 0; i < filtered.Count; i++)
-                {
-                    if (!ReferenceEquals(Tracks[i], filtered[i]))
-                        Tracks[i] = filtered[i];
-                }
-            }
-            else
-            {
-                Tracks.Clear();
-                foreach (var t in filtered)
-                {
-                    Tracks.Add(t);
-                }
-            }
+            Tracks.UpdateInPlace(filtered);
         });
     }
 

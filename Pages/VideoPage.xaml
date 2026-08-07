@@ -324,7 +324,7 @@
                         x:Name="MetadataOverlay"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
-                        Margin="24"
+                        Margin="24,64,24,24"
                         Padding="20"
                         CornerRadius="8"
                         Visibility="Collapsed"
@@ -332,68 +332,83 @@
                         <Border.BackgroundTransition>
                             <BrushTransition />
                         </Border.BackgroundTransition>
-                        <StackPanel Spacing="24" MaxWidth="350">
-                            <!-- File Info -->
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                
-                                <Grid ColumnSpacing="24" RowSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition />
-                                        <RowDefinition />
-                                        <RowDefinition />
-                                        <RowDefinition />
-                                        <RowDefinition />
-                                        <RowDefinition />
-                                    </Grid.RowDefinitions>
+                        <Grid>
+                            <Button x:Name="CloseMetadataButton" x:FieldModifier="public" 
+                                    Margin="0,-12,-12,0"
+                                    Padding="4"
+                                    HorizontalAlignment="Right" 
+                                    VerticalAlignment="Top" 
+                                    Background="Transparent"
+                                    BorderBrush="Transparent">
+                                <FontIcon Glyph="&#xE711;" FontSize="12" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Button>
+                            
+                            <ScrollViewer VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
+                                <StackPanel Spacing="24" MaxWidth="350">
+                                    <!-- File Info -->
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        
+                                        <Grid ColumnSpacing="24" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition />
+                                                <RowDefinition />
+                                                <RowDefinition />
+                                                <RowDefinition />
+                                                <RowDefinition />
+                                                <RowDefinition />
+                                            </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Bitrate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Bitrate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Framerate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Framerate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="File Size" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="File Size" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                </Grid>
-                            </StackPanel>
-
-                            <!-- Internet Metadata Match -->
-                            <StackPanel x:Name="InternetMetadataPanel" Spacing="12" Visibility="Collapsed">
-                                <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                <ProgressRing x:Name="InternetMetadataProgress" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20"/>
-                                
-                                <Grid x:Name="InternetMetadataContent" ColumnSpacing="12" Visibility="Collapsed">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Image x:Name="InternetMetadataPoster" Stretch="UniformToFill" VerticalAlignment="Top" />
-                                    <StackPanel Grid.Column="1" Spacing="8">
-                                        <TextBlock x:Name="InternetMetadataTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="InternetMetadataOverview" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        </Grid>
                                     </StackPanel>
-                                </Grid>
 
-                                <StackPanel x:Name="InternetMetadataProvidersPanel" Spacing="8" Visibility="Collapsed">
-                                    <TextBlock Text="Available on:" FontWeight="SemiBold" FontSize="14"/>
-                                    <Grid x:Name="InternetMetadataProvidersGrid" ColumnSpacing="8" RowSpacing="8"/>
+                                    <!-- Internet Metadata Match -->
+                                    <StackPanel x:Name="InternetMetadataPanel" Spacing="12" Visibility="Collapsed">
+                                        <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        <ProgressRing x:Name="InternetMetadataProgress" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20"/>
+                                        
+                                        <Grid x:Name="InternetMetadataContent" ColumnSpacing="12" Visibility="Collapsed">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" CornerRadius="6" VerticalAlignment="Top">
+                                                <Image x:Name="InternetMetadataPoster" Stretch="UniformToFill" MaxHeight="135" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Top">
+                                                <TextBlock x:Name="InternetMetadataTitle" FontWeight="SemiBold" TextWrapping="Wrap" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                <TextBlock x:Name="InternetMetadataOverview" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" LineHeight="15" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel x:Name="InternetMetadataProvidersPanel" Spacing="8" Visibility="Collapsed">
+                                            <Button x:Name="StreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="{ThemeResource SystemAccentColor}" Foreground="White" BorderBrush="Transparent" />
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>

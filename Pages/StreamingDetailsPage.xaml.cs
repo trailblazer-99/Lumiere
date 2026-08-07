@@ -30,6 +30,7 @@ namespace LumiereMediaPlayer.Pages
     {
         private readonly WatchmodeService _watchmodeService = new();
         private int _watchmodeId;
+        private string _titleIdFallback = "";
         private string _selectedRegion = "";
         private WatchmodeDetails? _details;
         private bool _isSaved;
@@ -64,11 +65,13 @@ namespace LumiereMediaPlayer.Pages
                     _watchmodeId = tupleId;
                     _selectedRegion = region;
                 }
-
-                if (string.IsNullOrEmpty(_selectedRegion))
+                else if (e.Parameter is string tmdbStr)
                 {
-                    _selectedRegion = AppServices.StreamingMoviesViewModel?.SelectedRegion ?? "";
+                    _titleIdFallback = tmdbStr;
+                    _watchmodeId = -1;
+                    _selectedRegion = "";
                 }
+
                 if (string.IsNullOrEmpty(_selectedRegion))
                 {
                     _selectedRegion = await RegionHelper.GetCurrentRegionAsync();
@@ -84,16 +87,45 @@ namespace LumiereMediaPlayer.Pages
 
         private async Task LoadDetailsAsync()
         {
-            // parallel fetch to optimize load time
-            var detailsTask = _watchmodeService.GetDetailsAsync(_watchmodeId);
-            var castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
-            var seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
-            var episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
-            var sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
-            var similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
-            var scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
-            var releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
+            Task<WatchmodeDetails?> detailsTask;
+            Task<List<WatchmodeCastCrew>> castTask;
+            Task<List<WatchmodeSeason>> seasonsTask;
+            Task<List<WatchmodeEpisode>> episodesTask;
+            Task<List<WatchmodeSource>> sourcesTask;
+            Task<List<WatchmodeTitle>> similarTask;
+            Task<WatchmodeScores?> scoresTask;
+            Task<List<WatchmodeRelease>> releasesTask;
 
+            if (_watchmodeId > 0)
+            {
+                detailsTask = _watchmodeService.GetDetailsAsync(_watchmodeId);
+                castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
+                seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
+                episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
+                sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
+                similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
+                scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
+                releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
+            }
+            else if (!string.IsNullOrEmpty(_titleIdFallback))
+            {
+                detailsTask = _watchmodeService.GetDetailsAsync(_titleIdFallback);
+                sourcesTask = _watchmodeService.GetSourcesAsync(_titleIdFallback, _selectedRegion);
+                // Other endpoints require a real watchmode ID, so return empty for them
+                castTask = Task.FromResult(new List<WatchmodeCastCrew>());
+                seasonsTask = Task.FromResult(new List<WatchmodeSeason>());
+                episodesTask = Task.FromResult(new List<WatchmodeEpisode>());
+                similarTask = Task.FromResult(new List<WatchmodeTitle>());
+                scoresTask = Task.FromResult<WatchmodeScores?>(null);
+                releasesTask = Task.FromResult(new List<WatchmodeRelease>());
+            }
+            else
+            {
+                TitleText.Text = "No title specified.";
+                return;
+            }
+
+            // parallel fetch to optimize load time
             await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask, similarTask, scoresTask, releasesTask);
 
             _details = await detailsTask;
@@ -1460,7 +1492,7 @@ namespace LumiereMediaPlayer.Pages
 
                     try
                     {
-                        var sources = await _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
+                        var sources = await _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion, _details?.Title ?? "");
                         BuildProvidersSection(sources);
                     }
                     catch (Exception ex)

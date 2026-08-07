@@ -15,8 +15,8 @@
 
     <Grid>
         <!-- Scrollable normal page content -->
-        <ScrollViewer>
-            <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Padding="0,0,0,40" Spacing="36" Opacity="1">
+        <ScrollViewer Margin="0,48,0,0">
+            <StackPanel x:Name="PageContent" Margin="32,0,32,24" Padding="0,0,0,40" Spacing="36" Opacity="1">
 
                 <!-- Header Grid containing Brand/Greeting and Open file(s) button -->
                 <Grid x:Name="HeaderGrid" Margin="0,0,0,12">

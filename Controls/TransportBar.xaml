@@ -298,7 +298,7 @@
                     AutomationProperties.Name="Volume"
                     Style="{StaticResource TransportIconButtonStyle}"
                     ToolTipService.ToolTip="Volume">
-                    <FontIcon x:Name="VolumeIcon" FontSize="14" Glyph="&#xE767;" />
+                    <FontIcon x:Name="VolumeIcon" FontSize="14" Glyph="&#xE995;" />
                     <Button.Flyout>
                         <Flyout Placement="Top">
                             <Flyout.FlyoutPresenterStyle>
@@ -318,7 +318,7 @@
                                     Style="{StaticResource TransportIconButtonStyle}"
                                     Padding="4"
                                     VerticalAlignment="Center">
-                                    <FontIcon x:Name="FlyoutVolumeIcon" FontSize="14" Glyph="&#xE767;" />
+                                    <FontIcon x:Name="FlyoutVolumeIcon" FontSize="14" Glyph="&#xE995;" />
                                 </Button>
                                 <!-- The volume slider -->
                                 <Slider

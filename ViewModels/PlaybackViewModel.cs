@@ -17,7 +17,7 @@ public partial class PlaybackViewModel : ObservableObject
 
     [ObservableProperty] public partial bool IsVideoPlayerActive { get; set; }
 
-    [ObservableProperty] public partial double Volume { get; set; } = 75;
+    [ObservableProperty] public partial double Volume { get; set; } = 100;
 
     [ObservableProperty] public partial IReadOnlyList<MediaItem> Queue { get; set; } = [];
 

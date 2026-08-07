@@ -35,7 +35,7 @@ public sealed class AppSettings
     // ── Audio & Output Settings ────────────────────────────────────
     public EqualizerPreset Equalizer { get; set; } = EqualizerPreset.Flat;
     public bool VolumeNormalization { get; set; } = false;
-    public double DefaultVolume { get; set; } = 75.0;
+    public double DefaultVolume { get; set; } = 100.0;
     public bool MonoAudio { get; set; } = false;
     public int BassBoostLevel { get; set; } = 0;
     public int AudioBalance { get; set; } = 0; // -100 (left) to +100 (right)

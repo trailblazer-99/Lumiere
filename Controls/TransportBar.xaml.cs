@@ -36,7 +36,7 @@ public sealed partial class TransportBar : UserControl
 
     public static readonly DependencyProperty VolumeProperty =
         DependencyProperty.Register(nameof(Volume), typeof(double), typeof(TransportBar),
-            new PropertyMetadata(75d, OnVolumePropertyChanged));
+            new PropertyMetadata(100d, OnVolumePropertyChanged));
 
     public static readonly DependencyProperty IsInPipModeProperty =
         DependencyProperty.Register(nameof(IsInPipMode), typeof(bool), typeof(TransportBar),
@@ -45,8 +45,13 @@ public sealed partial class TransportBar : UserControl
     private bool _isSeeking;
     private bool _isFullscreenPresentation;
     private MediaItem? _observedTrack;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
+    private double _pendingScrubValue;
+    private string _hoverTimeText = "00:00";
+    private double _previousVolume = 100;
 
     public event EventHandler? PlayPauseRequested;
+    public event EventHandler<double>? SeekRequested;
     public event EventHandler? StopRequested;
     public event EventHandler? PreviousRequested;
     public event EventHandler? NextRequested;
@@ -66,6 +71,14 @@ public sealed partial class TransportBar : UserControl
         ActualThemeChanged += (_, _) => UpdateAcrylicBackground();
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
+        
+        _scrubThrottleTimer = DispatcherQueue.CreateTimer();
+        _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(100);
+        _scrubThrottleTimer.Tick += (s, e) =>
+        {
+            _scrubThrottleTimer.Stop();
+            if (_isSeeking) ScrubbingPositionChanged?.Invoke(this, _pendingScrubValue);
+        };
         
         // WinUI 3 Slider consumes pointer events, so we must register with handledEventsToo = true
         ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnProgressPointerCapture), true);
@@ -252,6 +265,7 @@ public sealed partial class TransportBar : UserControl
     {
         if (!_isSeeking) return;
         _isSeeking = false;
+        _scrubThrottleTimer?.Stop();
         ScrubbingEnded?.Invoke(this, ProgressSlider.Value);
         PositionChanged?.Invoke(this, ProgressSlider.Value);
     }
@@ -263,7 +277,11 @@ public sealed partial class TransportBar : UserControl
         if (_isSeeking)
         {
             ElapsedTimeText.Text = TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
-            ScrubbingPositionChanged?.Invoke(this, e.NewValue);
+            _pendingScrubValue = e.NewValue;
+            if (_scrubThrottleTimer != null && !_scrubThrottleTimer.IsRunning)
+            {
+                _scrubThrottleTimer.Start();
+            }
         }
         else
         {
@@ -365,8 +383,37 @@ public sealed partial class TransportBar : UserControl
     private void OnInfoClick(object sender, RoutedEventArgs e) => OnInfoButtonClick(sender, e);
     private void OnReplayClick(object sender, RoutedEventArgs e) => PositionChanged?.Invoke(this, 0d);
     
-    private void OnVolumeClick(object sender, RoutedEventArgs e) { }
-    private void OnVolumeValueChanged(object sender, RangeBaseValueChangedEventArgs e) => OnVolumeSliderValueChanged(sender, e);
+    private void OnVolumeClick(object sender, RoutedEventArgs e)
+    {
+        if (Volume > 0)
+        {
+            _previousVolume = Volume;
+            Volume = 0;
+            VolumeChanged?.Invoke(this, 0);
+        }
+        else
+        {
+            Volume = _previousVolume > 0 ? _previousVolume : 100;
+            VolumeChanged?.Invoke(this, Volume);
+        }
+    }
+
+    private void OnVolumeValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        OnVolumeSliderValueChanged(sender, e);
+        
+        // Update volume icons
+        string glyph = e.NewValue switch
+        {
+            0 => "\uE74F", // Mute
+            <= 33 => "\uE992", // Volume 1
+            <= 66 => "\uE993", // Volume 2
+            _ => "\uE995" // Volume 3
+        };
+        
+        if (VolumeIcon != null) VolumeIcon.Glyph = glyph;
+        if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Glyph = glyph;
+    }
     
     private void OnSpeedClick(object sender, RoutedEventArgs e)
     {

@@ -12,8 +12,8 @@
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
-    <ScrollViewer>
-        <StackPanel x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Spacing="28" Opacity="1">
+    <ScrollViewer Margin="0,48,0,0">
+        <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="28" Opacity="1">
             <!-- Header -->
             <StackPanel Spacing="6">
                 <TextBlock

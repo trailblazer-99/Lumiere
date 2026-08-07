@@ -148,7 +148,7 @@ public sealed class SettingsService
             // Audio
             Equalizer = ParseEnum(settingsValues, EqualizerPresetKey, EqualizerPreset.Flat),
             VolumeNormalization = ReadBool(settingsValues, VolumeNormalizationKey, false),
-            DefaultVolume = ReadDouble(settingsValues, DefaultVolumeKey, 75.0),
+            DefaultVolume = ReadDouble(settingsValues, DefaultVolumeKey, 100.0),
             MonoAudio = ReadBool(settingsValues, MonoAudioKey, false),
             BassBoostLevel = ReadInt(settingsValues, BassBoostLevelKey, 0),
             AudioBalance = ReadInt(settingsValues, AudioBalanceKey, 0),

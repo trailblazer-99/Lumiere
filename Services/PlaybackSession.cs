@@ -70,8 +70,8 @@ public sealed class PlaybackSession
         }
         catch
         {
-            Volume = 75;
-            _mediaPlayer.Volume = 0.75;
+            Volume = 100;
+            _mediaPlayer.Volume = 1.0;
         }
 
         // Wire media events
@@ -242,6 +242,8 @@ public sealed class PlaybackSession
         if (!IsCurrentPlaybackRequest(requestVersion) || CurrentTrack?.Id != track.Id)
         {
             Log("LoadCurrentTrackSourceAsync: Request version changed or track changed. Aborting.");
+            // Dispose the orphaned source to release file locks (Rule 6: MediaSource File Unlocking)
+            if (source != null) CleanupPlaybackSource(source);
             _isChangingSource = false;
             return;
         }
@@ -741,7 +743,7 @@ public sealed class PlaybackSession
     public void SetVolume(double volume)
     {
         Volume = volume;
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        // Do not invoke StateChanged here. It forces a complete UI/Queue rebuild and Image reload on every slider tick.
     }
 
     public void Stop()
@@ -1068,6 +1070,15 @@ public sealed class PlaybackSession
 
             var nextTrack = _queue[nextIndex];
             Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
+
+            // Bypass crossfader for Video formats since headless MediaPlayers break the hardware rendering pipeline
+            if (CurrentTrack?.IsVideo == true || nextTrack.IsVideo)
+            {
+                _currentIndex = nextIndex;
+                CurrentTrack = nextTrack;
+                PlayTrack(nextTrack);
+                return;
+            }
 
             try
             {
@@ -1454,13 +1465,24 @@ public sealed class PlaybackSession
         {
             if (source is MediaPlaybackItem playbackItem)
             {
-                var sourceToDispose = playbackItem.Source;
+                var mediaSource = playbackItem.Source;
                 try
                 {
-                    sourceToDispose?.Reset();
-                    sourceToDispose?.Dispose();
+                    // Reset and dispose MediaSource first to release file locks (Rule 6)
+                    mediaSource?.Reset();
                 }
                 catch { }
+
+                try
+                {
+                    mediaSource?.Dispose();
+                }
+                catch { }
+            }
+            else if (source is MediaSource directSource)
+            {
+                try { directSource.Reset(); } catch { }
+                try { directSource.Dispose(); } catch { }
             }
             else if (source is IDisposable disposableSource)
             {
