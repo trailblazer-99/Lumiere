@@ -200,12 +200,12 @@ public sealed class PlaybackSession
         _isChangingSource = true;
         try
         {
-            _mediaPlayer.Source = null;
             if (_currentPlaybackSource != null)
             {
                 CleanupPlaybackSource(_currentPlaybackSource);
                 _currentPlaybackSource = null;
             }
+            _mediaPlayer.Source = null;
         }
         catch { }
 
@@ -624,6 +624,11 @@ public sealed class PlaybackSession
                 }
                 else
                 {
+                    if (_currentPlaybackSource != null)
+                    {
+                        CleanupPlaybackSource(_currentPlaybackSource);
+                        _currentPlaybackSource = null;
+                    }
                     _mediaPlayer.Source = null;
                 }
 
@@ -656,6 +661,11 @@ public sealed class PlaybackSession
         {
             _currentIndex = -1;
             CurrentTrack = null;
+            if (_currentPlaybackSource != null)
+            {
+                CleanupPlaybackSource(_currentPlaybackSource);
+                _currentPlaybackSource = null;
+            }
             _mediaPlayer.Source = null;
         }
         else if (index < _currentIndex)
@@ -752,18 +762,17 @@ public sealed class PlaybackSession
         try
         {
             _mediaPlayer.Pause();
+            if (_currentPlaybackSource != null)
+            {
+                CleanupPlaybackSource(_currentPlaybackSource);
+                _currentPlaybackSource = null;
+            }
             _mediaPlayer.Source = null;
         }
         catch { }
 
         CurrentTrack = null;
         _currentIndex = -1;
-
-        if (_currentPlaybackSource != null)
-        {
-            CleanupPlaybackSource(_currentPlaybackSource);
-            _currentPlaybackSource = null;
-        }
 
         if (_preloadedNextSource != null)
         {
