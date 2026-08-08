@@ -27,10 +27,20 @@ namespace LumiereMediaPlayer.Services
                     {
                         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
                         {
-                            RecentlyPlayed.Clear();
-                            foreach (var item in loaded)
+                            if (RecentlyPlayed.Count == loaded.Length)
                             {
-                                RecentlyPlayed.Add(item);
+                                for (int i = 0; i < loaded.Length; i++)
+                                {
+                                    RecentlyPlayed[i] = loaded[i];
+                                }
+                            }
+                            else
+                            {
+                                RecentlyPlayed.Clear();
+                                foreach (var item in loaded)
+                                {
+                                    RecentlyPlayed.Add(item);
+                                }
                             }
                         });
                     }

@@ -386,8 +386,18 @@ public static class SampleMediaLibrary
                             }
                         }
 
-                        _allTracks.Clear();
-                        _allTracks.AddRange(uniqueTracks);
+                        if (_allTracks.Count == uniqueTracks.Count)
+                        {
+                            for (int i = 0; i < uniqueTracks.Count; i++)
+                            {
+                                _allTracks[i] = uniqueTracks[i];
+                            }
+                        }
+                        else
+                        {
+                            _allTracks.Clear();
+                            _allTracks.AddRange(uniqueTracks);
+                        }
                         // Sync class-level dedup sets with loaded data
                         _seenPaths.Clear();
                         _seenIds.Clear();
