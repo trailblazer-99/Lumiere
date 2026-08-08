@@ -207,14 +207,7 @@ public static class ThemeHelper
         {
             if (dictionary.TryGetValue(key, out var resource))
             {
-                if (resource is SolidColorBrush brush)
-                {
-                    brush.Color = color;
-                }
-                else
-                {
-                    dictionary[key] = new SolidColorBrush(color);
-                }
+                dictionary[key] = new SolidColorBrush(color);
             }
             else if (addIfMissing)
             {

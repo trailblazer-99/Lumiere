@@ -76,7 +76,7 @@ public sealed class SettingsService
 
     // Accessibility
     private const string HighContrastModeKey = "HighContrastMode";
-    private const string LargeTextModeKey = "LargeTextMode";
+    private const string TextScaleKey = "TextScale";
     private const string ReduceMotionKey = "ReduceMotion";
     private const string ScreenReaderOptimizationKey = "ScreenReaderOptimization";
     private const string CaptionsAlwaysOnKey = "CaptionsAlwaysOn";
@@ -200,7 +200,7 @@ public sealed class SettingsService
 
             // Accessibility
             HighContrastMode = ReadBool(settingsValues, HighContrastModeKey, false),
-            LargeTextMode = ReadBool(settingsValues, LargeTextModeKey, false),
+            TextScale = ReadDouble(settingsValues, TextScaleKey, 1.0),
             ReduceMotion = ReadBool(settingsValues, ReduceMotionKey, false),
             ScreenReaderOptimization = ReadBool(settingsValues, ScreenReaderOptimizationKey, false),
             CaptionsAlwaysOn = ReadBool(settingsValues, CaptionsAlwaysOnKey, false),
@@ -228,7 +228,31 @@ public sealed class SettingsService
         };
     }
 
+    private Microsoft.UI.Xaml.DispatcherTimer? _saveDebounceTimer;
+
     public void Save()
+    {
+        if (App.MainDispatcher != null && App.MainDispatcher.HasThreadAccess)
+        {
+            if (_saveDebounceTimer == null)
+            {
+                _saveDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _saveDebounceTimer.Tick += (s, e) =>
+                {
+                    _saveDebounceTimer.Stop();
+                    ExecuteSave();
+                };
+            }
+            _saveDebounceTimer.Stop();
+            _saveDebounceTimer.Start();
+        }
+        else
+        {
+            ExecuteSave();
+        }
+    }
+
+    private void ExecuteSave()
     {
         var s = ApplicationData.Current.LocalSettings;
 
@@ -297,7 +321,7 @@ public sealed class SettingsService
 
         // Accessibility
         s.Values[HighContrastModeKey] = Current.HighContrastMode;
-        s.Values[LargeTextModeKey] = Current.LargeTextMode;
+        s.Values[TextScaleKey] = Current.TextScale;
         s.Values[ReduceMotionKey] = Current.ReduceMotion;
         s.Values[ScreenReaderOptimizationKey] = Current.ScreenReaderOptimization;
         s.Values[CaptionsAlwaysOnKey] = Current.CaptionsAlwaysOn;
@@ -379,7 +403,7 @@ public sealed class SettingsService
             ShowSpeedInMoreMenuKey, ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
             AutomaticLibraryScanKey, LibrarySortOrderKey, ShowHiddenFilesKey, AutoImportNewFilesKey,
             SendTelemetryKey, RememberRecentlyPlayedKey, RememberPlaybackPositionPerTrackKey,
-            HighContrastModeKey, LargeTextModeKey, ReduceMotionKey,
+            HighContrastModeKey, TextScaleKey, ReduceMotionKey,
             ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
             KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
             LargerClickTargetsKey, ColorBlindModeKey,

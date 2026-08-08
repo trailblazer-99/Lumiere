@@ -998,15 +998,10 @@ public sealed class PlaybackSession
                 {
                     try
                     {
-                        string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
-                        var apiResult = await AiAssistantService.TranslateLyricsAsync(track.Id, new List<string> { prompt }, "English");
-                        if (apiResult != null && apiResult.Count > 0)
+                        var apiResult = await AiAssistantService.CategorizeEqualizerAsync(title, genre);
+                        if (apiResult != EqualizerPreset.Flat)
                         {
-                            string responseText = apiResult[0].Trim();
-                            if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
-                            {
-                                matchedPreset = parsedPreset;
-                            }
+                            matchedPreset = apiResult;
                         }
                     }
                     catch { }

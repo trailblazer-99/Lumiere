@@ -96,7 +96,7 @@ public sealed class AppSettings
 
     // ── Accessibility ──────────────────────────────────────────
     public bool HighContrastMode { get; set; } = false;
-    public bool LargeTextMode { get; set; } = false;
+    public double TextScale { get; set; } = 1.0;
     public bool ReduceMotion { get; set; } = false;
     public bool ScreenReaderOptimization { get; set; } = false;
     public bool CaptionsAlwaysOn { get; set; } = false;
@@ -112,6 +112,8 @@ public sealed class AppSettings
     public string AiTranslationTargetLanguage { get; set; } = "Hindi";
     public bool AiSemanticSearchEnabled { get; set; } = false;
     public string GeminiApiKey { get; set; } = "";
+    public bool UseLocalAi { get; set; } = false;
+    public string OllamaModelName { get; set; } = "llama3.2";
     public bool AiEqualizerMatcherEnabled { get; set; } = false;
     public bool VoiceClarityEnabled { get; set; } = false;
     public bool NightModeEnabled { get; set; } = false;

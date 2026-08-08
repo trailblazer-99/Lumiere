@@ -11,7 +11,7 @@
     Title="Lumière Media Player">
 
 
-    <Grid x:Name="RootGrid" Loaded="OnWindowLoaded" KeyDown="OnRootGridKeyDown" PointerWheelChanged="OnRootGridPointerWheelChanged" PointerMoved="OnRootGridPointerMoved" PointerPressed="OnRootGridPointerPressed" PointerReleased="OnRootGridPointerReleased">
+    <Grid x:Name="RootGrid" Loaded="OnWindowLoaded" KeyDown="OnRootGridKeyDown" PointerWheelChanged="OnRootGridPointerWheelChanged" PointerMoved="OnRootGridPointerMoved" PointerPressed="OnRootGridPointerPressed" PointerReleased="OnRootGridPointerReleased" PointerCanceled="OnRootGridPointerCanceled" PointerCaptureLost="OnRootGridPointerCanceled">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />

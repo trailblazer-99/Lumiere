@@ -133,9 +133,25 @@ public sealed partial class SettingsPage : Page
 
     private void OnAiSemanticSearchToggled(object sender, RoutedEventArgs e)
     {
-        if (sender is ToggleSwitch toggle)
+        if (sender is ToggleSwitch toggleSwitch)
         {
-            ViewModel.AiSemanticSearchEnabled = toggle.IsOn;
+            ViewModel.AiSemanticSearchEnabled = toggleSwitch.IsOn;
+        }
+    }
+
+    private void OnUseLocalAiToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggleSwitch)
+        {
+            ViewModel.UseLocalAi = toggleSwitch.IsOn;
+        }
+    }
+
+    private void OnOllamaModelNameChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            ViewModel.OllamaModelName = textBox.Text;
         }
     }
 

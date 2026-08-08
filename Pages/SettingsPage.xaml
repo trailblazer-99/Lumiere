@@ -34,7 +34,7 @@
     </Page.Resources>
 
     <Grid>
-        <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" Margin="0,48,0,0">
+        <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" Margin="0,48,0,0" BringIntoViewOnFocusChange="False">
             <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="24" MaxWidth="1040" HorizontalAlignment="Center" Opacity="1">
 
                 <!-- Page Title & Search Header -->
@@ -806,7 +806,7 @@
                                 <TextBlock FontSize="14" Text="Library folders"/>
                                 <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Folders scanned for audio and video media files."/>
                             </StackPanel>
-                            <Button Grid.Column="2" Click="OnAddFolderClick" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center">
+                            <Button Grid.Column="2" Click="OnAddFolderClick" Style="{StaticResource SettingsAccentActionButtonStyle}" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="14" Glyph="&#xE710;"/>
                                     <TextBlock Text="Add folder"/>
@@ -956,6 +956,38 @@
                     </Grid>
                 </Border>
 
+                <InfoBar IsOpen="{x:Bind ViewModel.IsLocalAiSupported, Mode=OneWay}" Severity="Success"
+                         Title="Local AI Recommended" Message="{x:Bind ViewModel.LocalAiHardwareSuggestion, Mode=OneWay}"
+                         Margin="0,0,0,8" IsClosable="True" />
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE914;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Use Local AI (Ollama)"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Process AI tasks locally instead of using cloud APIs for better privacy."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" x:Name="UseLocalAiToggle" IsOn="{x:Bind ViewModel.UseLocalAi, Mode=OneWay}" Toggled="OnUseLocalAiToggled" VerticalAlignment="Center" MinWidth="0"/>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE735;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Ollama Model Name"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Specify the installed Ollama model to use for AI features."/>
+                        </StackPanel>
+                        <TextBox Grid.Column="2" x:Name="OllamaModelTextBox" Text="{x:Bind ViewModel.OllamaModelName, Mode=OneWay}" TextChanged="OnOllamaModelNameChanged" Width="150" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
@@ -1084,9 +1116,9 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear playback history, search history, or recently opened files."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Button Content="Playback history" Command="{x:Bind ViewModel.ClearPlaybackHistoryCommand}" VerticalAlignment="Center"/>
-                            <Button Content="Search history" Command="{x:Bind ViewModel.ClearSearchHistoryCommand}" VerticalAlignment="Center"/>
-                            <Button Content="Recent files" Command="{x:Bind ViewModel.ClearRecentFilesCommand}" VerticalAlignment="Center"/>
+                            <Button Content="Playback history" Command="{x:Bind ViewModel.ClearPlaybackHistoryCommand}" Style="{StaticResource SettingsActionButtonStyle}" VerticalAlignment="Center"/>
+                            <Button Content="Search history" Command="{x:Bind ViewModel.ClearSearchHistoryCommand}" Style="{StaticResource SettingsActionButtonStyle}" VerticalAlignment="Center"/>
+                            <Button Content="Recent files" Command="{x:Bind ViewModel.ClearRecentFilesCommand}" Style="{StaticResource SettingsActionButtonStyle}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1119,10 +1151,10 @@
                         </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D2;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Large text mode"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase text size throughout the application."/>
+                            <TextBlock FontSize="14" Text="Text scale"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase text size proportionally throughout the application."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.LargeTextMode, Mode=TwoWay}"/>
+                        <Slider Grid.Column="2" VerticalAlignment="Center" Minimum="1.0" Maximum="2.0" StepFrequency="0.05" Width="150" Value="{x:Bind ViewModel.TextScale, Mode=TwoWay}"/>
                     </Grid>
                 </Border>
 
@@ -1333,8 +1365,8 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear caches or reset all settings to factory defaults."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Button Content="Reset history &amp; cache" Command="{x:Bind ViewModel.ResetHistoryAndCacheCommand}" VerticalAlignment="Center"/>
-                            <Button Content="Factory reset" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind ViewModel.FactoryResetCommand}" VerticalAlignment="Center"/>
+                            <Button Content="Reset history &amp; cache" Command="{x:Bind ViewModel.ResetHistoryAndCacheCommand}" Style="{StaticResource SettingsActionButtonStyle}" VerticalAlignment="Center"/>
+                            <Button Content="Factory reset" Style="{StaticResource SettingsAccentActionButtonStyle}" Command="{x:Bind ViewModel.FactoryResetCommand}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1342,19 +1374,46 @@
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Image Width="36" Height="36" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
-                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="Lumière Media Player"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}"
-                                       Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 10"/>
-                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
-                                <HyperlinkButton Content="Send feedback" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/issues"/>
-                                <HyperlinkButton Content="Rate this app" Padding="0" FontSize="12" NavigateUri="ms-windows-store://review/?ProductId=LumiereMediaPlayer"/>
-                                <HyperlinkButton Content="GitHub repository" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere"/>
-                                <HyperlinkButton Content="Open source licenses" Padding="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/blob/main/LICENSE"/>
-                            </StackPanel>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE895;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Check for updates"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="Check for updates" Command="{x:Bind ViewModel.CheckForUpdatesCommand}" Style="{StaticResource SettingsActionButtonStyle}" VerticalAlignment="Center"/>
+                            <Button Content="Update Available" Style="{StaticResource SettingsAccentActionButtonStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" 
+                                    Command="{x:Bind ViewModel.InstallUpdateCommand}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="48"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Image Grid.Column="0" Width="48" Height="48" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Top" Margin="0,2,0,0" Stretch="Uniform" />
+                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Top">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Lumière Media Player"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 10" Margin="0,0,0,8"/>
+                            
+                            <Grid ColumnSpacing="16" RowSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <HyperlinkButton Grid.Row="0" Grid.Column="0" Content="Send feedback" Padding="0" MinHeight="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/issues"/>
+                                <HyperlinkButton Grid.Row="0" Grid.Column="1" Content="Rate this app" Padding="0" MinHeight="0" FontSize="12" NavigateUri="ms-windows-store://review/?ProductId=LumiereMediaPlayer"/>
+                                <HyperlinkButton Grid.Row="1" Grid.Column="0" Content="GitHub repository" Padding="0" MinHeight="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere"/>
+                                <HyperlinkButton Grid.Row="1" Grid.Column="1" Content="Open source licenses" Padding="0" MinHeight="0" FontSize="12" NavigateUri="https://github.com/trailblazer-99/Lumiere/blob/main/LICENSE"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>

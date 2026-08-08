@@ -1394,6 +1394,8 @@ public sealed partial class MainWindow : Window
 
         UpdateLayoutForVideoMode();
 
+        try { Helpers.AccessibilityHelper.Apply(AppServices.Settings.Current); } catch { }
+
         _isNavigating = false;
     }
 
@@ -3541,6 +3543,7 @@ public sealed partial class MainWindow : Window
 
     private void OnRootGridPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        if (e.Handled) return;
         if (!AppServices.Settings.Current.EnableSwipeNavigation) return;
         var pt = e.GetCurrentPoint(RootGrid);
         if (pt.Properties.IsLeftButtonPressed)
@@ -3553,7 +3556,12 @@ public sealed partial class MainWindow : Window
 
     private void OnRootGridPointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (!_isSwiping || !AppServices.Settings.Current.EnableSwipeNavigation) return;
+        bool wasSwiping = _isSwiping;
+        _isSwiping = false;
+        try { RootGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+        if (e.Handled) return;
+        if (!wasSwiping || !AppServices.Settings.Current.EnableSwipeNavigation) return;
         
         var pt = e.GetCurrentPoint(RootGrid);
         double deltaX = pt.Position.X - _swipeStartX;
@@ -3572,9 +3580,12 @@ public sealed partial class MainWindow : Window
                 try { ContentFrame.GoForward(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Swipe] GoForward failed: {ex.Message}"); }
             }
         }
-        
+    }
+
+    private void OnRootGridPointerCanceled(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
         _isSwiping = false;
-        RootGrid.ReleasePointerCapture(e.Pointer);
+        try { RootGrid.ReleasePointerCapture(e.Pointer); } catch { }
     }
 
     private void SaveWindowBounds()

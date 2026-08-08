@@ -10,6 +10,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly SettingsService _settingsService;
     private bool _isSyncing;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _textScaleDebounceTimer;
 
     // ── Playback ───────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeOption SelectedTheme { get; set; }
@@ -83,7 +84,7 @@ public partial class SettingsViewModel : ObservableObject
 
     // ── Accessibility ──────────────────────────────────────────────
     [ObservableProperty] public partial bool HighContrastMode { get; set; }
-    [ObservableProperty] public partial bool LargeTextMode { get; set; }
+    [ObservableProperty] public partial double TextScale { get; set; }
     [ObservableProperty] public partial bool ReduceMotion { get; set; }
     [ObservableProperty] public partial bool ScreenReaderOptimization { get; set; }
     [ObservableProperty] public partial bool CaptionsAlwaysOn { get; set; }
@@ -98,10 +99,22 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AiLyricsTranslationEnabled { get; set; }
     [ObservableProperty] public partial string AiTranslationTargetLanguage { get; set; } = "Hindi";
     [ObservableProperty] public partial bool AiSemanticSearchEnabled { get; set; }
-    [ObservableProperty] public partial string GeminiApiKey { get; set; } = "";
+    [ObservableProperty] public partial string GeminiApiKey { get; set; }
+    [ObservableProperty] public partial bool UseLocalAi { get; set; }
+    [ObservableProperty] public partial string OllamaModelName { get; set; }
     [ObservableProperty] public partial bool AiEqualizerMatcherEnabled { get; set; }
     [ObservableProperty] public partial bool VoiceClarityEnabled { get; set; }
     [ObservableProperty] public partial bool NightModeEnabled { get; set; }
+    
+    // ── Local AI Hardware Status ───────────────────────────────────
+    [ObservableProperty] public partial bool IsLocalAiSupported { get; set; }
+    [ObservableProperty] public partial string LocalAiHardwareSuggestion { get; set; } = string.Empty;
+
+    // ── Update Status ──────────────────────────────────────────────
+    [ObservableProperty] public partial bool IsCheckingForUpdates { get; set; }
+    [ObservableProperty] public partial bool IsUpdateAvailable { get; set; }
+    [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
 
     // ── Folders ────────────────────────────────────────────────────
     [ObservableProperty] public partial IReadOnlyList<string> LibraryFolders { get; set; } = [];
@@ -109,8 +122,65 @@ public partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(SettingsService settingsService)
     {
         _settingsService = settingsService;
+        _textScaleDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+        _textScaleDebounceTimer.Tick += (s, e) =>
+        {
+            _textScaleDebounceTimer.Stop();
+            SaveAndApplyAccessibility();
+        };
+
         SyncFromSettings();
         _settingsService.SettingsChanged += (_, _) => SyncFromSettings();
+
+        // Analyze hardware async in background
+        _ = AnalyzeHardwareBackgroundAsync();
+    }
+
+    private async System.Threading.Tasks.Task AnalyzeHardwareBackgroundAsync()
+    {
+        var result = await HardwareDetectionService.AnalyzeHardwareAsync();
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            IsLocalAiSupported = result.SupportsLocalAi;
+            if (result.SupportsLocalAi)
+            {
+                LocalAiHardwareSuggestion = $"Hardware analysis: Compatible {(string.IsNullOrWhiteSpace(result.GpuName) ? "System RAM" : result.GpuName)} detected. Local AI inference is recommended for privacy and offline usage.";
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task CheckForUpdatesAsync()
+    {
+        if (IsCheckingForUpdates) return;
+        IsCheckingForUpdates = true;
+        UpdateStatusText = "Checking for updates...";
+        IsUpdateAvailable = false;
+
+        var info = await UpdateService.CheckForUpdatesAsync();
+        
+        IsCheckingForUpdates = false;
+        
+        if (info.IsUpdateAvailable)
+        {
+            IsUpdateAvailable = true;
+            UpdateStatusText = $"Update Available: v{info.LatestVersion} (Current: {info.CurrentVersion})";
+            LatestVersion = info.LatestVersion;
+        }
+        else if (!string.IsNullOrEmpty(info.CurrentVersion))
+        {
+            UpdateStatusText = $"You're on the latest version ({info.CurrentVersion}).";
+        }
+        else
+        {
+            UpdateStatusText = "Failed to check for updates. Try again later.";
+        }
+    }
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task InstallUpdateAsync()
+    {
+        await UpdateService.InstallUpdateAsync();
     }
 
     // ── Index properties for ComboBox bindings ─────────────────────
@@ -537,7 +607,15 @@ public partial class SettingsViewModel : ObservableObject
 
     // Accessibility
     partial void OnHighContrastModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HighContrastMode = value; SaveAndApplyAccessibility(); } }
-    partial void OnLargeTextModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.LargeTextMode = value; SaveAndApplyAccessibility(); } }
+    partial void OnTextScaleChanged(double value) 
+    { 
+        if (!_isSyncing) 
+        { 
+            _settingsService.Current.TextScale = value; 
+            _textScaleDebounceTimer.Stop();
+            _textScaleDebounceTimer.Start();
+        } 
+    }
     partial void OnReduceMotionChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ReduceMotion = value; SaveAndApplyAccessibility(); } }
     partial void OnScreenReaderOptimizationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ScreenReaderOptimization = value; SaveAndApplyAccessibility(); } }
     partial void OnCaptionsAlwaysOnChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CaptionsAlwaysOn = value; SaveAndApplyAccessibility(); } }
@@ -568,6 +646,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAiTranslationTargetLanguageChanged(string value) { if (!_isSyncing) { _settingsService.Current.AiTranslationTargetLanguage = value; _settingsService.Save(); OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex)); } }
     partial void OnAiSemanticSearchEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiSemanticSearchEnabled = value; _settingsService.Save(); } }
     partial void OnGeminiApiKeyChanged(string value) { if (!_isSyncing) { _settingsService.Current.GeminiApiKey = value; _settingsService.Save(); } }
+    partial void OnUseLocalAiChanged(bool value) { if (!_isSyncing) { _settingsService.Current.UseLocalAi = value; _settingsService.Save(); } }
+    partial void OnOllamaModelNameChanged(string value) { if (!_isSyncing) { _settingsService.Current.OllamaModelName = value; _settingsService.Save(); } }
     partial void OnAiEqualizerMatcherEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiEqualizerMatcherEnabled = value; _settingsService.Save(); } }
     partial void OnVoiceClarityEnabledChanged(bool value)
     {
@@ -590,8 +670,15 @@ public partial class SettingsViewModel : ObservableObject
 
     private void SaveAndApplyAccessibility()
     {
-        _settingsService.Save();
-        AccessibilityHelper.Apply(_settingsService.Current);
+        try
+        {
+            _settingsService.Save();
+            AccessibilityHelper.Apply(_settingsService.Current);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error applying accessibility: {ex.Message}");
+        }
     }
 
     // ── Commands ───────────────────────────────────────────────────
@@ -740,7 +827,7 @@ public partial class SettingsViewModel : ObservableObject
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;
 
         HighContrastMode = c.HighContrastMode;
-        LargeTextMode = c.LargeTextMode;
+        TextScale = c.TextScale;
         ReduceMotion = c.ReduceMotion;
         ScreenReaderOptimization = c.ScreenReaderOptimization;
         CaptionsAlwaysOn = c.CaptionsAlwaysOn;
@@ -756,7 +843,9 @@ public partial class SettingsViewModel : ObservableObject
         AiLyricsTranslationEnabled = c.AiLyricsTranslationEnabled;
         AiTranslationTargetLanguage = c.AiTranslationTargetLanguage;
         AiSemanticSearchEnabled = c.AiSemanticSearchEnabled;
-        GeminiApiKey = c.GeminiApiKey;
+        GeminiApiKey = c.GeminiApiKey ?? "";
+        UseLocalAi = c.UseLocalAi;
+        OllamaModelName = c.OllamaModelName ?? "llama3.2";
         AiEqualizerMatcherEnabled = c.AiEqualizerMatcherEnabled;
         VoiceClarityEnabled = c.VoiceClarityEnabled;
         NightModeEnabled = c.NightModeEnabled;
