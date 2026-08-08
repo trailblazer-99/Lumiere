@@ -418,45 +418,52 @@ public sealed partial class VideoPage : Page
     {
         try
         {
-            if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
+            try
             {
-                HideMetadataOverlay();
-                e.Handled = true;
-                _videoTapClickCount++;
-                
-                if (_videoTapClickCount == 1)
+                if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
                 {
-                    var cts = new System.Threading.CancellationTokenSource();
-                    _videoTapCts = cts;
-                    try
+                    HideMetadataOverlay();
+                    e.Handled = true;
+                    _videoTapClickCount++;
+                
+                    if (_videoTapClickCount == 1)
                     {
-                        await System.Threading.Tasks.Task.Delay(225, cts.Token);
-                        if (AppServices.PlaybackViewModel.IsPlaying)
+                        var cts = new System.Threading.CancellationTokenSource();
+                        _videoTapCts = cts;
+                        try
                         {
-                            AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                            await System.Threading.Tasks.Task.Delay(225, cts.Token);
+                            if (AppServices.PlaybackViewModel.IsPlaying)
+                            {
+                                AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                            }
+                            else
+                            {
+                                AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
+                            }
                         }
-                        else
+                        catch (System.Threading.Tasks.TaskCanceledException)
                         {
-                            AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
                         }
-                    }
-                    catch (System.Threading.Tasks.TaskCanceledException)
-                    {
-                    }
-                    finally
-                    {
-                        _videoTapClickCount = 0;
-                        // Only dispose if we still own the CTS (another tap may have replaced it)
-                        if (_videoTapCts == cts)
-                            _videoTapCts = null;
-                        cts.Dispose();
+                        finally
+                        {
+                            _videoTapClickCount = 0;
+                            // Only dispose if we still own the CTS (another tap may have replaced it)
+                            if (_videoTapCts == cts)
+                                _videoTapCts = null;
+                            cts.Dispose();
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Exception in OnVideoTapped: {ex.Message}");
         }
     }
 

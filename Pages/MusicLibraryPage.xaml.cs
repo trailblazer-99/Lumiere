@@ -88,67 +88,95 @@ public sealed partial class MusicLibraryPage : Page
     {
         try
         {
-            if (e.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+            try
             {
-                bool useAi = AiSearchToggle?.IsChecked == true;
-                await ViewModel.SearchLibraryAsync(sender.Text, useAi);
-                UpdateSavePlaylistButtonVisibility();
+                if (e.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+                {
+                    bool useAi = AiSearchToggle?.IsChecked == true;
+                    await ViewModel.SearchLibraryAsync(sender.Text, useAi);
+                    UpdateSavePlaylistButtonVisibility();
+                }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnSearchBoxTextChanged: {ex.Message}");
+        }
     }
 
     private async void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
     {
         try
         {
-            bool useAi = AiSearchToggle?.IsChecked == true;
-            await ViewModel.SearchLibraryAsync(sender.Text, useAi);
-            UpdateSavePlaylistButtonVisibility();
+            try
+            {
+                bool useAi = AiSearchToggle?.IsChecked == true;
+                await ViewModel.SearchLibraryAsync(sender.Text, useAi);
+                UpdateSavePlaylistButtonVisibility();
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnSearchBoxQuerySubmitted: {ex.Message}");
+        }
     }
 
     private async void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
     {
         try
         {
-            if (AiSearchIcon != null)
+            try
             {
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
-            }
-            if (SearchBox != null)
-            {
-                SearchBox.PlaceholderText = "Describe what you want to hear...";
-                if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                if (AiSearchIcon != null)
                 {
-                    await ViewModel.SearchLibraryAsync(SearchBox.Text, true);
+                    AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
                 }
+                if (SearchBox != null)
+                {
+                    SearchBox.PlaceholderText = "Describe what you want to hear...";
+                    if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                    {
+                        await ViewModel.SearchLibraryAsync(SearchBox.Text, true);
+                    }
+                }
+                UpdateSavePlaylistButtonVisibility();
             }
-            UpdateSavePlaylistButtonVisibility();
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnAiSearchToggleChecked: {ex.Message}");
+        }
     }
 
     private async void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
     {
         try
         {
-            if (AiSearchIcon != null)
+            try
             {
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-            }
-            if (SearchBox != null)
-            {
-                SearchBox.PlaceholderText = "Search collection...";
-                if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                if (AiSearchIcon != null)
                 {
-                    await ViewModel.SearchLibraryAsync(SearchBox.Text, false);
+                    AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
                 }
+                if (SearchBox != null)
+                {
+                    SearchBox.PlaceholderText = "Search collection...";
+                    if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                    {
+                        await ViewModel.SearchLibraryAsync(SearchBox.Text, false);
+                    }
+                }
+                UpdateSavePlaylistButtonVisibility();
             }
-            UpdateSavePlaylistButtonVisibility();
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnAiSearchToggleUnchecked: {ex.Message}");
+        }
     }
 
     private void UpdateSavePlaylistButtonVisibility()
@@ -164,26 +192,33 @@ public sealed partial class MusicLibraryPage : Page
     {
         try
         {
-            if (ViewModel.Tracks.Count == 0 || string.IsNullOrWhiteSpace(SearchBox.Text)) return;
-
-            string playlistName = $"AI: {SearchBox.Text}";
-            string description = $"Dynamically generated smart playlist for query: \"{SearchBox.Text}\"";
-
-            await SampleMediaLibrary.CreatePlaylistAsync(playlistName, description, ViewModel.Tracks.ToList());
-
-            var dialog = new ContentDialog
-            {
-                Title = "AI Playlist Created",
-                Content = $"Successfully generated smart playlist \"{playlistName}\" with {ViewModel.Tracks.Count} tracks.",
-                CloseButtonText = "OK",
-                XamlRoot = this.XamlRoot
-            };
             try
             {
-                await dialog.ShowAsync();
+                if (ViewModel.Tracks.Count == 0 || string.IsNullOrWhiteSpace(SearchBox.Text)) return;
+
+                string playlistName = $"AI: {SearchBox.Text}";
+                string description = $"Dynamically generated smart playlist for query: \"{SearchBox.Text}\"";
+
+                await SampleMediaLibrary.CreatePlaylistAsync(playlistName, description, ViewModel.Tracks.ToList());
+
+                var dialog = new ContentDialog
+                {
+                    Title = "AI Playlist Created",
+                    Content = $"Successfully generated smart playlist \"{playlistName}\" with {ViewModel.Tracks.Count} tracks.",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
+                try
+                {
+                    await dialog.ShowAsync();
+                }
+                catch { }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnSaveAiPlaylistClick: {ex.Message}");
+        }
     }
 }

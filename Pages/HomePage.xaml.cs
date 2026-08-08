@@ -179,20 +179,27 @@ public sealed partial class HomePage : Page
 
     private async void OnClearHistoryClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new ContentDialog
+        try
         {
-            Title = "Clear recently played?",
-            Content = "This will remove all items from your recently played history. This action cannot be undone.",
-            PrimaryButtonText = "Clear",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = this.XamlRoot
-        };
+            var dialog = new ContentDialog
+            {
+                Title = "Clear recently played?",
+                Content = "This will remove all items from your recently played history. This action cannot be undone.",
+                PrimaryButtonText = "Clear",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = this.XamlRoot
+            };
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                ViewModel.ClearHistoryCommand.Execute(null);
+                RecentSection.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch (Exception ex)
         {
-            ViewModel.ClearHistoryCommand.Execute(null);
-            RecentSection.Visibility = Visibility.Collapsed;
+            System.Diagnostics.Debug.WriteLine($"Exception in OnClearHistoryClick: {ex.Message}");
         }
     }
 }

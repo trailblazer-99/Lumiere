@@ -336,12 +336,19 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                if (e.ClickedItem is MusicApiTrack track)
+                try
                 {
-                    await ShowTrackDetailsDialogAsync(track, isFromLibrary: false);
+                    if (e.ClickedItem is MusicApiTrack track)
+                    {
+                        await ShowTrackDetailsDialogAsync(track, isFromLibrary: false);
+                    }
                 }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in OnTrackClicked: {ex.Message}");
+            }
         }
 
         private async System.Threading.Tasks.Task ShowTrackDetailsDialogAsync(MusicApiTrack track, bool isFromLibrary = false)
@@ -596,19 +603,26 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                if (e.ClickedItem is Services.Streaming.SavedStreamingItem item)
+                try
                 {
-                    var track = new MusicApiTrack
+                    if (e.ClickedItem is Services.Streaming.SavedStreamingItem item)
                     {
-                        Id = item.Id,
-                        Name = item.Title,
-                        Artist = item.Subtitle,
-                        ArtworkUrl = item.PosterUrl
-                    };
-                    await ShowTrackDetailsDialogAsync(track, isFromLibrary: true);
+                        var track = new MusicApiTrack
+                        {
+                            Id = item.Id,
+                            Name = item.Title,
+                            Artist = item.Subtitle,
+                            ArtworkUrl = item.PosterUrl
+                        };
+                        await ShowTrackDetailsDialogAsync(track, isFromLibrary: true);
+                    }
                 }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in LibraryGridView_ItemClick: {ex.Message}");
+            }
         }
     }
 }

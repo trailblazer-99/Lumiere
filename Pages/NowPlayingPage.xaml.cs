@@ -186,34 +186,41 @@ public sealed partial class NowPlayingPage : Page
     {
         try
         {
-            if (MetadataOverlay.Visibility == Visibility.Visible)
+            try
             {
-                MetadataOverlay.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                MetadataOverlay.Visibility = Visibility.Visible;
-                InternetMetadataPanel.Children.Clear();
-                
-                var title = ViewModel.Title ?? "";
-                var artist = ViewModel.Artist ?? "";
-                
-                if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(artist))
+                if (MetadataOverlay.Visibility == Visibility.Visible)
                 {
-                    var results = await _musicService.SearchTracksAsync($"{title} {artist}");
-                    if (results != null && results.Count > 0)
+                    MetadataOverlay.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    MetadataOverlay.Visibility = Visibility.Visible;
+                    InternetMetadataPanel.Children.Clear();
+                
+                    var title = ViewModel.Title ?? "";
+                    var artist = ViewModel.Artist ?? "";
+                
+                    if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(artist))
                     {
-                        var track = results[0];
-                        RenderProviders(track.TrackName, track.ArtistName);
-                    }
-                    else
-                    {
-                        RenderProviders(title, artist);
+                        var results = await _musicService.SearchTracksAsync($"{title} {artist}");
+                        if (results != null && results.Count > 0)
+                        {
+                            var track = results[0];
+                            RenderProviders(track.TrackName, track.ArtistName);
+                        }
+                        else
+                        {
+                            RenderProviders(title, artist);
+                        }
                     }
                 }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in ToggleMetadataOverlay: {ex.Message}");
+        }
     }
 
     private void RenderProviders(string trackName, string artistName)
@@ -572,62 +579,69 @@ public sealed partial class NowPlayingPage : Page
     {
         try
         {
-            if (_lyrics == null || _lyrics.Count == 0) return;
-
-            bool hasAnyTranslation = _lyrics.Any(l => !string.IsNullOrEmpty(l.Translation));
-            if (hasAnyTranslation)
-            {
-                foreach (var line in _lyrics)
-                {
-                    line.Translation = string.Empty;
-                }
-                if (LyricsListView != null)
-                {
-                    LyricsListView.ItemsSource = null;
-                    LyricsListView.ItemsSource = _lyrics;
-                }
-                return;
-            }
-
-            if (TranslateLyricsButton != null)
-            {
-                TranslateLyricsButton.IsEnabled = false;
-            }
-
             try
             {
-                var rawLines = _lyrics.Select(l => l.Text).ToList();
-                var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
-                var currentTrackId = AppServices.PlaybackViewModel.CurrentTrack?.Id ?? "temp";
-                
-                var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
-                if (translations != null && translations.Count == _lyrics.Count)
+                if (_lyrics == null || _lyrics.Count == 0) return;
+
+                bool hasAnyTranslation = _lyrics.Any(l => !string.IsNullOrEmpty(l.Translation));
+                if (hasAnyTranslation)
                 {
-                    for (int i = 0; i < _lyrics.Count; i++)
+                    foreach (var line in _lyrics)
                     {
-                        _lyrics[i].Translation = translations[i];
+                        line.Translation = string.Empty;
                     }
+                    if (LyricsListView != null)
+                    {
+                        LyricsListView.ItemsSource = null;
+                        LyricsListView.ItemsSource = _lyrics;
+                    }
+                    return;
                 }
 
-                if (LyricsListView != null)
-                {
-                    LyricsListView.ItemsSource = null;
-                    LyricsListView.ItemsSource = _lyrics;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Translation failed: {ex.Message}");
-            }
-            finally
-            {
                 if (TranslateLyricsButton != null)
                 {
-                    TranslateLyricsButton.IsEnabled = true;
+                    TranslateLyricsButton.IsEnabled = false;
+                }
+
+                try
+                {
+                    var rawLines = _lyrics.Select(l => l.Text).ToList();
+                    var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
+                    var currentTrackId = AppServices.PlaybackViewModel.CurrentTrack?.Id ?? "temp";
+                
+                    var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
+                    if (translations != null && translations.Count == _lyrics.Count)
+                    {
+                        for (int i = 0; i < _lyrics.Count; i++)
+                        {
+                            _lyrics[i].Translation = translations[i];
+                        }
+                    }
+
+                    if (LyricsListView != null)
+                    {
+                        LyricsListView.ItemsSource = null;
+                        LyricsListView.ItemsSource = _lyrics;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Translation failed: {ex.Message}");
+                }
+                finally
+                {
+                    if (TranslateLyricsButton != null)
+                    {
+                        TranslateLyricsButton.IsEnabled = true;
+                    }
                 }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in OnTranslateLyricsClick: {ex.Message}");
+        }
     }
 
     private void UpdateLyricsHighlight(TimeSpan position)

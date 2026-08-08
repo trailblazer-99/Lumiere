@@ -33,37 +33,44 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
-                    base.OnNavigatedTo(e);
+                    try
+                    {
+                        base.OnNavigatedTo(e);
                     
-                    // Refresh library items in case we are returning from Details Page where they changed
-                    RefreshLibraryList();
+                        // Refresh library items in case we are returning from Details Page where they changed
+                        RefreshLibraryList();
                     
-                    if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
-                    {
-                        // Preserve search results, active filters, and pivot tabs when returning from Details Page
-                        return;
-                    }
+                        if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+                        {
+                            // Preserve search results, active filters, and pivot tabs when returning from Details Page
+                            return;
+                        }
 
-                    ViewModel.ResetState();
+                        ViewModel.ResetState();
 
-                    if (MainPivot != null)
-                    {
-                        MainPivot.SelectedIndex = 0;
+                        if (MainPivot != null)
+                        {
+                            MainPivot.SelectedIndex = 0;
+                        }
+                        if (SearchBox != null)
+                        {
+                            SearchBox.Text = string.Empty;
+                        }
+                        await ViewModel.InitializeAndLoadAsync();
                     }
-                    if (SearchBox != null)
+                    catch (Exception ex)
                     {
-                        SearchBox.Text = string.Empty;
+                        System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
                     }
-                    await ViewModel.InitializeAndLoadAsync();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in OnNavigatedTo: {ex.Message}");
             }
         }
 
@@ -71,27 +78,34 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+                try
                 {
-                    string query = sender.Text;
-                    if (query.Length >= 3)
+                    if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
                     {
-                        try
+                        string query = sender.Text;
+                        if (query.Length >= 3)
                         {
-                            var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
-                            sender.ItemsSource = suggestions;
+                            try
+                            {
+                                var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
+                                sender.ItemsSource = suggestions;
+                            }
+                            catch { }
                         }
-                        catch { }
+                        else
+                        {
+                            sender.ItemsSource = null;
+                        }
                     }
-                    else
-                    {
-                        sender.ItemsSource = null;
-                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in OnSearchBoxTextChanged: {ex.Message}");
             }
         }
 
@@ -198,21 +212,28 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                if (sender != e.OriginalSource) return;
-                if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
+                try
                 {
-                    string header = pivotItem.Header?.ToString() ?? string.Empty;
-                    if (header == "Library")
+                    if (sender != e.OriginalSource) return;
+                    if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
                     {
-                        RefreshLibraryList();
-                    }
-                    else if (header == "Trending")
-                    {
-                        await LoadTrendingAsync();
+                        string header = pivotItem.Header?.ToString() ?? string.Empty;
+                        if (header == "Library")
+                        {
+                            RefreshLibraryList();
+                        }
+                        else if (header == "Trending")
+                        {
+                            await LoadTrendingAsync();
+                        }
                     }
                 }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in MainPivot_SelectionChanged: {ex.Message}");
+            }
         }
 
         private readonly TmdbService _tmdbService = new();

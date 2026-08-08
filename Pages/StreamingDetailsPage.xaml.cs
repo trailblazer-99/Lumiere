@@ -47,41 +47,48 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                base.OnNavigatedTo(e);
+                try
+                {
+                    base.OnNavigatedTo(e);
 
-                var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("PosterAnimation");
-                if (animation != null)
-                {
-                    animation.TryStart(PosterImage);
-                }
+                    var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("PosterAnimation");
+                    if (animation != null)
+                    {
+                        animation.TryStart(PosterImage);
+                    }
 
-                if (e.Parameter is int id)
-                {
-                    _watchmodeId = id;
-                    _selectedRegion = "";
-                }
-                else if (e.Parameter is (int tupleId, string region))
-                {
-                    _watchmodeId = tupleId;
-                    _selectedRegion = region;
-                }
-                else if (e.Parameter is string tmdbStr)
-                {
-                    _titleIdFallback = tmdbStr;
-                    _watchmodeId = -1;
-                    _selectedRegion = "";
-                }
+                    if (e.Parameter is int id)
+                    {
+                        _watchmodeId = id;
+                        _selectedRegion = "";
+                    }
+                    else if (e.Parameter is (int tupleId, string region))
+                    {
+                        _watchmodeId = tupleId;
+                        _selectedRegion = region;
+                    }
+                    else if (e.Parameter is string tmdbStr)
+                    {
+                        _titleIdFallback = tmdbStr;
+                        _watchmodeId = -1;
+                        _selectedRegion = "";
+                    }
 
-                if (string.IsNullOrEmpty(_selectedRegion))
-                {
-                    _selectedRegion = await RegionHelper.GetCurrentRegionAsync();
-                }
+                    if (string.IsNullOrEmpty(_selectedRegion))
+                    {
+                        _selectedRegion = await RegionHelper.GetCurrentRegionAsync();
+                    }
 
-                await LoadDetailsAsync();
+                    await LoadDetailsAsync();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in OnNavigatedTo: {ex.Message}");
             }
         }
 
@@ -397,26 +404,33 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                if (_details != null && !string.IsNullOrEmpty(_details.Trailer))
+                try
                 {
-                    try
+                    if (_details != null && !string.IsNullOrEmpty(_details.Trailer))
                     {
-                        if (_details.Trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
-                            _details.Trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                        try
                         {
-                            App.MainWindowInstance?.NavigateToYouTube(_details.Trailer);
+                            if (_details.Trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                                _details.Trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                            {
+                                App.MainWindowInstance?.NavigateToYouTube(_details.Trailer);
+                            }
+                            else
+                            {
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
+                            }
                         }
-                        else
-                        {
-                            await Windows.System.Launcher.LaunchUriAsync(new Uri(_details.Trailer));
-                        }
+                        catch { }
                     }
-                    catch { }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in OnTrailerButtonClick: {ex.Message}");
             }
         }
 
@@ -664,153 +678,160 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-            if (string.IsNullOrWhiteSpace(title)) return;
-            string cleanTarget = CleanTitleForComparison(title);
-            if (string.IsNullOrEmpty(cleanTarget)) return;
-
-            var allLocalItems = AppServices.VideoViewModel.RawVideos
-                .Concat(SampleMediaLibrary.AllTracks)
-                .Concat(SampleMediaLibrary.VideoTracks)
-                .Concat(SampleMediaLibrary.AudioTracks)
-                .Distinct()
-                .ToList();
-
-            MediaItem? match = null;
-
-            await Task.Run(() =>
-            {
-                foreach (var item in allLocalItems)
-            {
-                if (item == null) continue;
-                string sourcePath = item.SourcePath ?? "";
-
-                if (IsTitleMatch(title, item.Title) ||
-                    IsTitleMatch(title, System.IO.Path.GetFileNameWithoutExtension(sourcePath)) ||
-                    IsTitleMatch(title, GetParentDirectoryName(sourcePath)) ||
-                    IsTitleMatch(title, GetGrandparentDirectoryName(sourcePath)))
-                {
-                    match = item;
-                    break;
-                }
-            }
-
-            // On-the-fly recursive disk scan fallback if title is on disk but not yet indexed in library memory
-            if (match == null)
-            {
                 try
                 {
-                    var foldersToCheck = new List<string>();
-                    try { foldersToCheck.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)); } catch { }
-                    try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")); } catch { }
-                    try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos")); } catch { }
+                if (string.IsNullOrWhiteSpace(title)) return;
+                string cleanTarget = CleanTitleForComparison(title);
+                if (string.IsNullOrEmpty(cleanTarget)) return;
+
+                var allLocalItems = AppServices.VideoViewModel.RawVideos
+                    .Concat(SampleMediaLibrary.AllTracks)
+                    .Concat(SampleMediaLibrary.VideoTracks)
+                    .Concat(SampleMediaLibrary.AudioTracks)
+                    .Distinct()
+                    .ToList();
+
+                MediaItem? match = null;
+
+                await Task.Run(() =>
+                {
+                    foreach (var item in allLocalItems)
+                {
+                    if (item == null) continue;
+                    string sourcePath = item.SourcePath ?? "";
+
+                    if (IsTitleMatch(title, item.Title) ||
+                        IsTitleMatch(title, System.IO.Path.GetFileNameWithoutExtension(sourcePath)) ||
+                        IsTitleMatch(title, GetParentDirectoryName(sourcePath)) ||
+                        IsTitleMatch(title, GetGrandparentDirectoryName(sourcePath)))
+                    {
+                        match = item;
+                        break;
+                    }
+                }
+
+                // On-the-fly recursive disk scan fallback if title is on disk but not yet indexed in library memory
+                if (match == null)
+                {
                     try
                     {
-                        if (AppServices.Settings.Current.LibraryFolders != null)
+                        var foldersToCheck = new List<string>();
+                        try { foldersToCheck.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)); } catch { }
+                        try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")); } catch { }
+                        try { foldersToCheck.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos")); } catch { }
+                        try
                         {
-                            foreach (var f in AppServices.Settings.Current.LibraryFolders)
+                            if (AppServices.Settings.Current.LibraryFolders != null)
                             {
-                                if (!string.IsNullOrEmpty(f) && !foldersToCheck.Contains(f, StringComparer.OrdinalIgnoreCase))
+                                foreach (var f in AppServices.Settings.Current.LibraryFolders)
                                 {
-                                    foldersToCheck.Add(f);
+                                    if (!string.IsNullOrEmpty(f) && !foldersToCheck.Contains(f, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        foldersToCheck.Add(f);
+                                    }
                                 }
                             }
                         }
+                        catch { }
+
+                        foreach (var folder in foldersToCheck)
+                        {
+                            if (string.IsNullOrEmpty(folder) || !System.IO.Directory.Exists(folder)) continue;
+                            var files = SafeEnumerateVideoFiles(folder, maxDepth: 3);
+                            foreach (var filePath in files)
+                            {
+                                string fileNameNoExt = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                                if (IsTitleMatch(title, fileNameNoExt) ||
+                                    IsTitleMatch(title, GetParentDirectoryName(filePath)) ||
+                                    IsTitleMatch(title, GetGrandparentDirectoryName(filePath)))
+                                {
+                                    var fileInfo = new System.IO.FileInfo(filePath);
+                                    string ext = System.IO.Path.GetExtension(filePath);
+                                    match = new MediaItem
+                                    {
+                                        Id = Guid.NewGuid().ToString(),
+                                        Title = fileNameNoExt,
+                                        SourcePath = filePath,
+                                        Kind = MediaKind.Video,
+                                        FileSize = fileInfo.Length,
+                                        DateCreated = fileInfo.CreationTime,
+                                        LastModifiedUtc = fileInfo.LastWriteTimeUtc,
+                                        DateAdded = DateTime.Now,
+                                        IsFolder = false,
+                                        FileExtension = ext
+                                    };
+                                    _ = SampleMediaLibrary.AddTrackAsync(match);
+                                    break;
+                                }
+                            }
+                            if (match != null) break;
+                        }
                     }
                     catch { }
-
-                    foreach (var folder in foldersToCheck)
-                    {
-                        if (string.IsNullOrEmpty(folder) || !System.IO.Directory.Exists(folder)) continue;
-                        var files = SafeEnumerateVideoFiles(folder, maxDepth: 3);
-                        foreach (var filePath in files)
-                        {
-                            string fileNameNoExt = System.IO.Path.GetFileNameWithoutExtension(filePath);
-                            if (IsTitleMatch(title, fileNameNoExt) ||
-                                IsTitleMatch(title, GetParentDirectoryName(filePath)) ||
-                                IsTitleMatch(title, GetGrandparentDirectoryName(filePath)))
-                            {
-                                var fileInfo = new System.IO.FileInfo(filePath);
-                                string ext = System.IO.Path.GetExtension(filePath);
-                                match = new MediaItem
-                                {
-                                    Id = Guid.NewGuid().ToString(),
-                                    Title = fileNameNoExt,
-                                    SourcePath = filePath,
-                                    Kind = MediaKind.Video,
-                                    FileSize = fileInfo.Length,
-                                    DateCreated = fileInfo.CreationTime,
-                                    LastModifiedUtc = fileInfo.LastWriteTimeUtc,
-                                    DateAdded = DateTime.Now,
-                                    IsFolder = false,
-                                    FileExtension = ext
-                                };
-                                _ = SampleMediaLibrary.AddTrackAsync(match);
-                                break;
-                            }
-                        }
-                        if (match != null) break;
-                    }
                 }
-                catch { }
-            }
-            });
-
-            if (match != null)
-            {
-                var card = new Microsoft.UI.Xaml.Controls.Button
-                {
-                    Style = (Style)Application.Current.Resources["DefaultButtonStyle"],
-                    Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                    Padding = new Thickness(16, 12, 16, 12),
-                    CornerRadius = new CornerRadius(6),
-                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                    BorderThickness = new Thickness(1),
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Left
-                };
-
-                var rowPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                rowPanel.Children.Add(new FontIcon
-                {
-                    Glyph = "\uE768",
-                    FontSize = 24,
-                    Margin = new Thickness(0, 0, 14, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
                 });
 
-                var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                textCol.Children.Add(new TextBlock
+                if (match != null)
                 {
-                    Text = "Play Local Copy",
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    FontSize = 14
-                });
+                    var card = new Microsoft.UI.Xaml.Controls.Button
+                    {
+                        Style = (Style)Application.Current.Resources["DefaultButtonStyle"],
+                        Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                        Padding = new Thickness(16, 12, 16, 12),
+                        CornerRadius = new CornerRadius(6),
+                        BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                        BorderThickness = new Thickness(1),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        HorizontalContentAlignment = HorizontalAlignment.Left
+                    };
 
-                string subText = !string.IsNullOrEmpty(match.Resolution) ? $"{match.Resolution} · In Library" : "In Library";
-                textCol.Children.Add(new TextBlock
+                    var rowPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                    rowPanel.Children.Add(new FontIcon
+                    {
+                        Glyph = "\uE768",
+                        FontSize = 24,
+                        Margin = new Thickness(0, 0, 14, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                    });
+
+                    var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                    textCol.Children.Add(new TextBlock
+                    {
+                        Text = "Play Local Copy",
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        FontSize = 14
+                    });
+
+                    string subText = !string.IsNullOrEmpty(match.Resolution) ? $"{match.Resolution} · In Library" : "In Library";
+                    textCol.Children.Add(new TextBlock
+                    {
+                        Text = subText,
+                        FontSize = 12,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                    });
+
+                    rowPanel.Children.Add(textCol);
+                    card.Content = rowPanel;
+
+                    var capturedItem = match;
+                    card.Click += (_, _) =>
+                    {
+                        AppServices.PlaybackViewModel.PlayTrack(capturedItem);
+                    };
+
+                    ProvidersContainer.Children.Add(card);
+                    ProvidersContainer.Children.Add(new Microsoft.UI.Xaml.Controls.Border { Height = 16 });
+                }
+                }
+                catch (Exception ex)
                 {
-                    Text = subText,
-                    FontSize = 12,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-                });
-
-                rowPanel.Children.Add(textCol);
-                card.Content = rowPanel;
-
-                var capturedItem = match;
-                card.Click += (_, _) =>
-                {
-                    AppServices.PlaybackViewModel.PlayTrack(capturedItem);
-                };
-
-                ProvidersContainer.Children.Add(card);
-                ProvidersContainer.Children.Add(new Microsoft.UI.Xaml.Controls.Border { Height = 16 });
-            }
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in CheckAndBuildLocalMediaSection: {ex.Message}");
             }
         }
 
@@ -1466,52 +1487,59 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-            if (RegionDetailComboBox.SelectedValue is string newRegion && !string.IsNullOrEmpty(newRegion))
-            {
-                if (newRegion != _selectedRegion)
+                try
                 {
-                    _selectedRegion = newRegion;
-                    
-                    // Propagate selection back to global view models to sync state across views
-                    if (AppServices.StreamingMoviesViewModel != null)
-                        AppServices.StreamingMoviesViewModel.SelectedRegion = newRegion;
-                    if (AppServices.StreamingTvShowsViewModel != null)
-                        AppServices.StreamingTvShowsViewModel.SelectedRegion = newRegion;
-
-                    ProvidersContainer.Children.Clear();
-                    
-                    var progressRing = new ProgressRing 
-                    { 
-                        IsActive = true, 
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Width = 32,
-                        Height = 32,
-                        Margin = new Thickness(0, 16, 0, 16)
-                    };
-                    ProvidersContainer.Children.Add(progressRing);
-
-                    try
+                if (RegionDetailComboBox.SelectedValue is string newRegion && !string.IsNullOrEmpty(newRegion))
+                {
+                    if (newRegion != _selectedRegion)
                     {
-                        var sources = await _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion, _details?.Title ?? "");
-                        BuildProvidersSection(sources);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Failed to reload sources: {ex.Message}");
+                        _selectedRegion = newRegion;
+                    
+                        // Propagate selection back to global view models to sync state across views
+                        if (AppServices.StreamingMoviesViewModel != null)
+                            AppServices.StreamingMoviesViewModel.SelectedRegion = newRegion;
+                        if (AppServices.StreamingTvShowsViewModel != null)
+                            AppServices.StreamingTvShowsViewModel.SelectedRegion = newRegion;
+
                         ProvidersContainer.Children.Clear();
-                        ProvidersContainer.Children.Add(new TextBlock 
+                    
+                        var progressRing = new ProgressRing 
                         { 
-                            Text = "Error loading streaming sources.",
-                            FontStyle = Windows.UI.Text.FontStyle.Italic,
-                            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-                        });
+                            IsActive = true, 
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Width = 32,
+                            Height = 32,
+                            Margin = new Thickness(0, 16, 0, 16)
+                        };
+                        ProvidersContainer.Children.Add(progressRing);
+
+                        try
+                        {
+                            var sources = await _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion, _details?.Title ?? "");
+                            BuildProvidersSection(sources);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to reload sources: {ex.Message}");
+                            ProvidersContainer.Children.Clear();
+                            ProvidersContainer.Children.Add(new TextBlock 
+                            { 
+                                Text = "Error loading streaming sources.",
+                                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                            });
+                        }
                     }
                 }
-            }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in RegionDetailComboBox_SelectionChanged: {ex.Message}");
             }
         }
 
@@ -1539,89 +1567,96 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-            if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
-                return;
-
-            try
-            {
-                _isPersonDialogOpen = true;
-
-                var progressRing = new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Center, Width = 36, Height = 36, Margin = new Thickness(0, 24, 0, 24) };
-                var container = new StackPanel { Spacing = 12 };
-                container.Children.Add(progressRing);
-
-                var dialog = new ContentDialog
+                try
                 {
-                    Title = $"{person.FullName} — Filmography",
-                    Content = container,
-                    CloseButtonText = "Close",
-                    XamlRoot = this.XamlRoot
-                };
+                if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
+                    return;
 
-                _ = Task.Run(async () =>
+                try
                 {
-                    var details = await _watchmodeService.GetPersonDetailsAsync(person.PersonId, person.FullName);
-                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                    _isPersonDialogOpen = true;
+
+                    var progressRing = new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Center, Width = 36, Height = 36, Margin = new Thickness(0, 24, 0, 24) };
+                    var container = new StackPanel { Spacing = 12 };
+                    container.Children.Add(progressRing);
+
+                    var dialog = new ContentDialog
                     {
-                        container.Children.Clear();
-                        if (details?.KnownFor != null && details.KnownFor.Count > 0)
+                        Title = $"{person.FullName} — Filmography",
+                        Content = container,
+                        CloseButtonText = "Close",
+                        XamlRoot = this.XamlRoot
+                    };
+
+                    _ = Task.Run(async () =>
+                    {
+                        var details = await _watchmodeService.GetPersonDetailsAsync(person.PersonId, person.FullName);
+                        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                         {
-                            var titleBlock = new TextBlock
+                            container.Children.Clear();
+                            if (details?.KnownFor != null && details.KnownFor.Count > 0)
                             {
-                                Text = $"Known for ({details.KnownFor.Count} titles):",
-                                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                                Margin = new Thickness(0, 0, 0, 8)
-                            };
-                            container.Children.Add(titleBlock);
-
-                            var listView = new ListView
-                            {
-                                SelectionMode = ListViewSelectionMode.None,
-                                IsItemClickEnabled = true,
-                                MaxHeight = 350
-                            };
-
-                            listView.ItemTemplate = CreateFilmographyItemTemplate();
-                            listView.ItemsSource = details.KnownFor;
-
-                            listView.ItemClick += (s, args) =>
-                            {
-                                if (args.ClickedItem is WatchmodeTitle clickedTitle)
+                                var titleBlock = new TextBlock
                                 {
-                                    dialog.Hide();
-                                    Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
-                                }
-                            };
+                                    Text = $"Known for ({details.KnownFor.Count} titles):",
+                                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                                    Margin = new Thickness(0, 0, 0, 8)
+                                };
+                                container.Children.Add(titleBlock);
 
-                            container.Children.Add(listView);
-                        }
-                        else
-                        {
-                            container.Children.Add(new TextBlock
+                                var listView = new ListView
+                                {
+                                    SelectionMode = ListViewSelectionMode.None,
+                                    IsItemClickEnabled = true,
+                                    MaxHeight = 350
+                                };
+
+                                listView.ItemTemplate = CreateFilmographyItemTemplate();
+                                listView.ItemsSource = details.KnownFor;
+
+                                listView.ItemClick += (s, args) =>
+                                {
+                                    if (args.ClickedItem is WatchmodeTitle clickedTitle)
+                                    {
+                                        dialog.Hide();
+                                        Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+                                    }
+                                };
+
+                                container.Children.Add(listView);
+                            }
+                            else
                             {
-                                Text = "No filmography information available.",
-                                FontStyle = Windows.UI.Text.FontStyle.Italic,
-                                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                                Margin = new Thickness(0, 12, 0, 12)
-                            });
-                        }
+                                container.Children.Add(new TextBlock
+                                {
+                                    Text = "No filmography information available.",
+                                    FontStyle = Windows.UI.Text.FontStyle.Italic,
+                                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                                    Margin = new Thickness(0, 12, 0, 12)
+                                });
+                            }
+                        });
                     });
-                });
 
-                await dialog.ShowAsync();
+                    await dialog.ShowAsync();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CastGridView_ItemClick Error: {ex.Message}");
+                }
+                finally
+                {
+                    _isPersonDialogOpen = false;
+                }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CastGridView_ItemClick Error: {ex.Message}");
-            }
-            finally
-            {
-                _isPersonDialogOpen = false;
-            }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in CastGridView_ItemClick: {ex.Message}");
             }
         }
 
