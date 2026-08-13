@@ -41,6 +41,11 @@ namespace LumiereMediaPlayer.Pages
         {
             this.InitializeComponent();
             this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
+            this.Unloaded += OnUnloaded;
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -1139,7 +1144,8 @@ namespace LumiereMediaPlayer.Pages
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(url);
 
                             // Intercept Apple TV URLs to guarantee canonical Show ID extraction instead of Episode IDs
-                            if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase))
+                            if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) && 
+                                (cleanUrl.Contains("/search", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("/episode/", StringComparison.OrdinalIgnoreCase)))
                             {
                                 string term = "";
                                 var qMatch = System.Text.RegularExpressions.Regex.Match(cleanUrl, @"[?&]term=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1150,32 +1156,29 @@ namespace LumiereMediaPlayer.Pages
                                 {
                                     try
                                     {
-                                        string appleTvSearchUrl = $"https://tv.apple.com/us/search?term={Uri.EscapeDataString(term)}";
-                                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-                                        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
-                                        var html = await client.GetStringAsync(appleTvSearchUrl);
+                                        string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
+                                        string itunesUrl = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&media={mediaType}&limit=10";
                                         
-                                        var match = System.Text.RegularExpressions.Regex.Match(html, @"href=""(https://tv\.apple\.com/us/(?:show|movie)/[^""]+umc\.cmc\.[a-z0-9]+)""", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                                        if (match.Success)
+                                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                                        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                                        var response = await client.GetStringAsync(itunesUrl);
+                                        using var doc = System.Text.Json.JsonDocument.Parse(response);
+                                        var results = doc.RootElement.GetProperty("results");
+                                        
+                                        if (results.GetArrayLength() > 0)
                                         {
-                                            cleanUrl = match.Groups[1].Value;
-                                            AntiGravityLogger.Log($"Apple TV Web Scraper upgraded URL to: {cleanUrl}");
-                                        }
-                                        else
-                                        {
-                                            // Fallback to iTunes API if it's not an Apple TV original but a rentable movie
-                                            string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
-                                            string itunesUrl = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&media={mediaType}&limit=1";
-                                            var response = await client.GetStringAsync(itunesUrl);
-                                            using var doc = System.Text.Json.JsonDocument.Parse(response);
-                                            var results = doc.RootElement.GetProperty("results");
-                                            if (results.GetArrayLength() > 0)
+                                            foreach (var result in results.EnumerateArray())
                                             {
-                                                var trackViewUrl = results[0].GetProperty("trackViewUrl").GetString();
-                                                if (!string.IsNullOrEmpty(trackViewUrl))
+                                                var trackName = result.GetProperty("trackName").GetString() ?? "";
+                                                if (trackName.Contains(term, StringComparison.OrdinalIgnoreCase) || term.Contains(trackName, StringComparison.OrdinalIgnoreCase))
                                                 {
-                                                    cleanUrl = trackViewUrl;
-                                                    AntiGravityLogger.Log($"iTunes API upgraded URL to: {cleanUrl}");
+                                                    var trackViewUrl = result.GetProperty("trackViewUrl").GetString();
+                                                    if (!string.IsNullOrEmpty(trackViewUrl))
+                                                    {
+                                                        cleanUrl = trackViewUrl;
+                                                        AntiGravityLogger.Log($"iTunes API upgraded URL to: {cleanUrl}");
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }

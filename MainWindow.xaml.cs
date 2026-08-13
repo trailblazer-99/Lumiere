@@ -1762,11 +1762,14 @@ public sealed partial class MainWindow : Window
                 }
                 
                 // ── 3. Stretch the floating player to fill the screen ──
-                FloatingVideoContainer.Margin = new Thickness(0);
-                FloatingVideoContainer.Width = double.NaN;
-                FloatingVideoContainer.Height = double.NaN;
-                FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Stretch;
-                FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Stretch;
+                if (FloatingVideoContainer != null)
+                {
+                    FloatingVideoContainer.Margin = new Thickness(0);
+                    FloatingVideoContainer.Width = double.NaN;
+                    FloatingVideoContainer.Height = double.NaN;
+                    FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Stretch;
+                    FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Stretch;
+                }
                 
                 UpdateFullscreenPlayerLayout();
                 

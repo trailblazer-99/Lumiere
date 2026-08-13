@@ -28,6 +28,13 @@ public sealed partial class SettingsPage : Page
             visual.Opacity = 0f;
         }
         catch { }
+
+        this.Unloaded += OnUnloaded;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Bindings.StopTracking();
     }
 
     private async void OnAddFolderClick(object sender, RoutedEventArgs e)

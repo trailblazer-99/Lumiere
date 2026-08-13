@@ -374,6 +374,7 @@ public sealed partial class NowPlayingPage : Page
             {
                 ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
             }
+            Bindings.StopTracking();
         };
     }
 

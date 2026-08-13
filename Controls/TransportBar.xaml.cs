@@ -47,11 +47,9 @@ public sealed partial class TransportBar : UserControl
     private MediaItem? _observedTrack;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
     private double _pendingScrubValue;
-    private string _hoverTimeText = "00:00";
     private double _previousVolume = 100;
 
     public event EventHandler? PlayPauseRequested;
-    public event EventHandler<double>? SeekRequested;
     public event EventHandler? StopRequested;
     public event EventHandler? PreviousRequested;
     public event EventHandler? NextRequested;

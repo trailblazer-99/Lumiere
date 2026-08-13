@@ -19,6 +19,13 @@ public sealed partial class PlaylistsPage : Page
             visual.Opacity = 0f;
         }
         catch { }
+
+        this.Unloaded += OnUnloaded;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Bindings.StopTracking();
     }
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)

@@ -23,6 +23,13 @@ public sealed partial class MusicLibraryPage : Page
             visual.Opacity = 0f;
         }
         catch { }
+
+        this.Unloaded += OnUnloaded;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Bindings.StopTracking();
     }
 
 

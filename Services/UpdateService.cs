@@ -48,7 +48,7 @@ public static class UpdateService
             if (rootElement != null && rootElement.Name.LocalName == "AppInstaller")
             {
                 var versionAttr = rootElement.Attribute("Version");
-                if (versionAttr != null && Version.TryParse(versionAttr.Value, out Version latestVersion))
+                if (versionAttr != null && Version.TryParse(versionAttr.Value, out var latestVersion))
                 {
                     result.LatestVersion = latestVersion.ToString();
                     result.IsUpdateAvailable = latestVersion > currentVersion;

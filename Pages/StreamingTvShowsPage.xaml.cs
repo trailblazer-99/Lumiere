@@ -23,6 +23,13 @@ namespace LumiereMediaPlayer.Pages
                 visual.Opacity = 0f;
             }
             catch { }
+            this.Unloaded += OnUnloaded;
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            _heroTimer?.Stop();
+            Bindings.StopTracking();
         }
 
         private readonly WatchmodeService _watchmodeService = new();
@@ -242,6 +249,12 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task LoadTrendingAsync()
         {
+            int retries = 0;
+            while ((TrendingGridView == null || TrendingHeroCarousel == null) && retries < 20)
+            {
+                await System.Threading.Tasks.Task.Delay(50);
+                retries++;
+            }
             if (TrendingGridView == null || TrendingHeroCarousel == null) return;
 
             try
@@ -306,11 +319,11 @@ namespace LumiereMediaPlayer.Pages
             {
                 if (fe.DataContext is WatchmodeTitle wm)
                 {
-                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = wm.Id.ToString(), Title = wm.Title, Subtitle = $"({wm.Year})", PosterUrl = wm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = wm.Id.ToString(), Title = wm.Title ?? "", Subtitle = $"({wm.Year})", PosterUrl = wm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
                 }
                 else if (fe.DataContext is TmdbMedia tm)
                 {
-                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = tm.Id.ToString(), Title = tm.DisplayTitle, Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = tm.Id.ToString(), Title = tm.DisplayTitle ?? "", Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
                 }
             }
         }

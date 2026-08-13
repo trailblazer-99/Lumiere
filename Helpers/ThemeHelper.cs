@@ -178,6 +178,8 @@ public static class ThemeHelper
 
     private static void UpdateResourceIfPresent(ResourceDictionary dictionary, string key, object value)
     {
+        if (dictionary.Source != null) return;
+
         try
         {
             if (dictionary.ContainsKey(key))
@@ -203,6 +205,8 @@ public static class ThemeHelper
 
     private static void UpdateBrushResource(ResourceDictionary dictionary, string key, Color color, bool addIfMissing)
     {
+        if (dictionary.Source != null) return;
+
         try
         {
             if (dictionary.TryGetValue(key, out var resource))

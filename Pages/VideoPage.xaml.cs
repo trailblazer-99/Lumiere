@@ -73,6 +73,8 @@ public sealed partial class VideoPage : Page
         }
         catch { }
 
+        Bindings.StopTracking();
+
         try
         {
             // Removed LocalVideoPlayer nulling
