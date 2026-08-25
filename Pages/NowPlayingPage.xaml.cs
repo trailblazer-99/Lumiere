@@ -24,14 +24,6 @@ public sealed partial class NowPlayingPage : Page
     public NowPlayingPage()
     {
         InitializeComponent();
-        try
-        {
-            var contentVisual = ElementCompositionPreview.GetElementVisual(ContentGrid);
-            contentVisual.Opacity = 0f;
-            var lyricsVisual = ElementCompositionPreview.GetElementVisual(LyricsCard);
-            lyricsVisual.Opacity = 0f;
-        }
-        catch { }
         
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
@@ -110,9 +102,6 @@ public sealed partial class NowPlayingPage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(ContentGrid, true);
-            ElementCompositionPreview.SetIsTranslationEnabled(LyricsCard, true);
-
             var contentVisual = ElementCompositionPreview.GetElementVisual(ContentGrid);
             var compositor = contentVisual.Compositor;
 
@@ -130,7 +119,7 @@ public sealed partial class NowPlayingPage : Page
             slideUp.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 40, 0));
             slideUp.InsertKeyFrame(1f, System.Numerics.Vector3.Zero, easing);
             slideUp.Duration = TimeSpan.FromMilliseconds(600);
-            contentVisual.StartAnimation("Translation", slideUp);
+            contentVisual.StartAnimation("Offset", slideUp);
 
             // Album art — subtle scale-in
             try
@@ -166,7 +155,7 @@ public sealed partial class NowPlayingPage : Page
                 lyricsSlide.DelayTime = TimeSpan.FromMilliseconds(300);
 
                 lyricsVisual.StartAnimation("Opacity", lyricsFade);
-                lyricsVisual.StartAnimation("Translation", lyricsSlide);
+                lyricsVisual.StartAnimation("Offset", lyricsSlide);
             }
             catch (System.Exception ex)
             {
@@ -374,7 +363,6 @@ public sealed partial class NowPlayingPage : Page
             {
                 ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
             }
-            Bindings.StopTracking();
         };
     }
 

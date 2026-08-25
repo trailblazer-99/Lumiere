@@ -30,12 +30,6 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.Opacity = 0f;
-        }
-        catch { }
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
 
@@ -66,20 +60,6 @@ public sealed partial class VideoPage : Page
         ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
         AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged;
-        
-        try
-        {
-            (this.Resources["AmbientAnimation"] as Microsoft.UI.Xaml.Media.Animation.Storyboard)?.Stop();
-        }
-        catch { }
-
-        Bindings.StopTracking();
-
-        try
-        {
-            // Removed LocalVideoPlayer nulling
-        }
-        catch { }
 
         // Event handlers and references detached; allow normal GC reclamation without UI thread stutter.
     }
@@ -140,15 +120,6 @@ public sealed partial class VideoPage : Page
     {
         try
         {
-            if (this.Resources["AmbientAnimation"] is Microsoft.UI.Xaml.Media.Animation.Storyboard ambientStory)
-            {
-                ambientStory.Begin();
-            }
-        }
-        catch { }
-
-        try
-        {
             if (AppServices.Settings.Current.ReduceMotion)
             {
                 try
@@ -161,7 +132,6 @@ public sealed partial class VideoPage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
             var visual = ElementCompositionPreview.GetElementVisual(PageContent);
             var compositor = visual.Compositor;
 
@@ -175,7 +145,7 @@ public sealed partial class VideoPage : Page
             slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
             slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
             slideAnimation.Duration = TimeSpan.FromMilliseconds(450);
-            visual.StartAnimation("Translation", slideAnimation);
+            visual.StartAnimation("Offset", slideAnimation);
         }
         catch (System.Exception ex)
         {

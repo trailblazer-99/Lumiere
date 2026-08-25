@@ -216,6 +216,8 @@ public sealed partial class MediaCard : UserControl
         catch { }
     }
 
+    private SpringVector3NaturalMotionAnimation? _springAnimation;
+
     private void AnimateScale(double targetScale)
     {
         if (AlbumArtBackground == null || PlayOverlay == null) return;
@@ -225,20 +227,28 @@ public sealed partial class MediaCard : UserControl
             var overlayVisual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
             if (artVisual == null || overlayVisual == null) return;
 
-            artVisual.CenterPoint = new System.Numerics.Vector3(
+            var centerPoint = new System.Numerics.Vector3(
                 (float)(AlbumArtBackground.ActualWidth / 2),
                 (float)(AlbumArtBackground.ActualHeight / 2),
                 0);
-            overlayVisual.CenterPoint = artVisual.CenterPoint;
+            artVisual.CenterPoint = centerPoint;
+            overlayVisual.CenterPoint = centerPoint;
 
             var compositor = artVisual.Compositor;
             if (compositor == null) return;
-            var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-            scaleAnimation.InsertKeyFrame(1.0f, new System.Numerics.Vector3((float)targetScale));
-            scaleAnimation.Duration = TimeSpan.FromMilliseconds(200);
 
-            artVisual.StartAnimation("Scale", scaleAnimation);
-            overlayVisual.StartAnimation("Scale", scaleAnimation);
+            if (_springAnimation == null)
+            {
+                _springAnimation = compositor.CreateSpringVector3Animation();
+                _springAnimation.Target = "Scale";
+                _springAnimation.DampingRatio = 0.65f;
+                _springAnimation.Period = TimeSpan.FromMilliseconds(160);
+            }
+
+            _springAnimation.FinalValue = new System.Numerics.Vector3((float)targetScale);
+
+            artVisual.StartAnimation("Scale", _springAnimation);
+            overlayVisual.StartAnimation("Scale", _springAnimation);
         }
         catch { }
     }

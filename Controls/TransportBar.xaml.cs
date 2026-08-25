@@ -347,21 +347,42 @@ public sealed partial class TransportBar : UserControl
             return;
         }
 
-        bool isLight = ActualTheme == ElementTheme.Light;
-        var tintColor = isLight
-            ? Microsoft.UI.Colors.White
-            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32);
-        var fallbackColor = isLight
-            ? Microsoft.UI.ColorHelper.FromArgb(235, 255, 255, 255)
-            : Microsoft.UI.ColorHelper.FromArgb(230, 32, 32, 32);
-
-        BarGrid.Background = new AcrylicBrush
+        if (_isFullscreenPresentation)
         {
-            TintColor = tintColor,
-            TintOpacity = _isFullscreenPresentation ? 0.72 : 0.78,
-            TintLuminosityOpacity = _isFullscreenPresentation ? 0.78 : 0.85,
-            FallbackColor = fallbackColor
-        };
+            // Fullscreen video presentation overlay mode: dark frosted translucent acrylic
+            BarGrid.Background = new AcrylicBrush
+            {
+                TintColor = Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 24),
+                TintOpacity = 0.72,
+                TintLuminosityOpacity = 0.78,
+                FallbackColor = Microsoft.UI.ColorHelper.FromArgb(230, 24, 24, 24)
+            };
+            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(32, 255, 255, 255));
+            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+        }
+        else
+        {
+            // Normal Windowed mode: render the exact same theme and material as the application
+            if (Application.Current.Resources.TryGetValue("LayerFillColorDefaultBrush", out var layerBrush) && layerBrush is Brush bg)
+            {
+                BarGrid.Background = bg;
+            }
+            else if (Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out var cardBrush) && cardBrush is Brush bgCard)
+            {
+                BarGrid.Background = bgCard;
+            }
+            else
+            {
+                bool isLight = ActualTheme == ElementTheme.Light;
+                BarGrid.Background = new SolidColorBrush(isLight ? Microsoft.UI.Colors.White : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32));
+            }
+
+            if (Application.Current.Resources.TryGetValue("DividerStrokeColorDefaultBrush", out var dividerBrush) && dividerBrush is Brush borderB)
+            {
+                BarGrid.BorderBrush = borderB;
+            }
+            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+        }
     }
 
     public void SetArtImageSource(ImageSource source)

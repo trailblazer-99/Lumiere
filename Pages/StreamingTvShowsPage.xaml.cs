@@ -13,23 +13,20 @@ namespace LumiereMediaPlayer.Pages
     {
         public StreamingTvShowsViewModel ViewModel { get; } = AppServices.StreamingTvShowsViewModel;
 
+        public Visibility GetDiscoverEmptyState(bool isLoading, bool hasError) =>
+            (ViewModel.TvShows != null && ViewModel.TvShows.Count == 0 && !isLoading && !hasError) ? Visibility.Visible : Visibility.Collapsed;
+
         public StreamingTvShowsPage()
         {
             this.InitializeComponent();
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
             this.DataContext = this;
-            try
-            {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                visual.Opacity = 0f;
-            }
-            catch { }
             this.Unloaded += OnUnloaded;
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             _heroTimer?.Stop();
-            Bindings.StopTracking();
         }
 
         private readonly WatchmodeService _watchmodeService = new();
@@ -151,32 +148,43 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            if (AppServices.Settings.Current.ReduceMotion)
+            try
             {
-                visual.Opacity = 1f;
-                visual.Offset = new System.Numerics.Vector3(0, 0, 0);
-                PageContent.Opacity = 1.0;
-                return;
+                if (AppServices.Settings.Current.ReduceMotion)
+                {
+                    try
+                    {
+                        var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                        v.Opacity = 1f;
+                    }
+                    catch { }
+                    PageContent.Opacity = 1.0;
+                    return;
+                }
+
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                var compositor = visual.Compositor;
+
+                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
+                fadeAnim.InsertKeyFrame(0f, 0f);
+                fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
+
+                var slideAnim = compositor.CreateVector3KeyFrameAnimation();
+                slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
+                slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                slideAnim.Duration = TimeSpan.FromMilliseconds(450);
+
+                visual.StartAnimation("Opacity", fadeAnim);
+                visual.StartAnimation("Offset", slideAnim);
             }
-
-            visual.Opacity = 0f;
-            visual.Offset = new System.Numerics.Vector3(0, 20, 0);
-
-            var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
-
-            var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            slideAnim.Duration = TimeSpan.FromMilliseconds(500);
-
-            visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Offset", slideAnim);
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to animate StreamingTvShowsPage entrance: {ex.Message}");
+                PageContent.Opacity = 1.0;
+            }
         }
 
         private void OnTvShowClicked(object sender, ItemClickEventArgs e)
@@ -212,30 +220,29 @@ namespace LumiereMediaPlayer.Pages
                 }
             }
 
-            LibraryGridView.ItemsSource = System.Linq.Enumerable.ToList(allItems);
+            var list = System.Linq.Enumerable.ToList(allItems);
+            LibraryGridView.ItemsSource = list;
+            if (LibraryEmptyStatePanel != null)
+            {
+                LibraryEmptyStatePanel.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
+
 
         private async void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             try
             {
-                try
+                var selectedItem = MainPivot.SelectedItem as PivotItem;
+                string header = selectedItem?.Header?.ToString() ?? string.Empty;
+                if (header == "Library")
                 {
-                    if (sender != e.OriginalSource) return;
-                    if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
-                    {
-                        string header = pivotItem.Header?.ToString() ?? string.Empty;
-                        if (header == "Library")
-                        {
-                            RefreshLibraryList();
-                        }
-                        else if (header == "Trending")
-                        {
-                            await LoadTrendingAsync();
-                        }
-                    }
+                    RefreshLibraryList();
                 }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+                else if (header == "Trending")
+                {
+                    await LoadTrendingAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -249,17 +256,19 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task LoadTrendingAsync()
         {
-            int retries = 0;
-            while ((TrendingGridView == null || TrendingHeroCarousel == null) && retries < 20)
-            {
-                await System.Threading.Tasks.Task.Delay(50);
-                retries++;
-            }
-            if (TrendingGridView == null || TrendingHeroCarousel == null) return;
-
             try
             {
+                int retries = 0;
+                while ((TrendingGridView == null || TrendingHeroCarousel == null) && retries < 20)
+                {
+                    await System.Threading.Tasks.Task.Delay(50);
+                    retries++;
+                }
+                if (TrendingGridView == null || TrendingHeroCarousel == null) return;
+
                 var popularTvShows = await _tmdbService.GetPopularTvShowsAsync(1);
+                if (popularTvShows == null || popularTvShows.Count == 0) return;
+
                 var heroItems = popularTvShows.Take(5).ToList();
                 var gridItems = popularTvShows.Skip(5).ToList();
                 
@@ -271,13 +280,79 @@ namespace LumiereMediaPlayer.Pages
                     _heroTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
                     _heroTimer.Tick += (s, e) =>
                     {
-                        if (TrendingHeroCarousel.Items.Count > 0)
+                        try
                         {
-                            TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % TrendingHeroCarousel.Items.Count;
+                            if (TrendingHeroCarousel != null && TrendingHeroCarousel.ItemsSource is System.Collections.IList list && list.Count > 0)
+                            {
+                                TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
+                            }
                         }
+                        catch { }
                     };
                 }
-                _heroTimer.Start();
+                CollapseInternalFlipViewButtons(TrendingHeroCarousel);
+                TrendingHeroCarousel.Loaded += (s, e) => CollapseInternalFlipViewButtons(TrendingHeroCarousel);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadTrendingAsync TV shows error: {ex.Message}");
+            }
+        }
+
+        private void CollapseInternalFlipViewButtons(DependencyObject? parent)
+        {
+            if (parent == null) return;
+            try
+            {
+                int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < count; i++)
+                {
+                    var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+                    if (child is Button btn && (btn.Name == "PreviousButtonHorizontal" || btn.Name == "NextButtonHorizontal" || btn.Name == "PreviousButtonVertical" || btn.Name == "NextButtonVertical"))
+                    {
+                        btn.Visibility = Visibility.Collapsed;
+                        btn.Opacity = 0;
+                        btn.Width = 0;
+                        btn.Height = 0;
+                        btn.MinWidth = 0;
+                        btn.MinHeight = 0;
+                        btn.MaxWidth = 0;
+                        btn.MaxHeight = 0;
+                        btn.IsEnabled = false;
+                        btn.IsHitTestVisible = false;
+                    }
+                    else
+                    {
+                        CollapseInternalFlipViewButtons(child);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void OnCarouselPrevClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel?.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    int prev = TrendingHeroCarousel.SelectedIndex - 1;
+                    if (prev < 0) prev = list.Count - 1;
+                    TrendingHeroCarousel.SelectedIndex = prev;
+                }
+            }
+            catch { }
+        }
+
+        private void OnCarouselNextClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel?.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    int next = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
+                    TrendingHeroCarousel.SelectedIndex = next;
+                }
             }
             catch { }
         }
@@ -286,7 +361,7 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), (tmdbItem.Id, ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tmdbItem.Id}", ViewModel.SelectedRegion));
             }
         }
 
@@ -294,7 +369,8 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
             {
-                string query = $"{tmdbItem.Title} {tmdbItem.DisplayYear} tv trailer";
+                string title = !string.IsNullOrEmpty(tmdbItem.DisplayTitle) ? tmdbItem.DisplayTitle : "TV Show";
+                string query = $"{title} {tmdbItem.DisplayYear} tv trailer";
                 string url = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}";
                 Frame.Navigate(typeof(StreamingYouTubePage), url);
             }
@@ -307,9 +383,14 @@ namespace LumiereMediaPlayer.Pages
                 if (fe.DataContext is WatchmodeTitle wm)
                     Frame.Navigate(typeof(StreamingDetailsPage), (wm.Id, ViewModel.SelectedRegion));
                 else if (fe.DataContext is TmdbMedia tm)
-                    Frame.Navigate(typeof(StreamingDetailsPage), (tm.Id, ViewModel.SelectedRegion));
-                else if (fe.DataContext is SavedStreamingItem saved && int.TryParse(saved.Id, out int wid))
-                    Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tm.Id}", ViewModel.SelectedRegion));
+                else if (fe.DataContext is SavedStreamingItem saved)
+                {
+                    if (saved.Id.StartsWith("tmdb_"))
+                        Frame.Navigate(typeof(StreamingDetailsPage), (saved.Id, ViewModel.SelectedRegion));
+                    else if (int.TryParse(saved.Id, out int wid))
+                        Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion));
+                }
             }
         }
 
@@ -323,7 +404,7 @@ namespace LumiereMediaPlayer.Pages
                 }
                 else if (fe.DataContext is TmdbMedia tm)
                 {
-                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = tm.Id.ToString(), Title = tm.DisplayTitle ?? "", Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = $"tmdb_tv-{tm.Id}", Title = tm.DisplayTitle ?? "", Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
                 }
             }
         }
@@ -362,7 +443,7 @@ namespace LumiereMediaPlayer.Pages
                 {
                     Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
                 }
-                Frame.Navigate(typeof(StreamingDetailsPage), (tmdbItem.Id, ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tmdbItem.Id}", ViewModel.SelectedRegion));
             }
         }
 
@@ -375,7 +456,11 @@ namespace LumiereMediaPlayer.Pages
                 {
                     Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
                 }
-                if (int.TryParse(item.Id, out int watchmodeId))
+                if (item.Id.StartsWith("tmdb_"))
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), (item.Id, ViewModel.SelectedRegion));
+                }
+                else if (int.TryParse(item.Id, out int watchmodeId))
                 {
                     Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion));
                 }

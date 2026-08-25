@@ -13,160 +13,12 @@
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
-    <Page.Resources>
-        <Storyboard x:Key="AmbientAnimation" RepeatBehavior="Forever" AutoReverse="True">
-            <!-- Swirl 1: Indigo / Purple -->
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl1Transform"
-                Storyboard.TargetProperty="TranslateX"
-                From="-60" To="140" Duration="0:0:18"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl1Transform"
-                Storyboard.TargetProperty="TranslateY"
-                From="-40" To="110" Duration="0:0:22"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl1Transform"
-                Storyboard.TargetProperty="ScaleX"
-                From="1.1" To="1.5" Duration="0:0:20"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl1Transform"
-                Storyboard.TargetProperty="ScaleY"
-                From="1.1" To="1.5" Duration="0:0:20"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl1Transform"
-                Storyboard.TargetProperty="Rotation"
-                From="0" To="180" Duration="0:0:32"
-                EnableDependentAnimation="False" />
-
-            <!-- Swirl 2: Cyan / Teal -->
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl2Transform"
-                Storyboard.TargetProperty="TranslateX"
-                From="80" To="-120" Duration="0:0:24"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl2Transform"
-                Storyboard.TargetProperty="TranslateY"
-                From="60" To="-100" Duration="0:0:19"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl2Transform"
-                Storyboard.TargetProperty="ScaleX"
-                From="1.2" To="1.6" Duration="0:0:25"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl2Transform"
-                Storyboard.TargetProperty="ScaleY"
-                From="1.2" To="1.6" Duration="0:0:25"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl2Transform"
-                Storyboard.TargetProperty="Rotation"
-                From="360" To="180" Duration="0:0:38"
-                EnableDependentAnimation="False" />
-
-            <!-- Swirl 3: Magenta / Amber -->
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl3Transform"
-                Storyboard.TargetProperty="TranslateX"
-                From="-90" To="90" Duration="0:0:28"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl3Transform"
-                Storyboard.TargetProperty="TranslateY"
-                From="80" To="-80" Duration="0:0:26"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl3Transform"
-                Storyboard.TargetProperty="ScaleX"
-                From="1.0" To="1.4" Duration="0:0:30"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl3Transform"
-                Storyboard.TargetProperty="ScaleY"
-                From="1.0" To="1.4" Duration="0:0:30"
-                EnableDependentAnimation="False" />
-            <DoubleAnimation
-                Storyboard.TargetName="Swirl3Transform"
-                Storyboard.TargetProperty="Rotation"
-                From="-90" To="90" Duration="0:0:42"
-                EnableDependentAnimation="False" />
-        </Storyboard>
-    </Page.Resources>
-
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" RowSpacing="16" Opacity="1">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-
-        <!-- Swirling Ambient Glow Backdrop for Video Page -->
-        <Grid x:Name="AmbientArtworkHost" Opacity="0.22" Grid.RowSpan="3" IsHitTestVisible="False">
-            <Ellipse
-                x:Name="Swirl1"
-                Width="750" Height="750"
-                HorizontalAlignment="Left" VerticalAlignment="Top"
-                Margin="-150,-150,0,0"
-                RenderTransformOrigin="0.5,0.5">
-                <Ellipse.Fill>
-                    <RadialGradientBrush Center="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
-                        <GradientStop Color="#6366F1" Offset="0.0"/>
-                        <GradientStop Color="#006366F1" Offset="1.0"/>
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-                <Ellipse.RenderTransform>
-                    <CompositeTransform x:Name="Swirl1Transform" TranslateX="0" TranslateY="0" ScaleX="1.2" ScaleY="1.2" Rotation="0" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-
-            <Ellipse
-                x:Name="Swirl2"
-                Width="850" Height="850"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                Margin="0,0,-150,-150"
-                RenderTransformOrigin="0.5,0.5">
-                <Ellipse.Fill>
-                    <RadialGradientBrush Center="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
-                        <GradientStop Color="#06B6D4" Offset="0.0"/>
-                        <GradientStop Color="#0006B6D4" Offset="1.0"/>
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-                <Ellipse.RenderTransform>
-                    <CompositeTransform x:Name="Swirl2Transform" TranslateX="0" TranslateY="0" ScaleX="1.4" ScaleY="1.4" Rotation="0" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-
-            <Ellipse
-                x:Name="Swirl3"
-                Width="800" Height="800"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                RenderTransformOrigin="0.5,0.5">
-                <Ellipse.Fill>
-                    <RadialGradientBrush Center="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
-                        <GradientStop Color="#A855F7" Offset="0.0"/>
-                        <GradientStop Color="#00A855F7" Offset="1.0"/>
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-                <Ellipse.RenderTransform>
-                    <CompositeTransform x:Name="Swirl3Transform" TranslateX="0" TranslateY="0" ScaleX="1.3" ScaleY="1.3" Rotation="0" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            
-            <!-- Vignette blending overlay -->
-            <Border>
-                <Border.Background>
-                    <RadialGradientBrush Center="0.5,0.5" RadiusX="0.75" RadiusY="0.75">
-                        <GradientStop Color="#00000000" Offset="0.0"/>
-                        <GradientStop Color="{ThemeResource SolidBackgroundFillColorBase}" Offset="1.0"/>
-                    </RadialGradientBrush>
-                </Border.Background>
-            </Border>
-        </Grid>
 
         <!-- Header -->
         <StackPanel x:Name="HeaderPanel" Spacing="6" Visibility="{x:Bind ViewModel.OverlayVisibility, Mode=OneWay}">
@@ -205,13 +57,12 @@
                     </VisualStateGroup>
                 </VisualStateManager.VisualStateGroups>
 
-                <StackPanel x:Name="TitlePanel" Grid.Column="0" Grid.Row="0">
-                    <TextBlock
-                        Style="{StaticResource PageTitleTextStyle}"
-                        Text="Videos" />
-                    <TextBlock
-                        Style="{StaticResource PageSubtitleTextStyle}"
-                        Text="Watch videos with native Windows playback controls." />
+                <StackPanel x:Name="TitlePanel" Grid.Column="0" Grid.Row="0" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE8B2;" FontSize="28" VerticalAlignment="Center"/>
+                        <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Videos" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Watch videos with native Windows playback controls." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
                 
                 <StackPanel x:Name="ControlsPanel" Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">

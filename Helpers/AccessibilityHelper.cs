@@ -51,19 +51,26 @@ public static class AccessibilityHelper
             return;
         }
 
-        ApplyResourceSettings(settings);
-
-        if (App.MainWindowContent is FrameworkElement root)
+        try
         {
-            EnsureSnapshotsRecursive(root);
-        }
+            ApplyResourceSettings(settings);
 
-        foreach (var pair in Snapshots)
+            bool needsTreeWalk = Math.Abs(settings.TextScale - 1.0) > 0.01 ||
+                                 settings.LargerClickTargets ||
+                                 settings.ScreenReaderOptimization ||
+                                 settings.AutoReadControls;
+
+            if (needsTreeWalk && App.MainWindowContent is FrameworkElement root)
+            {
+                ApplyToElementTree(root, settings);
+            }
+
+            ApplyCaptionsPreference(AppServices.Playback.MediaPlayer);
+        }
+        catch (Exception ex)
         {
-            ApplyElementSettings(pair.Key, settings);
+            System.Diagnostics.Debug.WriteLine($"[AccessibilityHelper] Apply error: {ex.Message}");
         }
-
-        ApplyCaptionsPreference(AppServices.Playback.MediaPlayer);
     }
 
     public static void ApplyCaptionsPreference(MediaPlayer player)
@@ -234,136 +241,85 @@ public static class AccessibilityHelper
 
     private static void ApplyElementSettings(FrameworkElement element, AppSettings settings)
     {
-        var snapshot = Snapshots.GetValue(element, CreateSnapshot);
+        if (element == null) return;
+        try
+        {
+            var snapshot = Snapshots.GetValue(element, CreateSnapshot);
 
-        if (element is TextBlock textBlock)
-        {
-            if (Math.Abs(settings.TextScale - 1.0) > 0.01)
-                textBlock.FontSize = snapshot.FontSize * settings.TextScale;
-            else
-                RestoreFontSize(textBlock, TextBlock.FontSizeProperty, snapshot);
-        }
-        else if (element is FontIcon fontIcon)
-        {
-            if (Math.Abs(settings.TextScale - 1.0) > 0.01)
-                fontIcon.FontSize = snapshot.FontSize * settings.TextScale;
-            else
-                RestoreFontSize(fontIcon, FontIcon.FontSizeProperty, snapshot);
-        }
-        else if (element is Control controlText)
-        {
-            if (element is TextBox || element is PasswordBox || element is RichEditBox)
+            if (element is TextBlock textBlock)
+            {
+                if (Math.Abs(settings.TextScale - 1.0) > 0.01)
+                    textBlock.FontSize = snapshot.FontSize * settings.TextScale;
+                else
+                    RestoreFontSize(textBlock, TextBlock.FontSizeProperty, snapshot);
+            }
+            else if (element is FontIcon fontIcon)
+            {
+                if (Math.Abs(settings.TextScale - 1.0) > 0.01)
+                    fontIcon.FontSize = snapshot.FontSize * settings.TextScale;
+                else
+                    RestoreFontSize(fontIcon, FontIcon.FontSizeProperty, snapshot);
+            }
+            else if (element is Control controlText && (element is TextBox || element is PasswordBox || element is RichEditBox))
             {
                 if (Math.Abs(settings.TextScale - 1.0) > 0.01)
                     controlText.FontSize = snapshot.FontSize * settings.TextScale;
                 else
                     RestoreFontSize(controlText, Control.FontSizeProperty, snapshot);
             }
-            else
+            else if (element is RichTextBlock richTextBlock)
             {
-                // Ensure any lingering scaled FontSize from previous logic is cleared
-                RestoreFontSize(controlText, Control.FontSizeProperty, snapshot);
-            }
-        }
-        else if (element is RichTextBlock richTextBlock)
-        {
-            if (Math.Abs(settings.TextScale - 1.0) > 0.01)
-                richTextBlock.FontSize = snapshot.FontSize * settings.TextScale;
-            else
-                RestoreFontSize(richTextBlock, RichTextBlock.FontSizeProperty, snapshot);
-        }
-
-        if (element is Control control)
-        {
-            if (settings.LargerClickTargets && 
-                ((element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase && element is not HyperlinkButton) ||
-                 element is ToggleSwitch ||
-                 element is Slider ||
-                 element is ComboBox ||
-                 element is TextBox ||
-                 element is PasswordBox ||
-                 element is RichEditBox ||
-                 element is NavigationViewItem))
-            {
-                if (double.IsNaN(control.Width))
-                    control.MinWidth = Math.Max(snapshot.MinWidth, 44);
-                if (double.IsNaN(control.Height))
-                    control.MinHeight = Math.Max(snapshot.MinHeight, 44);
-            }
-            else
-            {
-                if (snapshot.LocalMinWidth == null || snapshot.LocalMinWidth == DependencyProperty.UnsetValue)
-                    control.ClearValue(Control.MinWidthProperty);
+                if (Math.Abs(settings.TextScale - 1.0) > 0.01)
+                    richTextBlock.FontSize = snapshot.FontSize * settings.TextScale;
                 else
-                    control.SetValue(Control.MinWidthProperty, snapshot.LocalMinWidth);
-
-                if (snapshot.LocalMinHeight == null || snapshot.LocalMinHeight == DependencyProperty.UnsetValue)
-                    control.ClearValue(Control.MinHeightProperty);
-                else
-                    control.SetValue(Control.MinHeightProperty, snapshot.LocalMinHeight);
+                    RestoreFontSize(richTextBlock, RichTextBlock.FontSizeProperty, snapshot);
             }
 
-            if (settings.KeyboardNavigationHighlight)
+            if (element is Control control && settings.LargerClickTargets)
             {
-                control.UseSystemFocusVisuals = true;
-                control.FocusVisualPrimaryThickness = new Thickness(Math.Clamp(settings.FocusIndicatorThickness, 1, 5));
-                control.FocusVisualSecondaryThickness = new Thickness(Math.Max(0, Math.Clamp(settings.FocusIndicatorThickness, 1, 5) - 1));
+                if ((element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase && element is not HyperlinkButton) ||
+                     element is ToggleSwitch ||
+                     element is Slider ||
+                     element is ComboBox ||
+                     element is TextBox ||
+                     element is PasswordBox ||
+                     element is RichEditBox ||
+                     element is NavigationViewItem)
+                {
+                    if (double.IsNaN(control.Width) || control.Width < 44)
+                        control.MinWidth = Math.Max(snapshot.MinWidth, 44);
+                    if (double.IsNaN(control.Height) || control.Height < 44)
+                        control.MinHeight = Math.Max(snapshot.MinHeight, 44);
+                }
             }
-            else
+
+            if (settings.ScreenReaderOptimization)
             {
-                if (snapshot.LocalUseSystemFocusVisuals == null || snapshot.LocalUseSystemFocusVisuals == DependencyProperty.UnsetValue)
-                    control.ClearValue(Control.UseSystemFocusVisualsProperty);
-                else
-                    control.SetValue(Control.UseSystemFocusVisualsProperty, snapshot.LocalUseSystemFocusVisuals);
-                
-                if (snapshot.LocalFocusVisualPrimaryThickness == null || snapshot.LocalFocusVisualPrimaryThickness == DependencyProperty.UnsetValue)
-                    control.ClearValue(Control.FocusVisualPrimaryThicknessProperty);
-                else
-                    control.SetValue(Control.FocusVisualPrimaryThicknessProperty, snapshot.LocalFocusVisualPrimaryThickness);
+                ImproveAutomationName(element);
+            }
 
-                if (snapshot.LocalFocusVisualSecondaryThickness == null || snapshot.LocalFocusVisualSecondaryThickness == DependencyProperty.UnsetValue)
-                    control.ClearValue(Control.FocusVisualSecondaryThicknessProperty);
-                else
-                    control.SetValue(Control.FocusVisualSecondaryThicknessProperty, snapshot.LocalFocusVisualSecondaryThickness);
+            if (settings.AutoReadControls && !AutoReadHandlers.TryGetValue(element, out _))
+            {
+                element.GotFocus += OnAutoReadElementFocused;
+                AutoReadHandlers.Add(element, new AutoReadHandlerMarker());
             }
         }
-
-        if (element is ItemsControl itemsControl)
+        catch (Exception ex)
         {
-            itemsControl.ItemContainerTransitions = settings.ReduceMotion ? new TransitionCollection() : snapshot.ItemContainerTransitions;
-        }
-
-        if (element is ListViewBase listViewBase)
-        {
-            listViewBase.ContainerContentChanging -= OnContainerContentChanging;
-            listViewBase.ContainerContentChanging += OnContainerContentChanging;
-        }
-        else if (element is Microsoft.UI.Xaml.Controls.ItemsRepeater itemsRepeater)
-        {
-            itemsRepeater.ElementPrepared -= OnElementPrepared;
-            itemsRepeater.ElementPrepared += OnElementPrepared;
-        }
-
-        element.Transitions = settings.ReduceMotion ? new TransitionCollection() : snapshot.Transitions;
-
-        if (settings.ScreenReaderOptimization)
-        {
-            ImproveAutomationName(element);
-        }
-
-        if (settings.AutoReadControls && !AutoReadHandlers.TryGetValue(element, out _))
-        {
-            element.GotFocus += OnAutoReadElementFocused;
-            AutoReadHandlers.Add(element, new AutoReadHandlerMarker());
+            System.Diagnostics.Debug.WriteLine($"[ApplyElementSettings] Error: {ex.Message}");
         }
     }
 
     private static void RestoreFontSize(DependencyObject obj, DependencyProperty property, ElementSnapshot snapshot)
     {
-        if (snapshot.LocalFontSize == null || snapshot.LocalFontSize == DependencyProperty.UnsetValue)
-            obj.ClearValue(property);
-        else
-            obj.SetValue(property, snapshot.LocalFontSize);
+        try
+        {
+            if (snapshot.LocalFontSize == null || snapshot.LocalFontSize == DependencyProperty.UnsetValue)
+                obj.ClearValue(property);
+            else
+                obj.SetValue(property, snapshot.LocalFontSize);
+        }
+        catch { }
     }
 
     private static void OnContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)

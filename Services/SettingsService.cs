@@ -169,7 +169,7 @@ public sealed class SettingsService
             CompactDensityMode = ReadBool(settingsValues, CompactDensityModeKey, false),
             ShowAlbumArtInTransportBar = ReadBool(settingsValues, ShowAlbumArtInTransportBarKey, true),
             AnimatedTransitions = ReadBool(settingsValues, AnimatedTransitionsKey, true),
-            AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, true),
+            AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
 
             // Controls & Interface
             ShowShuffleButton = ReadBool(settingsValues, ShowShuffleButtonKey, true),

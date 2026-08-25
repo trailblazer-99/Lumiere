@@ -15,22 +15,14 @@ namespace LumiereMediaPlayer.Pages
         public StreamingMusicViewModel ViewModel { get; } = AppServices.StreamingMusicViewModel;
         private ContentDialog? _currentDialog;
 
+        public Visibility GetDiscoverEmptyState(bool isLoading) =>
+            (ViewModel.Tracks != null && ViewModel.Tracks.Count == 0 && !isLoading) ? Visibility.Visible : Visibility.Collapsed;
+
         public StreamingMusicPage()
         {
             this.InitializeComponent();
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
             this.DataContext = this;
-            try
-            {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                visual.Opacity = 0f;
-            }
-            catch { }
-            this.Unloaded += OnUnloaded;
-        }
-
-        private void OnUnloaded(object sender, RoutedEventArgs e)
-        {
-            Bindings.StopTracking();
         }
 
         protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -54,48 +46,75 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            if (AppServices.Settings.Current.ReduceMotion)
+            try
             {
-                visual.Opacity = 1f;
-                visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                if (AppServices.Settings.Current.ReduceMotion)
+                {
+                    try
+                    {
+                        var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                        v.Opacity = 1f;
+                    }
+                    catch { }
+                    PageContent.Opacity = 1.0;
+                    return;
+                }
+
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                var compositor = visual.Compositor;
+
+                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
+                fadeAnim.InsertKeyFrame(0f, 0f);
+                fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
+
+                var slideAnim = compositor.CreateVector3KeyFrameAnimation();
+                slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
+                slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                slideAnim.Duration = TimeSpan.FromMilliseconds(450);
+
+                visual.StartAnimation("Opacity", fadeAnim);
+                visual.StartAnimation("Offset", slideAnim);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to animate StreamingMusicPage entrance: {ex.Message}");
                 PageContent.Opacity = 1.0;
-                return;
             }
-
-            visual.Opacity = 0f;
-            visual.Offset = new System.Numerics.Vector3(0, 20, 0);
-
-            var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
-
-            var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            slideAnim.Duration = TimeSpan.FromMilliseconds(500);
-
-            visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Offset", slideAnim);
         }
 
-        private void OnSearchKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+        private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
-            if (e.Key == Windows.System.VirtualKey.Enter)
+            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
             {
-                ViewModel.SearchQuery = SearchBox.Text;
-                ViewModel.PerformSearchCommand.Execute(SearchBox.Text);
+                ViewModel.SearchQuery = sender.Text;
             }
         }
 
-        private void OnSearchButtonClick(object sender, RoutedEventArgs e)
+        private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            ViewModel.SearchQuery = SearchBox.Text;
-            ViewModel.PerformSearchCommand.Execute(SearchBox.Text);
+            string query = args.QueryText;
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                ViewModel.SearchQuery = query;
+                ViewModel.PerformSearchCommand.Execute(query);
+            }
+            else
+            {
+                ViewModel.PerformSearchCommand.Execute("Pop");
+            }
         }
+
+        private void OnGenreSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(ViewModel.SearchQuery))
+            {
+                ViewModel.PerformSearchCommand.Execute(ViewModel.SearchQuery);
+            }
+        }
+
 
         private void Card_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
@@ -390,8 +409,13 @@ namespace LumiereMediaPlayer.Pages
                     {
                         var libraryItems = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Where(AppServices.StreamingLibrary.SavedItems, i => i.Type == Services.Streaming.StreamingItemType.Music));
                         LibraryGridView.ItemsSource = libraryItems;
+                        if (LibraryEmptyStatePanel != null)
+                        {
+                            LibraryEmptyStatePanel.Visibility = libraryItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                        }
                     }
                 }
+
                 else
                 {
                     AppServices.StreamingLibrary.AddItem(new Services.Streaming.SavedStreamingItem 
@@ -597,13 +621,18 @@ namespace LumiereMediaPlayer.Pages
 
         private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender != e.OriginalSource) return;
-            if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem && pivotItem.Header.ToString() == "Library")
+            var selectedItem = MainPivot.SelectedItem as PivotItem;
+            if (selectedItem?.Header?.ToString() == "Library")
             {
                 var libraryItems = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Where(AppServices.StreamingLibrary.SavedItems, i => i.Type == Services.Streaming.StreamingItemType.Music));
                 LibraryGridView.ItemsSource = libraryItems;
+                if (LibraryEmptyStatePanel != null)
+                {
+                    LibraryEmptyStatePanel.Visibility = libraryItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
             }
         }
+
 
         private async void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e)
         {

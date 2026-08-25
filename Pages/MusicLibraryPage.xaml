@@ -63,13 +63,12 @@
                 </VisualStateGroup>
             </VisualStateManager.VisualStateGroups>
 
-            <StackPanel x:Name="TitlePanel" Grid.Column="0" Grid.Row="0" Spacing="6">
-                <TextBlock
-                    Style="{StaticResource PageTitleTextStyle}"
-                    Text="Music library" />
-                <TextBlock
-                    Style="{StaticResource PageSubtitleTextStyle}"
-                    Text="Browse all tracks in your collection." />
+            <StackPanel x:Name="TitlePanel" Grid.Column="0" Grid.Row="0" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE8D6;" FontSize="28" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Music library" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Browse all tracks in your collection." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
             
             <Grid x:Name="ControlsGrid" Grid.Column="1" Grid.Row="0" VerticalAlignment="Center">

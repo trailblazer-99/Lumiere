@@ -44,20 +44,8 @@ namespace LumiereMediaPlayer.Services.Streaming
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
             
-            try
-            {
-                var results = await FetchTitleListAsync(servicePath, url);
-                if (results != null)
-                {
-                    return results;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Watchmode ListMovies failed: {ex.Message}");
-            }
-
-            return new List<WatchmodeTitle>();
+            var results = await FetchTitleListAsync(servicePath, url);
+            return results ?? new List<WatchmodeTitle>();
         }
 
         public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "", string networkIds = "")
@@ -72,20 +60,8 @@ namespace LumiereMediaPlayer.Services.Streaming
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
             
-            try
-            {
-                var results = await FetchTitleListAsync(servicePath, url);
-                if (results != null)
-                {
-                    return results;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Watchmode ListTvShows failed: {ex.Message}");
-            }
-
-            return new List<WatchmodeTitle>();
+            var results = await FetchTitleListAsync(servicePath, url);
+            return results ?? new List<WatchmodeTitle>();
         }
 
         private (int tmdbId, string? mediaType) ResolveTmdbId(int id)
@@ -276,26 +252,111 @@ namespace LumiereMediaPlayer.Services.Streaming
         }
 
 
-        public async Task<int> ResolveWatchmodeIdAsync(string titleId)
+        public async Task<int> ResolveWatchmodeIdAsync(string titleId, string? titleHint = null)
         {
-            if (titleId.StartsWith("tmdb_"))
+            if (string.IsNullOrWhiteSpace(titleId)) return -1;
+            if (int.TryParse(titleId, out int numericId) && !titleId.StartsWith("tmdb_")) return numericId;
+
+            int parsedTmdbId = -1;
+            string mediaType = "";
+
+            if (titleId.StartsWith("tmdb_tv-"))
             {
-                var idServicePath = $"watchmode/title/{titleId}/details/";
-                var idUrl = $"{BaseUrl}/title/{titleId}/details/?apiKey={ApiKey}";
+                int.TryParse(titleId.Substring(8), out parsedTmdbId);
+                mediaType = "tv";
+            }
+            else if (titleId.StartsWith("tmdb_movie-"))
+            {
+                int.TryParse(titleId.Substring(11), out parsedTmdbId);
+                mediaType = "movie";
+            }
+            else if (titleId.StartsWith("tmdb_"))
+            {
+                int.TryParse(titleId.Substring(5), out parsedTmdbId);
+            }
+
+            if (parsedTmdbId > 0)
+            {
+                // 1. Try Watchmode Search by tmdb_id
                 try
                 {
-                    var idResponse = await HttpHelper.GetStringAsync(idServicePath, idUrl);
-                    var idDoc = System.Text.Json.JsonDocument.Parse(idResponse);
-                    if (idDoc.RootElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    string searchTypeParam = mediaType == "tv" ? "&types=tv_series,tv" : (mediaType == "movie" ? "&types=movie" : "");
+                    var searchServicePath = $"watchmode/search/?search_field=tmdb_id&search_value={parsedTmdbId}{searchTypeParam}";
+                    var searchUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field=tmdb_id&search_value={parsedTmdbId}{searchTypeParam}";
+
+                    var response = await HttpHelper.GetStringAsync(searchServicePath, searchUrl);
+                    var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
+                    if (searchResponse?.TitleResults != null && searchResponse.TitleResults.Count > 0)
                     {
-                        return idProp.GetInt32();
+                        var match = searchResponse.TitleResults.FirstOrDefault(r =>
+                            (mediaType == "tv" && (r.Type == "tv_series" || r.Type == "tv" || r.Type == "tv_miniseries")) ||
+                            (mediaType == "movie" && r.Type == "movie") ||
+                            string.IsNullOrEmpty(mediaType)) ?? searchResponse.TitleResults[0];
+
+                        if (match.Id > 0)
+                        {
+                            IdMap[match.Id] = (match.ImdbId, match.TmdbId?.ToString(), match.Type);
+                            return match.Id;
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Watchmode ID Resolution Error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Watchmode TMDB Search Error: {ex.Message}");
+                }
+
+                // 2. Try fetching IMDB ID from TMDB external_ids and searching Watchmode by imdb_id
+                try
+                {
+                    string endpoint = mediaType == "tv" ? $"tv/{parsedTmdbId}/external_ids" : $"movie/{parsedTmdbId}/external_ids";
+                    var externalIds = await QueryTmdbAsync<TmdbExternalIds>(endpoint);
+                    if (externalIds != null && !string.IsNullOrEmpty(externalIds.ImdbId))
+                    {
+                        var imdbServicePath = $"watchmode/search/?search_field=imdb_id&search_value={externalIds.ImdbId}";
+                        var imdbUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field=imdb_id&search_value={externalIds.ImdbId}";
+
+                        var imdbResponse = await HttpHelper.GetStringAsync(imdbServicePath, imdbUrl);
+                        var imdbSearchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(imdbResponse, _jsonOptions);
+                        if (imdbSearchResponse?.TitleResults != null && imdbSearchResponse.TitleResults.Count > 0)
+                        {
+                            var match = imdbSearchResponse.TitleResults[0];
+                            if (match.Id > 0)
+                            {
+                                IdMap[match.Id] = (match.ImdbId, match.TmdbId?.ToString(), match.Type);
+                                return match.Id;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode IMDB Search Error: {ex.Message}");
                 }
             }
+
+            // 3. Fallback: Search by title hint if available
+            if (!string.IsNullOrWhiteSpace(titleHint))
+            {
+                try
+                {
+                    string searchTypeParam = mediaType == "tv" ? "&types=tv_series,tv" : (mediaType == "movie" ? "&types=movie" : "");
+                    var nameResults = await SearchAsync(titleHint, mediaType == "tv" ? "tv_series" : (mediaType == "movie" ? "movie" : ""));
+                    if (nameResults != null && nameResults.Count > 0)
+                    {
+                        var exact = nameResults.FirstOrDefault(n => string.Equals(n.Title, titleHint, StringComparison.OrdinalIgnoreCase)) ?? nameResults[0];
+                        if (exact.Id > 0)
+                        {
+                            IdMap[exact.Id] = (exact.ImdbId, exact.TmdbId?.ToString(), exact.Type);
+                            return exact.Id;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode Name Search Error: {ex.Message}");
+                }
+            }
+
             return -1;
         }
 
@@ -307,24 +368,25 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
             if (string.IsNullOrEmpty(region)) region = "us";
 
-            int watchmodeIdToUse = await ResolveWatchmodeIdAsync(titleId);
+            int watchmodeIdToUse = await ResolveWatchmodeIdAsync(titleId, title);
 
-            string targetIdForSources = watchmodeIdToUse > 0 ? watchmodeIdToUse.ToString() : titleId;
-
-            var servicePath = $"watchmode/title/{targetIdForSources}/sources/?region={region}";
-            var url = $"{BaseUrl}/title/{targetIdForSources}/sources/?apiKey={ApiKey}&region={region}";
-            try
+            if (watchmodeIdToUse > 0)
             {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                var sources = JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions);
-                if (sources != null && sources.Count > 0)
+                var servicePath = $"watchmode/title/{watchmodeIdToUse}/sources/?region={region}";
+                var url = $"{BaseUrl}/title/{watchmodeIdToUse}/sources/?apiKey={ApiKey}&region={region}";
+                try
                 {
-                    return sources;
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    var sources = JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions);
+                    if (sources != null && sources.Count > 0)
+                    {
+                        return sources;
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetSources Error: {ex.Message}");
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetSources Error: {ex.Message}");
+                }
             }
 
             // Fallback directly to TMDB API for watch providers when Watchmode is empty or unavailable

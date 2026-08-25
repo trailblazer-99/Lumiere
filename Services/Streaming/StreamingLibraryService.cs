@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace LumiereMediaPlayer.Services.Streaming
 {
@@ -12,14 +13,14 @@ namespace LumiereMediaPlayer.Services.Streaming
         TvShow
     }
 
-    public class SavedStreamingItem
+    public partial class SavedStreamingItem : ObservableObject
     {
-        public string Id { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Subtitle { get; set; } = string.Empty; // Artist or Year
-        public string? PosterUrl { get; set; }
-        public StreamingItemType Type { get; set; }
-        public string Watchlist { get; set; } = "Watchlist";
+        [ObservableProperty] public partial string Id { get; set; } = string.Empty;
+        [ObservableProperty] public partial string Title { get; set; } = string.Empty;
+        [ObservableProperty] public partial string Subtitle { get; set; } = string.Empty; // Artist or Year
+        [ObservableProperty] public partial string? PosterUrl { get; set; }
+        [ObservableProperty] public partial StreamingItemType Type { get; set; }
+        [ObservableProperty] public partial string Watchlist { get; set; } = "Watchlist";
     }
 
     public class StreamingLibraryService

@@ -70,7 +70,7 @@ public sealed class AppSettings
     public bool CompactDensityMode { get; set; } = false;
     public bool ShowAlbumArtInTransportBar { get; set; } = true;
     public bool AnimatedTransitions { get; set; } = true;
-    public bool AlwaysShowTransportBar { get; set; } = true;
+    public bool AlwaysShowTransportBar { get; set; } = false;
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

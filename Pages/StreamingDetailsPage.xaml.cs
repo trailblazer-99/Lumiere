@@ -48,6 +48,28 @@ namespace LumiereMediaPlayer.Pages
         {
         }
 
+        private void OnBackButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (Frame.CanGoBack)
+            {
+                Frame.GoBack();
+            }
+            else
+            {
+                // Hierarchical fallback: if no back stack, navigate to Movies or TV Shows based on title type
+                if (string.Equals(CurrentTitleType, "tv_series", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(CurrentTitleType, "tv_miniseries", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(CurrentTitleType, "tv", StringComparison.OrdinalIgnoreCase))
+                {
+                    Frame.Navigate(typeof(StreamingTvShowsPage));
+                }
+                else
+                {
+                    Frame.Navigate(typeof(StreamingMoviesPage));
+                }
+            }
+        }
+
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             try
@@ -65,18 +87,42 @@ namespace LumiereMediaPlayer.Pages
                     if (e.Parameter is int id)
                     {
                         _watchmodeId = id;
-                        _selectedRegion = "";
+                        _selectedRegion = string.Empty;
+                        _titleIdFallback = string.Empty;
                     }
                     else if (e.Parameter is (int tupleId, string region))
                     {
                         _watchmodeId = tupleId;
                         _selectedRegion = region;
+                        _titleIdFallback = string.Empty;
+                    }
+                    else if (e.Parameter is (string tupleStr, string tupleReg))
+                    {
+                        if (int.TryParse(tupleStr, out int parsedId) && !tupleStr.StartsWith("tmdb_"))
+                        {
+                            _watchmodeId = parsedId;
+                            _titleIdFallback = string.Empty;
+                        }
+                        else
+                        {
+                            _titleIdFallback = tupleStr;
+                            _watchmodeId = -1;
+                        }
+                        _selectedRegion = tupleReg;
                     }
                     else if (e.Parameter is string tmdbStr)
                     {
-                        _titleIdFallback = tmdbStr;
-                        _watchmodeId = -1;
-                        _selectedRegion = "";
+                        if (int.TryParse(tmdbStr, out int parsedId) && !tmdbStr.StartsWith("tmdb_"))
+                        {
+                            _watchmodeId = parsedId;
+                            _titleIdFallback = string.Empty;
+                        }
+                        else
+                        {
+                            _titleIdFallback = tmdbStr;
+                            _watchmodeId = -1;
+                        }
+                        _selectedRegion = string.Empty;
                     }
 
                     if (string.IsNullOrEmpty(_selectedRegion))
@@ -121,15 +167,37 @@ namespace LumiereMediaPlayer.Pages
             }
             else if (!string.IsNullOrEmpty(_titleIdFallback))
             {
-                detailsTask = _watchmodeService.GetDetailsAsync(_titleIdFallback);
-                sourcesTask = _watchmodeService.GetSourcesAsync(_titleIdFallback, _selectedRegion);
-                // Other endpoints require a real watchmode ID, so return empty for them
-                castTask = Task.FromResult(new List<WatchmodeCastCrew>());
-                seasonsTask = Task.FromResult(new List<WatchmodeSeason>());
-                episodesTask = Task.FromResult(new List<WatchmodeEpisode>());
-                similarTask = Task.FromResult(new List<WatchmodeTitle>());
-                scoresTask = Task.FromResult<WatchmodeScores?>(null);
-                releasesTask = Task.FromResult(new List<WatchmodeRelease>());
+                var fetchedDetails = await _watchmodeService.GetDetailsAsync(_titleIdFallback);
+                if (fetchedDetails == null)
+                {
+                    TitleText.Text = "Failed to load details.";
+                    return;
+                }
+
+                _details = fetchedDetails;
+                detailsTask = Task.FromResult<WatchmodeDetails?>(_details);
+
+                if (_details.Id > 0 && !_titleIdFallback.StartsWith("tmdb_"))
+                {
+                    _watchmodeId = _details.Id;
+                    castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
+                    seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
+                    episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
+                    sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion, _details.Title ?? string.Empty);
+                    similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
+                    scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
+                    releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
+                }
+                else
+                {
+                    sourcesTask = _watchmodeService.GetSourcesAsync(_titleIdFallback, _selectedRegion, _details.Title ?? string.Empty);
+                    castTask = Task.FromResult(new List<WatchmodeCastCrew>());
+                    seasonsTask = Task.FromResult(new List<WatchmodeSeason>());
+                    episodesTask = Task.FromResult(new List<WatchmodeEpisode>());
+                    similarTask = Task.FromResult(new List<WatchmodeTitle>());
+                    scoresTask = Task.FromResult<WatchmodeScores?>(null);
+                    releasesTask = Task.FromResult(new List<WatchmodeRelease>());
+                }
             }
             else
             {
@@ -1465,25 +1533,43 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            // Slide in animation
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
+            try
+            {
+                if (AppServices.Settings.Current.ReduceMotion)
+                {
+                    try
+                    {
+                        var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                        v.Opacity = 1f;
+                    }
+                    catch { }
+                    PageContent.Opacity = 1.0;
+                    return;
+                }
 
-            visual.Opacity = 0f;
-            visual.Offset = new System.Numerics.Vector3(0, 30, 0);
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
+                var compositor = visual.Compositor;
 
-            var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
+                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
+                fadeAnim.InsertKeyFrame(0f, 0f);
+                fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
 
-            var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            slideAnim.Duration = TimeSpan.FromMilliseconds(500);
+                var slideAnim = compositor.CreateVector3KeyFrameAnimation();
+                slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
+                slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
+                slideAnim.Duration = TimeSpan.FromMilliseconds(450);
 
-            visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Offset", slideAnim);
+                visual.StartAnimation("Opacity", fadeAnim);
+                visual.StartAnimation("Offset", slideAnim);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to animate StreamingDetailsPage entrance: {ex.Message}");
+                PageContent.Opacity = 1.0;
+            }
         }
 
         private async void RegionDetailComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

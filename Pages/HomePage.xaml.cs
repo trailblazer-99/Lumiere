@@ -15,13 +15,7 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
-        
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.Opacity = 0f;
-        }
-        catch { }
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
 
         SetGreeting();
         UpdateOpenFileButtonVisibility();
@@ -97,7 +91,6 @@ public sealed partial class HomePage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
             var visual = ElementCompositionPreview.GetElementVisual(PageContent);
             var compositor = visual.Compositor;
 
@@ -113,7 +106,7 @@ public sealed partial class HomePage : Page
             slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 30, 0));
             slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
             slideAnimation.Duration = TimeSpan.FromMilliseconds(500);
-            visual.StartAnimation("Translation", slideAnimation);
+            visual.StartAnimation("Offset", slideAnimation);
 
             // Staggered section animations
             AnimateSectionEntrance(RecentSection, 120);
@@ -136,7 +129,6 @@ public sealed partial class HomePage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(element, true);
             var visual = ElementCompositionPreview.GetElementVisual(element);
             var compositor = visual.Compositor;
 
@@ -153,7 +145,7 @@ public sealed partial class HomePage : Page
             slideAnimation.DelayTime = TimeSpan.FromMilliseconds(delayMs);
 
             visual.StartAnimation("Opacity", fadeAnimation);
-            visual.StartAnimation("Translation", slideAnimation);
+            visual.StartAnimation("Offset", slideAnimation);
         }
         catch (System.Exception ex)
         {

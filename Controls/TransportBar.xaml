@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:animatedvisuals="using:LumiereMediaPlayer.Controls"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers"
     mc:Ignorable="d"
     Height="{StaticResource TransportBarHeight}">
 
@@ -142,6 +143,8 @@
                 <Button
                     AutomationProperties.Name="Shuffle"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Shuffle">
                     <FontIcon FontSize="14" Glyph="&#xE8B1;" />
                 </Button>
@@ -149,6 +152,8 @@
                     AutomationProperties.Name="Skip back 10 seconds"
                     Click="OnSkipBackClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip back 10 seconds">
                     <FontIcon FontSize="16" Glyph="&#xED3C;" />
                     <Button.KeyboardAccelerators>
@@ -159,6 +164,8 @@
                     AutomationProperties.Name="Previous"
                     Click="OnPreviousClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Previous">
                     <FontIcon FontSize="16" Glyph="&#xE892;" />
                 </Button>
@@ -172,6 +179,8 @@
                     Background="#12B76A"
                     BorderThickness="0"
                     CornerRadius="6"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Replay from beginning"
                     VerticalAlignment="Center">
                     <Button.Resources>
@@ -192,6 +201,9 @@
                     AutomationProperties.Name="Play"
                     ToolTipService.ToolTip="Play"
                     Style="{StaticResource CleanPlayPauseButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
+                    helpers:SpringAnimationHelper.PressScale="0.92"
                     Click="OnPlayPauseClick">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                         <!-- Animated Visual Player for background dynamic glow -->
@@ -227,6 +239,8 @@
                     Background="#D92D20"
                     BorderThickness="0"
                     CornerRadius="6"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Stop"
                     VerticalAlignment="Center">
                     <Button.Resources>
@@ -242,6 +256,8 @@
                     AutomationProperties.Name="Next"
                     Click="OnNextClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Next">
                     <FontIcon FontSize="16" Glyph="&#xE893;" />
                 </Button>
@@ -249,6 +265,8 @@
                     AutomationProperties.Name="Skip forward 30 seconds"
                     Click="OnSkipForwardClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip forward 30 seconds">
                     <FontIcon FontSize="16" Glyph="&#xED3D;" />
                     <Button.KeyboardAccelerators>
@@ -258,6 +276,8 @@
                 <Button
                     AutomationProperties.Name="Repeat"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Repeat">
                     <FontIcon FontSize="14" Glyph="&#xE8EE;" />
                 </Button>
@@ -275,6 +295,8 @@
                     x:Name="AudioButton"
                     AutomationProperties.Name="Audio track"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Audio track">
                     <FontIcon FontSize="14" Glyph="&#xE8D6;" />
                     <Button.Flyout>
@@ -285,6 +307,8 @@
                 <Button
                     AutomationProperties.Name="Subtitles"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Subtitles">
                     <FontIcon FontSize="14" Glyph="&#xED1E;" />
                     <Button.Flyout>
@@ -297,6 +321,8 @@
                     x:Name="VolumeButton"
                     AutomationProperties.Name="Volume"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Volume">
                     <FontIcon x:Name="VolumeIcon" FontSize="14" Glyph="&#xE995;" />
                     <Button.Flyout>
@@ -346,6 +372,8 @@
                     AutomationProperties.Name="Fullscreen"
                     Click="OnFullscreenClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Fullscreen">
                     <FontIcon FontSize="14" Glyph="&#xE740;" />
                 </Button>
@@ -356,6 +384,8 @@
                     AutomationProperties.Name="Picture in Picture"
                     Click="OnPipClick"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Picture in Picture">
                     <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="14" Glyph="&#xE93A;" />
                 </Button>
@@ -365,6 +395,8 @@
                     x:Name="MoreButton"
                     AutomationProperties.Name="More options"
                     Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="More options">
                     <FontIcon FontSize="14" Glyph="&#xE712;" />
                     <Button.Flyout>

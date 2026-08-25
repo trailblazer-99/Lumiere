@@ -604,19 +604,33 @@ namespace LumiereMediaPlayer.Models.Streaming
                     }
                     else if (providerName.Contains("disney", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.disneyplus.com"; // Disney doesn't support direct search URL params well
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.disneyplus.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.disneyplus.com";
                     }
                     else if (providerName.Contains("max", StringComparison.OrdinalIgnoreCase) || providerName.Contains("hbo", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.max.com"; 
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://play.max.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://play.max.com";
                     }
                     else if (providerName.Contains("paramount", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.paramountplus.com";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.paramountplus.com/search/?q={Uri.EscapeDataString(title)}"
+                            : "https://www.paramountplus.com";
                     }
                     else if (providerName.Contains("hulu", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = "https://www.hulu.com";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.hulu.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.hulu.com";
+                    }
+                    else if (providerName.Contains("peacock", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.peacocktv.com/watch/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.peacocktv.com";
                     }
                     else if (providerName.Contains("youtube", StringComparison.OrdinalIgnoreCase))
                     {
@@ -916,6 +930,18 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("popularity")]
         public double Popularity { get; set; }
+    }
+
+    public class TmdbExternalIds
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("imdb_id")]
+        public string? ImdbId { get; set; }
+
+        [JsonPropertyName("tvdb_id")]
+        public int? TvdbId { get; set; }
     }
 }
 

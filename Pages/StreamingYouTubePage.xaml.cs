@@ -17,6 +17,18 @@ namespace LumiereMediaPlayer.Pages
             _ = InitializeYouTubeWebViewAsync();
         }
 
+        private void OnBackButtonClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            if (Frame.CanGoBack)
+            {
+                Frame.GoBack();
+            }
+            else
+            {
+                Frame.Navigate(typeof(StreamingMoviesPage));
+            }
+        }
+
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);

@@ -13,19 +13,7 @@ public sealed partial class PlaylistsPage : Page
     public PlaylistsPage()
     {
         InitializeComponent();
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.Opacity = 0f;
-        }
-        catch { }
-
-        this.Unloaded += OnUnloaded;
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        Bindings.StopTracking();
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
     }
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -44,7 +32,6 @@ public sealed partial class PlaylistsPage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
             var visual = ElementCompositionPreview.GetElementVisual(PageContent);
             var compositor = visual.Compositor;
 
@@ -58,7 +45,7 @@ public sealed partial class PlaylistsPage : Page
             slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
             slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
             slideAnimation.Duration = TimeSpan.FromMilliseconds(450);
-            visual.StartAnimation("Translation", slideAnimation);
+            visual.StartAnimation("Offset", slideAnimation);
         }
         catch (System.Exception ex)
         {

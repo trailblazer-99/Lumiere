@@ -74,6 +74,8 @@
                         Grid.Row="0"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
+                        helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                        helpers:SpringAnimationHelper.HoverScale="1.04"
                         Click="OnOpenFileClick">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="14" Glyph="&#xE838;" />
@@ -100,7 +102,14 @@
                 <StackPanel x:Name="RecentSection" Spacing="16">
                     <Grid>
                         <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Recently played" VerticalAlignment="Center" />
-                        <Button Content="Clear All" Click="OnClearHistoryClick" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource DefaultButtonStyle}" />
+                        <Button
+                            Content="Clear All"
+                            Click="OnClearHistoryClick"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.04"
+                            Style="{StaticResource DefaultButtonStyle}" />
                     </Grid>
                     <ItemsRepeater ItemsSource="{Binding ViewModel.RecentlyPlayed, ElementName=PageRoot}">
                         <ItemsRepeater.Layout>

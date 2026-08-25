@@ -348,7 +348,12 @@ public static class SampleMediaLibrary
         try
         {
             var folder = Windows.Storage.ApplicationData.Current.LocalFolder;
-            var file = await folder.GetFileAsync("library_cache.json");
+            var item = await folder.TryGetItemAsync("library_cache.json");
+            if (item is not Windows.Storage.StorageFile file)
+            {
+                return;
+            }
+
             var json = await Windows.Storage.FileIO.ReadTextAsync(file);
 
             if (!string.IsNullOrWhiteSpace(json))

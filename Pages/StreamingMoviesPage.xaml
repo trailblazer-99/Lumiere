@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:LumiereMediaPlayer.Models.Streaming"
     xmlns:services="using:LumiereMediaPlayer.Services.Streaming"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers"
     Loaded="OnPageLoaded">
 
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Opacity="1">
@@ -13,17 +14,19 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,20">
             <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8B2;" FontSize="32"/>
-                <TextBlock Text="Movies" Style="{StaticResource PageTitleTextStyle}"/>
+                <FontIcon Glyph="&#xE8B2;" FontSize="28" VerticalAlignment="Center"/>
+                <TextBlock Text="Movies" Style="{StaticResource PageTitleTextStyle}" VerticalAlignment="Center"/>
             </StackPanel>
             <TextBlock Text="Discover and stream the latest blockbusters via Watchmode."
                        Style="{StaticResource PageSubtitleTextStyle}"
-                       Opacity="0.7"/>
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
         </StackPanel>
 
         <Pivot x:Name="MainPivot" Grid.Row="1" SelectionChanged="MainPivot_SelectionChanged">
+            <!-- Discover Tab -->
             <PivotItem Header="Discover">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -33,14 +36,18 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
-                    <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" Margin="0,0,0,16">
-                        <StackPanel Orientation="Horizontal" Spacing="16">
-                            <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="280" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="160" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Service" ItemsSource="{x:Bind ViewModel.ProviderOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedProvider, Mode=TwoWay}" Width="150" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="140" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="130" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="120" VerticalAlignment="Bottom" />
+                    <!-- Search & Filter Toolbar with Aligned Headers and Dimensions -->
+                    <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" Margin="0,0,0,20">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <StackPanel Spacing="4" VerticalAlignment="Bottom">
+                                <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
+                            </StackPanel>
+                            <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Service" ItemsSource="{x:Bind ViewModel.ProviderOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedProvider, Mode=TwoWay}" Width="155" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="165" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
                         </StackPanel>
                     </ScrollViewer>
 
@@ -51,6 +58,7 @@
                              IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                              Margin="0,0,0,16" />
 
+                    <!-- GridView & State Views -->
                     <Grid Grid.Row="2">
                         <GridView x:Name="MoviesGridView" ItemsSource="{x:Bind ViewModel.Movies, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="OnMovieClicked" SelectionMode="None">
                             <GridView.ItemContainerStyle>
@@ -58,46 +66,47 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:WatchmodeTitle">
-                                        <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,16"
-                                              Background="{ThemeResource LayerFillColorDefaultBrush}"
-                                              BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                              PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                            <Border.ContextFlyout>
-                                                <MenuFlyout>
-                                                    <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
-                                                    <MenuFlyoutItem Text="Add to Watchlist" Click="OnContextAddWatchlistClick" />
-                                                    <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
-                                                </MenuFlyout>
-                                            </Border.ContextFlyout>
-                                            <Border.Shadow>
-                                                <ThemeShadow />
-                                            </Border.Shadow>
+                                    <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,8"
+                                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
+                                                <MenuFlyoutItem Text="Add to Watchlist" Click="OnContextAddWatchlistClick" />
+                                                <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <Border.Shadow>
+                                            <ThemeShadow />
+                                        </Border.Shadow>
                                         <Grid CornerRadius="12">
-                                            <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
+                                            <FontIcon Glyph="&#xE8B2;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Image Source="{x:Bind PosterUrl, Mode=OneWay}" Stretch="UniformToFill" />
                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                        <GradientStop Color="#44000000" Offset="0.0"/>
-                                                        <GradientStop Color="#BB000000" Offset="1.0"/>
+                                                        <GradientStop Color="#30000000" Offset="0.0"/>
+                                                        <GradientStop Color="#B0000000" Offset="1.0"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
                                                 <Grid>
-                                                    <Border Width="56" Height="56" CornerRadius="28" Background="#88000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                        <FontIcon FontSize="24" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    <Border Width="52" Height="52" CornerRadius="26" Background="#80000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <FontIcon FontSize="22" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                     </Border>
                                                 </Grid>
                                             </Border>
-                                            <Border VerticalAlignment="Bottom" Height="100" CornerRadius="0,0,12,12">
+                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
-                                                        <GradientStop Color="#D9000000" Offset="0.6"/>
-                                                        <GradientStop Color="#FF000000" Offset="1"/>
+                                                        <GradientStop Color="#B8000000" Offset="0.55"/>
+                                                        <GradientStop Color="#F2000000" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <StackPanel VerticalAlignment="Bottom" Padding="12,12,12,16">
-                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="Bold" FontSize="16" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{x:Bind DisplayYear, Mode=OneWay}" Foreground="#E0E0E0" FontSize="13" Margin="0,2,0,0"/>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
+                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{x:Bind DisplayYear, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12"/>
                                                 </StackPanel>
                                             </Border>
                                         </Grid>
@@ -107,20 +116,34 @@
                         </GridView>
                         
                         <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <!-- Empty State Container -->
+                        <StackPanel x:Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                                    Visibility="{x:Bind GetDiscoverEmptyState(ViewModel.IsLoading, ViewModel.HasError), Mode=OneWay}">
+                            <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
+                                <FontIcon Glyph="&#xE8B2;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Text="No movies found" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Try adjusting your search query, genre, service, or region filters." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
 
-                    <!-- Pagination Controls -->
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24" Margin="0,16,0,16">
-                        <Button Content="Previous Page" Command="{x:Bind ViewModel.PreviousPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoPrevious, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}"/>
-                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}" FontWeight="SemiBold"/>
-                        </StackPanel>
-                        <Button Content="Next Page" Command="{x:Bind ViewModel.NextPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoNext, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}"/>
+
+                    <!-- Pagination Controls Aligned to 36px Geometry -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,20,0,16">
+                        <Button Content="Previous Page" Command="{x:Bind ViewModel.PreviousPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoPrevious, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}" Height="36" CornerRadius="8" Padding="16,0"/>
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="14,0" Height="36">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13"/>
+                                <TextBlock Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}" FontWeight="SemiBold" FontSize="13"/>
+                            </StackPanel>
+                        </Border>
+                        <Button Content="Next Page" Command="{x:Bind ViewModel.NextPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoNext, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}" Height="36" CornerRadius="8" Padding="16,0"/>
                     </StackPanel>
                 </Grid>
             </PivotItem>
             
+            <!-- Library Tab -->
             <PivotItem Header="Library">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -128,8 +151,8 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16" Margin="0,0,0,24">
-                        <ComboBox x:Name="LibraryFilterComboBox" Header="Watchlist Category" Width="180" SelectionChanged="OnLibraryFilterChanged">
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,20">
+                        <ComboBox x:Name="LibraryFilterComboBox" Header="Watchlist Category" Width="180" CornerRadius="8" SelectionChanged="OnLibraryFilterChanged">
                             <ComboBoxItem Content="All" IsSelected="True" />
                             <ComboBoxItem Content="Watchlist" />
                             <ComboBoxItem Content="Plan to Watch" />
@@ -139,156 +162,237 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <GridView Grid.Row="1" x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
-                        <GridView.ItemContainerStyle>
-                            <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
-                        </GridView.ItemContainerStyle>
-                        <GridView.ItemTemplate>
-                            <DataTemplate x:DataType="services:SavedStreamingItem">
-                                <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,16"
-                                      Background="{ThemeResource LayerFillColorDefaultBrush}"
-                                      BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                      PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                    <Border.ContextFlyout>
-                                        <MenuFlyout>
-                                            <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
-                                            <MenuFlyoutItem Text="Remove from Library" Click="OnContextRemoveFromLibraryClick" Foreground="Red" />
-                                        </MenuFlyout>
-                                    </Border.ContextFlyout>
-                                    <Border.Shadow>
-                                        <ThemeShadow />
-                                    </Border.Shadow>
-                                    <Grid CornerRadius="12">
-                                        <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
-                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#44000000" Offset="0.0"/>
-                                                    <GradientStop Color="#BB000000" Offset="1.0"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <Grid>
-                                                <Border Width="56" Height="56" CornerRadius="28" Background="#88000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <FontIcon FontSize="24" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                        <Border VerticalAlignment="Bottom" Height="100" CornerRadius="0,0,12,12">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="Transparent" Offset="0"/>
-                                                    <GradientStop Color="#D9000000" Offset="0.6"/>
-                                                    <GradientStop Color="#FF000000" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <StackPanel VerticalAlignment="Bottom" Padding="12,12,12,16">
-                                                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="Bold" FontSize="16" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Subtitle}" Foreground="#E0E0E0" FontSize="13" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </GridView.ItemTemplate>
-                    </GridView>
+                    <Grid Grid.Row="1">
+                        <GridView x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
+                            <GridView.ItemContainerStyle>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <DataTemplate x:DataType="services:SavedStreamingItem">
+                                    <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,8"
+                                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
+                                                <MenuFlyoutItem Text="Remove from Library" Click="OnContextRemoveFromLibraryClick" Foreground="Red" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <Border.Shadow>
+                                            <ThemeShadow />
+                                        </Border.Shadow>
+                                        <Grid CornerRadius="12">
+                                            <FontIcon Glyph="&#xE8B2;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Image Source="{x:Bind PosterUrl, Mode=OneWay}" Stretch="UniformToFill" />
+                                            <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="#30000000" Offset="0.0"/>
+                                                        <GradientStop Color="#B0000000" Offset="1.0"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <Grid>
+                                                    <Border Width="52" Height="52" CornerRadius="26" Background="#80000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <FontIcon FontSize="22" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="Transparent" Offset="0"/>
+                                                        <GradientStop Color="#B8000000" Offset="0.55"/>
+                                                        <GradientStop Color="#F2000000" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </GridView.ItemTemplate>
+                        </GridView>
+
+                        <!-- Empty State for Library -->
+                        <StackPanel x:Name="LibraryEmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Visibility="Collapsed">
+                            <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
+                                <FontIcon Glyph="&#xE734;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Text="Your watchlist is empty" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Explore and add movies from Discover or Trending to build your watchlist." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </PivotItem>
 
+            <!-- Trending Tab -->
             <PivotItem Header="Trending">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,0">
+                    <StackPanel Spacing="16" Padding="0,0,0,32" Margin="0,0,4,0">
+                        <TextBlock Text="Trending movies currently popular across streaming platforms." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.75" />
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                        <TextBlock Text="Trending movies currently popular across streaming platforms." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7" />
-                    </StackPanel>
-
-                    <!-- Hero Carousel -->
-                    <FlipView Grid.Row="1" x:Name="TrendingHeroCarousel" Height="340" Margin="0,0,0,24" CornerRadius="12">
-                        <FlipView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid CornerRadius="12">
-                                    <Image Source="{Binding BackdropUrl}" Stretch="UniformToFill" />
-                                    <Border>
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                                <GradientStop Color="#EE000000" Offset="0" />
-                                                <GradientStop Color="#88000000" Offset="0.4" />
-                                                <GradientStop Color="Transparent" Offset="1" />
-                                            </LinearGradientBrush>
-                                        </Border.Background>
-                                    </Border>
-                                    <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="32" Spacing="12" MaxWidth="700">
-                                        <TextBlock Text="{Binding DisplayTitle}" FontSize="36" FontWeight="Bold" Foreground="White" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding Overview}" FontSize="15" Foreground="#EEEEEE" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
-                                            <Button Content="View Details" Style="{StaticResource AccentButtonStyle}" Click="OnHeroViewDetailsClick" />
-                                            <Button Content="Play Trailer" Click="OnHeroPlayTrailerClick" Background="#44FFFFFF" Foreground="White" BorderBrush="Transparent" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </FlipView.ItemTemplate>
-                    </FlipView>
-
-                    <GridView Grid.Row="2" x:Name="TrendingGridView" IsItemClickEnabled="True" ItemClick="OnTrendingItemClick" SelectionMode="None">
-                        <GridView.ItemContainerStyle>
-                            <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
-                        </GridView.ItemContainerStyle>
-                        <GridView.ItemTemplate>
-                            <DataTemplate>
-                                <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,16"
-                                      Background="{ThemeResource LayerFillColorDefaultBrush}"
-                                      BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                      PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                    <Border.ContextFlyout>
-                                        <MenuFlyout>
-                                            <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
-                                            <MenuFlyoutItem Text="Add to Watchlist" Click="OnContextAddWatchlistClick" />
-                                            <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
-                                        </MenuFlyout>
-                                    </Border.ContextFlyout>
-                                    <Border.Shadow>
-                                        <ThemeShadow />
-                                    </Border.Shadow>
-                                    <Grid CornerRadius="12">
-                                        <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
-                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#44000000" Offset="0.0"/>
-                                                    <GradientStop Color="#BB000000" Offset="1.0"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <Grid>
-                                                <Border Width="56" Height="56" CornerRadius="28" Background="#88000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <FontIcon FontSize="24" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <!-- Hero Carousel with Directional Scrim and Fluent Design 2 Rectangular Navigation Buttons -->
+                        <Grid Height="360" CornerRadius="14">
+                            <FlipView x:Name="TrendingHeroCarousel" Height="360" CornerRadius="14">
+                                <FlipView.Resources>
+                                    <Style x:Key="FlipViewPreviousButtonStyleHorizontal" TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Setter Property="Opacity" Value="0" />
+                                        <Setter Property="Width" Value="0" />
+                                        <Setter Property="Height" Value="0" />
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MinHeight" Value="0" />
+                                        <Setter Property="MaxWidth" Value="0" />
+                                        <Setter Property="MaxHeight" Value="0" />
+                                        <Setter Property="IsHitTestVisible" Value="False" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button" />
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                    <Style x:Key="FlipViewNextButtonStyleHorizontal" TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Setter Property="Opacity" Value="0" />
+                                        <Setter Property="Width" Value="0" />
+                                        <Setter Property="Height" Value="0" />
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MinHeight" Value="0" />
+                                        <Setter Property="MaxWidth" Value="0" />
+                                        <Setter Property="MaxHeight" Value="0" />
+                                        <Setter Property="IsHitTestVisible" Value="False" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button" />
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </FlipView.Resources>
+                                <FlipView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TmdbMedia">
+                                        <Grid CornerRadius="14">
+                                            <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(BackdropUrl, 1280), Mode=OneWay}" Stretch="UniformToFill" />
+                                            <!-- Directional Scrim Gradient -->
+                                            <Border CornerRadius="14">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,1" EndPoint="0.7,0">
+                                                        <GradientStop Color="#F5000000" Offset="0.0" />
+                                                        <GradientStop Color="#B8000000" Offset="0.45" />
+                                                        <GradientStop Color="#30000000" Offset="0.8" />
+                                                        <GradientStop Color="Transparent" Offset="1.0" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="32" Spacing="10" MaxWidth="720">
+                                                <Border HorizontalAlignment="Left" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="4" Padding="8,3">
+                                                    <TextBlock Text="TRENDING MOVIE" FontSize="11" FontWeight="Bold" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CharacterSpacing="40"/>
                                                 </Border>
-                                            </Grid>
-                                        </Border>
-                                        <Border VerticalAlignment="Bottom" Height="100" CornerRadius="0,0,12,12">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="Transparent" Offset="0"/>
-                                                    <GradientStop Color="#D9000000" Offset="0.6"/>
-                                                    <GradientStop Color="#FF000000" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <StackPanel VerticalAlignment="Bottom" Padding="12,12,12,16">
-                                                <TextBlock Text="{Binding DisplayTitle}" Foreground="White" FontWeight="Bold" FontSize="16" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding DisplayYear}" Foreground="#E0E0E0" FontSize="13" Margin="0,2,0,0"/>
+                                                <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" FontSize="32" FontWeight="Bold" Foreground="White" LineHeight="38" TextWrapping="Wrap" MaxLines="2" />
+                                                <TextBlock Text="{x:Bind Overview, Mode=OneWay}" FontSize="14" Foreground="#E2E8F0" LineHeight="20" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+                                                    <Button Style="{StaticResource AccentButtonStyle}" Height="36" CornerRadius="8" Padding="16,0" Click="OnHeroViewDetailsClick">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <FontIcon Glyph="&#xE946;" FontSize="14"/>
+                                                            <TextBlock Text="View Details" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Click="OnHeroPlayTrailerClick" Height="36" CornerRadius="8" Padding="16,0" Background="#33FFFFFF" Foreground="White" BorderBrush="#30FFFFFF" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <FontIcon Glyph="&#xE768;" FontSize="14"/>
+                                                            <TextBlock Text="Play Trailer" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
                                             </StackPanel>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </GridView.ItemTemplate>
-                    </GridView>
-                </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </FlipView.ItemTemplate>
+                            </FlipView>
+
+                            <!-- Fluent Design 2 Rectangular Navigation Buttons -->
+                            <Button x:Name="CarouselPrevButton"
+                                    Style="{StaticResource FluentCarouselNavButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="16,0,0,0"
+                                    Click="OnCarouselPrevClick"
+                                    ToolTipService.ToolTip="Previous">
+                                <FontIcon Glyph="&#xE76B;" FontSize="14" Foreground="White"/>
+                            </Button>
+
+                            <Button x:Name="CarouselNextButton"
+                                    Style="{StaticResource FluentCarouselNavButtonStyle}"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,16,0"
+                                    Click="OnCarouselNextClick"
+                                    ToolTipService.ToolTip="Next">
+                                <FontIcon Glyph="&#xE76C;" FontSize="14" Foreground="White"/>
+                            </Button>
+                        </Grid>
+
+                        <GridView x:Name="TrendingGridView" IsItemClickEnabled="True" ItemClick="OnTrendingItemClick" SelectionMode="None" ScrollViewer.VerticalScrollMode="Disabled">
+                            <GridView.ItemContainerStyle>
+                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TmdbMedia">
+                                    <Border Width="220" Height="330" CornerRadius="12" Translation="0,0,8"
+                                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="View Details" Click="OnContextViewDetailsClick" />
+                                                <MenuFlyoutItem Text="Add to Watchlist" Click="OnContextAddWatchlistClick" />
+                                                <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <Border.Shadow>
+                                            <ThemeShadow />
+                                        </Border.Shadow>
+                                        <Grid CornerRadius="12">
+                                            <FontIcon Glyph="&#xE8B2;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 300), Mode=OneWay}" Stretch="UniformToFill" />
+                                            <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="#30000000" Offset="0.0"/>
+                                                        <GradientStop Color="#B0000000" Offset="1.0"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <Grid>
+                                                    <Border Width="52" Height="52" CornerRadius="26" Background="#80000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <FontIcon FontSize="22" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="Transparent" Offset="0"/>
+                                                        <GradientStop Color="#B8000000" Offset="0.55"/>
+                                                        <GradientStop Color="#F2000000" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
+                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{x:Bind DisplayYear, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </StackPanel>
+                </ScrollViewer>
             </PivotItem>
         </Pivot>
     </Grid>
 </Page>
+

@@ -5,6 +5,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:LumiereMediaPlayer.Pages"
+    xmlns:animatedvisuals="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -41,7 +42,14 @@
                 <StackPanel x:Name="MainHeaderPanel" Spacing="16">
                     <StackPanel Spacing="4">
                         <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon FontSize="24" Glyph="&#xE713;" VerticalAlignment="Center"/>
+                            <AnimatedIcon x:Name="SettingsHeaderAnimatedIcon" Width="26" Height="26" VerticalAlignment="Center">
+                                <AnimatedIcon.Source>
+                                    <animatedvisuals:AnimatedSettingsVisualSource/>
+                                </AnimatedIcon.Source>
+                                <AnimatedIcon.FallbackIconSource>
+                                    <SymbolIconSource Symbol="Setting"/>
+                                </AnimatedIcon.FallbackIconSource>
+                            </AnimatedIcon>
                             <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Settings" VerticalAlignment="Center"/>
                         </StackPanel>
                         <TextBlock Style="{StaticResource PageSubtitleTextStyle}"
@@ -666,8 +674,8 @@
                         </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE700;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Always show transport bar"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Keep the transport controls visible (vs. auto-hide in fullscreen)."/>
+                            <TextBlock FontSize="14" Text="Show transport bar"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the playback controls bar at the bottom of the window."/>
                         </StackPanel>
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=TwoWay}"/>
                     </Grid>
@@ -929,7 +937,7 @@
                             <TextBlock FontSize="14" Text="Enable lyrics translation"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically translate synced lyrics on the Now Playing screen using AI."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="AiLyricsTranslationToggle" IsOn="False" Toggled="OnAiLyricsTranslationToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiLyricsTranslationToggle" IsOn="{x:Bind ViewModel.AiLyricsTranslationEnabled, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
 
@@ -943,7 +951,7 @@
                             <TextBlock FontSize="14" Text="Translation target language"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select the language into which lyrics and subtitles should be translated."/>
                         </StackPanel>
-                        <ComboBox Grid.Column="2" x:Name="AiTranslationLanguageComboBox" SelectionChanged="OnAiTranslationLanguageSelectionChanged" Width="150" VerticalAlignment="Center">
+                        <ComboBox Grid.Column="2" x:Name="AiTranslationLanguageComboBox" SelectedIndex="{x:Bind ViewModel.SelectedAiTranslationLanguageIndex, Mode=TwoWay}" Width="150" VerticalAlignment="Center">
                             <ComboBoxItem Content="Hindi"/>
                             <ComboBoxItem Content="Spanish"/>
                             <ComboBoxItem Content="French"/>
@@ -970,7 +978,7 @@
                             <TextBlock FontSize="14" Text="Use Local AI (Ollama)"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Process AI tasks locally instead of using cloud APIs for better privacy."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="UseLocalAiToggle" IsOn="{x:Bind ViewModel.UseLocalAi, Mode=OneWay}" Toggled="OnUseLocalAiToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="UseLocalAiToggle" IsOn="{x:Bind ViewModel.UseLocalAi, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
 
@@ -984,7 +992,7 @@
                             <TextBlock FontSize="14" Text="Ollama Model Name"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Specify the installed Ollama model to use for AI features."/>
                         </StackPanel>
-                        <TextBox Grid.Column="2" x:Name="OllamaModelTextBox" Text="{x:Bind ViewModel.OllamaModelName, Mode=OneWay}" TextChanged="OnOllamaModelNameChanged" Width="150" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="2" x:Name="OllamaModelTextBox" Text="{x:Bind ViewModel.OllamaModelName, Mode=TwoWay}" Width="150" VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
 
@@ -998,7 +1006,7 @@
                             <TextBlock FontSize="14" Text="Enable semantic search"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use natural-language parsing for search queries in your music and video libraries."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="AiSemanticSearchToggle" IsOn="False" Toggled="OnAiSemanticSearchToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiSemanticSearchToggle" IsOn="{x:Bind ViewModel.AiSemanticSearchEnabled, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
 
@@ -1012,7 +1020,7 @@
                             <TextBlock FontSize="14" Text="AI Equalizer Matcher"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically detect and set equalizer presets based on track genre and details."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="AiEqualizerMatcherToggle" IsOn="False" Toggled="OnAiEqualizerMatcherToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="AiEqualizerMatcherToggle" IsOn="{x:Bind ViewModel.AiEqualizerMatcherEnabled, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
 
@@ -1026,7 +1034,7 @@
                             <TextBlock FontSize="14" Text="Voice Clarity Enhancer"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enable hardware-accelerated dialogue optimization for clearer spoken voice."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="VoiceClarityToggle" IsOn="False" Toggled="OnVoiceClarityToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="VoiceClarityToggle" IsOn="{x:Bind ViewModel.VoiceClarityEnabled, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
 
@@ -1040,7 +1048,7 @@
                             <TextBlock FontSize="14" Text="Dynamic Volume Leveler (Night Mode)"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Level loud highlights and boost quiet dialogue for comfortable late-night viewing."/>
                         </StackPanel>
-                        <ToggleSwitch Grid.Column="2" x:Name="NightModeToggle" IsOn="False" Toggled="OnNightModeToggled" VerticalAlignment="Center" MinWidth="0"/>
+                        <ToggleSwitch Grid.Column="2" x:Name="NightModeToggle" IsOn="{x:Bind ViewModel.NightModeEnabled, Mode=TwoWay}" VerticalAlignment="Center" MinWidth="0"/>
                     </Grid>
                 </Border>
             </StackPanel>

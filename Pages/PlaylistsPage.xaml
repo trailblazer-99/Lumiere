@@ -15,13 +15,12 @@
     <ScrollViewer Margin="0,48,0,0">
         <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="28" Opacity="1">
             <!-- Header -->
-            <StackPanel Spacing="6">
-                <TextBlock
-                    Style="{StaticResource PageTitleTextStyle}"
-                    Text="Playlists" />
-                <TextBlock
-                    Style="{StaticResource PageSubtitleTextStyle}"
-                    Text="Curated collections ready to play." />
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE93C;" FontSize="28" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Playlists" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Curated collections ready to play." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
             <!-- Playlist grid -->

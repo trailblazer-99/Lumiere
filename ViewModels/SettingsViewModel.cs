@@ -188,43 +188,43 @@ public partial class SettingsViewModel : ObservableObject
     public int SelectedThemeIndex
     {
         get => (int)SelectedTheme;
-        set { if (SelectedTheme != (AppThemeOption)value) SelectedTheme = (AppThemeOption)value; }
+        set { if (value >= 0 && SelectedTheme != (AppThemeOption)value) SelectedTheme = (AppThemeOption)value; }
     }
 
     public int SelectedEqualizerIndex
     {
         get => (int)SelectedEqualizer;
-        set { if (SelectedEqualizer != (EqualizerPreset)value) SelectedEqualizer = (EqualizerPreset)value; }
+        set { if (value >= 0 && SelectedEqualizer != (EqualizerPreset)value) SelectedEqualizer = (EqualizerPreset)value; }
     }
 
     public int SelectedBackdropIndex
     {
         get => (int)SelectedBackdrop;
-        set { if (SelectedBackdrop != (AppThemeBackdrop)value) SelectedBackdrop = (AppThemeBackdrop)value; }
+        set { if (value >= 0 && SelectedBackdrop != (AppThemeBackdrop)value) SelectedBackdrop = (AppThemeBackdrop)value; }
     }
 
     public int SelectedAccentColorIndex
     {
         get => (int)SelectedAccentColor;
-        set { if (SelectedAccentColor != (AccentColorOption)value) SelectedAccentColor = (AccentColorOption)value; }
+        set { if (value >= 0 && SelectedAccentColor != (AccentColorOption)value) SelectedAccentColor = (AccentColorOption)value; }
     }
 
     public int SelectedAspectRatioIndex
     {
         get => (int)DefaultAspectRatio;
-        set { if (DefaultAspectRatio != (AspectRatioOption)value) DefaultAspectRatio = (AspectRatioOption)value; }
+        set { if (value >= 0 && DefaultAspectRatio != (AspectRatioOption)value) DefaultAspectRatio = (AspectRatioOption)value; }
     }
 
     public int SelectedHdrModeIndex
     {
         get => (int)SelectedHdrMode;
-        set { if (SelectedHdrMode != (HdrMode)value) SelectedHdrMode = (HdrMode)value; }
+        set { if (value >= 0 && SelectedHdrMode != (HdrMode)value) SelectedHdrMode = (HdrMode)value; }
     }
 
     public int SelectedToneMappingModeIndex
     {
         get => (int)SelectedToneMappingMode;
-        set { if (SelectedToneMappingMode != (ToneMappingMode)value) SelectedToneMappingMode = (ToneMappingMode)value; }
+        set { if (value >= 0 && SelectedToneMappingMode != (ToneMappingMode)value) SelectedToneMappingMode = (ToneMappingMode)value; }
     }
 
     public string PeakBrightnessText => $"{PeakBrightnessNits} nits";
@@ -232,7 +232,7 @@ public partial class SettingsViewModel : ObservableObject
     public int SelectedSubtitleFontSizeIndex
     {
         get => (int)SubtitleFontSize;
-        set { if (SubtitleFontSize != (SubtitleFontSize)value) SubtitleFontSize = (SubtitleFontSize)value; }
+        set { if (value >= 0 && SubtitleFontSize != (SubtitleFontSize)value) SubtitleFontSize = (SubtitleFontSize)value; }
     }
 
     public int SelectedSubtitleLanguageIndex
@@ -252,38 +252,41 @@ public partial class SettingsViewModel : ObservableObject
         };
         set
         {
-            DefaultSubtitleLanguage = value switch
+            if (value >= 0)
             {
-                0 => "None",
-                1 => "English",
-                2 => "Hindi",
-                3 => "Spanish",
-                4 => "French",
-                5 => "German",
-                6 => "Japanese",
-                7 => "Korean",
-                8 => "Chinese",
-                _ => "None",
-            };
+                DefaultSubtitleLanguage = value switch
+                {
+                    0 => "None",
+                    1 => "English",
+                    2 => "Hindi",
+                    3 => "Spanish",
+                    4 => "French",
+                    5 => "German",
+                    6 => "Japanese",
+                    7 => "Korean",
+                    8 => "Chinese",
+                    _ => "None",
+                };
+            }
         }
     }
 
     public int SelectedLibrarySortOrderIndex
     {
         get => (int)SelectedLibrarySortOrder;
-        set { if (SelectedLibrarySortOrder != (LibrarySortOrder)value) SelectedLibrarySortOrder = (LibrarySortOrder)value; }
+        set { if (value >= 0 && SelectedLibrarySortOrder != (LibrarySortOrder)value) SelectedLibrarySortOrder = (LibrarySortOrder)value; }
     }
 
     public int SelectedOpenFilePositionCornerIndex
     {
         get => (int)SelectedOpenFilePositionCorner;
-        set { if (SelectedOpenFilePositionCorner != (OpenFileCorner)value) SelectedOpenFilePositionCorner = (OpenFileCorner)value; }
+        set { if (value >= 0 && SelectedOpenFilePositionCorner != (OpenFileCorner)value) SelectedOpenFilePositionCorner = (OpenFileCorner)value; }
     }
 
     public int SelectedColorBlindModeIndex
     {
         get => (int)SelectedColorBlindMode;
-        set { if (SelectedColorBlindMode != (ColorBlindMode)value) SelectedColorBlindMode = (ColorBlindMode)value; }
+        set { if (value >= 0 && SelectedColorBlindMode != (ColorBlindMode)value) SelectedColorBlindMode = (ColorBlindMode)value; }
     }
 
     public int SelectedAiTranslationLanguageIndex
@@ -302,18 +305,21 @@ public partial class SettingsViewModel : ObservableObject
         };
         set
         {
-            AiTranslationTargetLanguage = value switch
+            if (value >= 0)
             {
-                0 => "Hindi",
-                1 => "Spanish",
-                2 => "French",
-                3 => "German",
-                4 => "Japanese",
-                5 => "Chinese",
-                6 => "Russian",
-                7 => "Italian",
-                _ => "Hindi",
-            };
+                AiTranslationTargetLanguage = value switch
+                {
+                    0 => "Hindi",
+                    1 => "Spanish",
+                    2 => "French",
+                    3 => "German",
+                    4 => "Japanese",
+                    5 => "Chinese",
+                    6 => "Russian",
+                    7 => "Italian",
+                    _ => "Hindi",
+                };
+            }
         }
     }
 
@@ -566,7 +572,15 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnCompactDensityModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CompactDensityMode = value; _settingsService.Save(); } }
     partial void OnShowAlbumArtInTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowAlbumArtInTransportBar = value; _settingsService.Save(); } }
     partial void OnAnimatedTransitionsChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AnimatedTransitions = value; _settingsService.Save(); } }
-    partial void OnAlwaysShowTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AlwaysShowTransportBar = value; _settingsService.Save(); } }
+    partial void OnAlwaysShowTransportBarChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AlwaysShowTransportBar = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.ApplyTransportBarVisibility(value);
+        }
+    }
 
     // Controls & Interface
     partial void OnShowShuffleButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowShuffleButton = value; _settingsService.Save(); } }

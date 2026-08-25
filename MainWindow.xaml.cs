@@ -323,6 +323,7 @@ public sealed partial class MainWindow : Window
         WireTransportBar();
         NavigateToHome();
         SyncTransportBar();
+        UpdateTransportBarVisibility();
         UpdateTransportBarTheme();
         AppServices.Settings.SettingsChanged += (s, e) => {
             DispatcherQueue.TryEnqueue(() => {
@@ -344,6 +345,8 @@ public sealed partial class MainWindow : Window
                 {
                     AnimateAccentColorChange(currentAccent);
                 }
+
+                UpdateTransportBarVisibility();
             });
         };
         try { ApplyConfiguredTheme(); } catch { }
@@ -781,24 +784,43 @@ public sealed partial class MainWindow : Window
 
     private void NavigateTo(System.Type pageType, object? parameter = null)
     {
+        if (ContentFrame == null) return;
+        if (_isNavigating) return;
+
         if (ContentFrame.CurrentSourcePageType != pageType || parameter != null)
         {
-            Microsoft.UI.Xaml.Media.Animation.NavigationTransitionInfo transitionInfo;
+            try
+            {
+                _isNavigating = true;
+                Microsoft.UI.Xaml.Media.Animation.NavigationTransitionInfo transitionInfo;
 
-            if (pageType == typeof(VideoPage) || pageType == typeof(NowPlayingPage))
-            {
-                // DrillIn expands/collapses the player smoothly from/to the center
-                transitionInfo = new Microsoft.UI.Xaml.Media.Animation.DrillInNavigationTransitionInfo();
-            }
-            else
-            {
-                // Premium slide transition for standard page navigation
-                transitionInfo = new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo
+                if (pageType == typeof(VideoPage) || pageType == typeof(NowPlayingPage))
                 {
-                    Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight
-                };
+                    // DrillIn expands/collapses the player smoothly from/to the center
+                    transitionInfo = new Microsoft.UI.Xaml.Media.Animation.DrillInNavigationTransitionInfo();
+                }
+                else if (AppServices.Settings.Current.ReduceMotion)
+                {
+                    transitionInfo = new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo();
+                }
+                else
+                {
+                    // Premium slide transition for standard page navigation
+                    transitionInfo = new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo
+                    {
+                        Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight
+                    };
+                }
+                ContentFrame.Navigate(pageType, parameter, transitionInfo);
             }
-            ContentFrame.Navigate(pageType, parameter, transitionInfo);
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Navigation to {pageType.Name} failed: {ex.Message}");
+            }
+            finally
+            {
+                _isNavigating = false;
+            }
         }
     }
 
@@ -872,17 +894,32 @@ public sealed partial class MainWindow : Window
         {
             if (_playback.IsVideoPlayerActive)
             {
-                RootNavigationView.SelectedItem = FindNavItem("videos");
+                SafeSetSelectedItem(FindNavItem("videos"));
                 NavigateTo(typeof(VideoPage));
             }
         }
         else
         {
-            RootNavigationView.SelectedItem = NowPlayingNavItem;
+            SafeSetSelectedItem(NowPlayingNavItem);
             NavigateTo(typeof(NowPlayingPage));
         }
 
         _isNavigating = false;
+    }
+
+    private void SafeSetSelectedItem(object? item)
+    {
+        try
+        {
+            if (!ReferenceEquals(RootNavigationView.SelectedItem, item))
+            {
+                RootNavigationView.SelectedItem = item;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SafeSetSelectedItem] Error: {ex.Message}");
+        }
     }
 
     private NavigationViewItem? FindNavItem(string tag)
@@ -1081,12 +1118,12 @@ public sealed partial class MainWindow : Window
         _isNavigating = true;
         if (result.Tag == "settings")
         {
-            RootNavigationView.SelectedItem = RootNavigationView.SettingsItem;
+            SafeSetSelectedItem(RootNavigationView.SettingsItem);
         }
         else
         {
             var navItem = FindNavItem(result.Tag);
-            if (navItem != null) RootNavigationView.SelectedItem = navItem;
+            if (navItem != null) SafeSetSelectedItem(navItem);
         }
         _isNavigating = false;
     }
@@ -1292,15 +1329,13 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
     }
 
-    private void OnBackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
+    public void NavigateBack()
     {
         if (ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive)
         {
             ExitVideoPlayback();
             return;
         }
-
-
 
         if (ContentFrame.CanGoBack)
         {
@@ -1313,90 +1348,146 @@ public sealed partial class MainWindow : Window
                 System.Diagnostics.Debug.WriteLine($"[Navigation] GoBack failed: {ex.Message}");
             }
         }
+        else
+        {
+            // Hierarchical Fallback: Return to logical parent if back stack is empty
+            if (ContentFrame.Content is StreamingDetailsPage detailsPage)
+            {
+                if (string.Equals(detailsPage.CurrentTitleType, "tv_series", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(detailsPage.CurrentTitleType, "tv_miniseries", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(detailsPage.CurrentTitleType, "tv", StringComparison.OrdinalIgnoreCase))
+                {
+                    NavigateTo(typeof(StreamingTvShowsPage));
+                }
+                else
+                {
+                    NavigateTo(typeof(StreamingMoviesPage));
+                }
+            }
+            else if (ContentFrame.Content is StreamingYouTubePage || ContentFrame.Content is StreamingTwitchPage)
+            {
+                NavigateTo(typeof(StreamingMoviesPage));
+            }
+            else if (ContentFrame.Content is not HomePage)
+            {
+                NavigateToHome();
+            }
+        }
+    }
+
+    public void NavigateForward()
+    {
+        if (ContentFrame.CanGoForward)
+        {
+            try
+            {
+                ContentFrame.GoForward();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Navigation] GoForward failed: {ex.Message}");
+            }
+        }
+    }
+
+    private void OnBackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
+    {
+        NavigateBack();
     }
     private void OnContentFrameNavigating(object sender, Microsoft.UI.Xaml.Navigation.NavigatingCancelEventArgs e)
     {
-        if (e.SourcePageType == typeof(Pages.VideoPage) || ContentFrame.Content is Pages.VideoPage)
-        {
-            ContentFrame.ContentTransitions = null;
-        }
-        else
-        {
-            var transitionCollection = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
-            transitionCollection.Add(new Microsoft.UI.Xaml.Media.Animation.NavigationThemeTransition());
-            ContentFrame.ContentTransitions = transitionCollection;
-        }
+        // Safe navigation lifecycle pass
+    }
+
+    private void OnContentFrameNavigationFailed(object sender, Microsoft.UI.Xaml.Navigation.NavigationFailedEventArgs e)
+    {
+        e.Handled = true;
+        _isNavigating = false;
+        System.Diagnostics.Debug.WriteLine($"[MainWindow] Navigation failed to {e.SourcePageType?.Name}: {e.Exception?.Message}");
     }
 
     private void OnContentFrameNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         _isNavigating = true;
+        try
+        {
+            if (ContentFrame.Content is HomePage)
+            {
+                SafeSetSelectedItem(FindNavItem("home"));
+            }
+            else if (ContentFrame.Content is MusicLibraryPage)
+            {
+                SafeSetSelectedItem(FindNavItem("music"));
+            }
+            else if (ContentFrame.Content is VideoPage)
+            {
+                SafeSetSelectedItem(FindNavItem("videos"));
+            }
+            else if (ContentFrame.Content is PlaylistsPage)
+            {
+                SafeSetSelectedItem(FindNavItem("playlists"));
+            }
+            else if (ContentFrame.Content is NowPlayingPage)
+            {
+                SafeSetSelectedItem(NowPlayingNavItem);
+            }
+            else if (ContentFrame.Content is SettingsPage)
+            {
+                SafeSetSelectedItem(RootNavigationView.SettingsItem);
+            }
+            else if (ContentFrame.Content is StreamingMusicPage)
+            {
+                SafeSetSelectedItem(FindNavItem("streamMusic"));
+            }
+            else if (ContentFrame.Content is StreamingMoviesPage)
+            {
+                SafeSetSelectedItem(FindNavItem("streamMovies"));
+            }
+            else if (ContentFrame.Content is StreamingTvShowsPage)
+            {
+                SafeSetSelectedItem(FindNavItem("streamTvShows"));
+            }
+            else if (ContentFrame.Content is StreamingYouTubePage)
+            {
+                SafeSetSelectedItem(FindNavItem("streamYouTube"));
+            }
+            else if (ContentFrame.Content is StreamingDetailsPage detailsPage)
+            {
+                SelectStreamingTabForTitleType(detailsPage.CurrentTitleType);
+            }
 
-        if (ContentFrame.Content is HomePage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("home");
-        }
-        else if (ContentFrame.Content is MusicLibraryPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("music");
-        }
-        else if (ContentFrame.Content is VideoPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("videos");
-        }
-        else if (ContentFrame.Content is PlaylistsPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("playlists");
-        }
-        else if (ContentFrame.Content is NowPlayingPage)
-        {
-            RootNavigationView.SelectedItem = NowPlayingNavItem;
-        }
-        else if (ContentFrame.Content is SettingsPage)
-        {
-            RootNavigationView.SelectedItem = RootNavigationView.SettingsItem;
-        }
-        else if (ContentFrame.Content is StreamingMusicPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("streamMusic");
-        }
-        else if (ContentFrame.Content is StreamingMoviesPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("streamMovies");
-        }
-        else if (ContentFrame.Content is StreamingTvShowsPage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("streamTvShows");
-        }
-        else if (ContentFrame.Content is StreamingYouTubePage)
-        {
-            RootNavigationView.SelectedItem = FindNavItem("streamYouTube");
-        }
-        else if (ContentFrame.Content is StreamingDetailsPage detailsPage)
-        {
-            SelectStreamingTabForTitleType(detailsPage.CurrentTitleType);
-        }
+            if (_activeVideoPage != null)
+            {
+                _activeVideoPage.VideoPlayerHostLayoutChanged -= OnVideoPlayerHostLayoutChanged;
+                _activeVideoPage = null;
+            }
 
-        if (_activeVideoPage != null)
-        {
-            _activeVideoPage.VideoPlayerHostLayoutChanged -= OnVideoPlayerHostLayoutChanged;
-            _activeVideoPage = null;
+            if (ContentFrame.Content is VideoPage vp)
+            {
+                _activeVideoPage = vp;
+                _activeVideoPage.VideoPlayerHostLayoutChanged += OnVideoPlayerHostLayoutChanged;
+            }
+
+            bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+            bool canGoBack = isVideo || ContentFrame.CanGoBack;
+            RootNavigationView.IsBackEnabled = canGoBack;
+            RootNavigationView.IsBackButtonVisible = canGoBack 
+                ? NavigationViewBackButtonVisible.Visible 
+                : NavigationViewBackButtonVisible.Collapsed;
+            RootNavigationView.IsPaneToggleButtonVisible = true;
+            RootNavigationView.Margin = new Thickness(0, 0, 0, 0);
+            UpdateTitleBarLayout();
+
+            UpdateLayoutForVideoMode();
         }
-
-        if (ContentFrame.Content is VideoPage vp)
+        catch (Exception ex)
         {
-            _activeVideoPage = vp;
-            _activeVideoPage.VideoPlayerHostLayoutChanged += OnVideoPlayerHostLayoutChanged;
+            System.Diagnostics.Debug.WriteLine($"[OnContentFrameNavigated] Error: {ex.Message}");
         }
-
-        bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
-        RootNavigationView.IsBackEnabled = isVideo || ContentFrame.CanGoBack;
-
-        UpdateLayoutForVideoMode();
-
-        try { Helpers.AccessibilityHelper.Apply(AppServices.Settings.Current); } catch { }
-
-        _isNavigating = false;
+        finally
+        {
+            _isNavigating = false;
+        }
     }
 
     private void OnVideoPlayerHostLayoutChanged(object? sender, EventArgs e)
@@ -1449,6 +1540,21 @@ public sealed partial class MainWindow : Window
         AnimateWindowEntrance();
         UpdateTitleBarLayout();
         RestoreWindowBounds();
+        UpdateTransportBarVisibility();
+        UpdateTransportBarTheme();
+
+        try
+        {
+            if (VideoBackButtonShadow != null && RootGrid != null)
+            {
+                VideoBackButtonShadow.Receivers.Add(RootGrid);
+            }
+            if (FullscreenBackShadow != null && FullscreenVideoContainer != null)
+            {
+                FullscreenBackShadow.Receivers.Add(FullscreenVideoContainer);
+            }
+        }
+        catch { }
 
         if (AppSearchBox != null && RootNavigationView != null)
         {
@@ -1816,12 +1922,15 @@ public sealed partial class MainWindow : Window
                 {
                     RootNavigationView.Visibility = Visibility.Visible;
                     RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-                    RootNavigationView.IsPaneToggleButtonVisible = true;
                     RootNavigationView.IsPaneVisible = true;
                     RootNavigationView.IsPaneOpen = true;
-                    if (TransportControls != null) TransportControls.Visibility = Visibility.Visible;
-                    RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
-                    RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
+                    UpdateTransportBarVisibility();
+                    bool canGoBack = ContentFrame?.CanGoBack ?? false;
+                    RootNavigationView.IsBackEnabled = canGoBack;
+                    RootNavigationView.IsBackButtonVisible = canGoBack 
+                        ? NavigationViewBackButtonVisible.Visible 
+                        : NavigationViewBackButtonVisible.Collapsed;
+                    RootNavigationView.IsPaneToggleButtonVisible = true;
                     RootNavigationView.ClearValue(Control.BackgroundProperty);
                 }
                 
@@ -1900,13 +2009,16 @@ public sealed partial class MainWindow : Window
             {
                 RootNavigationView.Visibility = Visibility.Visible;
                 RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-                RootNavigationView.IsPaneToggleButtonVisible = true;
                 RootNavigationView.IsPaneVisible = true;
                 RootNavigationView.IsPaneOpen = true;
-                if (TransportControls != null) TransportControls.Visibility = Visibility.Visible;
+                UpdateTransportBarVisibility();
                 ForceRefreshNavigationViewLayout();
-                RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Visible;
-                RootNavigationView.IsBackEnabled = ContentFrame?.CanGoBack ?? false;
+                bool canGoBack = ContentFrame?.CanGoBack ?? false;
+                RootNavigationView.IsBackEnabled = canGoBack;
+                RootNavigationView.IsBackButtonVisible = canGoBack 
+                    ? NavigationViewBackButtonVisible.Visible 
+                    : NavigationViewBackButtonVisible.Collapsed;
+                RootNavigationView.IsPaneToggleButtonVisible = true;
                 RootNavigationView.ClearValue(Control.BackgroundProperty);
             }
             if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
@@ -2120,7 +2232,7 @@ public sealed partial class MainWindow : Window
         TransportControls.HorizontalAlignment = HorizontalAlignment.Stretch;
         TransportControls.VerticalAlignment = VerticalAlignment.Stretch;
         UpdateTransportBarTheme();
-        TransportControls.Visibility = Visibility.Visible;
+        UpdateTransportBarVisibility();
         TransportControls.Opacity = 1.0;
         TransportControls.SetBorderThickness(new Thickness(0, 1, 0, 0));
         TransportControls.SetFullscreenPresentation(false);
@@ -2331,6 +2443,35 @@ public sealed partial class MainWindow : Window
                 : ElementTheme.Dark
         };
         TransportControls.RefreshTheme();
+    }
+
+    public void ApplyTransportBarVisibility(bool show)
+    {
+        UpdateTransportBarVisibility(show);
+    }
+
+    public void UpdateTransportBarVisibility(bool? isExplicitVisible = null)
+    {
+        if (TransportControls == null)
+        {
+            return;
+        }
+
+        if (MiniPlayerGrid != null && MiniPlayerGrid.Visibility == Visibility.Visible)
+        {
+            TransportControls.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        if (isFullScreen)
+        {
+            // In fullscreen mode, visibility is managed by FullscreenControlsOverlay
+            return;
+        }
+
+        bool show = isExplicitVisible ?? AppServices.Settings.Current.AlwaysShowTransportBar;
+        TransportControls.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateWindowFrameTheme(ElementTheme theme)
@@ -2855,42 +2996,30 @@ public sealed partial class MainWindow : Window
     }
     #endregion
 
+    private bool _isNavPaneExpanded = true;
+
     private void OnNavigationPaneOpened(NavigationView sender, object args)
     {
-        if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Visible;
-        UpdateTitleBarLayout();
+        _isNavPaneExpanded = true;
+        UpdateTitleBarLayout(isPaneOpen: true);
     }
 
     private void OnNavigationPaneClosed(NavigationView sender, object args)
     {
-        if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Collapsed;
-        UpdateTitleBarLayout();
+        _isNavPaneExpanded = false;
+        UpdateTitleBarLayout(isPaneOpen: false);
     }
 
     private void OnNavigationPaneOpening(NavigationView sender, object args)
     {
-        try
-        {
-            if (TitleBrandPanel != null)
-            {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TitleBrandPanel);
-                visual.Opacity = 0f;
-            }
-        }
-        catch { }
+        _isNavPaneExpanded = true;
+        UpdateTitleBarLayout(isPaneOpen: true);
     }
 
     private void OnNavigationPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
     {
-        try
-        {
-            if (TitleBrandPanel != null)
-            {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TitleBrandPanel);
-                visual.Opacity = 0f;
-            }
-        }
-        catch { }
+        _isNavPaneExpanded = false;
+        UpdateTitleBarLayout(isPaneOpen: false);
     }
 
     private void OnNavigationDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
@@ -2909,9 +3038,7 @@ public sealed partial class MainWindow : Window
             {
                 if (RootNavigationView != null)
                 {
-                    // Toggle title bar auto padding to correct top offsets
                     RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
-                    RootNavigationView.IsTitleBarAutoPaddingEnabled = true;
 
                     if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                     {
@@ -2926,98 +3053,23 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private void UpdateTitleBarLayout()
+    private void UpdateTitleBarLayout(bool? isPaneOpen = null)
     {
-        if (RootNavigationView == null || TitleBrandPanel == null) return;
-        
-        bool isCollapsed = !RootNavigationView.IsPaneOpen || RootNavigationView.DisplayMode == NavigationViewDisplayMode.Minimal;
-        
-        if (AppServices.Settings.Current.ReduceMotion)
+        if (RootNavigationView == null) return;
+
+        bool open = isPaneOpen ?? (_isNavPaneExpanded && RootNavigationView.IsPaneOpen);
+
+        if (!open)
         {
-            if (isCollapsed)
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Center;
-                double rightMargin = RootNavigationView.DisplayMode == NavigationViewDisplayMode.Minimal ? 140 : 92;
-                TitleBrandPanel.Margin = new Thickness(0, 0, rightMargin, 0);
-            }
-            else
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Left;
-                TitleBrandPanel.Margin = new Thickness(12, 0, 0, 0);
-            }
-            return;
+            // When menu is collapsed: Show centered title in header, hide pane brand
+            if (CenteredTitleBrandPanel != null) CenteredTitleBrandPanel.Visibility = Visibility.Visible;
+            if (PaneBrandPanel != null) PaneBrandPanel.Visibility = Visibility.Collapsed;
         }
-
-        try
+        else
         {
-            // Enable translation on TitleBrandPanel visual
-            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetIsTranslationEnabled(TitleBrandPanel, true);
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TitleBrandPanel);
-            var compositor = visual.Compositor;
-
-            // Instantly hide it (set opacity = 0 and translation Y = -40)
-            visual.Opacity = 0f;
-            visual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0f, -40f, 0f));
-
-            // Layout alignment/margin instantly
-            if (isCollapsed)
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Center;
-                double rightMargin = RootNavigationView.DisplayMode == NavigationViewDisplayMode.Minimal ? 140 : 92;
-                TitleBrandPanel.Margin = new Thickness(0, 0, rightMargin, 0);
-            }
-            else
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Left;
-                TitleBrandPanel.Margin = new Thickness(12, 0, 0, 0);
-            }
-
-            // Smooth composition animations to fade it in (opacity 1.0) and slide it down (translation Y = 0)
-            var easing = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1.0f));
-
-            int delayMs = isCollapsed ? 150 : 100;
-            int durationMs = 200;
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f, easing);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(durationMs);
-            fadeAnimation.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0f, -40f, 0f));
-            slideAnimation.InsertKeyFrame(1f, System.Numerics.Vector3.Zero, easing);
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(durationMs);
-            slideAnimation.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-
-            visual.StartAnimation("Opacity", fadeAnimation);
-            visual.StartAnimation("Translation", slideAnimation);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[UpdateTitleBarLayout] Animation failed: {ex.Message}");
-            
-            // Fallback: layout alignment/margin instantly
-            if (isCollapsed)
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Center;
-                double rightMargin = RootNavigationView.DisplayMode == NavigationViewDisplayMode.Minimal ? 140 : 92;
-                TitleBrandPanel.Margin = new Thickness(0, 0, rightMargin, 0);
-            }
-            else
-            {
-                TitleBrandPanel.HorizontalAlignment = HorizontalAlignment.Left;
-                TitleBrandPanel.Margin = new Thickness(12, 0, 0, 0);
-            }
-            
-            try
-            {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TitleBrandPanel);
-                visual.Opacity = 1.0f;
-                visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
-            }
-            catch {}
+            // When menu is open: Keep brand in PaneHeader along the hamburger button, hide centered header title
+            if (CenteredTitleBrandPanel != null) CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+            if (PaneBrandPanel != null) PaneBrandPanel.Visibility = Visibility.Visible;
         }
     }
 
@@ -3155,26 +3207,42 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Left:
-                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
                 {
-                    TriggerIncrementalSeek(false);
+                    NavigateBack();
+                    e.Handled = true;
                 }
                 else
                 {
-                    SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
+                    if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                    {
+                        TriggerIncrementalSeek(false);
+                    }
+                    else
+                    {
+                        SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
+                    }
+                    e.Handled = true;
                 }
-                e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Right:
-                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
                 {
-                    TriggerIncrementalSeek(true);
+                    NavigateForward();
+                    e.Handled = true;
                 }
                 else
                 {
-                    SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                    if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                    {
+                        TriggerIncrementalSeek(true);
+                    }
+                    else
+                    {
+                        SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                    }
+                    e.Handled = true;
                 }
-                e.Handled = true;
                 break;
             case Windows.System.VirtualKey.J:
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
@@ -3219,6 +3287,14 @@ public sealed partial class MainWindow : Window
             case Windows.System.VirtualKey.F:
             case Windows.System.VirtualKey.F11:
                 ToggleFullscreen();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.GoBack:
+                NavigateBack();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.GoForward:
+                NavigateForward();
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Escape:
@@ -3547,8 +3623,20 @@ public sealed partial class MainWindow : Window
     private void OnRootGridPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         if (e.Handled) return;
-        if (!AppServices.Settings.Current.EnableSwipeNavigation) return;
         var pt = e.GetCurrentPoint(RootGrid);
+        if (pt.Properties.IsXButton1Pressed)
+        {
+            NavigateBack();
+            e.Handled = true;
+            return;
+        }
+        if (pt.Properties.IsXButton2Pressed)
+        {
+            NavigateForward();
+            e.Handled = true;
+            return;
+        }
+        if (!AppServices.Settings.Current.EnableSwipeNavigation) return;
         if (pt.Properties.IsLeftButtonPressed)
         {
             _swipeStartX = pt.Position.X;
