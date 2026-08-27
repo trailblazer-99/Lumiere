@@ -18,68 +18,39 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool ResumePlaybackPosition { get; set; }
     [ObservableProperty] public partial int SkipForwardInterval { get; set; }
     [ObservableProperty] public partial int SkipBackwardInterval { get; set; }
-    [ObservableProperty] public partial double DefaultPlaybackSpeed { get; set; }
     [ObservableProperty] public partial bool AutoAdvanceToNextTrack { get; set; }
     [ObservableProperty] public partial bool RememberLastPlayedTrack { get; set; }
     [ObservableProperty] public partial bool EnableSwipeNavigation { get; set; }
     [ObservableProperty] public partial bool CrossfadeEnabled { get; set; }
     [ObservableProperty] public partial int CrossfadeDuration { get; set; }
-    [ObservableProperty] public partial bool GaplessPlayback { get; set; }
 
     // ── Audio ──────────────────────────────────────────────────────
     [ObservableProperty] public partial EqualizerPreset SelectedEqualizer { get; set; }
-    [ObservableProperty] public partial bool VolumeNormalization { get; set; }
     [ObservableProperty] public partial double DefaultVolume { get; set; }
-    [ObservableProperty] public partial bool MonoAudio { get; set; }
-    [ObservableProperty] public partial int BassBoostLevel { get; set; }
-    [ObservableProperty] public partial int AudioBalance { get; set; }
 
     // ── Video ──────────────────────────────────────────────────────
     [ObservableProperty] public partial AspectRatioOption DefaultAspectRatio { get; set; }
-    [ObservableProperty] public partial string DefaultSubtitleLanguage { get; set; } = "None";
-    [ObservableProperty] public partial SubtitleFontSize SubtitleFontSize { get; set; }
-    [ObservableProperty] public partial int SubtitleBackgroundOpacity { get; set; }
-    [ObservableProperty] public partial bool HardwareAcceleration { get; set; }
-    [ObservableProperty] public partial bool AutoRotateVideo { get; set; }
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     [ObservableProperty] public partial HdrMode SelectedHdrMode { get; set; }
     [ObservableProperty] public partial ToneMappingMode SelectedToneMappingMode { get; set; }
     [ObservableProperty] public partial int PeakBrightnessNits { get; set; }
     [ObservableProperty] public partial bool AutoBoostHdrBrightness { get; set; }
-    [ObservableProperty] public partial bool HdrRealTimePlayback { get; set; }
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
     // ── Appearance ─────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeBackdrop SelectedBackdrop { get; set; }
-    [ObservableProperty] public partial bool ShowMediaCardGlow { get; set; }
-    [ObservableProperty] public partial bool ShowTimelinePreview { get; set; }
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
-    [ObservableProperty] public partial bool CompactDensityMode { get; set; }
-    [ObservableProperty] public partial bool ShowAlbumArtInTransportBar { get; set; }
-    [ObservableProperty] public partial bool AnimatedTransitions { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
 
     // ── Controls & Interface ───────────────────────────────────────
-    [ObservableProperty] public partial bool ShowShuffleButton { get; set; }
-    [ObservableProperty] public partial bool ShowRepeatButton { get; set; }
-    [ObservableProperty] public partial bool ShowSubtitlesButton { get; set; }
-    [ObservableProperty] public partial bool ShowFullscreenButton { get; set; }
-    [ObservableProperty] public partial bool ShowPipButton { get; set; }
-    [ObservableProperty] public partial bool ShowQueueInMoreMenu { get; set; }
-    [ObservableProperty] public partial bool ShowSpeedInMoreMenu { get; set; }
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
     [ObservableProperty] public partial OpenFileCorner SelectedOpenFilePositionCorner { get; set; }
 
     // ── Library ────────────────────────────────────────────────────
     [ObservableProperty] public partial bool AutomaticLibraryScan { get; set; }
-    [ObservableProperty] public partial LibrarySortOrder SelectedLibrarySortOrder { get; set; }
-    [ObservableProperty] public partial bool ShowHiddenFiles { get; set; }
-    [ObservableProperty] public partial bool AutoImportNewFiles { get; set; }
 
     // ── Privacy ────────────────────────────────────────────────────
-    [ObservableProperty] public partial bool SendTelemetry { get; set; }
-    [ObservableProperty] public partial bool RememberRecentlyPlayed { get; set; }
     [ObservableProperty] public partial bool RememberPlaybackPositionPerTrack { get; set; }
 
     // ── Accessibility ──────────────────────────────────────────────
@@ -105,6 +76,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AiEqualizerMatcherEnabled { get; set; }
     [ObservableProperty] public partial bool VoiceClarityEnabled { get; set; }
     [ObservableProperty] public partial bool NightModeEnabled { get; set; }
+    [ObservableProperty] public partial string AiConnectionStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsTestingAi { get; set; }
+    [ObservableProperty] public partial bool? IsAiConnected { get; set; }
     
     // ── Local AI Hardware Status ───────────────────────────────────
     [ObservableProperty] public partial bool IsLocalAiSupported { get; set; }
@@ -131,6 +105,13 @@ public partial class SettingsViewModel : ObservableObject
 
         SyncFromSettings();
         _settingsService.SettingsChanged += (_, _) => SyncFromSettings();
+        AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) =>
+        {
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                OnPropertyChanged(nameof(ActiveDisplayProfileSummary));
+            });
+        };
 
         // Analyze hardware async in background
         _ = AnalyzeHardwareBackgroundAsync();
@@ -228,54 +209,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     public string PeakBrightnessText => $"{PeakBrightnessNits} nits";
-
-    public int SelectedSubtitleFontSizeIndex
-    {
-        get => (int)SubtitleFontSize;
-        set { if (value >= 0 && SubtitleFontSize != (SubtitleFontSize)value) SubtitleFontSize = (SubtitleFontSize)value; }
-    }
-
-    public int SelectedSubtitleLanguageIndex
-    {
-        get => DefaultSubtitleLanguage switch
-        {
-            "None" => 0,
-            "English" => 1,
-            "Hindi" => 2,
-            "Spanish" => 3,
-            "French" => 4,
-            "German" => 5,
-            "Japanese" => 6,
-            "Korean" => 7,
-            "Chinese" => 8,
-            _ => 0,
-        };
-        set
-        {
-            if (value >= 0)
-            {
-                DefaultSubtitleLanguage = value switch
-                {
-                    0 => "None",
-                    1 => "English",
-                    2 => "Hindi",
-                    3 => "Spanish",
-                    4 => "French",
-                    5 => "German",
-                    6 => "Japanese",
-                    7 => "Korean",
-                    8 => "Chinese",
-                    _ => "None",
-                };
-            }
-        }
-    }
-
-    public int SelectedLibrarySortOrderIndex
-    {
-        get => (int)SelectedLibrarySortOrder;
-        set { if (value >= 0 && SelectedLibrarySortOrder != (LibrarySortOrder)value) SelectedLibrarySortOrder = (LibrarySortOrder)value; }
-    }
+    public string ActiveDisplayProfileSummary => AppServices.DisplayManager.DisplayProfileSummary;
 
     public int SelectedOpenFilePositionCornerIndex
     {
@@ -337,31 +271,7 @@ public partial class SettingsViewModel : ObservableObject
         set { if (value >= 0 && value < SkipIntervals.Length) SkipBackwardInterval = SkipIntervals[value]; }
     }
 
-    private static readonly double[] SpeedValues = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-
-    public int DefaultPlaybackSpeedIndex
-    {
-        get
-        {
-            int idx = Array.IndexOf(SpeedValues, DefaultPlaybackSpeed);
-            return idx >= 0 ? idx : 3; // default 1.0x
-        }
-        set
-        {
-            if (value >= 0 && value < SpeedValues.Length)
-                DefaultPlaybackSpeed = SpeedValues[value];
-        }
-    }
-
     public string DefaultVolumeText => $"{(int)DefaultVolume}%";
-    public string BassBoostText => $"{BassBoostLevel}%";
-    public string SubtitleOpacityText => $"{SubtitleBackgroundOpacity}%";
-    public string AudioBalanceText => AudioBalance switch
-    {
-        0 => "Center",
-        < 0 => $"L {-AudioBalance}%",
-        _ => $"R {AudioBalance}%",
-    };
     public string CrossfadeDurationText => $"{CrossfadeDuration}s";
     public string FocusIndicatorThicknessText => $"{FocusIndicatorThickness}px";
 
@@ -397,14 +307,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SkipBackwardIndex));
     }
 
-    partial void OnDefaultPlaybackSpeedChanged(double value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.DefaultPlaybackSpeed = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(DefaultPlaybackSpeedIndex));
-    }
-
     partial void OnAutoAdvanceToNextTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoAdvanceToNextTrack = value; _settingsService.Save(); } }
     partial void OnRememberLastPlayedTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberLastPlayedTrack = value; _settingsService.Save(); } }
     partial void OnEnableSwipeNavigationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.EnableSwipeNavigation = value; _settingsService.Save(); } }
@@ -418,8 +320,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(CrossfadeDurationText));
     }
 
-    partial void OnGaplessPlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.GaplessPlayback = value; _settingsService.Save(); } }
-
     // Audio
     partial void OnSelectedEqualizerChanged(EqualizerPreset value)
     {
@@ -429,32 +329,12 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedEqualizerIndex));
     }
 
-    partial void OnVolumeNormalizationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.VolumeNormalization = value; _settingsService.Save(); } }
-
     partial void OnDefaultVolumeChanged(double value)
     {
         if (_isSyncing) return;
         _settingsService.Current.DefaultVolume = value;
         _settingsService.Save();
         OnPropertyChanged(nameof(DefaultVolumeText));
-    }
-
-    partial void OnMonoAudioChanged(bool value) { if (!_isSyncing) { _settingsService.Current.MonoAudio = value; _settingsService.Save(); } }
-
-    partial void OnBassBoostLevelChanged(int value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.BassBoostLevel = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(BassBoostText));
-    }
-
-    partial void OnAudioBalanceChanged(int value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.AudioBalance = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(AudioBalanceText));
     }
 
     // Video
@@ -465,33 +345,6 @@ public partial class SettingsViewModel : ObservableObject
         _settingsService.Save();
         OnPropertyChanged(nameof(SelectedAspectRatioIndex));
     }
-
-    partial void OnDefaultSubtitleLanguageChanged(string value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.DefaultSubtitleLanguage = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedSubtitleLanguageIndex));
-    }
-
-    partial void OnSubtitleFontSizeChanged(SubtitleFontSize value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.SubtitleFontSize = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedSubtitleFontSizeIndex));
-    }
-
-    partial void OnSubtitleBackgroundOpacityChanged(int value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.SubtitleBackgroundOpacity = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(SubtitleOpacityText));
-    }
-
-    partial void OnHardwareAccelerationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HardwareAcceleration = value; _settingsService.Save(); } }
-    partial void OnAutoRotateVideoChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoRotateVideo = value; _settingsService.Save(); } }
 
     // HDR & Color Pipeline
     partial void OnSelectedHdrModeChanged(HdrMode value)
@@ -530,7 +383,6 @@ public partial class SettingsViewModel : ObservableObject
         TryReapplyHdrPipeline();
     }
 
-    partial void OnHdrRealTimePlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HdrRealTimePlayback = value; _settingsService.Save(); } }
     partial void OnShowHdrBadgeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHdrBadge = value; _settingsService.Save(); } }
 
     private static void TryReapplyHdrPipeline()
@@ -556,9 +408,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedBackdropIndex));
     }
 
-    partial void OnShowMediaCardGlowChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowMediaCardGlow = value; _settingsService.Save(); } }
-    partial void OnShowTimelinePreviewChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowTimelinePreview = value; _settingsService.Save(); } }
-
     partial void OnSelectedAccentColorChanged(AccentColorOption value)
     {
         if (_isSyncing) return;
@@ -569,9 +418,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
     }
 
-    partial void OnCompactDensityModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CompactDensityMode = value; _settingsService.Save(); } }
-    partial void OnShowAlbumArtInTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowAlbumArtInTransportBar = value; _settingsService.Save(); } }
-    partial void OnAnimatedTransitionsChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AnimatedTransitions = value; _settingsService.Save(); } }
     partial void OnAlwaysShowTransportBarChanged(bool value)
     {
         if (!_isSyncing)
@@ -583,13 +429,6 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     // Controls & Interface
-    partial void OnShowShuffleButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowShuffleButton = value; _settingsService.Save(); } }
-    partial void OnShowRepeatButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowRepeatButton = value; _settingsService.Save(); } }
-    partial void OnShowSubtitlesButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowSubtitlesButton = value; _settingsService.Save(); } }
-    partial void OnShowFullscreenButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowFullscreenButton = value; _settingsService.Save(); } }
-    partial void OnShowPipButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowPipButton = value; _settingsService.Save(); } }
-    partial void OnShowQueueInMoreMenuChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowQueueInMoreMenu = value; _settingsService.Save(); } }
-    partial void OnShowSpeedInMoreMenuChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowSpeedInMoreMenu = value; _settingsService.Save(); } }
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
 
     partial void OnSelectedOpenFilePositionCornerChanged(OpenFileCorner value)
@@ -603,20 +442,7 @@ public partial class SettingsViewModel : ObservableObject
     // Library
     partial void OnAutomaticLibraryScanChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutomaticLibraryScan = value; _settingsService.Save(); } }
 
-    partial void OnSelectedLibrarySortOrderChanged(LibrarySortOrder value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.LibrarySortOrder = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedLibrarySortOrderIndex));
-    }
-
-    partial void OnShowHiddenFilesChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHiddenFiles = value; _settingsService.Save(); } }
-    partial void OnAutoImportNewFilesChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoImportNewFiles = value; _settingsService.Save(); } }
-
     // Privacy
-    partial void OnSendTelemetryChanged(bool value) { if (!_isSyncing) { _settingsService.Current.SendTelemetry = value; _settingsService.Save(); } }
-    partial void OnRememberRecentlyPlayedChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberRecentlyPlayed = value; _settingsService.Save(); } }
     partial void OnRememberPlaybackPositionPerTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberPlaybackPositionPerTrack = value; _settingsService.Save(); } }
 
     // Accessibility
@@ -698,6 +524,34 @@ public partial class SettingsViewModel : ObservableObject
     // ── Commands ───────────────────────────────────────────────────
 
     [RelayCommand]
+    private async System.Threading.Tasks.Task TestAiConnection()
+    {
+        IsTestingAi = true;
+        AiConnectionStatus = "Pinging configured AI pipeline...";
+        IsAiConnected = null;
+
+        try
+        {
+            // Ensure settings service has the latest key immediately
+            _settingsService.Current.GeminiApiKey = GeminiApiKey?.Trim() ?? "";
+            var (success, message, latency) = await Services.AiAssistantService.TestAiConnectionAsync(GeminiApiKey);
+            IsAiConnected = success;
+            AiConnectionStatus = success 
+                ? $"✅ {message}" 
+                : $"❌ {message}";
+        }
+        catch (Exception ex)
+        {
+            IsAiConnected = false;
+            AiConnectionStatus = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            IsTestingAi = false;
+        }
+    }
+
+    [RelayCommand]
     private void RemoveFolder(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -724,12 +578,6 @@ public partial class SettingsViewModel : ObservableObject
     {
         await _settingsService.ResetPlaybackHistoryAndCacheAsync();
         SyncFromSettings();
-    }
-
-    [RelayCommand]
-    private async System.Threading.Tasks.Task ClearPlaybackHistory()
-    {
-        await _settingsService.ResetPlaybackHistoryAndCacheAsync();
     }
 
     [RelayCommand]
@@ -783,61 +631,32 @@ public partial class SettingsViewModel : ObservableObject
         ResumePlaybackPosition = c.ResumePlaybackPosition;
         SkipForwardInterval = c.SkipForwardInterval;
         SkipBackwardInterval = c.SkipBackwardInterval;
-        DefaultPlaybackSpeed = c.DefaultPlaybackSpeed;
         AutoAdvanceToNextTrack = c.AutoAdvanceToNextTrack;
         RememberLastPlayedTrack = c.RememberLastPlayedTrack;
         CrossfadeEnabled = c.CrossfadeEnabled;
         CrossfadeDuration = c.CrossfadeDuration;
-        GaplessPlayback = c.GaplessPlayback;
         EnableSwipeNavigation = c.EnableSwipeNavigation;
 
         SelectedEqualizer = c.Equalizer;
-        VolumeNormalization = c.VolumeNormalization;
         DefaultVolume = c.DefaultVolume;
-        MonoAudio = c.MonoAudio;
-        BassBoostLevel = c.BassBoostLevel;
-        AudioBalance = c.AudioBalance;
 
         DefaultAspectRatio = c.DefaultAspectRatio;
-        DefaultSubtitleLanguage = c.DefaultSubtitleLanguage;
-        SubtitleFontSize = c.SubtitleFontSize;
-        SubtitleBackgroundOpacity = c.SubtitleBackgroundOpacity;
-        HardwareAcceleration = c.HardwareAcceleration;
-        AutoRotateVideo = c.AutoRotateVideo;
 
         SelectedHdrMode = c.HdrMode;
         AutoBoostHdrBrightness = c.AutoBoostHdrBrightness;
         SelectedToneMappingMode = c.ToneMappingMode;
         PeakBrightnessNits = c.PeakBrightnessNits;
-        HdrRealTimePlayback = c.HdrRealTimePlayback;
         ShowHdrBadge = c.ShowHdrBadge;
 
         SelectedBackdrop = c.BackdropType;
-        ShowMediaCardGlow = c.ShowMediaCardGlow;
-        ShowTimelinePreview = c.ShowTimelinePreview;
         SelectedAccentColor = c.AccentColor;
-        CompactDensityMode = c.CompactDensityMode;
-        ShowAlbumArtInTransportBar = c.ShowAlbumArtInTransportBar;
-        AnimatedTransitions = c.AnimatedTransitions;
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
 
-        ShowShuffleButton = c.ShowShuffleButton;
-        ShowRepeatButton = c.ShowRepeatButton;
-        ShowSubtitlesButton = c.ShowSubtitlesButton;
-        ShowFullscreenButton = c.ShowFullscreenButton;
-        ShowPipButton = c.ShowPipButton;
-        ShowQueueInMoreMenu = c.ShowQueueInMoreMenu;
-        ShowSpeedInMoreMenu = c.ShowSpeedInMoreMenu;
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
 
         AutomaticLibraryScan = c.AutomaticLibraryScan;
-        SelectedLibrarySortOrder = c.LibrarySortOrder;
-        ShowHiddenFiles = c.ShowHiddenFiles;
-        AutoImportNewFiles = c.AutoImportNewFiles;
 
-        SendTelemetry = c.SendTelemetry;
-        RememberRecentlyPlayed = c.RememberRecentlyPlayed;
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;
 
         HighContrastMode = c.HighContrastMode;
@@ -873,16 +692,9 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SkipForwardIndex));
         OnPropertyChanged(nameof(SkipBackwardIndex));
         OnPropertyChanged(nameof(DefaultVolumeText));
-        OnPropertyChanged(nameof(DefaultPlaybackSpeedIndex));
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
         OnPropertyChanged(nameof(SelectedAspectRatioIndex));
-        OnPropertyChanged(nameof(SelectedSubtitleFontSizeIndex));
-        OnPropertyChanged(nameof(SelectedSubtitleLanguageIndex));
-        OnPropertyChanged(nameof(SelectedLibrarySortOrderIndex));
         OnPropertyChanged(nameof(SelectedOpenFilePositionCornerIndex));
-        OnPropertyChanged(nameof(BassBoostText));
-        OnPropertyChanged(nameof(AudioBalanceText));
-        OnPropertyChanged(nameof(SubtitleOpacityText));
         OnPropertyChanged(nameof(CrossfadeDurationText));
         OnPropertyChanged(nameof(SelectedColorBlindModeIndex));
         OnPropertyChanged(nameof(FocusIndicatorThicknessText));

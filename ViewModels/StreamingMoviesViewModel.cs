@@ -34,6 +34,23 @@ namespace LumiereMediaPlayer.ViewModels
             Movies?.Clear();
         }
 
+        [ObservableProperty] public partial bool IsAiSearchActive { get; set; }
+
+        [RelayCommand]
+        public void ResetFilters()
+        {
+            ActiveSearchQuery = string.Empty;
+            SelectedProvider = "All Services";
+            SelectedGenre = "All Genres";
+            SelectedAccessType = "All Access Types";
+            SelectedSortOrder = "Popularity";
+            CurrentPage = 1;
+            if (_initialized)
+            {
+                _ = LoadMoviesAsync();
+            }
+        }
+
         [ObservableProperty] public partial ObservableCollection<WatchmodeTitle> Movies { get; set; } = new();
 
         [ObservableProperty] public partial bool IsLoading { get; set; }

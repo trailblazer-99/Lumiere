@@ -49,6 +49,9 @@ public sealed class PlaybackSession
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _sleepCheckTimer;
     private DateTime? _sleepExpireTime;
 
+    [System.Runtime.InteropServices.DllImport("psapi.dll")]
+    private static extern bool EmptyWorkingSet(nint hProcess);
+
     public PlaybackSession(IEnumerable<MediaItem> initialQueue)
     {
         _queue = initialQueue.ToList();
@@ -269,10 +272,6 @@ public sealed class PlaybackSession
 
             _currentPlaybackSource = source;
             _mediaPlayer.Source = source;
-            if (track.IsVideo)
-            {
-                PrefetchVideoThumbnails(track);
-            }
 
             var targetPos = GetResumePositionSeconds(track);
             if (targetPos > 0)
@@ -340,6 +339,9 @@ public sealed class PlaybackSession
                 {
                     StateChanged?.Invoke(this, EventArgs.Empty);
                 }
+
+                // Ensure deep container and HDR metadata is scanned
+                _ = MediaMetadataScanner.ScanMetadataAsync(CurrentTrack);
             }
 
             // Configure the HDR pipeline for the newly opened media.
@@ -761,6 +763,23 @@ public sealed class PlaybackSession
         BeginPlaybackRequest();
         try
         {
+            _prefetchCts?.Cancel();
+            _prefetchCts = null;
+        }
+        catch { }
+
+        lock (VideoThumbnailCacheLock)
+        {
+            _videoThumbnailCache.Clear();
+        }
+
+        lock (_compositionLock)
+        {
+            _activeComposition = null;
+        }
+
+        try
+        {
             _mediaPlayer.Pause();
             if (_currentPlaybackSource != null)
             {
@@ -793,29 +812,21 @@ public sealed class PlaybackSession
             _sleepCheckTimer = null;
         }
 
-        try
-        {
-            _prefetchCts?.Cancel();
-            _prefetchCts = null;
-        }
-        catch { }
-
-        lock (VideoThumbnailCacheLock)
-        {
-            _videoThumbnailCache.Clear();
-        }
-
-        lock (_compositionLock)
-        {
-            _activeComposition = null;
-        }
-
         UpdateDisplayRequestState();
         StateChanged?.Invoke(this, EventArgs.Empty);
 
-        // Force GC collection immediately to free up decoders and video buffers from RAM
-        // Allow .NET generational GC to reclaim memory asynchronously (Rule 4)
-        // Do not call GC.Collect() synchronously on the UI thread
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                System.Threading.Thread.Sleep(80);
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
+                EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+            }
+            catch { }
+        });
     }
 
     private async void RestoreLastPlayedTrack()
@@ -1001,9 +1012,10 @@ public sealed class PlaybackSession
                     matchedPreset = EqualizerPreset.Vocal;
                 }
                 
-                // 2. Cloud matching fallback (using proxy/Gemini) if UseProxy is enabled
+                // 2. AI matching fallback (using Local Ollama, Gemini API, or Proxy)
                 var config = ConfigService.Config;
-                if (matchedPreset == EqualizerPreset.Flat && config.UseProxy)
+                bool hasAiProvider = settings.UseLocalAi || !string.IsNullOrWhiteSpace(settings.GeminiApiKey) || (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl));
+                if (matchedPreset == EqualizerPreset.Flat && hasAiProvider)
                 {
                     try
                     {
@@ -1016,7 +1028,8 @@ public sealed class PlaybackSession
                     catch { }
                 }
 
-                if (settings.Equalizer != matchedPreset)
+                // Only apply if AI/heuristic found a specific match — never reset user's preset to Flat
+                if (matchedPreset != EqualizerPreset.Flat && settings.Equalizer != matchedPreset)
                 {
                     Log($"AI Equalizer Matcher: Autodetected and changed EQ preset to '{matchedPreset}' for track '{title}'");
                     App.MainDispatcher?.TryEnqueue(() =>
@@ -1364,10 +1377,10 @@ public sealed class PlaybackSession
                 double totalSec = clip.OriginalDuration.TotalSeconds;
                 if (totalSec <= 0) return;
 
-                int numThumbnails = 45;
-                double step = totalSec / numThumbnails;
+                int numThumbnails = 8;
+                double step = totalSec / (numThumbnails + 1);
 
-                for (int i = 0; i < numThumbnails; i++)
+                for (int i = 1; i <= numThumbnails; i++)
                 {
                     if (token.IsCancellationRequested) break;
 
@@ -1376,8 +1389,15 @@ public sealed class PlaybackSession
 
                     try
                     {
+                        if (token.IsCancellationRequested) break;
                         var stream = await composition.GetThumbnailAsync(time, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
                         
+                        if (token.IsCancellationRequested)
+                        {
+                            stream?.Dispose();
+                            break;
+                        }
+
                         bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
                         {
                             using (stream)
@@ -1404,7 +1424,7 @@ public sealed class PlaybackSession
                         // Ignore individual frame extraction failures
                     }
 
-                    await Task.Delay(40, token);
+                    await Task.Delay(50, token);
                 }
                 Log("PrefetchVideoThumbnails: Thread finished enqueuing tasks.");
             }

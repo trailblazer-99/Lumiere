@@ -18,6 +18,8 @@ namespace LumiereMediaPlayer.ViewModels
 
         [ObservableProperty] public partial string SearchQuery { get; set; } = "Pop";
 
+        [ObservableProperty] public partial bool IsAiSearchActive { get; set; }
+
         [ObservableProperty] public partial bool IsLoading { get; set; }
 
         [ObservableProperty] public partial ObservableCollection<string> Genres { get; set; } = new()

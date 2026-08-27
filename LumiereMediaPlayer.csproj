@@ -17,6 +17,11 @@
     <Version>1.0.1.0</Version>
     <ApplicationVersion>1.0.1.0</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.1.0</ApplicationDisplayVersion>
+    <!-- Client Desktop RAM & Performance Optimizations -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Platform)' == 'AnyCPU'">

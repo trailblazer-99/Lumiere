@@ -60,10 +60,25 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private bool _isInitializingPasswordBox;
+
+    private void OnGeminiApiKeyPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializingPasswordBox || GeminiApiKeyPasswordBox == null) return;
+        ViewModel.GeminiApiKey = GeminiApiKeyPasswordBox.Password?.Trim() ?? "";
+    }
+
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         try
         {
+            if (GeminiApiKeyPasswordBox != null)
+            {
+                _isInitializingPasswordBox = true;
+                GeminiApiKeyPasswordBox.Password = ViewModel.GeminiApiKey ?? "";
+                _isInitializingPasswordBox = false;
+            }
+
             if (_allSearchItems.Count == 0)
             {
                 InitializeSettingsSearchCatalog();
@@ -108,63 +123,38 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Resume playback position", Description = "Remember where you left off and resume from that location", Section = "Playback", Keywords = "resume, remember, history, progress, position, time, continue, timestamp", TargetElement = PlaybackSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Skip forward interval", Description = "How many seconds to skip when seeking forward", Section = "Playback", Keywords = "skip, forward, jump, seconds, interval, seek, fast forward, 5s, 10s, 15s, 30s, 45s, 60s", TargetElement = PlaybackSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Skip backward interval", Description = "How many seconds to skip when seeking backward", Section = "Playback", Keywords = "skip, backward, back, jump, seconds, interval, seek, rewind, 5s, 10s, 15s, 30s, 45s, 60s", TargetElement = PlaybackSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Default playback speed", Description = "Set the default speed for media playback (0.25x - 2.0x)", Section = "Playback", Keywords = "speed, rate, fast, slow, 1x, 2x, 1.5x, 0.5x, pitch, tempo, playback speed, normal", TargetElement = PlaybackSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Auto-advance to next track", Description = "Automatically play the next track when current one finishes", Section = "Playback", Keywords = "auto advance, next track, autoplay next, playlist, queue, continue, next song", TargetElement = PlaybackSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Remember last played track", Description = "Load the last played track on app startup", Section = "Playback", Keywords = "remember track, last played, startup, resume song, previous track, history", TargetElement = PlaybackSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Crossfade between tracks", Description = "Smoothly blend audio when transitioning between tracks", Section = "Playback", Keywords = "crossfade, blend, transition, smooth, mix, overlap, fade, duration, seconds", TargetElement = PlaybackSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Gapless playback", Description = "Eliminate silence gaps between consecutive tracks in an album", Section = "Playback", Keywords = "gapless, seamless, no gap, album, continuous, silence, silence removal", TargetElement = PlaybackSection });
 
         // 2. Audio & Output
         _allSearchItems.Add(new SettingSearchItem { Title = "Equalizer preset", Description = "Adjust 10-band frequency levels and audio EQ presets", Section = "Audio & Output", Keywords = "equalizer, eq, graphic eq, 10 band, bands, frequency, preset, rock, pop, jazz, classical, acoustic, flat", TargetElement = AudioSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Volume normalization", Description = "Balance volume differences across songs and albums", Section = "Audio & Output", Keywords = "replaygain, normalization, normalize, loudness, volume leveling, peak, ebu r128, track, album", TargetElement = AudioSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Default startup volume", Description = "Set the starting volume level for new sessions", Section = "Audio & Output", Keywords = "volume, loudness, sound level, initial volume, default startup volume, percentage, master", TargetElement = AudioSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Mono audio", Description = "Combine left and right audio channels into a single mono channel", Section = "Audio & Output", Keywords = "mono, mono audio, stereo, channels, accessibility, downmix", TargetElement = AudioSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Bass boost level", Description = "Enhance low-end frequencies and subwoofer punch", Section = "Audio & Output", Keywords = "bass, bass boost, low frequency, subwoofer, punch, deep bass, low end, level, slider", TargetElement = AudioSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Audio balance", Description = "Adjust stereo channel balance between Left and Right", Section = "Audio & Output", Keywords = "balance, left, right, stereo, channels, pan, l, r, stereo balance, audio balance", TargetElement = AudioSection });
 
         // 3. Video
         _allSearchItems.Add(new SettingSearchItem { Title = "Default aspect ratio", Description = "Set default video framing (16:9, 4:3, 21:9, Zoom, Fill)", Section = "Video", Keywords = "aspect ratio, 16:9, 4:3, 21:9, stretch, fill, fit, zoom, widescreen, ultrawide, letterbox, pillarbox", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Default subtitle language", Description = "Preferred language for automatic subtitle selection", Section = "Video", Keywords = "subtitle, language, english, spanish, french, german, captions, srt", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Subtitle font size", Description = "Adjust the default size of on-screen subtitle text", Section = "Video", Keywords = "subtitle size, font size, small, medium, large, extra large, text size, font scale", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Subtitle background opacity", Description = "Control translucent background box opacity behind subtitles", Section = "Video", Keywords = "subtitle background, opacity, translucent, black box, shadow, outline, backdrop, readability", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Hardware acceleration", Description = "Use GPU video decoding (DXVA2, D3D11VA, NVDEC)", Section = "Video", Keywords = "hardware acceleration, gpu, decode, dxva, dxva2, d3d11, nvdec, vce, intel qsv, amd, nvidia, video card", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Auto-rotate video", Description = "Automatically rotate portrait and landscape videos based on orientation metadata", Section = "Video", Keywords = "rotate, auto rotate, orientation, portrait, landscape", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "HDR mode", Description = "Configure Auto, Forced, or SDR mode for HDR10 & streaming displays", Section = "Video", Keywords = "hdr, high dynamic range, hdr10, auto, force, forced hdr, sdr, 10bit, 12bit, bt2020, dci-p3, colorspace, wide color", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Auto brightness boost in HDR", Description = "Automatically boost display brightness to 100% during HDR playback", Section = "Video", Keywords = "brightness, auto, hdr, boost, luminance, monitor, screen, 100%, peak brightness, nits, laptop", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Tone mapping", Description = "Choose ACES, Reinhard, or Hable tone-mapping operator", Section = "Video", Keywords = "tonemap, tone mapping, aces, reinhard, hable, luminance, roll-off, clipping, contrast, sdr conversion", TargetElement = VideoSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Real-time HDR decoding", Description = "Direct GPU decoding and MPO shared-surface rendering", Section = "Video", Keywords = "decode, realtime, latency, gpu, hardware, mpo, dual gpu, nvdec, d3d11va, direct shared surface, 10-bit", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show HDR badge on player", Description = "Display an HDR10/HLG badge on the video player when active", Section = "Video", Keywords = "badge, overlay, indicator, status, hdr10, hlg, dolby vision, tag, label, stamp", TargetElement = VideoSection });
 
         // 4. Appearance & Visuals
         _allSearchItems.Add(new SettingSearchItem { Title = "App theme", Description = "Switch between Dark, Light, or System default theme", Section = "Appearance & Visuals", Keywords = "theme, dark, light, system, mode, color, appearance, style, dark mode, light mode", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Backdrop type", Description = "Change window material (Mica, Mica Alt, Acrylic, Solid)", Section = "Appearance & Visuals", Keywords = "backdrop, mica, mica alt, acrylic, solid, blur, transparency, glass, material, aero, window background", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Accent color", Description = "Choose primary highlight color (Orange, Purple, Blue, Teal, Red, Pink)", Section = "Appearance & Visuals", Keywords = "accent, color, tint, orange, purple, blue, teal, red, pink, custom color, system default", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show media card glow", Description = "Enable ambient artwork-colored glow effects on media cards", Section = "Appearance & Visuals", Keywords = "glow, card glow, ambient, dynamic glow, border glow, illumination, card border", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show timeline preview on hover", Description = "Display timestamp preview when hovering over timeline slider", Section = "Appearance & Visuals", Keywords = "timeline preview, hover, timestamp, preview thumbnail, seek preview", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Compact density mode", Description = "Reduce padding and spacing for a denser interface layout", Section = "Appearance & Visuals", Keywords = "compact, density, layout, padding, spacing, dense", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show album art in transport bar", Description = "Display album artwork thumbnail in bottom playback bar", Section = "Appearance & Visuals", Keywords = "album art, transport bar, thumbnail, artwork, bottom bar, cover", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Animated transitions", Description = "Enable smooth page and card transition animations", Section = "Appearance & Visuals", Keywords = "animations, transitions, animated, smooth, motion", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show transport bar", Description = "Toggle playback controls bar visibility across the app", Section = "Appearance & Visuals", Keywords = "transport bar, show transport bar, hide transport bar, player bar, bottom bar, playback bar, mini bar, toggle transport bar, transport", TargetElement = AppearanceSection });
 
         // 5. Controls & Interface
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show shuffle button", Description = "Display the shuffle button in the transport controls", Section = "Controls & Interface", Keywords = "shuffle, random, transport controls, button", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show repeat button", Description = "Display the repeat button in the transport controls", Section = "Controls & Interface", Keywords = "repeat, loop, transport controls, button", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show subtitles button", Description = "Display the subtitles toggle in the transport controls", Section = "Controls & Interface", Keywords = "subtitles, captions, cc, transport controls, button", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show fullscreen button", Description = "Display the fullscreen toggle in the transport controls", Section = "Controls & Interface", Keywords = "fullscreen, maximize, expand, transport controls, button", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show Picture in Picture button", Description = "Display the mini overlay player toggle button", Section = "Controls & Interface", Keywords = "pip, picture in picture, compact overlay, mini player, pin", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show queue in more menu", Description = "Show playback queue option in the transport overflow menu", Section = "Controls & Interface", Keywords = "queue, play queue, more menu, overflow, up next", TargetElement = ControlsSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show speed controls in more menu", Description = "Show playback speed selection in the transport overflow menu", Section = "Controls & Interface", Keywords = "speed, playback rate, 1x, 2x, more menu, overflow", TargetElement = ControlsSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Controls & Interface", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = ControlsSection });
 
         // 6. Media Library & Files
         _allSearchItems.Add(new SettingSearchItem { Title = "Library folders", Description = "Add or remove local folders to include in your media library", Section = "Media Library & Files", Keywords = "library, folders, scan, folder, add, music, videos, directory, path, watch folder, media folders, remove folder", TargetElement = LibrarySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Automatic library scan on launch", Description = "Automatically check for new media files on startup", Section = "Media Library & Files", Keywords = "scan, refresh, update, library, startup scan, background scan, auto scan", TargetElement = LibrarySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Sort library by", Description = "Default sorting for media lists (Title, Artist, Date, Duration)", Section = "Media Library & Files", Keywords = "sort, order, title, artist, album, date added, year, duration, file name, ascending, descending", TargetElement = LibrarySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show hidden files", Description = "Include hidden folders and files when scanning libraries", Section = "Media Library & Files", Keywords = "hidden, dot files, scan, library, hidden files", TargetElement = LibrarySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Auto-import new files", Description = "Monitor watched library folders in real-time for newly added files", Section = "Media Library & Files", Keywords = "auto import, watcher, monitor, real-time, scan, import", TargetElement = LibrarySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Supported formats", Description = "View and configure file extensions recognized by Lumière", Section = "Media Library & Files", Keywords = "formats, extensions, mp4, mkv, mp3, flac, wav, aac, m4a, avi, webm, hevc, av1", TargetElement = LibrarySection });
 
         // 7. AI Features
+        _allSearchItems.Add(new SettingSearchItem { Title = "Google Gemini API Key", Description = "Configure direct cloud API key for Google Gemini generative AI", Section = "AI Features", Keywords = "gemini, api key, google gemini, cloud ai, llm key, token, gemini 2.0 flash, generative ai, api, cloud", TargetElement = AiSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Test AI Pipeline Connection", Description = "Ping configured local Ollama or cloud Gemini AI provider to verify latency", Section = "AI Features", Keywords = "test ai, test connection, ping ollama, check gemini, ai latency, model test, verify ai, diagnostics, status, health", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Enable lyrics translation", Description = "Automatically translate synced lyrics using AI", Section = "AI Features", Keywords = "ai lyrics, translation, translate, song lyrics, multilingual, synced lyrics, realtime lyrics", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Translation target language", Description = "Select language for AI lyrics and subtitle translation", Section = "AI Features", Keywords = "target language, language, english, spanish, french, german, japanese, chinese, hindi, korean, italian, russian", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Use Local AI (Ollama)", Description = "Process AI tasks locally on-device for privacy and offline use", Section = "AI Features", Keywords = "ollama, local ai, privacy, offline, on-device, llm, phi, llama, mistral, deepseek", TargetElement = AiSection });
@@ -175,11 +165,9 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Dynamic Volume Leveler (Night Mode)", Description = "Level loud explosions and boost quiet dialogue for night viewing", Section = "AI Features", Keywords = "night mode, volume leveler, dynamic range, quiet dialogue, loud explosions, late night, compression, drc", TargetElement = AiSection });
 
         // 8. Privacy & History
-        _allSearchItems.Add(new SettingSearchItem { Title = "Send anonymous telemetry", Description = "Share usage statistics to help improve Lumière", Section = "Privacy & History", Keywords = "telemetry, crash, data, usage, privacy, diagnostics, reports, analytics, anonymous", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "API Data Attribution", Description = "Metadata and streaming availability provided by TMDB & Watchmode", Section = "Privacy & History", Keywords = "tmdb, watchmode, api, attribution, license, credits, terms", TargetElement = PrivacySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Remember recently played", Description = "Keep history of recently played media items", Section = "Privacy & History", Keywords = "recently played, history, recent items, playback history, track list, recent videos, recent songs", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Remember playback position per track", Description = "Store and resume last position for each individual track", Section = "Privacy & History", Keywords = "position, per track, remember time, bookmark, track history, resume time", TargetElement = PrivacySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Clear data", Description = "Clear playback history, search history, or recent files", Section = "Privacy & History", Keywords = "clear, delete, reset history, wipe cache, clear recent, remove history, purge data", TargetElement = PrivacySection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Clear data", Description = "Clear search history or recent files", Section = "Privacy & History", Keywords = "clear, delete, reset history, wipe cache, clear recent, remove history, purge data", TargetElement = PrivacySection });
 
         // 9. Accessibility
         _allSearchItems.Add(new SettingSearchItem { Title = "High contrast mode", Description = "Increase contrast between UI elements for better legibility", Section = "Accessibility", Keywords = "high contrast, contrast, accessibility, black, white, yellow, visibility, legible, vision", TargetElement = AccessibilitySection });

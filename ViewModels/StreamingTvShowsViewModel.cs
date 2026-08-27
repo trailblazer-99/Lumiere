@@ -34,6 +34,24 @@ namespace LumiereMediaPlayer.ViewModels
             TvShows?.Clear();
         }
 
+        [ObservableProperty] public partial bool IsAiSearchActive { get; set; }
+
+        [RelayCommand]
+        public void ResetFilters()
+        {
+            ActiveSearchQuery = string.Empty;
+            SelectedProvider = "All Services";
+            SelectedNetwork = "All Networks";
+            SelectedGenre = "All Genres";
+            SelectedAccessType = "All Access Types";
+            SelectedSortOrder = "Popularity";
+            CurrentPage = 1;
+            if (_initialized)
+            {
+                _ = LoadTvShowsAsync();
+            }
+        }
+
         [ObservableProperty] public partial ObservableCollection<WatchmodeTitle> TvShows { get; set; } = new();
 
         [ObservableProperty] public partial bool IsLoading { get; set; }

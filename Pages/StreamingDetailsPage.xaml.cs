@@ -46,6 +46,8 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            this.Unloaded -= OnUnloaded;
+            _details = null;
         }
 
         private void OnBackButtonClick(object sender, RoutedEventArgs e)
@@ -331,7 +333,8 @@ namespace LumiereMediaPlayer.Pages
             else if (!DetailsPivot.Items.Contains(CrewPivotItem))
             {
                 int castIndex = DetailsPivot.Items.IndexOf(CastPivotItem);
-                DetailsPivot.Items.Insert(castIndex >= 0 ? castIndex + 1 : 1, CrewPivotItem);
+                int insertIndex = Math.Clamp(castIndex >= 0 ? castIndex + 1 : 1, 0, DetailsPivot.Items.Count);
+                DetailsPivot.Items.Insert(insertIndex, CrewPivotItem);
             }
 
             // Bind similar titles (filter so movies only show movies and tv shows only show tv shows)
@@ -1679,52 +1682,63 @@ namespace LumiereMediaPlayer.Pages
 
                     _ = Task.Run(async () =>
                     {
-                        var details = await _watchmodeService.GetPersonDetailsAsync(person.PersonId, person.FullName);
-                        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                        try
                         {
-                            container.Children.Clear();
-                            if (details?.KnownFor != null && details.KnownFor.Count > 0)
+                            var details = await _watchmodeService.GetPersonDetailsAsync(person.PersonId, person.FullName);
+                            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                             {
-                                var titleBlock = new TextBlock
+                                try
                                 {
-                                    Text = $"Known for ({details.KnownFor.Count} titles):",
-                                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                                    Margin = new Thickness(0, 0, 0, 8)
-                                };
-                                container.Children.Add(titleBlock);
-
-                                var listView = new ListView
-                                {
-                                    SelectionMode = ListViewSelectionMode.None,
-                                    IsItemClickEnabled = true,
-                                    MaxHeight = 350
-                                };
-
-                                listView.ItemTemplate = CreateFilmographyItemTemplate();
-                                listView.ItemsSource = details.KnownFor;
-
-                                listView.ItemClick += (s, args) =>
-                                {
-                                    if (args.ClickedItem is WatchmodeTitle clickedTitle)
+                                    container.Children.Clear();
+                                    if (details?.KnownFor != null && details.KnownFor.Count > 0)
                                     {
-                                        dialog.Hide();
-                                        Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
-                                    }
-                                };
+                                        var titleBlock = new TextBlock
+                                        {
+                                            Text = $"Known for ({details.KnownFor.Count} titles):",
+                                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                                            Margin = new Thickness(0, 0, 0, 8)
+                                        };
+                                        container.Children.Add(titleBlock);
 
-                                container.Children.Add(listView);
-                            }
-                            else
-                            {
-                                container.Children.Add(new TextBlock
-                                {
-                                    Text = "No filmography information available.",
-                                    FontStyle = Windows.UI.Text.FontStyle.Italic,
-                                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                                    Margin = new Thickness(0, 12, 0, 12)
-                                });
-                            }
-                        });
+                                        var listView = new ListView
+                                        {
+                                            SelectionMode = ListViewSelectionMode.None,
+                                            IsItemClickEnabled = true,
+                                            MaxHeight = 350
+                                        };
+
+                                        listView.ItemTemplate = CreateFilmographyItemTemplate();
+                                        listView.ItemsSource = details.KnownFor;
+
+                                        listView.ItemClick += (s, args) =>
+                                        {
+                                            if (args.ClickedItem is WatchmodeTitle clickedTitle)
+                                            {
+                                                dialog.Hide();
+                                                Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+                                            }
+                                        };
+
+                                        container.Children.Add(listView);
+                                    }
+                                    else
+                                    {
+                                        container.Children.Add(new TextBlock
+                                        {
+                                            Text = "No filmography information available.",
+                                            FontStyle = Windows.UI.Text.FontStyle.Italic,
+                                            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                                            Margin = new Thickness(0, 12, 0, 12)
+                                        });
+                                    }
+                                }
+                                catch { }
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] GetPersonDetailsAsync error: {ex.Message}");
+                        }
                     });
 
                     await dialog.ShowAsync();

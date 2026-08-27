@@ -31,6 +31,7 @@ public sealed partial class HomePage : Page
         {
             RecentSection.Visibility = ViewModel.RecentlyPlayed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         });
+        _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -72,6 +73,7 @@ public sealed partial class HomePage : Page
         UpdateOpenFileButtonVisibility();
         RecentSection.Visibility = ViewModel.RecentlyPlayed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PlayEntranceAnimation();
+        _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
     }
 
     private void PlayEntranceAnimation()

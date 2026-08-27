@@ -197,42 +197,66 @@
                             <ScrollViewer VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                                 <StackPanel Spacing="24" MaxWidth="350">
                                     <!-- File Info -->
-                                    <StackPanel Spacing="12">
-                                        <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                        
-                                        <Grid ColumnSpacing="24" RowSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition />
-                                                <RowDefinition />
-                                                <RowDefinition />
-                                                <RowDefinition />
-                                                <RowDefinition />
-                                                <RowDefinition />
-                                            </Grid.RowDefinitions>
+                                     <StackPanel Spacing="12">
+                                         <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                         
+                                         <Grid ColumnSpacing="20" RowSpacing="7">
+                                             <Grid.ColumnDefinitions>
+                                                 <ColumnDefinition Width="Auto" />
+                                                 <ColumnDefinition Width="*" />
+                                             </Grid.ColumnDefinitions>
+                                             <Grid.RowDefinitions>
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                                 <RowDefinition />
+                                             </Grid.RowDefinitions>
 
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Bitrate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Framerate" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColor}" />
 
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="File Size" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.AudioFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="250" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                        </Grid>
-                                    </StackPanel>
+                                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.AudioTracksSummary, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+
+                                             <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+
+                                             <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                 <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             </StackPanel>
+
+                                             <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.ContainerFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                 <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                             </StackPanel>
+
+                                             <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                                             <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" MaxWidth="220" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                         </Grid>
+                                     </StackPanel>
 
                                     <!-- Internet Metadata Match -->
                                     <StackPanel x:Name="InternetMetadataPanel" Spacing="12" Visibility="Collapsed">

@@ -21,6 +21,7 @@ public sealed partial class VideoPage : Page
     private readonly LumiereMediaPlayer.Services.Streaming.WatchmodeService _watchmodeService = new();
     private readonly PropertyChangedEventHandler _viewModelPropertyChangedHandler;
     private readonly PropertyChangedEventHandler _playbackPropertyChangedHandler;
+    private readonly RoutedEventHandler _closeFullscreenHandler;
     private bool _eventHandlersDetached;
     private int _videoTapClickCount = 0;
     private System.Threading.CancellationTokenSource? _videoTapCts;
@@ -30,8 +31,10 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
+        _closeFullscreenHandler = (_, _) => HideMetadataOverlay();
 
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged += _playbackPropertyChangedHandler;
@@ -40,11 +43,14 @@ public sealed partial class VideoPage : Page
         // Ensure we catch the unload event to prevent memory leaks
         this.Unloaded += OnUnloaded;
 
-        CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
-        
-        if (App.MainWindowInstance != null)
+        if (CloseMetadataButton != null)
         {
-            App.MainWindowInstance.CloseFullscreenMetadataButton.Click += (_, _) => HideMetadataOverlay();
+            CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
+        }
+        
+        if (App.MainWindowInstance?.CloseFullscreenMetadataButton != null)
+        {
+            App.MainWindowInstance.CloseFullscreenMetadataButton.Click += _closeFullscreenHandler;
         }
 
         SyncMediaPlayer(true);
@@ -56,12 +62,17 @@ public sealed partial class VideoPage : Page
         if (_eventHandlersDetached) return;
         _eventHandlersDetached = true;
 
-        // CRITICAL: Unhook global static events to allow the Garbage Collector to destroy this page
+        this.Unloaded -= OnUnloaded;
         ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
         AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged;
 
-        // Event handlers and references detached; allow normal GC reclamation without UI thread stutter.
+        if (App.MainWindowInstance?.CloseFullscreenMetadataButton != null)
+        {
+            App.MainWindowInstance.CloseFullscreenMetadataButton.Click -= _closeFullscreenHandler;
+        }
+
+        if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -481,12 +492,10 @@ public sealed partial class VideoPage : Page
     private void OnVideoPlayerHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
         // Prevent the properties flyout from bleeding off the bottom of the window
-        MetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 88); // 64 Top Margin + 24 Bottom Margin
-        VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnVideoPlayerHostLayoutUpdated(object sender, object e)
-    {
+        if (MetadataOverlay != null)
+        {
+            MetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 88); // 64 Top Margin + 24 Bottom Margin
+        }
         VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 

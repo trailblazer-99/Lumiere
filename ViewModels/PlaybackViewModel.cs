@@ -98,7 +98,7 @@ public partial class PlaybackViewModel : ObservableObject
         {
             IsVideoPlayerActive = false;
         }
-        else if (IsPlaying)
+        else
         {
             IsVideoPlayerActive = true;
         }

@@ -39,7 +39,12 @@
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                                <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
+                                    <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
+                                        <FontIcon FontSize="13" Glyph="&#xE75E;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </ToggleButton>
+                                </StackPanel>
                             </StackPanel>
                             <ComboBox x:Name="FilterComboBox" Header="Filter by" ItemsSource="{x:Bind ViewModel.SearchFilters, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SearchFilter, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
                             <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.Genres, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" SelectionChanged="OnGenreSelectionChanged" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />

@@ -21,8 +21,16 @@ namespace LumiereMediaPlayer.Pages
         public StreamingMusicPage()
         {
             this.InitializeComponent();
-            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
+            this.Unloaded += OnUnloaded;
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            this.Unloaded -= OnUnloaded;
+            if (MusicGridView != null) MusicGridView.ItemsSource = null;
+            if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
         }
 
         protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -112,6 +120,26 @@ namespace LumiereMediaPlayer.Pages
             if (!string.IsNullOrWhiteSpace(ViewModel.SearchQuery))
             {
                 ViewModel.PerformSearchCommand.Execute(ViewModel.SearchQuery);
+            }
+        }
+
+        private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                ViewModel.PerformSearchCommand.Execute(SearchBox.Text);
+            }
+        }
+
+        private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                ViewModel.PerformSearchCommand.Execute(SearchBox.Text);
             }
         }
 

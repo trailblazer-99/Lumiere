@@ -326,18 +326,204 @@ public sealed partial class TransportBar : UserControl
 
     public void SetFullscreenPresentation(bool isFullscreen)
     {
-        if (_isFullscreenPresentation == isFullscreen)
-        {
-            return;
-        }
-
         _isFullscreenPresentation = isFullscreen;
         UpdateAcrylicBackground();
+        UpdateFullscreenFontColors(isFullscreen);
     }
 
     public void RefreshTheme()
     {
         UpdateAcrylicBackground();
+        UpdateFullscreenFontColors(_isFullscreenPresentation);
+    }
+
+    private void UpdateFullscreenFontColors(bool isFullscreen)
+    {
+        var elementTheme = isFullscreen ? ElementTheme.Dark : (AppServices.Settings.Current.Theme switch
+        {
+            AppThemeOption.Light => ElementTheme.Light,
+            AppThemeOption.Dark => ElementTheme.Dark,
+            _ => Application.Current.RequestedTheme == ApplicationTheme.Light ? ElementTheme.Light : ElementTheme.Dark
+        });
+
+        RequestedTheme = elementTheme;
+        if (BarGrid != null)
+        {
+            BarGrid.RequestedTheme = elementTheme;
+        }
+
+        if (isFullscreen)
+        {
+            var whiteBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
+            var subWhiteBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(204, 255, 255, 255));
+
+            // Set typography directly
+            if (TrackTitleText != null) TrackTitleText.Foreground = whiteBrush;
+            if (TrackArtistText != null) TrackArtistText.Foreground = subWhiteBrush;
+            if (ElapsedTimeText != null) ElapsedTimeText.Foreground = whiteBrush;
+            if (TotalTimeText != null) TotalTimeText.Foreground = whiteBrush;
+            if (VolumeValueText != null) VolumeValueText.Foreground = whiteBrush;
+
+            // Set all icons directly
+            if (ShuffleIcon != null) ShuffleIcon.Foreground = whiteBrush;
+            if (SkipBackIcon != null) SkipBackIcon.Foreground = whiteBrush;
+            if (PreviousIcon != null) PreviousIcon.Foreground = whiteBrush;
+            if (NextIcon != null) NextIcon.Foreground = whiteBrush;
+            if (SkipForwardIcon != null) SkipForwardIcon.Foreground = whiteBrush;
+            if (RepeatIcon != null) RepeatIcon.Foreground = whiteBrush;
+            if (AudioIcon != null) AudioIcon.Foreground = whiteBrush;
+            if (SubtitlesIcon != null) SubtitlesIcon.Foreground = whiteBrush;
+            if (VolumeIcon != null) VolumeIcon.Foreground = whiteBrush;
+            if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Foreground = whiteBrush;
+            if (FullscreenIcon != null) FullscreenIcon.Foreground = whiteBrush;
+            if (PipIcon != null) PipIcon.Foreground = whiteBrush;
+            if (MoreIcon != null) MoreIcon.Foreground = whiteBrush;
+            if (FallbackIcon != null) FallbackIcon.Foreground = whiteBrush;
+
+            // Set all button foregrounds directly
+            if (ShuffleButton != null) ShuffleButton.Foreground = whiteBrush;
+            if (SkipBackButton != null) SkipBackButton.Foreground = whiteBrush;
+            if (PreviousButton != null) PreviousButton.Foreground = whiteBrush;
+            if (NextButton != null) NextButton.Foreground = whiteBrush;
+            if (SkipForwardButton != null) SkipForwardButton.Foreground = whiteBrush;
+            if (RepeatButton != null) RepeatButton.Foreground = whiteBrush;
+            if (AudioButton != null) AudioButton.Foreground = whiteBrush;
+            if (SubtitlesButton != null) SubtitlesButton.Foreground = whiteBrush;
+            if (VolumeButton != null) VolumeButton.Foreground = whiteBrush;
+            if (FlyoutVolumeButton != null) FlyoutVolumeButton.Foreground = whiteBrush;
+            if (FullscreenButton != null) FullscreenButton.Foreground = whiteBrush;
+            if (PipButton != null) PipButton.Foreground = whiteBrush;
+            if (MoreButton != null) MoreButton.Foreground = whiteBrush;
+
+            // Traverse entire visual tree to catch any other controls/presenters
+            if (BarGrid != null)
+            {
+                ApplyForegroundRecursively(BarGrid, true);
+            }
+        }
+        else
+        {
+            // Clear typography
+            TrackTitleText?.ClearValue(TextBlock.ForegroundProperty);
+            TrackArtistText?.ClearValue(TextBlock.ForegroundProperty);
+            ElapsedTimeText?.ClearValue(TextBlock.ForegroundProperty);
+            TotalTimeText?.ClearValue(TextBlock.ForegroundProperty);
+            VolumeValueText?.ClearValue(TextBlock.ForegroundProperty);
+
+            // Clear icons
+            ShuffleIcon?.ClearValue(FontIcon.ForegroundProperty);
+            SkipBackIcon?.ClearValue(FontIcon.ForegroundProperty);
+            PreviousIcon?.ClearValue(FontIcon.ForegroundProperty);
+            NextIcon?.ClearValue(FontIcon.ForegroundProperty);
+            SkipForwardIcon?.ClearValue(FontIcon.ForegroundProperty);
+            RepeatIcon?.ClearValue(FontIcon.ForegroundProperty);
+            AudioIcon?.ClearValue(FontIcon.ForegroundProperty);
+            SubtitlesIcon?.ClearValue(FontIcon.ForegroundProperty);
+            VolumeIcon?.ClearValue(FontIcon.ForegroundProperty);
+            FlyoutVolumeIcon?.ClearValue(FontIcon.ForegroundProperty);
+            FullscreenIcon?.ClearValue(FontIcon.ForegroundProperty);
+            PipIcon?.ClearValue(FontIcon.ForegroundProperty);
+            MoreIcon?.ClearValue(FontIcon.ForegroundProperty);
+            FallbackIcon?.ClearValue(FontIcon.ForegroundProperty);
+
+            // Clear buttons
+            ShuffleButton?.ClearValue(Button.ForegroundProperty);
+            SkipBackButton?.ClearValue(Button.ForegroundProperty);
+            PreviousButton?.ClearValue(Button.ForegroundProperty);
+            NextButton?.ClearValue(Button.ForegroundProperty);
+            SkipForwardButton?.ClearValue(Button.ForegroundProperty);
+            RepeatButton?.ClearValue(Button.ForegroundProperty);
+            AudioButton?.ClearValue(Button.ForegroundProperty);
+            SubtitlesButton?.ClearValue(Button.ForegroundProperty);
+            VolumeButton?.ClearValue(Button.ForegroundProperty);
+            FlyoutVolumeButton?.ClearValue(Button.ForegroundProperty);
+            FullscreenButton?.ClearValue(Button.ForegroundProperty);
+            PipButton?.ClearValue(Button.ForegroundProperty);
+            MoreButton?.ClearValue(Button.ForegroundProperty);
+
+            if (BarGrid != null)
+            {
+                ApplyForegroundRecursively(BarGrid, false);
+            }
+
+            // Play/Pause, Stop, and Replay buttons must ALWAYS retain white typography/icons whatsoever
+            var solidWhite = new SolidColorBrush(Microsoft.UI.Colors.White);
+            if (PlayPauseButton != null) PlayPauseButton.Foreground = solidWhite;
+            if (PlayPauseIcon != null) PlayPauseIcon.Foreground = solidWhite;
+            if (ReplayButton != null) ReplayButton.Foreground = solidWhite;
+            if (ReplayIcon != null) ReplayIcon.Foreground = solidWhite;
+            if (StopButton != null) StopButton.Foreground = solidWhite;
+            if (StopIcon != null) StopIcon.Foreground = solidWhite;
+        }
+    }
+
+    private static void ApplyForegroundRecursively(DependencyObject root, bool isFullscreen)
+    {
+        if (root == null) return;
+
+        var whiteBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
+        var subWhiteBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(204, 255, 255, 255));
+
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+
+            if (child is TextBlock tb)
+            {
+                if (isFullscreen)
+                {
+                    tb.Foreground = (tb.Name == "TrackArtistText") ? subWhiteBrush : whiteBrush;
+                }
+                else
+                {
+                    tb.ClearValue(TextBlock.ForegroundProperty);
+                }
+            }
+            else if (child is FontIcon fi)
+            {
+                if (fi.Name is "PlayPauseIcon" or "ReplayIcon" or "StopIcon")
+                {
+                    fi.Foreground = whiteBrush;
+                }
+                else if (isFullscreen)
+                {
+                    fi.Foreground = whiteBrush;
+                }
+                else
+                {
+                    fi.ClearValue(FontIcon.ForegroundProperty);
+                }
+            }
+            else if (child is Button btn)
+            {
+                if (btn.Name is "PlayPauseButton" or "ReplayButton" or "StopButton")
+                {
+                    btn.Foreground = whiteBrush;
+                }
+                else if (isFullscreen)
+                {
+                    btn.Foreground = whiteBrush;
+                }
+                else
+                {
+                    btn.ClearValue(Button.ForegroundProperty);
+                }
+            }
+            else if (child is ContentPresenter cp)
+            {
+                if (isFullscreen)
+                {
+                    cp.Foreground = whiteBrush;
+                }
+                else
+                {
+                    cp.ClearValue(ContentPresenter.ForegroundProperty);
+                }
+            }
+
+            ApplyForegroundRecursively(child, isFullscreen);
+        }
     }
 
     private void UpdateAcrylicBackground()
@@ -841,7 +1027,7 @@ public sealed partial class TransportBar : UserControl
             {
                 int index = i;
                 var track = tracks[i];
-                var name = string.IsNullOrEmpty(track.Label) ? (string.IsNullOrEmpty(track.Language) ? $"Track {i + 1}" : track.Language) : track.Label;
+                var name = MediaTrackFormatHelper.FormatSubtitleTrack(track, i);
                 
                 var trackItem = new ToggleMenuFlyoutItem
                 {
@@ -859,6 +1045,36 @@ public sealed partial class TransportBar : UserControl
                 };
                 
                 SubtitlesMenuFlyout.Items.Add(trackItem);
+            }
+
+            // Discover and display external sidecar subtitles
+            string? currentPath = AppServices.PlaybackViewModel.CurrentTrack?.SourcePath;
+            var externalSubs = MediaTrackFormatHelper.GetSidecarSubtitleFiles(currentPath);
+            if (externalSubs.Count > 0)
+            {
+                SubtitlesMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+                var headerItem = new MenuFlyoutItem { Text = "External Subtitles", IsEnabled = false };
+                SubtitlesMenuFlyout.Items.Add(headerItem);
+
+                foreach (var extSub in externalSubs)
+                {
+                    var extItem = new ToggleMenuFlyoutItem
+                    {
+                        Text = extSub.DisplayName,
+                        IsChecked = false
+                    };
+                    extItem.Click += async (s, args) =>
+                    {
+                        try
+                        {
+                            var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(extSub.FilePath);
+                            var timedTextSource = Windows.Media.Core.TimedTextSource.CreateFromStream(await storageFile.OpenReadAsync());
+                            playbackItem.Source.ExternalTimedTextSources.Add(timedTextSource);
+                        }
+                        catch { }
+                    };
+                    SubtitlesMenuFlyout.Items.Add(extItem);
+                }
             }
         }
     }
@@ -884,10 +1100,7 @@ public sealed partial class TransportBar : UserControl
             {
                 int index = i;
                 var track = tracks[i];
-                
-                var name = string.IsNullOrEmpty(track.Label) 
-                    ? (string.IsNullOrEmpty(track.Language) ? $"Track {i + 1}" : track.Language) 
-                    : track.Label;
+                var name = MediaTrackFormatHelper.FormatAudioTrack(track, i);
                 
                 var trackItem = new ToggleMenuFlyoutItem
                 {
@@ -901,6 +1114,26 @@ public sealed partial class TransportBar : UserControl
                 };
                 
                 AudioMenuFlyout.Items.Add(trackItem);
+            }
+
+            // Discover and display external sidecar audio tracks
+            string? currentPath = AppServices.PlaybackViewModel.CurrentTrack?.SourcePath;
+            var externalAudio = MediaTrackFormatHelper.GetSidecarAudioFiles(currentPath);
+            if (externalAudio.Count > 0)
+            {
+                AudioMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+                var headerItem = new MenuFlyoutItem { Text = "External Audio Tracks", IsEnabled = false };
+                AudioMenuFlyout.Items.Add(headerItem);
+
+                foreach (var extTrack in externalAudio)
+                {
+                    var extItem = new ToggleMenuFlyoutItem
+                    {
+                        Text = extTrack.DisplayName,
+                        IsChecked = false
+                    };
+                    AudioMenuFlyout.Items.Add(extItem);
+                }
             }
         }
         else

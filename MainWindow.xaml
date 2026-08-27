@@ -123,7 +123,7 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
-            <Frame x:Name="ContentFrame" x:FieldModifier="public" Margin="0" Navigated="OnContentFrameNavigated" Navigating="OnContentFrameNavigating" NavigationFailed="OnContentFrameNavigationFailed">
+            <Frame x:Name="ContentFrame" x:FieldModifier="public" Margin="0" CacheSize="2" Navigated="OnContentFrameNavigated" Navigating="OnContentFrameNavigating" NavigationFailed="OnContentFrameNavigationFailed">
                 <Frame.ContentTransitions>
                     <TransitionCollection>
                         <NavigationThemeTransition />
@@ -187,45 +187,46 @@
                 Height="32"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Background="#CC1F1F1F"
+                Background="#801F1F1F"
                 BorderBrush="#20FFFFFF"
                 BorderThickness="1"
-                CornerRadius="6"
+                CornerRadius="16"
+                Foreground="White"
                 Click="OnVideoBackButtonClick"
                 Visibility="Collapsed"
-                Translation="0,0,32"
                 ToolTipService.ToolTip="Back">
-                <Button.Shadow>
-                    <ThemeShadow x:Name="VideoBackButtonShadow" />
-                </Button.Shadow>
-                <AnimatedIcon>
-                    <AnimatedIcon.Source>
-                        <animatedvisuals:AnimatedBackVisualSource />
-                    </AnimatedIcon.Source>
-                    <AnimatedIcon.FallbackIconSource>
-                        <SymbolIconSource Symbol="Back" />
-                    </AnimatedIcon.FallbackIconSource>
-                </AnimatedIcon>
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#801F1F1F" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B31F1F1F" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#CC1F1F1F" />
+                    <SolidColorBrush x:Key="ButtonForeground" Color="White" />
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                </Button.Resources>
+                <FontIcon FontSize="13" Glyph="&#xE72B;" Foreground="White" />
             </Button>
         </Grid>
 
         <!-- The Fullscreen Video Container -->
-        <Grid x:Name="FullscreenVideoContainer" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged" SizeChanged="OnFullscreenVideoContainerSizeChanged">
+        <Grid x:Name="FullscreenVideoContainer" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" RequestedTheme="Dark" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged" SizeChanged="OnFullscreenVideoContainerSizeChanged">
 
 
             <!-- Fullscreen Controls Overlay — sits above video, fades in/out -->
-            <Grid x:Name="FullscreenControlsOverlay" VerticalAlignment="Stretch">
+            <Grid x:Name="FullscreenControlsOverlay" VerticalAlignment="Stretch" RequestedTheme="Dark">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>  <!-- top bar: back button -->
                     <RowDefinition Height="*"/>      <!-- transparent middle (hit-test pass-through) -->
                     <RowDefinition Height="Auto"/>   <!-- bottom bar: transport + scrim -->
                 </Grid.RowDefinitions>
 
-                <!-- Top gradient scrim + back button -->
-                <Grid Grid.Row="0" Height="72">
+                <!-- Top gradient scrim + back button (visible whenever transport bar / controls are visible) -->
+                <Grid
+                    x:Name="FullscreenTopBar"
+                    Grid.Row="0"
+                    Height="80">
                     <Grid.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#99000000" Offset="0"/>
                             <GradientStop Color="#00000000" Offset="1"/>
                         </LinearGradientBrush>
                     </Grid.Background>
@@ -233,26 +234,37 @@
                         x:Name="FullscreenBackButton"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
-                        Margin="16"
-                        Width="36" Height="36"
-                        Background="#40000000"
-                        BorderBrush="#30FFFFFF"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Translation="0,0,32"
+                        Margin="16,12,0,0"
+                        Width="40" Height="36"
+                        CornerRadius="4"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0"
+                        RequestedTheme="Dark"
+                        Foreground="White"
+                        helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                        helpers:SpringAnimationHelper.HoverScale="1.08"
+                        helpers:SpringAnimationHelper.PressScale="0.92"
+                        PointerEntered="OnControlsPointerEntered"
+                        PointerExited="OnControlsPointerExited"
                         Click="OnVideoBackButtonClick"
-                        ToolTipService.ToolTip="Exit video">
-                        <Button.Shadow>
-                            <ThemeShadow x:Name="FullscreenBackShadow" />
-                        </Button.Shadow>
-                        <AnimatedIcon>
-                            <AnimatedIcon.Source>
-                                <animatedvisuals:AnimatedBackVisualSource />
-                            </AnimatedIcon.Source>
-                            <AnimatedIcon.FallbackIconSource>
-                                <SymbolIconSource Symbol="Back" />
-                            </AnimatedIcon.FallbackIconSource>
-                        </AnimatedIcon>
+                        ToolTipService.ToolTip="Back">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#26FFFFFF" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#3DFFFFFF" />
+                            <SolidColorBrush x:Key="ButtonForeground" Color="White" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="White" />
+                        </Button.Resources>
+                        <FontIcon
+                            FontSize="16"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE72B;"
+                            Foreground="White"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
                     </Button>
                 </Grid>
 
@@ -295,7 +307,7 @@
                         <StackPanel Spacing="12" MaxWidth="350">
                     <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
                     
-                    <Grid ColumnSpacing="24" RowSpacing="8">
+                    <Grid ColumnSpacing="20" RowSpacing="7">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -307,25 +319,49 @@
                             <RowDefinition />
                             <RowDefinition />
                             <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Codec" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Bitrate" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Framerate" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="11" FontWeight="SemiBold" Foreground="#38BDF8" />
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="File Size" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="File Path" Foreground="#A0A0A0" FontSize="12" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="290" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="#A0A0A0" FontSize="11" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="11" Foreground="#66FFFFFF" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="#A0A0A0" FontSize="11" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="11" Foreground="#66FFFFFF" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
                     </Grid>
 
                     <!-- Divider between File Information and Internet Match -->

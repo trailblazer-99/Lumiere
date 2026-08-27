@@ -141,33 +141,36 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
                 <Button
+                    x:Name="ShuffleButton"
                     AutomationProperties.Name="Shuffle"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Shuffle">
-                    <FontIcon FontSize="14" Glyph="&#xE8B1;" />
+                    <FontIcon x:Name="ShuffleIcon" FontSize="14" Glyph="&#xE8B1;" />
                 </Button>
                 <Button
+                    x:Name="SkipBackButton"
                     AutomationProperties.Name="Skip back 10 seconds"
                     Click="OnSkipBackClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip back 10 seconds">
-                    <FontIcon FontSize="16" Glyph="&#xED3C;" />
+                    <FontIcon x:Name="SkipBackIcon" FontSize="16" Glyph="&#xED3C;" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Left" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
                 </Button>
                 <Button
+                    x:Name="PreviousButton"
                     AutomationProperties.Name="Previous"
                     Click="OnPreviousClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Previous">
-                    <FontIcon FontSize="16" Glyph="&#xE892;" />
+                    <FontIcon x:Name="PreviousIcon" FontSize="16" Glyph="&#xE892;" />
                 </Button>
                 <Button
                     x:Name="ReplayButton"
@@ -179,17 +182,25 @@
                     Background="#12B76A"
                     BorderThickness="0"
                     CornerRadius="6"
+                    Foreground="White"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Replay from beginning"
                     VerticalAlignment="Center">
                     <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#109B59" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0E804A" />
+                        <SolidColorBrush x:Key="ButtonBackground" Color="#12B76A" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#0E9F5D" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0A7A46" />
+                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#12B76A" />
+                        <SolidColorBrush x:Key="ButtonForeground" Color="White" />
                         <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
                         <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                        <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="White" />
+                        <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
                     </Button.Resources>
-                    <FontIcon FontSize="12" Glyph="&#xE72C;" Foreground="White" />
+                    <FontIcon x:Name="ReplayIcon" FontSize="12" Glyph="&#xE72C;" Foreground="White" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="R" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
@@ -200,6 +211,7 @@
                     x:Name="PlayPauseButton"
                     AutomationProperties.Name="Play"
                     ToolTipService.ToolTip="Play"
+                    Foreground="White"
                     Style="{StaticResource CleanPlayPauseButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
@@ -239,47 +251,58 @@
                     Background="#D92D20"
                     BorderThickness="0"
                     CornerRadius="6"
+                    Foreground="White"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Stop"
                     VerticalAlignment="Center">
                     <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B92318" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#9A1B14" />
+                        <SolidColorBrush x:Key="ButtonBackground" Color="#D92D20" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B42318" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#912018" />
+                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#D92D20" />
+                        <SolidColorBrush x:Key="ButtonForeground" Color="White" />
                         <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
                         <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                        <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="White" />
+                        <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
                     </Button.Resources>
-                    <FontIcon FontSize="11" Glyph="&#xE15B;" Foreground="White" />
+                    <FontIcon x:Name="StopIcon" FontSize="11" Glyph="&#xE15B;" Foreground="White" />
                 </Button>
 
                 <Button
+                    x:Name="NextButton"
                     AutomationProperties.Name="Next"
                     Click="OnNextClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Next">
-                    <FontIcon FontSize="16" Glyph="&#xE893;" />
+                    <FontIcon x:Name="NextIcon" FontSize="16" Glyph="&#xE893;" />
                 </Button>
                 <Button
+                    x:Name="SkipForwardButton"
                     AutomationProperties.Name="Skip forward 30 seconds"
                     Click="OnSkipForwardClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip forward 30 seconds">
-                    <FontIcon FontSize="16" Glyph="&#xED3D;" />
+                    <FontIcon x:Name="SkipForwardIcon" FontSize="16" Glyph="&#xED3D;" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Right" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
                 </Button>
                 <Button
+                    x:Name="RepeatButton"
                     AutomationProperties.Name="Repeat"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Repeat">
-                    <FontIcon FontSize="14" Glyph="&#xE8EE;" />
+                    <FontIcon x:Name="RepeatIcon" FontSize="14" Glyph="&#xE8EE;" />
                 </Button>
             </StackPanel>
 
@@ -298,19 +321,20 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Audio track">
-                    <FontIcon FontSize="14" Glyph="&#xE8D6;" />
+                    <FontIcon x:Name="AudioIcon" FontSize="14" Glyph="&#xE8D6;" />
                     <Button.Flyout>
                         <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" />
                     </Button.Flyout>
                 </Button>
 
                 <Button
+                    x:Name="SubtitlesButton"
                     AutomationProperties.Name="Subtitles"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Subtitles">
-                    <FontIcon FontSize="14" Glyph="&#xED1E;" />
+                    <FontIcon x:Name="SubtitlesIcon" FontSize="14" Glyph="&#xED1E;" />
                     <Button.Flyout>
                         <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" />
                     </Button.Flyout>
@@ -369,13 +393,14 @@
                 </Button>
 
                 <Button
+                    x:Name="FullscreenButton"
                     AutomationProperties.Name="Fullscreen"
                     Click="OnFullscreenClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Fullscreen">
-                    <FontIcon FontSize="14" Glyph="&#xE740;" />
+                    <FontIcon x:Name="FullscreenIcon" FontSize="14" Glyph="&#xE740;" />
                 </Button>
 
                 <!-- Picture in Picture (Mini Player) Button -->
@@ -398,7 +423,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="More options">
-                    <FontIcon FontSize="14" Glyph="&#xE712;" />
+                    <FontIcon x:Name="MoreIcon" FontSize="14" Glyph="&#xE712;" />
                     <Button.Flyout>
                         <MenuFlyout Placement="Top" Opening="OnMoreMenuOpening">
                             <MenuFlyoutItem Text="Properties" Click="OnInfoClick">

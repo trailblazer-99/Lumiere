@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Management;
 using System.Threading.Tasks;
+using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 using Windows.Media.Playback;
@@ -130,9 +131,26 @@ public sealed class HdrPipelineService
             // (no second DisplayInformation object required).
             RefreshDisplayCapability();
 
-            // React to display HDR changes (e.g. user toggles Windows HDR in Settings)
-            // by listening to the single shared display manager event.
-            AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) => RefreshDisplayCapability();
+            // React to display HDR changes (e.g. user toggles Windows HDR in Settings or moves window across screens)
+            AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) =>
+            {
+                RefreshDisplayCapability();
+                if (AppServices.Playback.CurrentTrack?.IsVideo == true)
+                {
+                    try
+                    {
+                        var player = AppServices.PlaybackViewModel.Session.MediaPlayer;
+                        MediaPlaybackItem? currentItem = null;
+                        if (player.Source is MediaPlaybackItem mpi) currentItem = mpi;
+                        else if (player.Source is MediaPlaybackList mpl) currentItem = mpl.CurrentItem;
+                        if (currentItem != null)
+                        {
+                            ConfigurePipeline(player, currentItem);
+                        }
+                    }
+                    catch { }
+                }
+            };
 
             // Perform non-blocking WMI scan to detect dual-GPU hybrid graphics setups
             // (e.g. integrated AMD Radeon + discrete Nvidia RTX/GTX).
@@ -262,6 +280,33 @@ public sealed class HdrPipelineService
     {
         try
         {
+            // Layer 0 — Direct container and file metadata inspection
+            string? sourcePath = AppServices.Playback.CurrentTrack?.SourcePath;
+            if (!string.IsNullOrEmpty(sourcePath))
+            {
+                string fName = System.IO.Path.GetFileName(sourcePath);
+                var containerTracks = MediaTrackFormatHelper.GetContainerTracks(sourcePath);
+                var vTrack = containerTracks.Find(t => t.TrackType == 1);
+
+                if (fName.Contains("DV", StringComparison.OrdinalIgnoreCase) || 
+                    fName.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) ||
+                    fName.Contains("DolbyVision", StringComparison.OrdinalIgnoreCase) ||
+                    (vTrack != null && vTrack.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase)))
+                {
+                    Debug.WriteLine("[HDR] Detected: Dolby Vision from container/filename");
+                    return HdrContentFormat.DolbyVision;
+                }
+
+                if (fName.Contains("HDR", StringComparison.OrdinalIgnoreCase) ||
+                    fName.Contains("10bit", StringComparison.OrdinalIgnoreCase) ||
+                    fName.Contains("ST2084", StringComparison.OrdinalIgnoreCase) ||
+                    fName.Contains("BT2020", StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.WriteLine("[HDR] Detected: HDR10 from container/filename");
+                    return HdrContentFormat.Hdr10;
+                }
+            }
+
             foreach (var track in item.VideoTracks)
             {
                 var props = track.GetEncodingProperties();
@@ -317,46 +362,13 @@ public sealed class HdrPipelineService
                     props.Subtype != null &&
                     (props.Subtype.Contains("HEVC", StringComparison.OrdinalIgnoreCase) ||
                      props.Subtype.Contains("H265", StringComparison.OrdinalIgnoreCase) ||
-                     props.Subtype.Contains("VP90", StringComparison.OrdinalIgnoreCase)) &&
+                     props.Subtype.Contains("VP90", StringComparison.OrdinalIgnoreCase) ||
+                     props.Subtype.Contains("35363248", StringComparison.OrdinalIgnoreCase)) &&
                     profile == 2)
                 {
                     Debug.WriteLine("[HDR] Inferred HDR10 from HEVC/VP9 10-bit profile");
                     return HdrContentFormat.Hdr10;
                 }
-            }
-
-            // Layer 6 — Filename / metadata keyword matching
-            try
-            {
-                var currentTrack = AppServices.Playback.CurrentTrack;
-                if (currentTrack != null)
-                {
-                    string pathToCheck = (currentTrack.SourcePath ?? currentTrack.Title ?? "").ToLowerInvariant();
-                    if (pathToCheck.Contains("hdr")    || pathToCheck.Contains("10bit") ||
-                        pathToCheck.Contains("dovi")   || pathToCheck.Contains("dolby") ||
-                        pathToCheck.Contains("vision") || pathToCheck.Contains("hlg")   ||
-                        pathToCheck.Contains("st2084") || pathToCheck.Contains("bt2020"))
-                    {
-                        foreach (var track in item.VideoTracks)
-                        {
-                            var props = track.GetEncodingProperties();
-                            if (props.Subtype != null &&
-                                (props.Subtype.Contains("HEVC", StringComparison.OrdinalIgnoreCase) ||
-                                 props.Subtype.Contains("H265", StringComparison.OrdinalIgnoreCase) ||
-                                 props.Subtype.Contains("AV01", StringComparison.OrdinalIgnoreCase) ||
-                                 props.Subtype.Contains("AV1",  StringComparison.OrdinalIgnoreCase) ||
-                                 props.Subtype.Contains("VP9",  StringComparison.OrdinalIgnoreCase)))
-                            {
-                                Debug.WriteLine("[HDR] Detected HDR via keyword matching on HEVC/AV1/VP9 video track");
-                                return HdrContentFormat.Hdr10;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[HDR Filename Fallback] Error: {ex.Message}");
             }
         }
         catch (Exception ex)
@@ -411,8 +423,8 @@ public sealed class HdrPipelineService
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
         TryConfigureNativePipeline(player, shouldEnableHdr, _isDualGpuPresent);
 
-        // 4. Configure Media Foundation tone-mapping operator and color space attributes on video tracks
-        ApplyToneMapping(item, settings.ToneMappingMode, shouldEnableHdr);
+        // 4. Configure Media Foundation tone-mapping operator and display-adaptive color grading
+        ApplyToneMapping(item, settings.ToneMappingMode, shouldEnableHdr, isContentHdr);
 
         _hdrActive = shouldEnableHdr;
         UpdateBrightnessOverride();
@@ -423,14 +435,14 @@ public sealed class HdrPipelineService
             ContentFormat             = _contentFormat,
             DisplayCapability         = _displayCapability,
             ToneMappingMode           = settings.ToneMappingMode,
-            PeakBrightnessNits        = settings.PeakBrightnessNits,
+            PeakBrightnessNits        = (int)AppServices.DisplayManager.MaxLuminanceInNits,
             IsDualGpuEnvironment      = _isDualGpuPresent,
             IsHdrStreamingCapableOnly = AppServices.DisplayManager.IsHdrStreamingCapableOnly
         };
 
         Debug.WriteLine($"[HDR] Pipeline — active={_hdrActive}, " +
-                        $"content={_contentFormat}, display={_displayCapability} (StreamOnly={AppServices.DisplayManager.IsHdrStreamingCapableOnly}), " +
-                        $"dualGpu={_isDualGpuPresent}, toneMap={settings.ToneMappingMode}, peak={settings.PeakBrightnessNits} nits");
+                        $"content={_contentFormat}, display={_displayCapability} (Profile={AppServices.DisplayManager.ActiveDisplayProfile}), " +
+                        $"dualGpu={_isDualGpuPresent}, toneMap={settings.ToneMappingMode}, peak={AppServices.DisplayManager.MaxLuminanceInNits:F0} nits");
 
         HdrStateChanged?.Invoke(this, args);
     }
@@ -465,7 +477,7 @@ public sealed class HdrPipelineService
         }
     }
 
-    private static void ApplyToneMapping(MediaPlaybackItem? item, ToneMappingMode mode, bool isHdrActive)
+    private static void ApplyToneMapping(MediaPlaybackItem? item, ToneMappingMode mode, bool isHdrActive, bool isContentHdr)
     {
         if (item == null || item.VideoTracks.Count == 0)
         {
@@ -474,23 +486,33 @@ public sealed class HdrPipelineService
 
         try
         {
-            // Map ToneMappingMode enum to Media Foundation Tone Mapping Operator index:
-            // 0 = Reinhard (smooth global roll-off)
-            // 1 = ACES (cinematic film curve approximation)
-            // 2 = BT.2408 (ITU reference HDR-to-SDR standard)
-            // 3 = Clip (linear highlight clipping)
+            var displayManager = AppServices.DisplayManager;
+            var displayProfile = displayManager.ActiveDisplayProfile;
+            float peakNits = displayManager.MaxLuminanceInNits;
+            float sdrWhiteNits = displayManager.SdrWhiteLevelInNits;
+
+            // Resolve Tone Mapping Operator: Display-Adaptive or manual preference
             uint toneMapOperatorIndex = mode switch
             {
-                ToneMappingMode.Reinhard => 0u,
-                ToneMappingMode.Aces     => 1u,
-                ToneMappingMode.Bt2408   => 2u,
-                ToneMappingMode.Clip     => 3u,
-                _                        => 1u
+                ToneMappingMode.DisplayAdaptive => displayProfile switch
+                {
+                    Display.DisplayProfileKind.TrueHdrOledOrMiniLed => 3u, // High-End HDR: Direct passthrough / Clip at screen peak
+                    Display.DisplayProfileKind.EntryHdr            => 2u, // Entry HDR: BT.2408 highlight compression
+                    Display.DisplayProfileKind.WideColorGamutSdr   => 2u, // WCG SDR: BT.2408 DCI-P3 reference
+                    _                                              => 2u  // Standard SDR: BT.2408 ITU standard
+                },
+                ToneMappingMode.Bt2408   => 2u, // BT.2408 (ITU standard reference)
+                ToneMappingMode.Aces     => 1u, // ACES (Cinematic highlights)
+                ToneMappingMode.Reinhard => 0u, // Reinhard (Smooth roll-off)
+                ToneMappingMode.Clip     => 3u, // Clip
+                _                        => 2u
             };
 
             var toneMapGuid = new Guid("DE9AC8C9-9602-4A85-AA27-BCE095709DFF"); // MF_VIDEO_TONEMAPPING_OPERATOR
             var primariesGuid = new Guid("dbfbe4d7-0740-4ee0-8192-850AB0E21935"); // MF_MT_VIDEO_PRIMARIES
-            var transferFuncGuid = new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EEED2"); // MF_MT_TRANSFER_FUNCTION
+            var transferFuncGuid = new Guid("93B7BE49-B4B2-4F40-A66E-C13B5F8E4E82"); // MF_MT_TRANSFER_FUNCTION
+            var yuvMatrixGuid = new Guid("3e23d46a-0ba1-44e5-a4e3-b9c1046182d4"); // MF_MT_YUV_MATRIX
+            var nominalRangeGuid = new Guid("66753cff-82ec-42f2-ac1a-e69a0b76cf55"); // MF_MT_VIDEO_NOMINAL_RANGE
 
             foreach (var track in item.VideoTracks)
             {
@@ -499,25 +521,29 @@ public sealed class HdrPipelineService
                     var props = track.GetEncodingProperties();
                     props.Properties[toneMapGuid] = toneMapOperatorIndex;
 
-                    if (!isHdrActive)
+                    if (isContentHdr)
                     {
-                        // When tone-mapping HDR down to SDR, instruct Media Foundation Video Processor
-                        // to map to BT.709 primaries (index 2) and BT.709 transfer curve (index 1)
-                        props.Properties[primariesGuid] = 2u;
-                        props.Properties[transferFuncGuid] = 1u;
+                        // Explicitly declare incoming stream format as 10-bit BT.2020 PQ Studio Range
+                        // This allows the Video Processor to apply the 3x3 BT.2020->BT.709 color conversion matrix
+                        // and ST 2084 PQ tone curve accurately without oversaturating or crushing dark tones!
+                        props.Properties[primariesGuid] = 9u;      // MFVideoPrimaries_BT2020 (9)
+                        props.Properties[transferFuncGuid] = 13u;  // MFVideoTransferFunction_2084 / PQ (13)
+                        props.Properties[yuvMatrixGuid] = 3u;      // MFVideoYUVMatrix_BT2020 (3)
+                        props.Properties[nominalRangeGuid] = 1u;   // MFNominalRange_Normal (Studio range 64-940)
                     }
                     else
                     {
-                        // When HDR output is active, preserve BT.2020 primaries (index 9) and PQ ST.2084 curve (index 6)
-                        // while applying the selected tone mapping operator for highlight compression
-                        props.Properties[primariesGuid] = 9u;
-                        props.Properties[transferFuncGuid] = 6u;
+                        // Standard SDR source: BT.709 sRGB Gamma 2.2
+                        props.Properties[primariesGuid] = 2u;      // MFVideoPrimaries_BT709 (2)
+                        props.Properties[transferFuncGuid] = 5u;   // MFVideoTransferFunction_709 (5)
+                        props.Properties[yuvMatrixGuid] = 2u;      // MFVideoYUVMatrix_BT709 (2)
+                        props.Properties[nominalRangeGuid] = 1u;   // MFNominalRange_Normal (Studio range 16-235)
                     }
                 }
                 catch { }
             }
 
-            Debug.WriteLine($"[HDR ToneMapping] Applied mode '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}) across {item.VideoTracks.Count} video tracks");
+            Debug.WriteLine($"[HDR Display-Adaptive ToneMapping] Profile: {displayProfile}, Screen Peak: {peakNits:F0} nits, White: {sdrWhiteNits:F0} nits, Mode: '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}) across {item.VideoTracks.Count} video tracks");
         }
         catch (Exception ex)
         {
@@ -538,7 +564,10 @@ public sealed class HdrPipelineService
     {
         try
         {
-            if (_hdrActive && AppServices.Settings.Current.AutoBoostHdrBrightness)
+            bool isContentHdr = _contentFormat != HdrContentFormat.None;
+            bool shouldBoost = (_hdrActive || (_isAppFullscreen && isContentHdr)) && AppServices.Settings.Current.AutoBoostHdrBrightness;
+
+            if (shouldBoost)
             {
                 if (_brightnessOverride == null)
                 {

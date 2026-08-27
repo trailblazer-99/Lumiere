@@ -19,13 +19,23 @@ namespace LumiereMediaPlayer.Pages
         public StreamingMoviesPage()
         {
             this.InitializeComponent();
-            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
             this.Unloaded += OnUnloaded;
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            this.Unloaded -= OnUnloaded;
+            _heroTimer?.Stop();
+            if (TrendingHeroCarousel != null) TrendingHeroCarousel.ItemsSource = null;
+            if (TrendingGridView != null) TrendingGridView.ItemsSource = null;
+            if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
+        }
+
+        protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+        {
+            base.OnNavigatedFrom(e);
             _heroTimer?.Stop();
         }
 
@@ -35,32 +45,33 @@ namespace LumiereMediaPlayer.Pages
         {
             try
             {
-                try
+                base.OnNavigatedTo(e);
+            
+                // Refresh library items in case we are returning from Details Page where they changed
+                RefreshLibraryList();
+            
+                if (MainPivot?.SelectedIndex == 2)
                 {
-                    base.OnNavigatedTo(e);
-                
-                    // Refresh library items in case we are returning from Details Page where they changed
-                    RefreshLibraryList();
-                
-                    if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
-                    {
-                        // Preserve search results, active filters, and pivot tabs when returning from Details Page
-                        return;
-                    }
-
-                    ViewModel.ResetState();
-
-                    if (MainPivot != null)
-                    {
-                        MainPivot.SelectedIndex = 0;
-                    }
-                    if (SearchBox != null)
-                    {
-                        SearchBox.Text = string.Empty;
-                    }
-                    await ViewModel.InitializeAndLoadAsync();
+                    _heroTimer?.Start();
                 }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+
+                if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+                {
+                    // Preserve search results, active filters, and pivot tabs when returning from Details Page
+                    return;
+                }
+
+                ViewModel.ResetState();
+
+                if (MainPivot != null)
+                {
+                    MainPivot.SelectedIndex = 0;
+                }
+                if (SearchBox != null)
+                {
+                    SearchBox.Text = string.Empty;
+                }
+                await ViewModel.InitializeAndLoadAsync();
             }
             catch (Exception ex)
             {
@@ -100,16 +111,23 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
-        private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs? args)
         {
-            string? query = args.ChosenSuggestion != null ? args.ChosenSuggestion.ToString() : args.QueryText;
-            if (!string.IsNullOrWhiteSpace(query))
+            try
             {
-                ViewModel.PerformSearchCommand.Execute(query);
+                string? query = args?.ChosenSuggestion != null ? args.ChosenSuggestion.ToString() : (args?.QueryText ?? sender?.Text);
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    ViewModel.PerformSearchCommand.Execute(query);
+                }
+                else
+                {
+                    ViewModel.PerformSearchCommand.Execute(string.Empty);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                ViewModel.PerformSearchCommand.Execute(string.Empty);
+                System.Diagnostics.Debug.WriteLine($"[StreamingMoviesPage] OnSearchBoxQuerySubmitted error: {ex.Message}");
             }
         }
 
@@ -131,6 +149,34 @@ namespace LumiereMediaPlayer.Pages
             if (ViewModel == null) return;
             if (string.IsNullOrEmpty(ViewModel.ActiveSearchQuery)) _ = ViewModel.LoadMoviesAsync();
             else ViewModel.PerformSearchCommand.Execute(ViewModel.ActiveSearchQuery);
+        }
+
+        private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                OnSearchBoxQuerySubmitted(SearchBox, null!);
+            }
+        }
+
+        private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                OnSearchBoxQuerySubmitted(SearchBox, null!);
+            }
+        }
+
+        private void OnResetFiltersClick(object sender, RoutedEventArgs e)
+        {
+            if (SearchBox != null)
+            {
+                SearchBox.Text = string.Empty;
+            }
         }
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -224,11 +270,17 @@ namespace LumiereMediaPlayer.Pages
                 string header = selectedItem?.Header?.ToString() ?? string.Empty;
                 if (header == "Library")
                 {
+                    _heroTimer?.Stop();
                     RefreshLibraryList();
                 }
                 else if (header == "Trending")
                 {
+                    _heroTimer?.Start();
                     await LoadTrendingAsync();
+                }
+                else
+                {
+                    _heroTimer?.Stop();
                 }
             }
             catch (Exception ex)

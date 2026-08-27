@@ -28,32 +28,37 @@ public sealed partial class MediaCard : UserControl
             new PropertyMetadata("#0078D4", OnAccentColorChanged));
 
     public static readonly DependencyProperty ArtworkProperty =
-        DependencyProperty.Register(nameof(Artwork), typeof(ImageSource), typeof(MediaCard), new PropertyMetadata(null));
+        DependencyProperty.Register(nameof(Artwork), typeof(ImageSource), typeof(MediaCard),
+            new PropertyMetadata(null, (d, e) => ((MediaCard)d).UpdateDisplayImage()));
 
     public static readonly DependencyProperty PosterUrlProperty =
-        DependencyProperty.Register(nameof(PosterUrl), typeof(string), typeof(MediaCard), new PropertyMetadata(null, OnPosterUrlChanged));
+        DependencyProperty.Register(nameof(PosterUrl), typeof(string), typeof(MediaCard),
+            new PropertyMetadata(null, (d, e) => ((MediaCard)d).UpdateDisplayImage()));
 
-    private static void OnPosterUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    public ImageSource? DisplayImage
     {
-        if (d is MediaCard card && card.PosterImageElement != null)
+        get
         {
-            var url = e.NewValue as string;
-            if (!string.IsNullOrEmpty(url))
+            if (Artwork != null) return Artwork;
+            if (!string.IsNullOrWhiteSpace(PosterUrl))
             {
-                try
-                {
-                    var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                    bmp.DecodePixelWidth = 240;
-                    bmp.UriSource = new System.Uri(url);
-                    card.PosterImageElement.Source = bmp;
-                }
-                catch { try { card.PosterImageElement.Source = null; } catch { } }
+                return ImageBindHelper.SafeImageFromUrl(PosterUrl, 300);
             }
-            else
+            return null;
+        }
+    }
+
+    public void UpdateDisplayImage()
+    {
+        try
+        {
+            var src = DisplayImage;
+            if (PosterImageElement != null)
             {
-                try { card.PosterImageElement.Source = null; } catch { }
+                PosterImageElement.Source = src;
             }
         }
+        catch { }
     }
 
     private DropShadow? _dropShadow;
@@ -61,16 +66,24 @@ public sealed partial class MediaCard : UserControl
     public MediaCard()
     {
         InitializeComponent();
-        this.Loaded += (s, e) => InitializeShadow();
+        this.Loaded += (s, e) =>
+        {
+            InitializeShadow();
+            UpdateDisplayImage();
+            ApplyAccent(AccentColor);
+        };
     }
 
     private void InitializeShadow()
     {
+        if (_dropShadow != null) return;
         try
         {
+            if (ShadowHost == null || AlbumArtBackground == null) return;
             var hostVisual = ElementCompositionPreview.GetElementVisual(ShadowHost);
             var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
-            var compositor = hostVisual.Compositor;
+            var compositor = hostVisual?.Compositor;
+            if (compositor == null || artVisual == null) return;
             
             var shadowVisual = compositor.CreateSpriteVisual();
             _dropShadow = compositor.CreateDropShadow();
@@ -200,18 +213,18 @@ public sealed partial class MediaCard : UserControl
         if (PlayOverlay == null) return;
         try
         {
-            var animation = new DoubleAnimation
-            {
-                To = targetOpacity,
-                Duration = new Duration(TimeSpan.FromMilliseconds(200)),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
+            var visual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
+            if (visual == null) return;
+            var compositor = visual.Compositor;
+            if (compositor == null) return;
 
-            var storyboard = new Storyboard();
-            Storyboard.SetTarget(animation, PlayOverlay);
-            Storyboard.SetTargetProperty(animation, "Opacity");
-            storyboard.Children.Add(animation);
-            storyboard.Begin();
+            var animation = compositor.CreateScalarKeyFrameAnimation();
+            animation.Duration = TimeSpan.FromMilliseconds(200);
+            var easing = compositor.CreateCubicBezierEasingFunction(
+                new System.Numerics.Vector2(0.1f, 0.9f),
+                new System.Numerics.Vector2(0.2f, 1.0f));
+            animation.InsertKeyFrame(1.0f, (float)targetOpacity, easing);
+            visual.StartAnimation("Opacity", animation);
         }
         catch { }
     }

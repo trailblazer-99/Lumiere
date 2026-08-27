@@ -14,47 +14,24 @@ public sealed class SettingsService
     private const string ResumePlaybackPositionKey = "ResumePlaybackPosition";
     private const string SkipForwardIntervalKey = "SkipForwardInterval";
     private const string SkipBackwardIntervalKey = "SkipBackwardInterval";
-    private const string DefaultPlaybackSpeedKey = "DefaultPlaybackSpeed";
     private const string AutoAdvanceToNextTrackKey = "AutoAdvanceToNextTrack";
     private const string RememberLastPlayedTrackKey = "RememberLastPlayedTrack";
     private const string CrossfadeEnabledKey = "CrossfadeEnabled";
     private const string CrossfadeDurationKey = "CrossfadeDuration";
-    private const string GaplessPlaybackKey = "GaplessPlayback";
 
     // Audio
     private const string EqualizerPresetKey = "EqualizerPreset";
-    private const string VolumeNormalizationKey = "VolumeNormalization";
     private const string DefaultVolumeKey = "DefaultVolume";
-    private const string MonoAudioKey = "MonoAudio";
-    private const string BassBoostLevelKey = "BassBoostLevel";
-    private const string AudioBalanceKey = "AudioBalance";
 
     // Video
     private const string DefaultAspectRatioKey = "DefaultAspectRatio";
-    private const string DefaultSubtitleLanguageKey = "DefaultSubtitleLanguage";
-    private const string SubtitleFontSizeKey = "SubtitleFontSize";
-    private const string SubtitleBackgroundOpacityKey = "SubtitleBackgroundOpacity";
-    private const string HardwareAccelerationKey = "HardwareAcceleration";
-    private const string AutoRotateVideoKey = "AutoRotateVideo";
 
     // Appearance
     private const string BackdropTypeKey = "BackdropType";
-    private const string ShowMediaCardGlowKey = "ShowMediaCardGlow";
-    private const string ShowTimelinePreviewKey = "ShowTimelinePreview";
     private const string AccentColorKey = "AccentColor";
-    private const string CompactDensityModeKey = "CompactDensityMode";
-    private const string ShowAlbumArtInTransportBarKey = "ShowAlbumArtInTransportBar";
-    private const string AnimatedTransitionsKey = "AnimatedTransitions";
     private const string AlwaysShowTransportBarKey = "AlwaysShowTransportBar";
 
     // Controls & Interface
-    private const string ShowShuffleButtonKey = "ShowShuffleButton";
-    private const string ShowRepeatButtonKey = "ShowRepeatButton";
-    private const string ShowSubtitlesButtonKey = "ShowSubtitlesButton";
-    private const string ShowFullscreenButtonKey = "ShowFullscreenButton";
-    private const string ShowPipButtonKey = "ShowPipButton";
-    private const string ShowQueueInMoreMenuKey = "ShowQueueInMoreMenu";
-    private const string ShowSpeedInMoreMenuKey = "ShowSpeedInMoreMenu";
     private const string ShowOpenFilesOnHomeKey = "ShowOpenFilesOnHome";
     private const string OpenFilePositionCornerKey = "OpenFilePositionCorner";
 
@@ -65,13 +42,8 @@ public sealed class SettingsService
 
     // Library
     private const string AutomaticLibraryScanKey = "AutomaticLibraryScan";
-    private const string LibrarySortOrderKey = "LibrarySortOrder";
-    private const string ShowHiddenFilesKey = "ShowHiddenFiles";
-    private const string AutoImportNewFilesKey = "AutoImportNewFiles";
 
     // Privacy
-    private const string SendTelemetryKey = "SendTelemetry";
-    private const string RememberRecentlyPlayedKey = "RememberRecentlyPlayed";
     private const string RememberPlaybackPositionPerTrackKey = "RememberPlaybackPositionPerTrack";
 
     // Accessibility
@@ -92,6 +64,8 @@ public sealed class SettingsService
     private const string AiTranslationTargetLanguageKey = "AiTranslationTargetLanguage";
     private const string AiSemanticSearchEnabledKey = "AiSemanticSearchEnabled";
     private const string GeminiApiKeyKey = "GeminiApiKey";
+    private const string UseLocalAiKey = "UseLocalAi";
+    private const string OllamaModelNameKey = "OllamaModelName";
     private const string AiEqualizerMatcherEnabledKey = "AiEqualizerMatcherEnabled";
     private const string VoiceClarityEnabledKey = "VoiceClarityEnabled";
     private const string NightModeEnabledKey = "NightModeEnabled";
@@ -138,47 +112,24 @@ public sealed class SettingsService
             ResumePlaybackPosition = ReadBool(settingsValues, ResumePlaybackPositionKey, true),
             SkipForwardInterval = ReadInt(settingsValues, SkipForwardIntervalKey, 30),
             SkipBackwardInterval = ReadInt(settingsValues, SkipBackwardIntervalKey, 10),
-            DefaultPlaybackSpeed = ReadDouble(settingsValues, DefaultPlaybackSpeedKey, 1.0),
             AutoAdvanceToNextTrack = ReadBool(settingsValues, AutoAdvanceToNextTrackKey, true),
             RememberLastPlayedTrack = ReadBool(settingsValues, RememberLastPlayedTrackKey, true),
             CrossfadeEnabled = ReadBool(settingsValues, CrossfadeEnabledKey, false),
             CrossfadeDuration = ReadInt(settingsValues, CrossfadeDurationKey, 3),
-            GaplessPlayback = ReadBool(settingsValues, GaplessPlaybackKey, false),
 
             // Audio
             Equalizer = ParseEnum(settingsValues, EqualizerPresetKey, EqualizerPreset.Flat),
-            VolumeNormalization = ReadBool(settingsValues, VolumeNormalizationKey, false),
             DefaultVolume = ReadDouble(settingsValues, DefaultVolumeKey, 100.0),
-            MonoAudio = ReadBool(settingsValues, MonoAudioKey, false),
-            BassBoostLevel = ReadInt(settingsValues, BassBoostLevelKey, 0),
-            AudioBalance = ReadInt(settingsValues, AudioBalanceKey, 0),
 
             // Video
             DefaultAspectRatio = ParseEnum(settingsValues, DefaultAspectRatioKey, AspectRatioOption.Auto),
-            DefaultSubtitleLanguage = settingsValues.TryGetValue(DefaultSubtitleLanguageKey, out var lang) && lang is string sLang ? sLang : "None",
-            SubtitleFontSize = ParseEnum(settingsValues, SubtitleFontSizeKey, SubtitleFontSize.Medium),
-            SubtitleBackgroundOpacity = ReadInt(settingsValues, SubtitleBackgroundOpacityKey, 60),
-            HardwareAcceleration = ReadBool(settingsValues, HardwareAccelerationKey, true),
-            AutoRotateVideo = ReadBool(settingsValues, AutoRotateVideoKey, true),
 
             // Appearance
             BackdropType = ParseEnum(settingsValues, BackdropTypeKey, AppThemeBackdrop.Mica),
-            ShowMediaCardGlow = ReadBool(settingsValues, ShowMediaCardGlowKey, true),
-            ShowTimelinePreview = ReadBool(settingsValues, ShowTimelinePreviewKey, true),
             AccentColor = ParseEnum(settingsValues, AccentColorKey, AccentColorOption.SystemDefault),
-            CompactDensityMode = ReadBool(settingsValues, CompactDensityModeKey, false),
-            ShowAlbumArtInTransportBar = ReadBool(settingsValues, ShowAlbumArtInTransportBarKey, true),
-            AnimatedTransitions = ReadBool(settingsValues, AnimatedTransitionsKey, true),
             AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
 
             // Controls & Interface
-            ShowShuffleButton = ReadBool(settingsValues, ShowShuffleButtonKey, true),
-            ShowRepeatButton = ReadBool(settingsValues, ShowRepeatButtonKey, true),
-            ShowSubtitlesButton = ReadBool(settingsValues, ShowSubtitlesButtonKey, true),
-            ShowFullscreenButton = ReadBool(settingsValues, ShowFullscreenButtonKey, true),
-            ShowPipButton = ReadBool(settingsValues, ShowPipButtonKey, true),
-            ShowQueueInMoreMenu = ReadBool(settingsValues, ShowQueueInMoreMenuKey, true),
-            ShowSpeedInMoreMenu = ReadBool(settingsValues, ShowSpeedInMoreMenuKey, true),
             ShowOpenFilesOnHome = ReadBool(settingsValues, ShowOpenFilesOnHomeKey, true),
             OpenFilePositionCorner = ParseEnum(settingsValues, OpenFilePositionCornerKey, OpenFileCorner.TopRight),
 
@@ -189,13 +140,8 @@ public sealed class SettingsService
 
             // Library
             AutomaticLibraryScan = ReadBool(settingsValues, AutomaticLibraryScanKey, true),
-            LibrarySortOrder = ParseEnum(settingsValues, LibrarySortOrderKey, LibrarySortOrder.Title),
-            ShowHiddenFiles = ReadBool(settingsValues, ShowHiddenFilesKey, false),
-            AutoImportNewFiles = ReadBool(settingsValues, AutoImportNewFilesKey, true),
 
             // Privacy
-            SendTelemetry = ReadBool(settingsValues, SendTelemetryKey, false),
-            RememberRecentlyPlayed = ReadBool(settingsValues, RememberRecentlyPlayedKey, true),
             RememberPlaybackPositionPerTrack = ReadBool(settingsValues, RememberPlaybackPositionPerTrackKey, true),
 
             // Accessibility
@@ -215,7 +161,9 @@ public sealed class SettingsService
             AiLyricsTranslationEnabled = ReadBool(settingsValues, AiLyricsTranslationEnabledKey, false),
             AiTranslationTargetLanguage = settingsValues.TryGetValue(AiTranslationTargetLanguageKey, out var aiLang) && aiLang is string sAiLang ? sAiLang : "Hindi",
             AiSemanticSearchEnabled = ReadBool(settingsValues, AiSemanticSearchEnabledKey, false),
-            GeminiApiKey = settingsValues.TryGetValue(GeminiApiKeyKey, out var aiKey) && aiKey is string sAiKey ? sAiKey : "",
+            GeminiApiKey = Helpers.SecureStorageHelper.GetSecret("GeminiApiKey"),
+            UseLocalAi = ReadBool(settingsValues, UseLocalAiKey, false),
+            OllamaModelName = settingsValues.TryGetValue(OllamaModelNameKey, out var oModel) && oModel is string sOModel ? sOModel : "llama3.2",
             AiEqualizerMatcherEnabled = ReadBool(settingsValues, AiEqualizerMatcherEnabledKey, false),
             VoiceClarityEnabled = ReadBool(settingsValues, VoiceClarityEnabledKey, false),
             NightModeEnabled = ReadBool(settingsValues, NightModeEnabledKey, false),
@@ -264,59 +212,31 @@ public sealed class SettingsService
         s.Values[ResumePlaybackPositionKey] = Current.ResumePlaybackPosition;
         s.Values[SkipForwardIntervalKey] = Current.SkipForwardInterval;
         s.Values[SkipBackwardIntervalKey] = Current.SkipBackwardInterval;
-        s.Values[DefaultPlaybackSpeedKey] = Current.DefaultPlaybackSpeed;
         s.Values[AutoAdvanceToNextTrackKey] = Current.AutoAdvanceToNextTrack;
         s.Values[RememberLastPlayedTrackKey] = Current.RememberLastPlayedTrack;
         s.Values[CrossfadeEnabledKey] = Current.CrossfadeEnabled;
         s.Values[CrossfadeDurationKey] = Current.CrossfadeDuration;
-        s.Values[GaplessPlaybackKey] = Current.GaplessPlayback;
 
         // Audio
         s.Values[EqualizerPresetKey] = Current.Equalizer.ToString();
-        s.Values[VolumeNormalizationKey] = Current.VolumeNormalization;
         s.Values[DefaultVolumeKey] = Current.DefaultVolume;
-        s.Values[MonoAudioKey] = Current.MonoAudio;
-        s.Values[BassBoostLevelKey] = Current.BassBoostLevel;
-        s.Values[AudioBalanceKey] = Current.AudioBalance;
 
         // Video
         s.Values[DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString();
-        s.Values[DefaultSubtitleLanguageKey] = Current.DefaultSubtitleLanguage;
-        s.Values[SubtitleFontSizeKey] = Current.SubtitleFontSize.ToString();
-        s.Values[SubtitleBackgroundOpacityKey] = Current.SubtitleBackgroundOpacity;
-        s.Values[HardwareAccelerationKey] = Current.HardwareAcceleration;
-        s.Values[AutoRotateVideoKey] = Current.AutoRotateVideo;
 
         // Appearance
         s.Values[BackdropTypeKey] = Current.BackdropType.ToString();
-        s.Values[ShowMediaCardGlowKey] = Current.ShowMediaCardGlow;
-        s.Values[ShowTimelinePreviewKey] = Current.ShowTimelinePreview;
         s.Values[AccentColorKey] = Current.AccentColor.ToString();
-        s.Values[CompactDensityModeKey] = Current.CompactDensityMode;
-        s.Values[ShowAlbumArtInTransportBarKey] = Current.ShowAlbumArtInTransportBar;
-        s.Values[AnimatedTransitionsKey] = Current.AnimatedTransitions;
         s.Values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
 
         // Controls & Interface
-        s.Values[ShowShuffleButtonKey] = Current.ShowShuffleButton;
-        s.Values[ShowRepeatButtonKey] = Current.ShowRepeatButton;
-        s.Values[ShowSubtitlesButtonKey] = Current.ShowSubtitlesButton;
-        s.Values[ShowFullscreenButtonKey] = Current.ShowFullscreenButton;
-        s.Values[ShowPipButtonKey] = Current.ShowPipButton;
-        s.Values[ShowQueueInMoreMenuKey] = Current.ShowQueueInMoreMenu;
-        s.Values[ShowSpeedInMoreMenuKey] = Current.ShowSpeedInMoreMenu;
         s.Values[ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome;
         s.Values[OpenFilePositionCornerKey] = Current.OpenFilePositionCorner.ToString();
 
         // Library
         s.Values[AutomaticLibraryScanKey] = Current.AutomaticLibraryScan;
-        s.Values[LibrarySortOrderKey] = Current.LibrarySortOrder.ToString();
-        s.Values[ShowHiddenFilesKey] = Current.ShowHiddenFiles;
-        s.Values[AutoImportNewFilesKey] = Current.AutoImportNewFiles;
 
         // Privacy
-        s.Values[SendTelemetryKey] = Current.SendTelemetry;
-        s.Values[RememberRecentlyPlayedKey] = Current.RememberRecentlyPlayed;
         s.Values[RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack;
 
         // Accessibility
@@ -336,7 +256,10 @@ public sealed class SettingsService
         s.Values[AiLyricsTranslationEnabledKey] = Current.AiLyricsTranslationEnabled;
         s.Values[AiTranslationTargetLanguageKey] = Current.AiTranslationTargetLanguage;
         s.Values[AiSemanticSearchEnabledKey] = Current.AiSemanticSearchEnabled;
-        s.Values[GeminiApiKeyKey] = Current.GeminiApiKey;
+        Helpers.SecureStorageHelper.SaveSecret("GeminiApiKey", Current.GeminiApiKey);
+        s.Values.Remove(GeminiApiKeyKey); // Never persist plaintext in LocalSettings
+        s.Values[UseLocalAiKey] = Current.UseLocalAi;
+        s.Values[OllamaModelNameKey] = Current.OllamaModelName;
         s.Values[AiEqualizerMatcherEnabledKey] = Current.AiEqualizerMatcherEnabled;
         s.Values[VoiceClarityEnabledKey] = Current.VoiceClarityEnabled;
         s.Values[NightModeEnabledKey] = Current.NightModeEnabled;
@@ -389,25 +312,21 @@ public sealed class SettingsService
         [
             ThemeKey, FoldersKey,
             AutoplayOnLaunchKey, ResumePlaybackPositionKey, SkipForwardIntervalKey, SkipBackwardIntervalKey,
-            DefaultPlaybackSpeedKey, AutoAdvanceToNextTrackKey, RememberLastPlayedTrackKey,
-            CrossfadeEnabledKey, CrossfadeDurationKey, GaplessPlaybackKey,
-            EqualizerPresetKey, VolumeNormalizationKey, DefaultVolumeKey,
-            MonoAudioKey, BassBoostLevelKey, AudioBalanceKey,
-            DefaultAspectRatioKey, DefaultSubtitleLanguageKey, SubtitleFontSizeKey,
-            SubtitleBackgroundOpacityKey, HardwareAccelerationKey, AutoRotateVideoKey,
-            BackdropTypeKey, ShowMediaCardGlowKey, ShowTimelinePreviewKey,
-            AccentColorKey, CompactDensityModeKey, ShowAlbumArtInTransportBarKey,
-            AnimatedTransitionsKey, AlwaysShowTransportBarKey,
-            ShowShuffleButtonKey, ShowRepeatButtonKey, ShowSubtitlesButtonKey,
-            ShowFullscreenButtonKey, ShowPipButtonKey, ShowQueueInMoreMenuKey,
-            ShowSpeedInMoreMenuKey, ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
-            AutomaticLibraryScanKey, LibrarySortOrderKey, ShowHiddenFilesKey, AutoImportNewFilesKey,
-            SendTelemetryKey, RememberRecentlyPlayedKey, RememberPlaybackPositionPerTrackKey,
+            AutoAdvanceToNextTrackKey, RememberLastPlayedTrackKey,
+            CrossfadeEnabledKey, CrossfadeDurationKey,
+            EqualizerPresetKey, DefaultVolumeKey,
+            DefaultAspectRatioKey,
+            BackdropTypeKey,
+            AccentColorKey, AlwaysShowTransportBarKey,
+            ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
+            AutomaticLibraryScanKey,
+            RememberPlaybackPositionPerTrackKey,
             HighContrastModeKey, TextScaleKey, ReduceMotionKey,
             ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
             KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
             LargerClickTargetsKey, ColorBlindModeKey,
             AiLyricsTranslationEnabledKey, AiTranslationTargetLanguageKey, AiSemanticSearchEnabledKey, GeminiApiKeyKey,
+            UseLocalAiKey, OllamaModelNameKey,
             AiEqualizerMatcherEnabledKey, VoiceClarityEnabledKey, NightModeEnabledKey,
             SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey
         ];
@@ -416,6 +335,8 @@ public sealed class SettingsService
         {
             s.Values.Remove(key);
         }
+
+        Helpers.SecureStorageHelper.DeleteSecret("GeminiApiKey");
 
         Load();
         Save();
