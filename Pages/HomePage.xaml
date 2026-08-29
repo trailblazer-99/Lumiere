@@ -132,13 +132,15 @@
                                         </TransitionCollection>
                                     </Button.Transitions>
                                     <controls:MediaCard
+                                        Item="{Binding}"
                                         CardWidth="150"
                                         CardHeight="225"
                                         AccentColor="{Binding AccentColor}"
                                         Artwork="{Binding Artwork}"
                                         PosterUrl="{Binding PosterUrl}"
                                         Subtitle="{Binding Artist}"
-                                        Title="{Binding Title}" />
+                                        Title="{Binding Title}"
+                                        SelectionChanged="OnCardSelectionChanged" />
                                 </Button>
                             </DataTemplate>
                         </ItemsRepeater.ItemTemplate>
@@ -146,6 +148,17 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Floating Selection Action Ribbon -->
+        <controls:SelectionRibbon
+            x:Name="HomeSelectionRibbon"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Margin="24,0,24,16"
+            Canvas.ZIndex="100"
+            SelectAllRequested="OnSelectAllRequested"
+            ClearRequested="OnClearSelectionRequested"
+            RemoveRequested="OnRemoveSelectedRequested" />
     </Grid>
 </Page>
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Numerics;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
@@ -270,5 +270,100 @@ public static class SpringAnimationHelper
             targetVisual.StartAnimation("Scale", expressionAnim);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Plays an elastic sparkle pop and rotational animation on the AI search toggle and its icon.
+    /// </summary>
+    public static void AnimateAiToggle(FrameworkElement? toggleButton, FrameworkElement? icon, bool isChecked)
+    {
+        try
+        {
+            if (toggleButton != null)
+            {
+                var btnVisual = ElementCompositionPreview.GetElementVisual(toggleButton);
+                if (btnVisual != null)
+                {
+                    btnVisual.CenterPoint = new Vector3((float)(toggleButton.ActualWidth / 2), (float)(toggleButton.ActualHeight / 2), 0f);
+                    var compositor = btnVisual.Compositor;
+                    if (compositor != null)
+                    {
+                        var btnSpring = compositor.CreateSpringVector3Animation();
+                        btnSpring.Target = "Scale";
+                        btnSpring.InitialValue = isChecked ? new Vector3(0.85f, 0.85f, 1f) : new Vector3(0.92f, 0.92f, 1f);
+                        btnSpring.FinalValue = new Vector3(1.0f, 1.0f, 1f);
+                        btnSpring.DampingRatio = 0.45f;
+                        btnSpring.Period = TimeSpan.FromMilliseconds(200);
+                        btnVisual.StartAnimation("Scale", btnSpring);
+                    }
+                }
+            }
+
+            if (icon != null)
+            {
+                var iconVisual = ElementCompositionPreview.GetElementVisual(icon);
+                if (iconVisual != null)
+                {
+                    iconVisual.CenterPoint = new Vector3((float)(icon.ActualWidth / 2), (float)(icon.ActualHeight / 2), 0f);
+                    var compositor = iconVisual.Compositor;
+                    if (compositor != null)
+                    {
+                        if (isChecked)
+                        {
+                            // Elastic pop & bounce
+                            var scaleSpring = compositor.CreateSpringVector3Animation();
+                            scaleSpring.Target = "Scale";
+                            scaleSpring.InitialValue = new Vector3(0.4f, 0.4f, 1f);
+                            scaleSpring.FinalValue = new Vector3(1.0f, 1.0f, 1f);
+                            scaleSpring.DampingRatio = 0.4f;
+                            scaleSpring.Period = TimeSpan.FromMilliseconds(220);
+                            iconVisual.StartAnimation("Scale", scaleSpring);
+
+                            // Sparkle spin animation
+                            var rotAnim = compositor.CreateScalarKeyFrameAnimation();
+                            rotAnim.Target = "RotationAngleInDegrees";
+                            rotAnim.InsertKeyFrame(0.0f, -90.0f);
+                            rotAnim.InsertKeyFrame(0.7f, 15.0f, compositor.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1.0f)));
+                            rotAnim.InsertKeyFrame(1.0f, 0.0f, compositor.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1.0f)));
+                            rotAnim.Duration = TimeSpan.FromMilliseconds(380);
+                            iconVisual.StartAnimation("RotationAngleInDegrees", rotAnim);
+                        }
+                        else
+                        {
+                            // Smooth deactivate settle
+                            var scaleSpring = compositor.CreateSpringVector3Animation();
+                            scaleSpring.Target = "Scale";
+                            scaleSpring.InitialValue = new Vector3(1.25f, 1.25f, 1f);
+                            scaleSpring.FinalValue = new Vector3(1.0f, 1.0f, 1f);
+                            scaleSpring.DampingRatio = 0.6f;
+                            scaleSpring.Period = TimeSpan.FromMilliseconds(160);
+                            iconVisual.StartAnimation("Scale", scaleSpring);
+
+                            var rotAnim = compositor.CreateScalarKeyFrameAnimation();
+                            rotAnim.Target = "RotationAngleInDegrees";
+                            rotAnim.InsertKeyFrame(0.0f, 25.0f);
+                            rotAnim.InsertKeyFrame(1.0f, 0.0f);
+                            rotAnim.Duration = TimeSpan.FromMilliseconds(180);
+                            iconVisual.StartAnimation("RotationAngleInDegrees", rotAnim);
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    public static Brush GetAiCheckedIconBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("TextOnAccentFillColorPrimaryBrush", out var res) && res is Brush b)
+            return b;
+        return new SolidColorBrush(Microsoft.UI.Colors.White);
+    }
+
+    public static Brush GetAiUncheckedIconBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out var res) && res is Brush b)
+            return b;
+        return new SolidColorBrush(Microsoft.UI.Colors.Gray);
     }
 }

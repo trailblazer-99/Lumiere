@@ -82,7 +82,58 @@ public static class SampleMediaLibrary
             _playlists.Add(playlist);
         }
         LibraryChanged?.Invoke(null, EventArgs.Empty);
+        RequestDebouncedSave();
         await Task.CompletedTask;
+    }
+
+    public static async Task AddTracksToPlaylistAsync(string playlistId, IEnumerable<MediaItem> tracks)
+    {
+        if (string.IsNullOrEmpty(playlistId) || tracks == null) return;
+        lock (_lock)
+        {
+            var playlist = _playlists.FirstOrDefault(p => p.Id == playlistId);
+            if (playlist != null)
+            {
+                var current = playlist.Tracks.ToList();
+                foreach (var t in tracks)
+                {
+                    if (!current.Any(x => x.Id == t.Id || (!string.IsNullOrEmpty(x.SourcePath) && x.SourcePath == t.SourcePath)))
+                    {
+                        current.Add(t);
+                    }
+                }
+                playlist.Tracks = current;
+            }
+        }
+        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        RequestDebouncedSave();
+        await Task.CompletedTask;
+    }
+
+    public static async Task RemoveTracksAsync(IEnumerable<MediaItem> tracks)
+    {
+        if (tracks == null) return;
+        var toRemove = tracks.ToList();
+        if (toRemove.Count == 0) return;
+
+        lock (_lock)
+        {
+            foreach (var track in toRemove)
+            {
+                _allTracks.RemoveAll(t => t.Id == track.Id || (!string.IsNullOrEmpty(t.SourcePath) && t.SourcePath == track.SourcePath));
+                if (!string.IsNullOrEmpty(track.SourcePath)) _seenPaths.Remove(track.SourcePath);
+                if (!string.IsNullOrEmpty(track.Id)) _seenIds.Remove(track.Id);
+            }
+        }
+        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        RequestDebouncedSave();
+        await Task.CompletedTask;
+    }
+
+    public static async Task RemoveTrackAsync(MediaItem track)
+    {
+        if (track == null) return;
+        await RemoveTracksAsync(new[] { track });
     }
 
     public static async Task ScanFolderAsync(Windows.Storage.StorageFolder folder)
@@ -371,6 +422,7 @@ public static class SampleMediaLibrary
 
                         foreach (var track in validTracks)
                         {
+                            track.IsSelected = false;
                             bool isDuplicate = false;
                             if (!string.IsNullOrEmpty(track.SourcePath))
                             {

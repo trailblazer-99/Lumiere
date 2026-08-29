@@ -6,9 +6,9 @@ public static class TimeFormatting
     {
         if (time.TotalHours >= 1)
         {
-            return time.ToString(@"h\:mm\:ss");
+            return $"{(int)time.TotalHours}:{time.Minutes:D2}:{time.Seconds:D2}";
         }
 
-        return time.ToString(@"m\:ss");
+        return $"{time.Minutes}:{time.Seconds:D2}";
     }
 }

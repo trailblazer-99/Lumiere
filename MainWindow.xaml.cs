@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Controls;
+using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Pages;
 using LumiereMediaPlayer.ViewModels;
@@ -21,13 +22,12 @@ public sealed partial class MainWindow : Window
 {
     private readonly PlaybackViewModel _playback = AppServices.PlaybackViewModel;
     public PlaybackViewModel Playback => _playback;
+    public TransportBar? TransportBarElement => TransportControls;
     private readonly DispatcherTimer _positionTimer;
     private readonly QueuePanel _queuePanel;
     private readonly Flyout _queueFlyout;
     private bool _isNavigating;
     private VideoPage? _activeVideoPage;
-    private double _previousVolume = 100;
-    private bool _isMuted = false;
     private AccentColorOption _lastAccentColor = AppServices.Settings.Current.AccentColor;
     private AppThemeOption _lastTheme = AppServices.Settings.Current.Theme;
     private AppThemeBackdrop _lastBackdrop = AppServices.Settings.Current.BackdropType;
@@ -302,6 +302,7 @@ public sealed partial class MainWindow : Window
             }
         };
         TransportControls.VolumeChanged += (_, volume) => _playback.SetVolume(volume);
+        TransportControls.MuteToggled += (_, _) => ToggleMute();
         TransportControls.QueueRequested += (_, _) =>
             _queueFlyout.ShowAt(TransportControls.QueueButtonControl);
         TransportControls.PipRequested += (_, _) => TogglePipMode();
@@ -370,10 +371,12 @@ public sealed partial class MainWindow : Window
             {
                 if (AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay)
                 {
+                    _expectedPresenterKind = AppWindowPresenterKind.Overlapped;
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
                 }
                 else
                 {
+                    _expectedPresenterKind = AppWindowPresenterKind.CompactOverlay;
                     AppWindow.SetPresenter(AppWindowPresenterKind.CompactOverlay);
                 }
             }
@@ -437,13 +440,15 @@ public sealed partial class MainWindow : Window
 
             if (isPip)
             {
+                _expectedPresenterKind = AppWindowPresenterKind.CompactOverlay;
                 return;
             }
 
-            // Guard: If this presenter change was initiated by our own transition engine, do not re-run
+            // Guard: If this presenter change was initiated by our own transition engine or PiP exit, do not re-run
             var currentKind = sender.Presenter.Kind;
-            if (currentKind == _expectedPresenterKind || _isFullscreenTransitioning)
+            if (currentKind == _expectedPresenterKind || _isFullscreenTransitioning || _wasInPipMode)
             {
+                _expectedPresenterKind = currentKind;
                 return;
             }
             _expectedPresenterKind = currentKind;
@@ -524,8 +529,14 @@ public sealed partial class MainWindow : Window
         TransportControls.IsPlaying = _playback.IsPlaying;
         TransportControls.Position = _playback.PositionSeconds;
         TransportControls.Volume = _playback.Volume;
+        TransportControls.IsMuted = _playback.IsMuted;
         UpdateMiniPlayPauseIcon();
         UpdateTransportBarVisibility();
+
+        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+        {
+            UpdateMiniPlayer();
+        }
     }
 
     private void OnPositionTimerTick(object? sender, object e)
@@ -536,6 +547,18 @@ public sealed partial class MainWindow : Window
         }
 
         _playback.PositionSeconds = _playback.Session.PositionSeconds;
+
+        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay && !_isMiniSliderSeeking)
+        {
+            if (MiniPositionSlider != null)
+            {
+                MiniPositionSlider.Value = Math.Clamp(_playback.PositionSeconds, 0, MiniPositionSlider.Maximum);
+            }
+            if (MiniPositionText != null)
+            {
+                MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(_playback.PositionSeconds));
+            }
+        }
 
         var now = DateTime.UtcNow;
         if (now - _lastPositionSaveTime >= PositionSaveInterval)
@@ -983,11 +1006,7 @@ public sealed partial class MainWindow : Window
         if (result.Tag != null && result.Tag.StartsWith("ai_search:"))
         {
             string searchQuery = result.Tag.Substring("ai_search:".Length);
-            NavigateToMusicLibrary();
-            App.MainDispatcher?.TryEnqueue(async () =>
-            {
-                await AppServices.MusicLibraryViewModel.SearchLibraryAsync(searchQuery, true);
-            });
+            NavigateTo(typeof(MusicLibraryPage), searchQuery);
             return;
         }
 
@@ -1070,12 +1089,13 @@ public sealed partial class MainWindow : Window
         try
         {
             var title = file.DisplayName;
-            var artist = "Local File";
+            var artist = string.Empty;
+            var album = string.Empty;
             var duration = TimeSpan.Zero;
             var kind = MediaKind.Audio;
 
             var ext = file.FileType.ToLowerInvariant();
-            if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv")
+            if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".webm")
             {
                 kind = MediaKind.Video;
                 try
@@ -1088,12 +1108,15 @@ public sealed partial class MainWindow : Window
             }
             else
             {
+                artist = "Local File";
+                album = "Local Playback";
                 try
                 {
                     var props = await file.Properties.GetMusicPropertiesAsync();
                     duration = props.Duration;
                     if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
                     if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
+                    if (!string.IsNullOrEmpty(props.Album)) album = props.Album;
                 }
                 catch { }
             }
@@ -1116,7 +1139,7 @@ public sealed partial class MainWindow : Window
                 Id = Guid.NewGuid().ToString(),
                 Title = title,
                 Artist = artist,
-                Album = "Local Playback",
+                Album = album,
                 Duration = duration,
                 AccentColor = "#FFF76B1C",
                 Kind = kind,
@@ -1164,7 +1187,8 @@ public sealed partial class MainWindow : Window
                     if (isAudio || isVideo)
                     {
                         var title = file.DisplayName;
-                        var artist = "Local File";
+                        var artist = string.Empty;
+                        var album = string.Empty;
                         var duration = TimeSpan.Zero;
                         var kind = isVideo ? MediaKind.Video : MediaKind.Audio;
 
@@ -1180,12 +1204,15 @@ public sealed partial class MainWindow : Window
                         }
                         else
                         {
+                            artist = "Local File";
+                            album = folder.Name;
                             try
                             {
                                 var props = await file.Properties.GetMusicPropertiesAsync();
                                 duration = props.Duration;
                                 if (!string.IsNullOrEmpty(props.Title)) title = props.Title;
                                 if (!string.IsNullOrEmpty(props.Artist)) artist = props.Artist;
+                                if (!string.IsNullOrEmpty(props.Album)) album = props.Album;
                             }
                             catch { }
                         }
@@ -1200,7 +1227,7 @@ public sealed partial class MainWindow : Window
                             Id = Guid.NewGuid().ToString(),
                             Title = title,
                             Artist = artist,
-                            Album = folder.Name,
+                            Album = album,
                             Duration = duration,
                             AccentColor = "#FFF76B1C",
                             Kind = kind,
@@ -1230,6 +1257,8 @@ public sealed partial class MainWindow : Window
 
     public void NavigateBack()
     {
+        if (_isNavigating) return;
+
         if (ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive)
         {
             ExitVideoPlayback();
@@ -1240,10 +1269,13 @@ public sealed partial class MainWindow : Window
         {
             try
             {
+                _isNavigating = true;
                 ContentFrame.GoBack();
+                return;
             }
             catch (Exception ex)
             {
+                _isNavigating = false;
                 System.Diagnostics.Debug.WriteLine($"[Navigation] GoBack failed: {ex.Message}");
             }
         }
@@ -1368,13 +1400,20 @@ public sealed partial class MainWindow : Window
             }
 
             bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
-            bool canGoBack = isVideo || ContentFrame.CanGoBack;
+            bool isStreamingSubPage = ContentFrame.Content is StreamingYouTubePage || ContentFrame.Content is StreamingTwitchPage || ContentFrame.Content is StreamingDetailsPage;
+            bool canGoBack = isVideo || isStreamingSubPage || ContentFrame.CanGoBack;
             RootNavigationView.IsBackEnabled = canGoBack;
             RootNavigationView.IsBackButtonVisible = canGoBack 
                 ? NavigationViewBackButtonVisible.Visible 
                 : NavigationViewBackButtonVisible.Collapsed;
             RootNavigationView.IsPaneToggleButtonVisible = true;
             RootNavigationView.Margin = new Thickness(0, 0, 0, 0);
+            if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen && !isVideo)
+            {
+                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                RootNavigationView.IsPaneVisible = true;
+            }
+
             UpdateTitleBarLayout();
 
             UpdateLayoutForVideoMode();
@@ -1453,7 +1492,11 @@ public sealed partial class MainWindow : Window
         UpdateTransportBarVisibility();
         UpdateTransportBarTheme();
 
-
+        try
+        {
+            RootGrid.Focus(FocusState.Programmatic);
+        }
+        catch { }
 
         if (AppSearchBox != null && RootNavigationView != null)
         {
@@ -1647,6 +1690,8 @@ public sealed partial class MainWindow : Window
         batch.End();
     }
 
+    private bool _wasInPipMode = false;
+
     private void UpdateLayoutForPip(bool isPip)
     {
         try
@@ -1660,70 +1705,103 @@ public sealed partial class MainWindow : Window
 
         if (isPip)
         {
+            _wasInPipMode = true;
             if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
             if (TransportControls != null) TransportControls.Visibility = Visibility.Collapsed;
+            if (AppTitleBar != null) AppTitleBar.Visibility = Visibility.Collapsed;
+            if (FloatingVideoContainer != null)
+            {
+                FloatingVideoContainer.Visibility = Visibility.Collapsed;
+            }
+            if (GlobalVideoPlayer != null)
+            {
+                GlobalVideoPlayer.SetMediaPlayer(null);
+            }
+
+            SaveAndClearRowDefinitions();
             if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Visible;
-            if (AppTitleBar != null) AppTitleBar.Height = 48;
             
             if (ContentFrame?.Content is VideoPage vp)
             {
                 vp.SyncMediaPlayer();
             }
 
-            var track = _playback.CurrentTrack;
-            if (track != null)
-            {
-                if (track.IsVideo)
-                {
-                    if (MiniVideoPlayer != null)
-                    {
-                        MiniVideoPlayer.Visibility = Visibility.Visible;
-                        MiniVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
-                    }
-                    if (MiniAudioArt != null) MiniAudioArt.Visibility = Visibility.Collapsed;
-                    if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    if (MiniVideoPlayer != null)
-                    {
-                        MiniVideoPlayer.Visibility = Visibility.Collapsed;
-                        MiniVideoPlayer.SetMediaPlayer(null);
-                    }
-                    if (MiniAudioArt != null)
-                    {
-                        MiniAudioArt.Visibility = Visibility.Visible;
-                        MiniAudioArt.Source = track.Artwork;
-                    }
-                    if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
-                }
-            }
-            UpdateMiniPlayPauseIcon();
-
-            if (MiniOverlayControls != null)
-            {
-                MiniOverlayControls.Visibility = Visibility.Visible;
-            }
+            UpdateMiniPlayer();
+            ShowMiniPlayerControls();
             _miniPlayerInteractionTimer?.Start();
         }
         else
         {
             _miniPlayerInteractionTimer?.Stop();
 
-            if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Visible;
-            UpdateLayoutForVideoMode();
-            if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Collapsed;
-            if (AppTitleBar != null) AppTitleBar.Height = 48;
-
             if (MiniVideoPlayer != null)
             {
                 MiniVideoPlayer.SetMediaPlayer(null);
             }
 
+            if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Collapsed;
+
+            RestoreRowDefinitions();
+
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.Visibility = Visibility.Visible;
+                RootNavigationView.Opacity = 1.0;
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
+                visual.Opacity = 1.0f;
+                visual.StopAnimation("Opacity");
+                RootNavigationView.IsPaneVisible = true;
+                RootNavigationView.IsPaneOpen = _isNavPaneExpanded;
+                bool canGoBack = ContentFrame?.CanGoBack ?? false;
+                RootNavigationView.IsBackEnabled = canGoBack;
+                RootNavigationView.IsBackButtonVisible = canGoBack 
+                    ? NavigationViewBackButtonVisible.Visible 
+                    : NavigationViewBackButtonVisible.Collapsed;
+                RootNavigationView.IsPaneToggleButtonVisible = true;
+                RootNavigationView.ClearValue(Control.BackgroundProperty);
+            }
+
+            if (AppTitleBar != null)
+            {
+                AppTitleBar.Visibility = Visibility.Visible;
+                AppTitleBar.Opacity = 1.0;
+                AppTitleBar.Height = 48;
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                visual.Opacity = 1.0f;
+                visual.StopAnimation("Opacity");
+                AppTitleBar.Background = null;
+                SetTitleBar(DragRegion);
+            }
+
+            if (GlobalVideoPlayer != null && _playback?.Session?.MediaPlayer != null)
+            {
+                GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+            }
+
             if (ContentFrame?.Content is VideoPage vp)
             {
+                _activeVideoPage = vp;
                 vp.SyncMediaPlayer(true);
             }
+
+            UpdateLayoutForVideoMode();
+            UpdateTransportBarVisibility();
+            ApplyConfiguredTheme();
+            UpdateRootGridBackground();
+            ForceRefreshNavigationViewLayout();
+
+            // Re-sync floating video layout across multiple ticks as window restore settles
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
+            {
+                SyncFloatingVideoPlayer(force: true);
+                await Task.Delay(80);
+                SyncFloatingVideoPlayer(force: true);
+                await Task.Delay(180);
+                SyncFloatingVideoPlayer(force: true);
+                await Task.Delay(300);
+                SyncFloatingVideoPlayer(force: true);
+                _wasInPipMode = false;
+            });
         }
     }
 
@@ -2274,6 +2352,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        bool isStreamingPage = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
+        if (isStreamingPage && _playback.CurrentTrack == null)
+        {
+            TransportControls.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         bool show;
         if (isExplicitVisible.HasValue)
         {
@@ -2340,6 +2425,91 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private bool _isMiniSliderSeeking = false;
+
+    private void UpdateMiniPlayer()
+    {
+        var track = _playback.CurrentTrack;
+        if (track != null)
+        {
+            if (MiniTrackTitle != null)
+            {
+                MiniTrackTitle.Text = string.IsNullOrWhiteSpace(track.Title) ? "Unknown Media" : track.Title;
+            }
+            if (MiniArtistTitle != null)
+            {
+                MiniArtistTitle.Text = string.IsNullOrWhiteSpace(track.Artist)
+                    ? (track.IsVideo ? "Video" : "Unknown Artist")
+                    : track.Artist;
+            }
+
+            if (track.IsVideo)
+            {
+                if (MiniVideoPlayer != null)
+                {
+                    MiniVideoPlayer.Visibility = Visibility.Visible;
+                    MiniVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+                }
+                if (MiniAudioHost != null) MiniAudioHost.Visibility = Visibility.Collapsed;
+                if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                if (MiniVideoPlayer != null)
+                {
+                    MiniVideoPlayer.Visibility = Visibility.Collapsed;
+                    MiniVideoPlayer.SetMediaPlayer(null);
+                }
+                if (MiniAudioHost != null)
+                {
+                    MiniAudioHost.Visibility = Visibility.Visible;
+                }
+                if (MiniAudioArt != null) MiniAudioArt.Source = track.Artwork;
+                if (MiniAudioArtBlurred != null) MiniAudioArtBlurred.Source = track.Artwork;
+                if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Collapsed;
+            }
+
+            if (MiniPositionSlider != null && !_isMiniSliderSeeking)
+            {
+                double duration = track.Duration.TotalSeconds;
+                if (duration <= 0 && _playback.Session.MediaPlayer != null)
+                {
+                    duration = _playback.Session.MediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+                }
+                MiniPositionSlider.Maximum = Math.Max(1, duration);
+                MiniPositionSlider.Value = Math.Clamp(_playback.PositionSeconds, 0, MiniPositionSlider.Maximum);
+            }
+
+            if (MiniPositionText != null)
+            {
+                MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(_playback.PositionSeconds));
+            }
+            if (MiniDurationText != null)
+            {
+                double duration = track.Duration.TotalSeconds;
+                if (duration <= 0 && _playback.Session.MediaPlayer != null)
+                {
+                    duration = _playback.Session.MediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+                }
+                MiniDurationText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(duration));
+            }
+        }
+        else
+        {
+            if (MiniTrackTitle != null) MiniTrackTitle.Text = "No Media Playing";
+            if (MiniArtistTitle != null) MiniArtistTitle.Text = "Lumière Media Player";
+            if (MiniPositionSlider != null) { MiniPositionSlider.Maximum = 1; MiniPositionSlider.Value = 0; }
+            if (MiniPositionText != null) MiniPositionText.Text = "00:00";
+            if (MiniDurationText != null) MiniDurationText.Text = "00:00";
+            if (MiniVideoPlayer != null) MiniVideoPlayer.Visibility = Visibility.Collapsed;
+            if (MiniAudioHost != null) MiniAudioHost.Visibility = Visibility.Collapsed;
+            if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Collapsed;
+        }
+
+        UpdateMiniPlayPauseIcon();
+        UpdateMiniVolumeIcon();
+    }
+
     private void UpdateMiniPlayPauseIcon()
     {
         if (MiniPlayPauseIcon != null)
@@ -2353,6 +2523,29 @@ public sealed partial class MainWindow : Window
             {
                 MiniPlayPauseIcon.Glyph = "\uE768"; // Solid Play
                 MiniPlayPauseIcon.Margin = new Thickness(2, 0, 0, 0);
+            }
+        }
+    }
+
+    private void UpdateMiniVolumeIcon()
+    {
+        if (MiniVolumeIcon != null)
+        {
+            if (_playback.IsMuted || _playback.Volume <= 0)
+            {
+                MiniVolumeIcon.Glyph = "\uE74F"; // Muted
+            }
+            else if (_playback.Volume < 33)
+            {
+                MiniVolumeIcon.Glyph = "\uE992"; // Low volume
+            }
+            else if (_playback.Volume < 66)
+            {
+                MiniVolumeIcon.Glyph = "\uE993"; // Med volume
+            }
+            else
+            {
+                MiniVolumeIcon.Glyph = "\uE767"; // High volume
             }
         }
     }
@@ -2407,17 +2600,25 @@ public sealed partial class MainWindow : Window
 
     private void ShowMiniPlayerControls()
     {
-        if (MiniOverlayControls != null && MiniOverlayControls.Visibility != Visibility.Visible)
+        if (MiniOverlayControls != null)
         {
-            MiniOverlayControls.Visibility = Visibility.Visible;
+            FadeElement(MiniOverlayControls, 1.0, 120);
+        }
+        if (MiniControlsDimmer != null && _playback.CurrentTrack is { IsVideo: true })
+        {
+            FadeElement(MiniControlsDimmer, 1.0, 120);
         }
     }
 
     private void HideMiniPlayerControls()
     {
-        if (MiniOverlayControls != null && MiniOverlayControls.Visibility == Visibility.Visible)
+        if (MiniOverlayControls != null)
         {
-            MiniOverlayControls.Visibility = Visibility.Collapsed;
+            FadeElement(MiniOverlayControls, 0.0, 250);
+        }
+        if (MiniControlsDimmer != null)
+        {
+            FadeElement(MiniControlsDimmer, 0.0, 250);
         }
     }
 
@@ -2447,9 +2648,38 @@ public sealed partial class MainWindow : Window
         _playback.NextCommand.Execute(null);
     }
 
+    private void OnMiniVolumeClick(object sender, RoutedEventArgs e)
+    {
+        _playback.IsMuted = !_playback.IsMuted;
+        UpdateMiniVolumeIcon();
+    }
+
     private void OnMiniExitPipClick(object sender, RoutedEventArgs e)
     {
         TogglePipMode();
+    }
+
+    private void OnMiniCloseClick(object sender, RoutedEventArgs e)
+    {
+        AnimateWindowExitAndClose();
+    }
+
+    private void OnMiniSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_isMiniSliderSeeking && MiniPositionText != null)
+        {
+            MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
+        }
+    }
+
+    private void OnMiniSliderPointerCaptureLost(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (MiniPositionSlider != null)
+        {
+            _playback.PositionSeconds = MiniPositionSlider.Value;
+            _playback.Seek(MiniPositionSlider.Value);
+            _isMiniSliderSeeking = false;
+        }
     }
 
     public void ApplyBackdrop(AppThemeBackdrop backdropType)
@@ -2510,191 +2740,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void UpdateAccentColor()
+    public void UpdateAccentColor()
     {
-        var accentOption = AppServices.Settings.Current.AccentColor;
-        if (accentOption == AccentColorOption.SystemDefault)
-        {
-            var keysToRemove = new string[]
-            {
-                "SystemAccentColor", "SystemAccentColorLight1", "SystemAccentColorLight2", "SystemAccentColorLight3",
-                "SystemAccentColorDark1", "SystemAccentColorDark2", "SystemAccentColorDark3",
-                "AccentFillColorDefaultBrush", "AccentFillColorSecondaryBrush", "AccentFillColorTertiaryBrush",
-                "SystemControlHighlightAccentBrush", "SystemControlBackgroundAccentBrush",
-                "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed",
-                "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
-                "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver", "ToggleSwitchFillOnPressed",
-                "ToggleSwitchStrokeOn", "ToggleSwitchStrokeOnPointerOver", "ToggleSwitchStrokeOnPressed",
-                "ProgressBarProgressFill", "CheckBoxBackgroundSelected", "CheckBoxBorderBrushSelected",
-                "RadioButtonBackgroundSelected", "RadioButtonBorderBrushSelected",
-                "AccentButtonBackground", "AccentButtonBackgroundPointerOver", "AccentButtonBackgroundPressed",
-                "AccentButtonBorderBrush", "AccentButtonBorderBrushPointerOver", "AccentButtonBorderBrushPressed"
-            };
-            foreach (var key in keysToRemove)
-            {
-                RootGrid.Resources.Remove(key);
-            }
-        }
-        else
-        {
-            Windows.UI.Color color;
-            Windows.UI.Color colorLight1;
-            Windows.UI.Color colorLight2;
-            Windows.UI.Color colorLight3;
-            Windows.UI.Color colorDark1;
-            Windows.UI.Color colorDark2;
-            Windows.UI.Color colorDark3;
-
-            switch (accentOption)
-            {
-                case AccentColorOption.Orange:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 247, 107, 28);      // #F76B1C
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 248, 129, 60);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 250, 153, 97);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 252, 178, 137);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 217, 83, 11);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 186, 68, 6);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 156, 54, 3);
-                    break;
-                case AccentColorOption.Purple:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 142, 82, 232);     // #8E52E8
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 163, 110, 237);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 185, 140, 242);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 207, 172, 247);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 116, 57, 207);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 93, 38, 181);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 71, 23, 156);
-                    break;
-                case AccentColorOption.Blue:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 0, 120, 212);       // #0078D4
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 43, 147, 228);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 97, 175, 239);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 148, 203, 248);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 90, 158);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 69, 120);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 45, 80);
-                    break;
-                case AccentColorOption.Teal:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 0, 183, 195);       // #00B7C3
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 43, 201, 211);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 97, 219, 227);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 148, 236, 242);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 144, 154);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 108, 116);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 0, 75, 80);
-                    break;
-                case AccentColorOption.Red:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 232, 17, 35);       // #E81123
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 236, 58, 73);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 241, 108, 120);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 246, 158, 167);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 189, 10, 26);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 148, 6, 18);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 112, 3, 12);
-                    break;
-                case AccentColorOption.Pink:
-                    color = Microsoft.UI.ColorHelper.FromArgb(255, 227, 0, 140);       // #E3008C
-                    colorLight1 = Microsoft.UI.ColorHelper.FromArgb(255, 232, 43, 161);
-                    colorLight2 = Microsoft.UI.ColorHelper.FromArgb(255, 238, 97, 185);
-                    colorLight3 = Microsoft.UI.ColorHelper.FromArgb(255, 244, 150, 208);
-                    colorDark1 = Microsoft.UI.ColorHelper.FromArgb(255, 181, 0, 111);
-                    colorDark2 = Microsoft.UI.ColorHelper.FromArgb(255, 140, 0, 85);
-                    colorDark3 = Microsoft.UI.ColorHelper.FromArgb(255, 102, 0, 61);
-                    break;
-                default:
-                    return;
-            }
-
-            RootGrid.Resources["SystemAccentColor"] = color;
-            RootGrid.Resources["SystemAccentColorLight1"] = colorLight1;
-            RootGrid.Resources["SystemAccentColorLight2"] = colorLight2;
-            RootGrid.Resources["SystemAccentColorLight3"] = colorLight3;
-            RootGrid.Resources["SystemAccentColorDark1"] = colorDark1;
-            RootGrid.Resources["SystemAccentColorDark2"] = colorDark2;
-            RootGrid.Resources["SystemAccentColorDark3"] = colorDark3;
-
-            var defaultBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(color);
-            var secondaryBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(colorLight1);
-            var tertiaryBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(colorLight2);
-
-            RootGrid.Resources["AccentFillColorDefaultBrush"] = defaultBrush;
-            RootGrid.Resources["AccentFillColorSecondaryBrush"] = secondaryBrush;
-            RootGrid.Resources["AccentFillColorTertiaryBrush"] = tertiaryBrush;
-            RootGrid.Resources["SystemControlHighlightAccentBrush"] = defaultBrush;
-            RootGrid.Resources["SystemControlBackgroundAccentBrush"] = defaultBrush;
-
-            // Custom seek (Slider) accent overrides
-            RootGrid.Resources["SliderTrackValueFill"] = defaultBrush;
-            RootGrid.Resources["SliderTrackValueFillPointerOver"] = secondaryBrush;
-            RootGrid.Resources["SliderTrackValueFillPressed"] = tertiaryBrush;
-            RootGrid.Resources["SliderThumbBackground"] = defaultBrush;
-            RootGrid.Resources["SliderThumbBackgroundPointerOver"] = defaultBrush;
-            RootGrid.Resources["SliderThumbBackgroundPressed"] = defaultBrush;
-
-            // Custom ToggleSwitch accent overrides
-            RootGrid.Resources["ToggleSwitchFillOn"] = defaultBrush;
-            RootGrid.Resources["ToggleSwitchFillOnPointerOver"] = secondaryBrush;
-            RootGrid.Resources["ToggleSwitchFillOnPressed"] = tertiaryBrush;
-            RootGrid.Resources["ToggleSwitchStrokeOn"] = defaultBrush;
-            RootGrid.Resources["ToggleSwitchStrokeOnPointerOver"] = secondaryBrush;
-            RootGrid.Resources["ToggleSwitchStrokeOnPressed"] = tertiaryBrush;
-
-            // ProgressBar, CheckBox, RadioButton accent overrides
-            RootGrid.Resources["ProgressBarProgressFill"] = defaultBrush;
-            RootGrid.Resources["CheckBoxBackgroundSelected"] = defaultBrush;
-            RootGrid.Resources["CheckBoxBorderBrushSelected"] = defaultBrush;
-            RootGrid.Resources["RadioButtonBackgroundSelected"] = defaultBrush;
-            RootGrid.Resources["RadioButtonBorderBrushSelected"] = defaultBrush;
-
-            // AccentButton overrides
-            RootGrid.Resources["AccentButtonBackground"] = defaultBrush;
-            RootGrid.Resources["AccentButtonBackgroundPointerOver"] = secondaryBrush;
-            RootGrid.Resources["AccentButtonBackgroundPressed"] = tertiaryBrush;
-            RootGrid.Resources["AccentButtonBorderBrush"] = defaultBrush;
-            RootGrid.Resources["AccentButtonBorderBrushPointerOver"] = secondaryBrush;
-            RootGrid.Resources["AccentButtonBorderBrushPressed"] = tertiaryBrush;
-        }
-
-        // Force dynamic resource lookups and ThemeResource bindings in the visual tree to update immediately
-        var currentTheme = RootGrid.RequestedTheme;
-        RootGrid.RequestedTheme = currentTheme == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
-        RootGrid.RequestedTheme = currentTheme;
+        ThemeHelper.ApplyAccentColor(AppServices.Settings.Current.AccentColor);
     }
 
     private void AnimateAccentColorChange(AccentColorOption newAccent)
     {
         _lastAccentColor = newAccent;
-
-        var fadeOut = new DoubleAnimation
-        {
-            From = 1.0,
-            To = 0.3,
-            Duration = new Duration(TimeSpan.FromMilliseconds(150))
-        };
-
-        fadeOut.Completed += (s, e) =>
-        {
-            UpdateAccentColor();
-
-            var fadeIn = new DoubleAnimation
-            {
-                From = 0.3,
-                To = 1.0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(250))
-            };
-
-            var sbIn = new Storyboard();
-            sbIn.Children.Add(fadeIn);
-            Storyboard.SetTarget(fadeIn, RootGrid);
-            Storyboard.SetTargetProperty(fadeIn, "Opacity");
-            sbIn.Begin();
-        };
-
-        var sbOut = new Storyboard();
-        sbOut.Children.Add(fadeOut);
-        Storyboard.SetTarget(fadeOut, RootGrid);
-        Storyboard.SetTargetProperty(fadeOut, "Opacity");
-        sbOut.Begin();
+        ThemeHelper.ApplyAccentColor(newAccent);
     }
 
     private void TogglePlayPause()
@@ -2717,34 +2771,19 @@ public sealed partial class MainWindow : Window
     private void ToggleMute()
     {
         NotifyActivityInFullscreen();
-        if (_isMuted)
-        {
-            _playback.SetVolume(_previousVolume);
-            _isMuted = false;
-        }
-        else
-        {
-            _previousVolume = _playback.Volume;
-            _playback.SetVolume(0);
-            _isMuted = true;
-        }
+        _playback.ToggleMute();
     }
 
     private void AdjustVolume(double delta)
     {
         NotifyActivityInFullscreen();
         double currentVolume = _playback.Volume;
-        if (_isMuted && delta > 0)
+        if (_playback.IsMuted && delta > 0)
         {
-            currentVolume = _previousVolume;
-            _isMuted = false;
+            _playback.Session.IsMuted = false;
         }
         double newVolume = Math.Clamp(currentVolume + delta, 0, 100);
         _playback.SetVolume(newVolume);
-        if (newVolume > 0)
-        {
-            _isMuted = false;
-        }
     }
 
     private void SeekRelative(double seconds)
@@ -2761,6 +2800,17 @@ public sealed partial class MainWindow : Window
         if (_isFullscreenTransitioning) return;
 
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        if (!isFullScreen)
+        {
+            bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+            bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
+            if (!isVideoActive && !isStreamingActive)
+            {
+                // Guard: Do not enter fullscreen if nothing is playing
+                return;
+            }
+        }
+
         if (isFullScreen)
         {
             await ExitFullscreenAnimatedAsync();
@@ -2780,6 +2830,12 @@ public sealed partial class MainWindow : Window
 
         if (isFullScreen)
         {
+            bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+            bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
+            if (!isVideoActive && !isStreamingActive)
+            {
+                return;
+            }
             await EnterFullscreenAnimatedAsync();
         }
         else
@@ -2865,7 +2921,29 @@ public sealed partial class MainWindow : Window
             }
             else
             {
+                // Streaming WebView (YouTube / Twitch) or other non-local video fullscreen
+                if (RootNavigationView != null)
+                {
+                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
+                    RootNavigationView.IsPaneVisible = false;
+                    RootNavigationView.IsPaneOpen = false;
+                    RootNavigationView.IsPaneToggleButtonVisible = false;
+                    RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
+                }
+
+                if (AppTitleBar != null)
+                {
+                    AppTitleBar.Visibility = Visibility.Collapsed;
+                }
+
+                if (TransportControls != null)
+                {
+                    TransportControls.Visibility = Visibility.Collapsed;
+                }
+
+                SaveAndClearRowDefinitions();
                 SetTitleBar(null);
+
                 if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen)
                 {
                     AppWindow?.SetPresenter(AppWindowPresenterKind.FullScreen);
@@ -2893,47 +2971,96 @@ public sealed partial class MainWindow : Window
             _videoControlsTimer.Stop();
             HideMetadataOverlayGlobal();
 
-            // 1. Smoothly fade out fullscreen overlays
-            FadeElement(FullscreenControlsOverlay, 0.0, 100);
-            FadeElement(TransportControls, 0.0, 100);
+            bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
 
-            await Task.Delay(110);
-
-            if (FullscreenControlsOverlay != null)
+            if (isVideoActive)
             {
-                FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                // 1. Smoothly fade out fullscreen overlays
+                FadeElement(FullscreenControlsOverlay, 0.0, 100);
+                FadeElement(TransportControls, 0.0, 100);
+
+                await Task.Delay(110);
+
+                if (FullscreenControlsOverlay != null)
+                {
+                    FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                }
+                if (FullscreenVideoContainer != null)
+                {
+                    FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                }
+
+                // 2. Restore row definitions & move transport controls to normal layout
+                RestoreRowDefinitions();
+                MoveTransportControlsToNormalLayout();
+                SetTitleBar(DragRegion);
+
+                // 3. Request OS window restore
+                if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
+                {
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
+
+                // 4. Wait for DWM window restore animation to settle cleanly (180ms)
+                await Task.Delay(180);
+
+                // 5. Restore themes and dock video player to exact windowed placeholder
+                ApplyConfiguredTheme();
+                UpdateRootGridBackground();
+                ForceRefreshNavigationViewLayout();
+                ApplyBackdrop(AppServices.Settings.Current.BackdropType);
+
+                SyncFloatingVideoPlayer(force: true);
+
+                // 6. Smoothly fade in windowed chrome around docked video
+                FadeElement(RootNavigationView, 1.0, 200);
+                FadeElement(AppTitleBar, 1.0, 200);
+                FadeElement(TransportControls, 1.0, 200);
             }
-            if (FullscreenVideoContainer != null)
+            else
             {
-                FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                // Restore from Streaming (YouTube/Twitch) fullscreen
+                RestoreRowDefinitions();
+                MoveTransportControlsToNormalLayout();
+
+                if (RootNavigationView != null)
+                {
+                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                    RootNavigationView.IsPaneVisible = true;
+                    RootNavigationView.IsPaneOpen = true;
+                    RootNavigationView.IsPaneToggleButtonVisible = true;
+                    RootNavigationView.Visibility = Visibility.Visible;
+                    RootNavigationView.Opacity = 1.0;
+                    bool isVideo = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+                    bool isStreamingSubPage = ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage || ContentFrame?.Content is StreamingDetailsPage;
+                    bool canGoBack = isVideo || isStreamingSubPage || (ContentFrame?.CanGoBack ?? false);
+                    RootNavigationView.IsBackEnabled = canGoBack;
+                    RootNavigationView.IsBackButtonVisible = canGoBack 
+                        ? NavigationViewBackButtonVisible.Visible 
+                        : NavigationViewBackButtonVisible.Collapsed;
+                }
+
+                if (AppTitleBar != null)
+                {
+                    AppTitleBar.Visibility = Visibility.Visible;
+                    AppTitleBar.Opacity = 1.0;
+                }
+
+                SetTitleBar(DragRegion);
+                UpdateTransportBarVisibility();
+
+                if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
+                {
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
+
+                await Task.Delay(180);
+
+                ApplyConfiguredTheme();
+                UpdateRootGridBackground();
+                ForceRefreshNavigationViewLayout();
+                ApplyBackdrop(AppServices.Settings.Current.BackdropType);
             }
-
-            // 2. Restore row definitions & move transport controls to normal layout
-            RestoreRowDefinitions();
-            MoveTransportControlsToNormalLayout();
-            SetTitleBar(DragRegion);
-
-            // 3. Request OS window restore
-            if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
-            {
-                AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
-            }
-
-            // 4. Wait for DWM window restore animation to settle cleanly (180ms)
-            await Task.Delay(180);
-
-            // 5. Restore themes and dock video player to exact windowed placeholder
-            ApplyConfiguredTheme();
-            UpdateRootGridBackground();
-            ForceRefreshNavigationViewLayout();
-            ApplyBackdrop(AppServices.Settings.Current.BackdropType);
-
-            SyncFloatingVideoPlayer(force: true);
-
-            // 6. Smoothly fade in windowed chrome around docked video
-            FadeElement(RootNavigationView, 1.0, 200);
-            FadeElement(AppTitleBar, 1.0, 200);
-            FadeElement(TransportControls, 1.0, 200);
         }
         catch (Exception ex)
         {

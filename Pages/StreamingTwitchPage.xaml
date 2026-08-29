@@ -6,11 +6,110 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Loaded="OnPageLoaded"
     Unloaded="OnPageUnloaded">
 
     <Grid x:Name="PageContent" Margin="0,48,0,0">
         <!-- Full-screen WebView2 container for Twitch Web Wrapper -->
         <Grid x:Name="WebViewContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <!-- Fluent Loading Placeholder Overlay -->
+        <Grid
+            x:Name="LoadingOverlay"
+            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12">
+                <Border
+                    Width="64"
+                    Height="64"
+                    CornerRadius="16"
+                    Background="#1A9146FF"
+                    BorderBrush="#339146FF"
+                    BorderThickness="1"
+                    HorizontalAlignment="Center">
+                    <FontIcon
+                        Glyph="&#xE7FC;"
+                        FontSize="28"
+                        Foreground="#FF9146FF"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+                </Border>
+
+                <ProgressRing
+                    IsActive="True"
+                    Width="32"
+                    Height="32"
+                    Margin="0,8,0,4"
+                    Foreground="{ThemeResource SystemAccentColor}"
+                    HorizontalAlignment="Center" />
+
+                <TextBlock
+                    Text="Connecting to Twitch..."
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                    HorizontalAlignment="Center" />
+
+                <TextBlock
+                    Text="Loading live streams and channels"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Fluent Network Error / Offline State -->
+        <Grid
+            x:Name="ErrorOverlay"
+            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Visibility="Collapsed">
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                MaxWidth="380">
+                <Border
+                    Width="56"
+                    Height="56"
+                    CornerRadius="28"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    HorizontalAlignment="Center">
+                    <FontIcon
+                        Glyph="&#xE783;"
+                        FontSize="24"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+                </Border>
+
+                <TextBlock
+                    Text="Unable to Load Twitch"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                    HorizontalAlignment="Center" />
+
+                <TextBlock
+                    Text="Please check your network connection and try again."
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap" />
+
+                <Button
+                    Content="Retry Connection"
+                    Style="{StaticResource AccentButtonStyle}"
+                    HorizontalAlignment="Center"
+                    Margin="0,8,0,0"
+                    Click="OnRetryClick" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

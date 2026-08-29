@@ -146,6 +146,13 @@ public sealed class MediaItem : INotifyPropertyChanged
         set { if (_genre != value) { _genre = value; OnPropertyChanged(); } }
     }
 
+    private string? _description;
+    public string? Description
+    {
+        get => _description;
+        set { if (_description != value) { _description = value; OnPropertyChanged(); } }
+    }
+
     private string? _audioFormat;
     public string? AudioFormat
     {
@@ -207,6 +214,21 @@ public sealed class MediaItem : INotifyPropertyChanged
     {
         get => _chaptersCount;
         set { if (_chaptersCount != value) { _chaptersCount = value; OnPropertyChanged(); } }
+    }
+
+    private bool _isSelected;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged(); } }
+    }
+
+    private bool _isFavorite;
+    public bool IsFavorite
+    {
+        get => _isFavorite;
+        set { if (_isFavorite != value) { _isFavorite = value; OnPropertyChanged(); } }
     }
 
     public string DurationText => Helpers.TimeFormatting.Format(Duration);

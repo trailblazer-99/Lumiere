@@ -37,6 +37,7 @@
                     </Grid.RowDefinitions>
                     
                     <!-- Search & Filter Toolbar with Aligned Headers and Dimensions -->
+                    <!-- Search & Filter Toolbar with Aligned Headers and Dimensions -->
                     <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" Margin="0,0,0,20">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
@@ -44,7 +45,7 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
                                     <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
-                                        <FontIcon FontSize="13" Glyph="&#xE75E;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <FontIcon FontSize="13" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </ToggleButton>
                                 </StackPanel>
                             </StackPanel>
@@ -52,13 +53,8 @@
                             <ComboBox Header="Service" ItemsSource="{x:Bind ViewModel.ProviderOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedProvider, Mode=TwoWay}" Width="155" CornerRadius="8" VerticalAlignment="Bottom" />
                             <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
                             <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="165" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Rating" ItemsSource="{x:Bind ViewModel.RatingOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedRating, Mode=TwoWay}" Width="135" CornerRadius="8" VerticalAlignment="Bottom" />
                             <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <Button x:Name="ResetFiltersButton" Command="{x:Bind ViewModel.ResetFiltersCommand}" Click="OnResetFiltersClick" ToolTipService.ToolTip="Reset all filters except location" Height="32" VerticalAlignment="Bottom" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}" Margin="4,0,0,0">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon FontSize="12" Glyph="&#xE777;"/>
-                                    <TextBlock Text="Reset Filters" FontSize="13"/>
-                                </StackPanel>
-                            </Button>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -69,9 +65,76 @@
                              IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                              Margin="0,0,0,16" />
 
-                    <!-- GridView & State Views -->
+                    <!-- GridView & State Views with Left Action Bar -->
                     <Grid Grid.Row="2">
-                        <GridView x:Name="MoviesGridView" ItemsSource="{x:Bind ViewModel.Movies, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="OnMovieClicked" SelectionMode="None">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left Vertical Quick Action Rail -->
+                        <StackPanel Grid.Column="0" Spacing="6" Margin="0,0,16,0" VerticalAlignment="Top" Width="136">
+                            <TextBlock Text="Quick Actions" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+                            
+                            <!-- Reset Filters Button -->
+                            <Button x:Name="VerticalResetButton" Command="{x:Bind ViewModel.ResetFiltersCommand}" Click="OnResetFiltersClick" ToolTipService.ToolTip="Reset Search &amp; Filters" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE777;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Reset Filters" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Surprise Me Button -->
+                            <Button x:Name="VerticalSurpriseButton" Command="{x:Bind ViewModel.SurpriseMeCommand}" ToolTipService.ToolTip="Surprise Me (Pick a Random Movie)" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE8B1;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Surprise Me" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Refresh Feed Button -->
+                            <Button x:Name="VerticalRefreshButton" Command="{x:Bind ViewModel.RefreshFeedCommand}" ToolTipService.ToolTip="Refresh Feed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE72C;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Refresh" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4"/>
+
+                            <TextBlock Text="Quick Filters" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+
+                            <!-- Top Rated Filter -->
+                            <Button Command="{x:Bind ViewModel.QuickFilterTopRatedCommand}" ToolTipService.ToolTip="Show 8.0+ Rated Movies" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE735;" Foreground="#FFD700"/>
+                                    <TextBlock Text="Top Rated" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Trending Filter -->
+                            <Button Command="{x:Bind ViewModel.QuickFilterTrendingCommand}" ToolTipService.ToolTip="Show Trending Movies" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE945;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    <TextBlock Text="Trending" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Free Movies Filter -->
+                            <Button Command="{x:Bind ViewModel.QuickFilterFreeCommand}" ToolTipService.ToolTip="Show Free to Stream Movies" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="13" Glyph="&#xE774;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Free Movies" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <GridView Grid.Column="1" x:Name="MoviesGridView" ItemsSource="{x:Bind ViewModel.Movies, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="OnMovieClicked" SelectionMode="None">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" HorizontalAlignment="Left" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
                             <GridView.ItemContainerStyle>
                                 <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
@@ -175,6 +238,11 @@
 
                     <Grid Grid.Row="1">
                         <GridView x:Name="LibraryGridView" IsItemClickEnabled="True" ItemClick="LibraryGridView_ItemClick" SelectionMode="None">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" HorizontalAlignment="Center" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
                             <GridView.ItemContainerStyle>
                                 <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                             </GridView.ItemContainerStyle>
@@ -348,6 +416,11 @@
                             </Grid>
                         </StackPanel>
                     </GridView.Header>
+                    <GridView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsWrapGrid Orientation="Horizontal" HorizontalAlignment="Center" />
+                        </ItemsPanelTemplate>
+                    </GridView.ItemsPanel>
                     <GridView.ItemContainerStyle>
                         <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
                     </GridView.ItemContainerStyle>

@@ -1360,6 +1360,44 @@ namespace LumiereMediaPlayer.Pages
                 }
             }
 
+            if (name.Contains("hotstar"))
+            {
+                var hotstarIdMatch = System.Text.RegularExpressions.Regex.Match(webUrl, @"/(\d{6,})");
+                if (hotstarIdMatch.Success)
+                {
+                    string hotstarId = hotstarIdMatch.Groups[1].Value;
+                    string titleSlug = "";
+                    if (!string.IsNullOrWhiteSpace(_details?.Title))
+                    {
+                        titleSlug = System.Text.RegularExpressions.Regex.Replace(_details.Title.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+                    }
+                    if (string.IsNullOrEmpty(titleSlug)) titleSlug = "title";
+
+                    string mediaType = (_details?.Type?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movies" : "shows";
+                    webUrl = $"https://www.hotstar.com/in/{mediaType}/{titleSlug}/{hotstarId}";
+                    AntiGravityLogger.Log($"Hotstar URL upgraded to canonical deep link: {webUrl}");
+                }
+            }
+
+            if (name.Contains("jiocinema") || name.Contains("jio cinema"))
+            {
+                var jioIdMatch = System.Text.RegularExpressions.Regex.Match(webUrl, @"/(\d{6,})");
+                if (jioIdMatch.Success)
+                {
+                    string jioId = jioIdMatch.Groups[1].Value;
+                    string titleSlug = "";
+                    if (!string.IsNullOrWhiteSpace(_details?.Title))
+                    {
+                        titleSlug = System.Text.RegularExpressions.Regex.Replace(_details.Title.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+                    }
+                    if (string.IsNullOrEmpty(titleSlug)) titleSlug = "title";
+
+                    string mediaType = (_details?.Type?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movies" : "tv-shows";
+                    webUrl = $"https://www.jiocinema.com/{mediaType}/{titleSlug}/{jioId}";
+                    AntiGravityLogger.Log($"JioCinema URL upgraded to canonical deep link: {webUrl}");
+                }
+            }
+
             // Check if it's missing or just a root domain (or a root domain with a region code like /us/)
             bool isRootDomain = false;
             if (Uri.TryCreate(webUrl, UriKind.Absolute, out var parsedUri))

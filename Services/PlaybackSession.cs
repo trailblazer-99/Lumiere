@@ -48,6 +48,8 @@ public sealed class PlaybackSession
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _crossfadeCheckTimer;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _sleepCheckTimer;
     private DateTime? _sleepExpireTime;
+    private double _volume = 100;
+    private double _savedVolumeBeforeMute = 100;
 
     [System.Runtime.InteropServices.DllImport("psapi.dll")]
     private static extern bool EmptyWorkingSet(nint hProcess);
@@ -68,12 +70,14 @@ public sealed class PlaybackSession
         // Initialize volume
         try
         {
-            Volume = AppServices.Settings.Current.DefaultVolume;
-            _mediaPlayer.Volume = Volume / 100.0;
+            _volume = AppServices.Settings.Current.DefaultVolume;
+            _savedVolumeBeforeMute = _volume > 0 ? _volume : 100;
+            _mediaPlayer.Volume = _volume / 100.0;
         }
         catch
         {
-            Volume = 100;
+            _volume = 100;
+            _savedVolumeBeforeMute = 100;
             _mediaPlayer.Volume = 1.0;
         }
 
@@ -116,8 +120,76 @@ public sealed class PlaybackSession
 
     public double Volume
     {
-        get => _mediaPlayer.Volume * 100;
-        set => _mediaPlayer.Volume = Math.Clamp(value, 0, 100) / 100.0;
+        get => _volume;
+        set
+        {
+            _volume = Math.Clamp(value, 0, 100);
+            _mediaPlayer.Volume = _volume / 100.0;
+            if (_volume > 0)
+            {
+                _savedVolumeBeforeMute = _volume;
+                if (_mediaPlayer.IsMuted)
+                {
+                    _mediaPlayer.IsMuted = false;
+                    StateChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            else
+            {
+                if (!_mediaPlayer.IsMuted)
+                {
+                    _mediaPlayer.IsMuted = true;
+                    StateChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+        }
+    }
+
+    public bool IsMuted
+    {
+        get => _mediaPlayer.IsMuted;
+        set
+        {
+            if (_mediaPlayer.IsMuted != value)
+            {
+                _mediaPlayer.IsMuted = value;
+                if (value)
+                {
+                    if (_volume > 0)
+                    {
+                        _savedVolumeBeforeMute = _volume;
+                    }
+                }
+                else
+                {
+                    if (_volume == 0)
+                    {
+                        Volume = _savedVolumeBeforeMute > 0 ? _savedVolumeBeforeMute : 100;
+                    }
+                }
+                StateChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public void ToggleMute()
+    {
+        if (IsMuted || _volume == 0)
+        {
+            IsMuted = false;
+            if (_volume == 0)
+            {
+                Volume = _savedVolumeBeforeMute > 0 ? _savedVolumeBeforeMute : 100;
+            }
+        }
+        else
+        {
+            if (_volume > 0)
+            {
+                _savedVolumeBeforeMute = _volume;
+            }
+            IsMuted = true;
+        }
     }
 
     public event EventHandler? StateChanged;
@@ -342,6 +414,11 @@ public sealed class PlaybackSession
 
                 // Ensure deep container and HDR metadata is scanned
                 _ = MediaMetadataScanner.ScanMetadataAsync(CurrentTrack);
+
+                if (CurrentTrack.IsVideo)
+                {
+                    PrefetchVideoThumbnails(CurrentTrack);
+                }
             }
 
             // Configure the HDR pipeline for the newly opened media.
@@ -681,6 +758,48 @@ public sealed class PlaybackSession
             return; // PlayQueueItemAt will fire StateChanged
         }
 
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Enqueue(MediaItem track)
+    {
+        if (track == null) return;
+        _queue.Add(track);
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void EnqueueRange(IEnumerable<MediaItem> tracks)
+    {
+        if (tracks == null) return;
+        var list = tracks.ToList();
+        if (list.Count == 0) return;
+        _queue.AddRange(list);
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void PlayNext(MediaItem track)
+    {
+        if (track == null) return;
+        if (_queue.Count == 0 || _currentIndex < 0)
+        {
+            PlayTrack(track);
+            return;
+        }
+        _queue.Insert(_currentIndex + 1, track);
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void PlayNextRange(IEnumerable<MediaItem> tracks)
+    {
+        if (tracks == null) return;
+        var list = tracks.ToList();
+        if (list.Count == 0) return;
+        if (_queue.Count == 0 || _currentIndex < 0)
+        {
+            SetQueue(list, 0);
+            return;
+        }
+        _queue.InsertRange(_currentIndex + 1, list);
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -1365,67 +1484,95 @@ public sealed class PlaybackSession
             {
                 Log($"PrefetchVideoThumbnails: Starting for track '{track.Title}'");
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
-                var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-                var composition = new Windows.Media.Editing.MediaComposition();
-                composition.Clips.Add(clip);
-
-                lock (_compositionLock)
+                
+                try
                 {
-                    _activeComposition = composition;
+                    var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
+                    var composition = new Windows.Media.Editing.MediaComposition();
+                    composition.Clips.Add(clip);
+
+                    lock (_compositionLock)
+                    {
+                        _activeComposition = composition;
+                    }
+
+                    double totalSec = clip.OriginalDuration.TotalSeconds;
+                    if (totalSec > 0)
+                    {
+                        int numThumbnails = 12;
+                        double step = totalSec / (numThumbnails + 1);
+
+                        for (int i = 1; i <= numThumbnails; i++)
+                        {
+                            if (token.IsCancellationRequested) break;
+
+                            double sec = i * step;
+                            var time = TimeSpan.FromSeconds(sec);
+
+                            try
+                            {
+                                if (token.IsCancellationRequested) break;
+                                var stream = await composition.GetThumbnailAsync(time, 160, 90, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+                                
+                                if (token.IsCancellationRequested)
+                                {
+                                    stream?.Dispose();
+                                    break;
+                                }
+
+                                bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
+                                {
+                                    using (stream)
+                                    {
+                                        try
+                                        {
+                                            if (token.IsCancellationRequested) return;
+
+                                            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
+                                            await bitmap.SetSourceAsync(stream);
+                                            AddCachedThumbnail(time, bitmap);
+                                        }
+                                        catch { }
+                                    }
+                                }) ?? false;
+
+                                if (!enqueued)
+                                {
+                                    stream.Dispose();
+                                }
+                            }
+                            catch { }
+
+                            await Task.Delay(40, token);
+                        }
+                    }
                 }
-
-                double totalSec = clip.OriginalDuration.TotalSeconds;
-                if (totalSec <= 0) return;
-
-                int numThumbnails = 8;
-                double step = totalSec / (numThumbnails + 1);
-
-                for (int i = 1; i <= numThumbnails; i++)
+                catch
                 {
-                    if (token.IsCancellationRequested) break;
-
-                    double sec = i * step;
-                    var time = TimeSpan.FromSeconds(sec);
-
+                    // Fallback for MKV / other formats: extract shell video thumbnail
                     try
                     {
-                        if (token.IsCancellationRequested) break;
-                        var stream = await composition.GetThumbnailAsync(time, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
-                        
-                        if (token.IsCancellationRequested)
+                        var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
+                        if (thumb != null && !token.IsCancellationRequested)
                         {
-                            stream?.Dispose();
-                            break;
-                        }
-
-                        bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-                        {
-                            using (stream)
+                            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
                             {
-                                try
+                                using (thumb)
                                 {
-                                    if (token.IsCancellationRequested) return;
-
-                                    var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 120 };
-                                    await bitmap.SetSourceAsync(stream);
-                                    AddCachedThumbnail(time, bitmap);
+                                    try
+                                    {
+                                        var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
+                                        await bitmap.SetSourceAsync(thumb);
+                                        AddCachedThumbnail(TimeSpan.Zero, bitmap);
+                                    }
+                                    catch { }
                                 }
-                                catch { }
-                            }
-                        }) ?? false;
-
-                        if (!enqueued)
-                        {
-                            stream.Dispose();
+                            });
                         }
                     }
-                    catch
-                    {
-                        // Ignore individual frame extraction failures
-                    }
-
-                    await Task.Delay(50, token);
+                    catch { }
                 }
+
                 Log("PrefetchVideoThumbnails: Thread finished enqueuing tasks.");
             }
             catch (Exception ex)
@@ -1448,7 +1595,7 @@ public sealed class PlaybackSession
         try
         {
             var timeSpan = TimeSpan.FromSeconds(seconds);
-            return await comp.GetThumbnailAsync(timeSpan, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+            return await comp.GetThumbnailAsync(timeSpan, 160, 90, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
         }
         catch
         {

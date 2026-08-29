@@ -1,6 +1,9 @@
 using System;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.Web.WebView2.Core;
+using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Pages
 {
@@ -8,8 +11,17 @@ namespace LumiereMediaPlayer.Pages
     {
         private WebView2? _webView;
         private bool _isInitialized = false;
-
         private string _targetUrl = "https://www.youtube.com";
+
+        public bool CanGoBack => _webView?.CanGoBack ?? false;
+
+        public void GoBack()
+        {
+            if (_webView?.CanGoBack == true)
+            {
+                _webView.GoBack();
+            }
+        }
 
         public StreamingYouTubePage()
         {
@@ -17,9 +29,13 @@ namespace LumiereMediaPlayer.Pages
             _ = InitializeYouTubeWebViewAsync();
         }
 
-        private void OnBackButtonClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private void OnBackButtonClick(object sender, RoutedEventArgs e)
         {
-            if (Frame.CanGoBack)
+            if (CanGoBack)
+            {
+                GoBack();
+            }
+            else if (Frame.CanGoBack)
             {
                 Frame.GoBack();
             }
@@ -45,6 +61,8 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
+                    LoadingOverlay.Visibility = Visibility.Visible;
+                    ErrorOverlay.Visibility = Visibility.Collapsed;
                     _webView.CoreWebView2.Navigate(_targetUrl);
                 }
                 catch (Exception ex)
@@ -60,10 +78,20 @@ namespace LumiereMediaPlayer.Pages
             {
                 if (_webView == null)
                 {
+                    bool isDark = AppServices.Settings.Current.Theme switch
+                    {
+                        AppThemeOption.Light => false,
+                        AppThemeOption.Dark => true,
+                        _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
+                    };
+
                     _webView = new WebView2
                     {
-                        HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
-                        VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch,
+                        DefaultBackgroundColor = isDark
+                            ? Windows.UI.Color.FromArgb(255, 15, 15, 15)
+                            : Windows.UI.Color.FromArgb(255, 248, 248, 248)
                     };
 
                     WebViewContainer.Children.Add(_webView);
@@ -71,14 +99,18 @@ namespace LumiereMediaPlayer.Pages
                     // Configure profile and persistent folder to save login state
                     var localAppData = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
                     var userDataFolder = System.IO.Path.Combine(localAppData, "WebView2Data");
-                    var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, userDataFolder, null);
+                    var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, userDataFolder, null);
                     
                     await _webView.EnsureCoreWebView2Async(env);
 
-                    // Spoof Safari on macOS User-Agent to bypass Google Account sign-in blocks on embedded browsers.
-                    // _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
-                    
-                    // Enable full screen support from within the YouTube web player
+                    // Sync dark/light theme with YouTube profile
+                    _webView.CoreWebView2.Profile.PreferredColorScheme = isDark
+                        ? CoreWebView2PreferredColorScheme.Dark
+                        : CoreWebView2PreferredColorScheme.Light;
+
+                    // Hook navigation lifecycle
+                    _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                    _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
                     _isInitialized = true;
                 }
@@ -91,15 +123,55 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[YouTubePage] Failed to initialize dynamic WebView2: {ex.Message}");
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Visible;
             }
         }
 
+        private void OnNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs args)
+        {
+            if (args.IsUserInitiated)
+            {
+                ErrorOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
 
-        private void OnWebViewContainsFullScreenElementChanged(Microsoft.Web.WebView2.Core.CoreWebView2 sender, object args)
+        private void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
+        {
+            if (args.IsSuccess)
+            {
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void OnRetryClick(object sender, RoutedEventArgs e)
+        {
+            ErrorOverlay.Visibility = Visibility.Collapsed;
+            LoadingOverlay.Visibility = Visibility.Visible;
+            if (_webView?.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.Navigate(_targetUrl);
+            }
+            else
+            {
+                _ = InitializeYouTubeWebViewAsync();
+            }
+        }
+
+        private void OnWebViewContainsFullScreenElementChanged(CoreWebView2 sender, object args)
         {
             var isFullScreen = sender.ContainsFullScreenElement;
-            PageContent.Margin = isFullScreen ? new Microsoft.UI.Xaml.Thickness(0) : new Microsoft.UI.Xaml.Thickness(0, 48, 0, 0);
-            App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
+                App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
+            });
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -108,7 +180,7 @@ namespace LumiereMediaPlayer.Pages
             DisposeWebView();
         }
 
-        private void OnPageUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private void OnPageUnloaded(object sender, RoutedEventArgs e)
         {
             DisposeWebView();
         }
@@ -120,14 +192,13 @@ namespace LumiereMediaPlayer.Pages
                 try
                 {
                     App.MainWindowInstance?.SetFullScreenMode(false);
-                    if (_webView != null)
+                    if (_isInitialized && _webView.CoreWebView2 != null)
                     {
-                        if (_isInitialized)
-                        {
-                            _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
-                        }
-                        _webView.Close();
+                        _webView.CoreWebView2.NavigationStarting -= OnNavigationStarting;
+                        _webView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
+                        _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
                     }
+                    _webView.Close();
                 }
                 catch (Exception ex)
                 {
@@ -136,6 +207,7 @@ namespace LumiereMediaPlayer.Pages
 
                 WebViewContainer.Children.Remove(_webView);
                 _webView = null;
+                _isInitialized = false;
                 System.Diagnostics.Debug.WriteLine("[YouTubePage] WebView2 components fully disposed.");
             }
         }

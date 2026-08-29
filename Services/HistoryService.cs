@@ -25,6 +25,11 @@ namespace LumiereMediaPlayer.Services
                     var loaded = JsonSerializer.Deserialize<MediaItem[]>(json);
                     if (loaded != null)
                     {
+                        foreach (var item in loaded)
+                        {
+                            item.IsSelected = false;
+                        }
+
                         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
                         {
                             if (RecentlyPlayed.Count == loaded.Length)
@@ -63,6 +68,7 @@ namespace LumiereMediaPlayer.Services
         public async Task AddToHistoryAsync(MediaItem item)
         {
             if (item == null) return;
+            item.IsSelected = false;
 
             // Await UI thread update before serializing to ensure data consistency
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
@@ -96,6 +102,30 @@ namespace LumiereMediaPlayer.Services
             }
 
             await tcs.Task;
+            await SaveHistoryAsync();
+        }
+
+        public async Task RemoveFromHistoryAsync(MediaItem item)
+        {
+            if (item == null) return;
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                RecentlyPlayed.Remove(item);
+            });
+            await SaveHistoryAsync();
+        }
+
+        public async Task RemoveRangeFromHistoryAsync(IEnumerable<MediaItem> items)
+        {
+            if (items == null) return;
+            var list = items.ToList();
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                foreach (var it in list)
+                {
+                    RecentlyPlayed.Remove(it);
+                }
+            });
             await SaveHistoryAsync();
         }
 

@@ -106,12 +106,30 @@ public partial class MusicLibraryViewModel : ObservableObject
         });
     }
 
-    public async Task SearchLibraryAsync(string query, bool useAi)
+    private System.Threading.CancellationTokenSource? _searchCts;
+
+    public async Task SearchLibraryAsync(string query, bool useAi, bool debounce = true)
     {
+        _searchCts?.Cancel();
+        var cts = new System.Threading.CancellationTokenSource();
+        _searchCts = cts;
+
         if (string.IsNullOrWhiteSpace(query))
         {
             SyncTracks();
             return;
+        }
+
+        if (debounce && useAi)
+        {
+            try
+            {
+                await Task.Delay(250, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
 
         var sourceTracks = SampleMediaLibrary.AudioTracks.ToList();
@@ -122,6 +140,7 @@ public partial class MusicLibraryViewModel : ObservableObject
             try
             {
                 filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
+                if (cts.IsCancellationRequested) return;
             }
             catch (Exception ex)
             {
@@ -139,10 +158,13 @@ public partial class MusicLibraryViewModel : ObservableObject
                 .ToList();
         }
 
-        App.MainDispatcher?.TryEnqueue(() =>
+        if (!cts.IsCancellationRequested)
         {
-            Tracks.UpdateInPlace(filtered);
-        });
+            App.MainDispatcher?.TryEnqueue(() =>
+            {
+                Tracks.UpdateInPlace(filtered);
+            });
+        }
     }
 
     [RelayCommand]

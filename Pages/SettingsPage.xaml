@@ -75,7 +75,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE768;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE768;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Autoplay on launch"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically start playback when the app starts."/>
@@ -89,7 +89,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE81C;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE81C;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Resume playback position"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Remember where you left off and resume from that location."/>
@@ -103,7 +103,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED3D;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED3D;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Skip forward interval"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="How many seconds to skip when seeking forward."/>
@@ -124,7 +124,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE72B;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE72B;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Skip backward interval"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="How many seconds to skip when seeking backward."/>
@@ -145,7 +145,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE893;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE893;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Auto-advance to next track"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically play the next track when the current one finishes."/>
@@ -159,7 +159,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D3;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D3;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Remember last played track"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Load the last played track on app startup."/>
@@ -179,7 +179,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Row="0" Grid.Column="0" FontSize="18" Glyph="&#xE71A;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Row="0" Grid.Column="0" FontSize="18" Glyph="&#xE71A;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Crossfade between tracks"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Smoothly blend audio when transitioning between tracks."/>
@@ -204,7 +204,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE9F9;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE9F9;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Equalizer preset"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select an equalizer curve for audio playback."/>
@@ -229,7 +229,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE995;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE995;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Default startup volume"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Volume level set automatically on app launch."/>
@@ -251,7 +251,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE740;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE740;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Default aspect ratio"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose the default aspect ratio for video playback."/>
@@ -285,7 +285,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7DE;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7DE;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="HDR mode"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Control when HDR output is engaged. Auto enables HDR only on supported displays."/>
@@ -303,7 +303,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE706;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE706;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Auto brightness boost in HDR"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically boost monitor or laptop brightness to 100% when HDR playback starts, and restore when finished."/>
@@ -317,7 +317,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE793;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE793;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Tone mapping &amp; color grading"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Calibrates HDR highlights, midtone exposure, and color gamut to the display."/>
@@ -337,7 +337,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7C1;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7C1;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Show HDR badge on player"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display an HDR10/HLG badge on the video player when HDR content is active."/>
@@ -356,7 +356,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE771;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE771;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="App theme"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose your preferred color theme."/>
@@ -374,7 +374,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7B3;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7B3;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Backdrop type"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Change window backdrop effect (Mica, Acrylic, or Solid)."/>
@@ -393,7 +393,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE790;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE790;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Accent color"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Choose the primary accent color for the app interface."/>
@@ -415,7 +415,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE700;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE700;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Show transport bar"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the playback controls bar at the bottom of the window."/>
@@ -434,7 +434,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B7;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B7;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Show open files button on home page"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display the Open file(s) button in the Home page greeting section."/>
@@ -454,7 +454,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B7;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B7;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock FontSize="14" Text="Library folders"/>
                                 <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Folders scanned for audio and video media files."/>
@@ -473,7 +473,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <FontIcon Grid.Column="0" FontSize="14" Glyph="&#xE838;" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        <FontIcon Grid.Column="0" FontSize="14" Glyph="&#xE838;" Foreground="{ThemeResource SystemAccentColor}" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" FontSize="13" VerticalAlignment="Center" Text="{x:Bind}" TextTrimming="CharacterEllipsis"/>
                                         <Button Grid.Column="2" Click="OnRemoveFolderClick" CommandParameter="{x:Bind}" AutomationProperties.Name="Remove folder" Background="Transparent" BorderThickness="0" CornerRadius="16" Height="32" Padding="8,0" Width="32" ToolTipService.ToolTip="Remove">
                                             <FontIcon FontSize="12" Glyph="&#xE711;"/>
@@ -490,7 +490,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE81A;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE81A;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Automatic library scan on launch"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Scan media folders in the background when the app starts."/>
@@ -504,7 +504,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE946;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE946;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
                             <TextBlock FontSize="14" Text="Supported formats"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" TextWrapping="Wrap">
@@ -529,7 +529,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8C8;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8C8;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Enable lyrics translation"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically translate synced lyrics on the Now Playing screen using AI."/>
@@ -543,7 +543,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE774;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE774;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Translation target language"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select the language into which lyrics and subtitles should be translated."/>
@@ -570,7 +570,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D7;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D7;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Google Gemini API Key"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Direct API key for cloud AI features (lyrics translation, smart EQ, semantic search)."/>
@@ -584,7 +584,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE914;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE914;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Use Local AI (Ollama)"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Process AI tasks locally instead of using cloud APIs for better privacy."/>
@@ -598,7 +598,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE735;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE735;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Ollama Model Name"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Specify the installed Ollama model to use for AI features."/>
@@ -612,7 +612,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE768;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE768;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Test AI Pipeline Connection"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Ping configured local Ollama or cloud Gemini AI provider to verify latency and model readiness."/>
@@ -632,7 +632,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE75E;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED37;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Enable semantic search"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use natural-language parsing for search queries in your music and video libraries."/>
@@ -646,7 +646,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE9E9;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE9E9;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="AI Equalizer Matcher"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically detect and set equalizer presets based on track genre and details."/>
@@ -660,7 +660,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE720;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE720;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Voice Clarity Enhancer"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Enable hardware-accelerated dialogue optimization for clearer spoken voice."/>
@@ -674,7 +674,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE708;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE708;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Dynamic Volume Leveler (Night Mode)"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Level loud highlights and boost quiet dialogue for comfortable late-night viewing."/>
@@ -693,7 +693,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE946;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE946;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="API Data Attribution"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="This product uses the TMDB API but is not endorsed or certified by TMDB. Additional metadata and streaming availability is provided by Watchmode." TextWrapping="Wrap"/>
@@ -706,7 +706,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D3;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D3;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Remember playback position per track"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Store and resume the last playback position for each individual track."/>
@@ -720,7 +720,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE74D;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE74D;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Clear data"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear search history or recently opened files."/>
@@ -744,7 +744,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F4;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F4;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="High contrast mode"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase contrast between UI elements for better visibility."/>
@@ -758,7 +758,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D2;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D2;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Text scale"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase text size proportionally throughout the application."/>
@@ -772,7 +772,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE790;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE790;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Color blind mode"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust colors for color vision deficiency."/>
@@ -791,7 +791,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F5;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F5;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Screen reader optimization"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Optimize UI for screen reader compatibility."/>
@@ -805,7 +805,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7B3;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7B3;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Focus indicator thickness"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust the thickness of focus indicators around controls."/>
@@ -824,7 +824,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED1E;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED1E;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Captions always on"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically enable captions for all media."/>
@@ -838,7 +838,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE706;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE706;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Visual notifications for sound"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Flash visual indicators when audio cues play."/>
@@ -854,7 +854,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE765;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE765;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Keyboard navigation highlight"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Show visible focus indicators during keyboard navigation."/>
@@ -868,7 +868,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B0;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8B0;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Larger click targets"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Increase the size of buttons and interactive elements."/>
@@ -882,7 +882,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7AD;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7AD;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Reduce motion"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Minimize animations and transitions throughout the app."/>
@@ -898,7 +898,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F6;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7F6;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Auto-read controls"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Announce UI control labels when focused."/>
@@ -918,7 +918,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE765;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+                            <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE765;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Top"/>
                             <TextBlock Grid.Column="1" FontSize="14" Text="Available keyboard shortcuts" VerticalAlignment="Center"/>
                         </Grid>
 
@@ -968,7 +968,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7E6;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE7E6;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Reset settings"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Clear caches or reset all settings to factory defaults."/>
@@ -985,7 +985,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE895;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE895;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock FontSize="14" Text="Check for updates"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"/>

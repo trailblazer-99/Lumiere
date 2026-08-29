@@ -9,7 +9,8 @@
     mc:Ignorable="d"
     Width="{x:Bind CardWidth, Mode=OneWay}"
     PointerEntered="OnPointerEntered"
-    PointerExited="OnPointerExited">
+    PointerExited="OnPointerExited"
+    RightTapped="OnCardRightTapped">
 
     <StackPanel Spacing="10">
         <!-- Album art container with hover overlay -->
@@ -31,6 +32,16 @@
                 </Grid>
             </Border>
 
+            <!-- Selection highlight border -->
+            <Border
+                x:Name="SelectionBorder"
+                Height="{x:Bind CardHeight, Mode=OneWay}"
+                CornerRadius="{StaticResource AlbumArtCornerRadiusFull}"
+                BorderBrush="{ThemeResource SystemAccentColor}"
+                BorderThickness="2.5"
+                Visibility="Collapsed"
+                IsHitTestVisible="False" />
+
             <!-- Hover play overlay -->
             <Border
                 x:Name="PlayOverlay"
@@ -39,7 +50,8 @@
                 Opacity="0">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#00000000" Offset="0.0"/>
+                        <GradientStop Color="#40000000" Offset="0.0"/>
+                        <GradientStop Color="#20000000" Offset="0.3"/>
                         <GradientStop Color="#90000000" Offset="1.0"/>
                     </LinearGradientBrush>
                 </Border.Background>
@@ -56,6 +68,56 @@
                     </Border>
                 </Grid>
             </Border>
+
+            <!-- Top Header Controls (Selection CheckBox & 3-Dot More Button) -->
+            <Grid Height="{x:Bind CardHeight, Mode=OneWay}" VerticalAlignment="Top" Padding="6">
+                <!-- Selection CheckBox (Top-Left) -->
+                <Border
+                    x:Name="SelectionHost"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Opacity="0"
+                    Background="#80000000"
+                    CornerRadius="6"
+                    Padding="2">
+                    <CheckBox
+                        x:Name="CardCheckBox"
+                        IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                        Checked="OnCardCheckBoxChanged"
+                        Unchecked="OnCardCheckBoxChanged"
+                        MinWidth="20"
+                        MinHeight="20"
+                        Padding="0"
+                        Margin="0"
+                        ToolTipService.ToolTip="Select"
+                        helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                        helpers:SpringAnimationHelper.HoverScale="1.1" />
+                </Border>
+
+                <!-- 3-Dot More Options Button (Top-Right) -->
+                <Button
+                    x:Name="MoreOptionsButton"
+                    Click="OnMoreOptionsClick"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    CornerRadius="14"
+                    Background="#90000000"
+                    BorderBrush="#33FFFFFF"
+                    BorderThickness="1"
+                    Opacity="0"
+                    ToolTipService.ToolTip="More options"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.15">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="12"
+                        Glyph="&#xE712;"
+                        Foreground="White" />
+                </Button>
+            </Grid>
         </Grid>
 
         <StackPanel Spacing="2">

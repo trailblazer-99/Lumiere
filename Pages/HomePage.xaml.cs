@@ -71,6 +71,12 @@ public sealed partial class HomePage : Page
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         UpdateOpenFileButtonVisibility();
+        foreach (var item in ViewModel.RecentlyPlayed)
+        {
+            item.IsSelected = false;
+        }
+        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+
         RecentSection.Visibility = ViewModel.RecentlyPlayed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PlayEntranceAnimation();
         _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
@@ -194,6 +200,38 @@ public sealed partial class HomePage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Exception in OnClearHistoryClick: {ex.Message}");
+        }
+    }
+
+    private void OnCardSelectionChanged(object? sender, EventArgs e)
+    {
+        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+    }
+
+    private void OnSelectAllRequested(object? sender, EventArgs e)
+    {
+        foreach (var item in ViewModel.RecentlyPlayed)
+        {
+            item.IsSelected = true;
+        }
+        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+    }
+
+    private void OnClearSelectionRequested(object? sender, EventArgs e)
+    {
+        foreach (var item in ViewModel.RecentlyPlayed)
+        {
+            item.IsSelected = false;
+        }
+    }
+
+    private async void OnRemoveSelectedRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            await AppServices.History.RemoveRangeFromHistoryAsync(selected);
+            HomeSelectionRibbon?.ClearSelection();
         }
     }
 }

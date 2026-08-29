@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="LumiereMediaPlayer.Controls.SelectionRibbon"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers"
+    mc:Ignorable="d"
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Bottom"
+    Margin="24,0,24,16"
+    MaxWidth="1100"
+    Visibility="Collapsed">
+
+    <Border
+        x:Name="RibbonCard"
+        CornerRadius="8"
+        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+        BorderThickness="1"
+        Padding="16,0"
+        Height="52">
+        <Border.Shadow>
+            <ThemeShadow />
+        </Border.Shadow>
+
+        <Grid VerticalAlignment="Center" ColumnSpacing="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Checkbox + Count + Dot + Clear Link -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <CheckBox
+                    x:Name="MasterCheckBox"
+                    IsChecked="True"
+                    Checked="OnMasterCheckBoxChecked"
+                    Unchecked="OnMasterCheckBoxUnchecked"
+                    MinWidth="20"
+                    MinHeight="20"
+                    Padding="0"
+                    Margin="0,0,2,0"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Select / Unselect all" />
+                <TextBlock
+                    x:Name="CountTextBlock"
+                    Text="1 item selected"
+                    FontSize="13.5"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                    VerticalAlignment="Center" />
+                <TextBlock
+                    Text="•"
+                    FontSize="13"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="2,0"
+                    VerticalAlignment="Center" />
+                <Button
+                    x:Name="ClearButton"
+                    Click="OnClearClick"
+                    Content="Clear"
+                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                    FontWeight="SemiBold"
+                    FontSize="13.5"
+                    Padding="6,2"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    VerticalAlignment="Center"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05" />
+            </StackPanel>
+
+            <!-- Right: Fluent Action Buttons -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <!-- Play Button (Accent Solid Button) -->
+                <Button
+                    x:Name="PlayButton"
+                    Click="OnPlayClick"
+                    Style="{StaticResource AccentButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="16,0"
+                    Margin="0,0,2,0"
+                    ToolTipService.ToolTip="Play selected"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05"
+                    helpers:SpringAnimationHelper.PressScale="0.95">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE768;" FontSize="13" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                        <TextBlock Text="Play" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Play Next -->
+                <Button
+                    x:Name="PlayNextButton"
+                    Click="OnPlayNextClick"
+                    Style="{StaticResource DefaultButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="13,0"
+                    ToolTipService.ToolTip="Play next"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE898;" FontSize="13" />
+                        <TextBlock Text="Play next" FontSize="13" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Queue -->
+                <Button
+                    x:Name="AddToQueueButton"
+                    Click="OnAddToQueueClick"
+                    Style="{StaticResource DefaultButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="13,0"
+                    ToolTipService.ToolTip="Add to queue"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE8E5;" FontSize="13" />
+                        <TextBlock Text="Queue" FontSize="13" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Add to -->
+                <Button
+                    x:Name="AddToPlaylistButton"
+                    Click="OnAddToPlaylistClick"
+                    Style="{StaticResource DefaultButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="13,0"
+                    ToolTipService.ToolTip="Add to playlist"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                        <TextBlock Text="Add to" FontSize="13" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Remove -->
+                <Button
+                    x:Name="RemoveButton"
+                    Click="OnRemoveClick"
+                    Style="{StaticResource DefaultButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="13,0"
+                    ToolTipService.ToolTip="Remove selected from library"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE711;" FontSize="11" />
+                        <TextBlock Text="Remove" FontSize="13" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Properties -->
+                <Button
+                    x:Name="PropertiesButton"
+                    Click="OnPropertiesClick"
+                    Style="{StaticResource DefaultButtonStyle}"
+                    CornerRadius="4"
+                    Height="34"
+                    Padding="13,0"
+                    ToolTipService.ToolTip="Properties"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.05">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE946;" FontSize="13" />
+                        <TextBlock Text="Properties" FontSize="13" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

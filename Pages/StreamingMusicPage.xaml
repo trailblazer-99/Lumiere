@@ -42,7 +42,7 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
                                     <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
-                                        <FontIcon FontSize="13" Glyph="&#xE75E;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <FontIcon FontSize="13" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </ToggleButton>
                                 </StackPanel>
                             </StackPanel>

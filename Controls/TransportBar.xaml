@@ -41,21 +41,23 @@
                 <Slider
                     x:Name="ProgressSlider"
                     Maximum="100"
-                    ValueChanged="OnProgressValueChanged"
+                    IsThumbToolTipEnabled="False"
+                    IsEnabled="False"
+                    ValueChanged="OnProgressSliderValueChanged"
                     PointerMoved="OnProgressSliderPointerMoved"
                     PointerExited="OnProgressSliderPointerExited"
                     Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                 
                 <!-- Hover Preview Popup -->
-                <Popup x:Name="HoverPreviewPopup" IsLightDismissEnabled="False" VerticalOffset="-96">
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                <Popup x:Name="HoverPreviewPopup" IsLightDismissEnabled="False" VerticalOffset="-126">
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
                             BorderThickness="1" 
                             CornerRadius="8" 
                             Padding="6">
                         <StackPanel Spacing="6" HorizontalAlignment="Center">
-                            <Border CornerRadius="4" BorderThickness="0" Background="#FF1E1E1E">
-                                <Image x:Name="HoverThumbnailImage" Width="120" Height="68" Stretch="Uniform" />
+                            <Border x:Name="HoverThumbnailBorder" CornerRadius="6" BorderThickness="0" Background="#FF1E1E1E">
+                                <Image x:Name="HoverThumbnailImage" Width="144" Height="81" Stretch="UniformToFill" />
                             </Border>
                             <TextBlock x:Name="HoverTimeText" Text="0:00" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontSize="12" HorizontalAlignment="Center" FontWeight="SemiBold"/>
                         </StackPanel>
@@ -350,7 +352,7 @@
                     ToolTipService.ToolTip="Volume">
                     <FontIcon x:Name="VolumeIcon" FontSize="14" Glyph="&#xE995;" />
                     <Button.Flyout>
-                        <Flyout Placement="Top">
+                        <Flyout Placement="Top" Opening="OnVolumeFlyoutOpening">
                             <Flyout.FlyoutPresenterStyle>
                                 <Style TargetType="FlyoutPresenter">
                                     <Setter Property="Padding" Value="16,10,16,10" />
@@ -374,16 +376,18 @@
                                 <Slider
                                     x:Name="VolumeSlider"
                                     Width="120"
+                                    Minimum="0"
                                     Maximum="100"
-                                    Value="{x:Bind Volume, Mode=TwoWay}"
+                                    Value="100"
+                                    IsThumbToolTipEnabled="False"
                                     ValueChanged="OnVolumeValueChanged"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                                 <!-- Volume value text label -->
                                 <TextBlock
                                     x:Name="VolumeValueText"
-                                    Text="{Binding Volume}"
-                                    Width="24"
+                                    Text="100"
+                                    Width="28"
                                     TextAlignment="Right"
                                     VerticalAlignment="Center"
                                     FontSize="12" />
@@ -426,7 +430,7 @@
                     <FontIcon x:Name="MoreIcon" FontSize="14" Glyph="&#xE712;" />
                     <Button.Flyout>
                         <MenuFlyout Placement="Top" Opening="OnMoreMenuOpening">
-                            <MenuFlyoutItem Text="Properties" Click="OnInfoClick">
+                            <MenuFlyoutItem x:Name="MenuPropertiesItem" Text="Properties" Click="OnInfoClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE946;" />
                                 </MenuFlyoutItem.Icon>
@@ -434,12 +438,12 @@
                                     <KeyboardAccelerator Key="I" Modifiers="Control" />
                                 </MenuFlyoutItem.KeyboardAccelerators>
                             </MenuFlyoutItem>
-                             <MenuFlyoutItem Text="Edit with Clipchamp" Click="OnEditWithClipchampClick">
+                             <MenuFlyoutItem x:Name="MenuClipchampItem" Text="Edit with Clipchamp" Click="OnEditWithClipchampClick">
                                  <MenuFlyoutItem.Icon>
                                      <FontIcon Glyph="&#xE294;" />
                                  </MenuFlyoutItem.Icon>
                              </MenuFlyoutItem>
-                             <MenuFlyoutItem Text="Equaliser" Click="OnEqualiserClick">
+                             <MenuFlyoutItem x:Name="MenuEqualiserItem" Text="Equaliser" Click="OnEqualiserClick">
                                  <MenuFlyoutItem.Icon>
                                      <FontIcon Glyph="&#xE9F9;" />
                                  </MenuFlyoutItem.Icon>
@@ -448,7 +452,7 @@
                                  </MenuFlyoutItem.KeyboardAccelerators>
                              </MenuFlyoutItem>
                              
-                             <MenuFlyoutSubItem Text="Speed">
+                             <MenuFlyoutSubItem x:Name="MenuSpeedSubItem" Text="Speed">
                                  <MenuFlyoutSubItem.Icon>
                                      <FontIcon Glyph="&#xEBE6;" />
                                  </MenuFlyoutSubItem.Icon>
@@ -459,7 +463,7 @@
                                  <MenuFlyoutItem Text="2.0x" Click="OnSpeedClick" Tag="2.0" />
                              </MenuFlyoutSubItem>
 
-                              <MenuFlyoutSubItem Text="Sleep Timer">
+                              <MenuFlyoutSubItem x:Name="MenuSleepTimerSubItem" Text="Sleep Timer">
                                   <MenuFlyoutSubItem.Icon>
                                       <FontIcon Glyph="&#xE708;" />
                                   </MenuFlyoutSubItem.Icon>
@@ -470,7 +474,7 @@
                                   <ToggleMenuFlyoutItem x:Name="SleepEndItem" Text="End of Current Track" Click="OnSleepTimerItemClick" Tag="end"/>
                               </MenuFlyoutSubItem>
 
-                             <MenuFlyoutItem Text="Cast to device" Click="OnCastToDeviceClick">
+                             <MenuFlyoutItem x:Name="MenuCastItem" Text="Cast to device" Click="OnCastToDeviceClick">
                                  <MenuFlyoutItem.Icon>
                                      <FontIcon Glyph="&#xEC15;" />
                                  </MenuFlyoutItem.Icon>
@@ -485,7 +489,7 @@
                                  </MenuFlyoutSubItem.Icon>
                              </MenuFlyoutSubItem>
 
-                             <MenuFlyoutSubItem Text="Video settings">
+                             <MenuFlyoutSubItem x:Name="MenuVideoSettingsSubItem" Text="Video settings">
                                  <MenuFlyoutSubItem.Icon>
                                      <FontIcon Glyph="&#xE714;" />
                                  </MenuFlyoutSubItem.Icon>

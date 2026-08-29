@@ -12,6 +12,7 @@ namespace LumiereMediaPlayer.ViewModels
     public partial class StreamingTvShowsViewModel : ObservableObject
     {
         private readonly WatchmodeService _watchmodeService = new();
+        private readonly TmdbService _tmdbService = new();
         private int _contentRequestVersion;
         private bool _initialized;
 
@@ -23,6 +24,34 @@ namespace LumiereMediaPlayer.ViewModels
             foreach (var r in list) RegionOptions.Add(r);
         }
 
+        public event System.Action<WatchmodeTitle>? OnSurpriseMeRequested;
+
+        [RelayCommand]
+        public void SurpriseMe()
+        {
+            if (TvShows != null && TvShows.Count > 0)
+            {
+                var random = new System.Random();
+                int index = random.Next(TvShows.Count);
+                var luckyItem = TvShows[index];
+                OnSurpriseMeRequested?.Invoke(luckyItem);
+            }
+        }
+
+        [RelayCommand]
+        public async Task RefreshFeedAsync()
+        {
+            CurrentPage = 1;
+            if (string.IsNullOrEmpty(ActiveSearchQuery))
+            {
+                await LoadTvShowsAsync();
+            }
+            else
+            {
+                await PerformSearchAsync(ActiveSearchQuery);
+            }
+        }
+
         public void ResetState()
         {
             _initialized = false;
@@ -31,6 +60,7 @@ namespace LumiereMediaPlayer.ViewModels
             SelectedGenre = "All Genres";
             SelectedAccessType = "All Access Types";
             SelectedSortOrder = "Popularity";
+            SelectedRating = "All Ratings";
             TvShows?.Clear();
         }
 
@@ -45,11 +75,33 @@ namespace LumiereMediaPlayer.ViewModels
             SelectedGenre = "All Genres";
             SelectedAccessType = "All Access Types";
             SelectedSortOrder = "Popularity";
+            SelectedRating = "All Ratings";
             CurrentPage = 1;
             if (_initialized)
             {
                 _ = LoadTvShowsAsync();
             }
+        }
+
+        [RelayCommand]
+        public void QuickFilterTopRated()
+        {
+            SelectedRating = "⭐ 8.0+";
+            SelectedSortOrder = "Popularity";
+        }
+
+        [RelayCommand]
+        public void QuickFilterTrending()
+        {
+            SelectedSortOrder = "Popularity";
+            SelectedRating = "All Ratings";
+            SelectedGenre = "All Genres";
+        }
+
+        [RelayCommand]
+        public void QuickFilterFree()
+        {
+            SelectedAccessType = "Free";
         }
 
         [ObservableProperty] public partial ObservableCollection<WatchmodeTitle> TvShows { get; set; } = new();
@@ -61,6 +113,19 @@ namespace LumiereMediaPlayer.ViewModels
 
         public ObservableCollection<string> SortOptions { get; } = new() { "Popularity", "Release Date" };
         [ObservableProperty] public partial string SelectedSortOrder { get; set; } = "Popularity";
+
+        public ObservableCollection<string> RatingOptions { get; } = new() { "All Ratings", "⭐ 8.0+", "⭐ 7.0+", "⭐ 6.0+" };
+        [ObservableProperty] public partial string SelectedRating { get; set; } = "All Ratings";
+
+        partial void OnSelectedRatingChanged(string value)
+        {
+            if (_initialized && value != null)
+            {
+                CurrentPage = 1;
+                if (string.IsNullOrEmpty(ActiveSearchQuery)) _ = LoadTvShowsAsync();
+                else _ = PerformSearchAsync(ActiveSearchQuery);
+            }
+        }
 
         public static readonly System.Collections.Generic.Dictionary<string, int> GenreMap = new()
         {
@@ -344,11 +409,104 @@ namespace LumiereMediaPlayer.ViewModels
             {
                 ErrorMessage = string.Empty;
                 HasError = false;
-                var response = await _watchmodeService.SearchAsync(query, "tv");
+                List<WatchmodeTitle> showList = new();
+
+                // 1. Check if the query refers to a Director, Creator, Actor, or Person
+                var personResults = await _tmdbService.SearchPersonAsync(query);
+                var matchedPerson = personResults.FirstOrDefault(p => 
+                    string.Equals(p.Name, query, System.StringComparison.OrdinalIgnoreCase) || 
+                    (p.Name != null && p.Name.Contains(query, System.StringComparison.OrdinalIgnoreCase) && p.Popularity > 1.0));
+
+                if (matchedPerson != null)
+                {
+                    var credits = await _tmdbService.GetPersonTvCreditsAsync(matchedPerson.Id);
+                    if (credits.Count > 0)
+                    {
+                        showList = credits.Select(c => c.ToWatchmodeTitle("tv_series")).ToList();
+                    }
+                    else if (matchedPerson.KnownFor.Count > 0)
+                    {
+                        showList = matchedPerson.KnownFor.Select(k => k.ToWatchmodeTitle("tv_series")).ToList();
+                    }
+                }
+
+                // 2. If AI Search is active and no direct person was resolved
+                if (showList.Count == 0 && IsAiSearchActive)
+                {
+                    int? matchedGenreId = ResolveGenreId(query);
+
+                    // Ask AI for recommended TV show titles matching the user's semantic request
+                    var aiTitles = await Services.AiAssistantService.RecommendTitlesForPromptAsync(query, "tv show");
+
+                    if (aiTitles.Count > 0)
+                    {
+                        var searchTasks = aiTitles.Select(async title =>
+                        {
+                            try
+                            {
+                                var res = await _watchmodeService.SearchAsync(title, "tv");
+                                if (res != null && res.Count > 0) return res.First();
+                                var tmdbRes = await _tmdbService.SearchTvShowsAsync(title);
+                                return tmdbRes?.FirstOrDefault()?.ToWatchmodeTitle("tv_series");
+                            }
+                            catch
+                            {
+                                return null;
+                            }
+                        });
+
+                        var found = await Task.WhenAll(searchTasks);
+                        showList = found.Where(m => m != null).DistinctBy(m => m!.Id).Select(m => m!).ToList();
+                    }
+
+                    // Fallback to genre query if AI returned no titles or AI is offline
+                    if (showList.Count == 0 && matchedGenreId.HasValue)
+                    {
+                        string sourceTypes = SelectedAccessType switch
+                        {
+                            "Subscription" => "sub",
+                            "Free" => "free",
+                            "Rent or Buy" => "rent,buy",
+                            _ => ""
+                        };
+                        string sourceIds = "";
+                        if (SelectedProvider != "All Services" && ProviderIdMap.TryGetValue(SelectedProvider, out string? pId))
+                        {
+                            sourceIds = pId;
+                        }
+                        string networkIds = "";
+                        if (SelectedNetwork != "All Networks" && NetworkIdMap.TryGetValue(SelectedNetwork, out string? nId))
+                        {
+                            networkIds = nId;
+                        }
+                        var genreShows = await _watchmodeService.ListTvShowsAsync(1, 25, SelectedRegion, sourceTypes, matchedGenreId.Value.ToString(), sourceIds, networkIds);
+                        if (genreShows != null) showList = genreShows;
+                    }
+                }
+
+                // 3. Fallback: Search TMDB and Watchmode for TV show titles
+                if (showList.Count == 0)
+                {
+                    var tmdbSearch = await _tmdbService.SearchTvShowsAsync(query);
+                    var wmSearch = await _watchmodeService.SearchAsync(query, "tv");
+
+                    var combined = new List<WatchmodeTitle>();
+                    if (wmSearch != null && wmSearch.Count > 0) combined.AddRange(wmSearch);
+                    if (tmdbSearch != null && tmdbSearch.Count > 0)
+                    {
+                        foreach (var tm in tmdbSearch)
+                        {
+                            if (!combined.Any(c => c.Title != null && c.Title.Equals(tm.DisplayTitle, System.StringComparison.OrdinalIgnoreCase)))
+                            {
+                                combined.Add(tm.ToWatchmodeTitle("tv_series"));
+                            }
+                        }
+                    }
+                    showList = combined;
+                }
 
                 if (requestVersion == _contentRequestVersion)
                 {
-                    var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
                     if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
                     TvShows.UpdateInPlace(showList);
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
@@ -370,6 +528,36 @@ namespace LumiereMediaPlayer.ViewModels
                     IsLoading = false;
                 }
             }
+        }
+
+        private static int? ResolveGenreId(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return null;
+            var q = query.Trim();
+
+            if (GenreMap.TryGetValue(q, out int id)) return id;
+
+            var lower = q.ToLowerInvariant();
+            if (lower.Contains("sci-fi") || lower.Contains("scifi") || lower.Contains("science fiction") || lower.Contains("space")) return 15;
+            if (lower.Contains("action")) return 1;
+            if (lower.Contains("adventure")) return 2;
+            if (lower.Contains("animation") || lower.Contains("anime") || lower.Contains("animated") || lower.Contains("cartoon")) return 3;
+            if (lower.Contains("comedy") || lower.Contains("comedies") || lower.Contains("funny") || lower.Contains("humor")) return 4;
+            if (lower.Contains("crime") || lower.Contains("gangster") || lower.Contains("mafia") || lower.Contains("heist")) return 5;
+            if (lower.Contains("documentary") || lower.Contains("docs") || lower.Contains("documentaries")) return 6;
+            if (lower.Contains("drama") || lower.Contains("dramatic")) return 7;
+            if (lower.Contains("family") || lower.Contains("kids") || lower.Contains("children")) return 8;
+            if (lower.Contains("fantasy") || lower.Contains("magic") || lower.Contains("myth")) return 9;
+            if (lower.Contains("history") || lower.Contains("historical") || lower.Contains("period")) return 10;
+            if (lower.Contains("horror") || lower.Contains("scary") || lower.Contains("spooky") || lower.Contains("creepy")) return 11;
+            if (lower.Contains("music") || lower.Contains("musical")) return 12;
+            if (lower.Contains("mystery") || lower.Contains("detective") || lower.Contains("whodunit")) return 13;
+            if (lower.Contains("romance") || lower.Contains("romantic") || lower.Contains("love")) return 14;
+            if (lower.Contains("thriller") || lower.Contains("suspense") || lower.Contains("psychological")) return 17;
+            if (lower.Contains("war") || lower.Contains("military") || lower.Contains("combat")) return 18;
+            if (lower.Contains("western") || lower.Contains("cowboy")) return 19;
+
+            return null;
         }
 
         public async Task<List<string>> WatchmodeSearchSuggestionsAsync(string query)

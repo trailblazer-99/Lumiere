@@ -11,6 +11,7 @@ using System.ComponentModel;
 using System.Collections.Generic;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Models.Streaming;
+using LumiereMediaPlayer.Services;
 
 namespace LumiereMediaPlayer.Pages;
 
@@ -131,6 +132,11 @@ public sealed partial class VideoPage : Page
     {
         try
         {
+            foreach (var v in ViewModel.FilteredVideos)
+            {
+                v.IsSelected = false;
+            }
+            VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
             if (AppServices.Settings.Current.ReduceMotion)
             {
                 try
@@ -505,6 +511,38 @@ public sealed partial class VideoPage : Page
         {
             ViewModel.PlayVideoCommand.Execute(video);
             e.Handled = true;
+        }
+    }
+
+    private void OnCardSelectionChanged(object? sender, EventArgs e)
+    {
+        VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
+    private void OnVideoSelectAllRequested(object? sender, EventArgs e)
+    {
+        foreach (var v in ViewModel.FilteredVideos)
+        {
+            v.IsSelected = true;
+        }
+        VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
+    private void OnVideoClearRequested(object? sender, EventArgs e)
+    {
+        foreach (var v in ViewModel.FilteredVideos)
+        {
+            v.IsSelected = false;
+        }
+    }
+
+    private async void OnVideoRemoveRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            await SampleMediaLibrary.RemoveTracksAsync(selected);
+            VideoSelectionRibbon?.ClearSelection();
         }
     }
 }

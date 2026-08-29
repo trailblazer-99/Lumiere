@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage;
+using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Pages
 {
@@ -11,6 +12,17 @@ namespace LumiereMediaPlayer.Pages
     {
         private WebView2? _webView;
         private bool _isInitialized = false;
+        private const string TwitchHomeUrl = "https://www.twitch.tv";
+
+        public bool CanGoBack => _webView?.CanGoBack ?? false;
+
+        public void GoBack()
+        {
+            if (_webView?.CanGoBack == true)
+            {
+                _webView.GoBack();
+            }
+        }
 
         public StreamingTwitchPage()
         {
@@ -39,10 +51,20 @@ namespace LumiereMediaPlayer.Pages
             {
                 if (_webView == null)
                 {
+                    bool isDark = AppServices.Settings.Current.Theme switch
+                    {
+                        AppThemeOption.Light => false,
+                        AppThemeOption.Dark => true,
+                        _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
+                    };
+
                     _webView = new WebView2
                     {
                         HorizontalAlignment = HorizontalAlignment.Stretch,
-                        VerticalAlignment = VerticalAlignment.Stretch
+                        VerticalAlignment = VerticalAlignment.Stretch,
+                        DefaultBackgroundColor = isDark
+                            ? Windows.UI.Color.FromArgb(255, 15, 15, 15)
+                            : Windows.UI.Color.FromArgb(255, 248, 248, 248)
                     };
 
                     WebViewContainer.Children.Add(_webView);
@@ -54,22 +76,64 @@ namespace LumiereMediaPlayer.Pages
                     
                     await _webView.EnsureCoreWebView2Async(env);
 
-                    // Spoof Safari on macOS User-Agent to bypass Twitch and Google Account sign-in blocks on embedded browsers.
-                    // _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
-                    
-                    // Enable full screen support from within the Twitch web player
+                    // Sync dark/light theme with Twitch profile
+                    _webView.CoreWebView2.Profile.PreferredColorScheme = isDark
+                        ? CoreWebView2PreferredColorScheme.Dark
+                        : CoreWebView2PreferredColorScheme.Light;
+
+                    // Hook navigation lifecycle
+                    _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                    _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
                     _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
                     _isInitialized = true;
                 }
 
                 if (_isInitialized)
                 {
-                    _webView.CoreWebView2.Navigate("https://www.twitch.tv");
+                    _webView.CoreWebView2.Navigate(TwitchHomeUrl);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TwitchPage] WebView2 initialization error: {ex.Message}");
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void OnNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs args)
+        {
+            if (args.IsUserInitiated)
+            {
+                ErrorOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
+        {
+            if (args.IsSuccess)
+            {
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+                ErrorOverlay.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void OnRetryClick(object sender, RoutedEventArgs e)
+        {
+            ErrorOverlay.Visibility = Visibility.Collapsed;
+            LoadingOverlay.Visibility = Visibility.Visible;
+            if (_webView?.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.Navigate(TwitchHomeUrl);
+            }
+            else
+            {
+                _ = InitializeTwitchWebViewAsync();
             }
         }
 
@@ -81,8 +145,10 @@ namespace LumiereMediaPlayer.Pages
             {
                 try
                 {
-                    if (_isInitialized)
+                    if (_isInitialized && _webView.CoreWebView2 != null)
                     {
+                        _webView.CoreWebView2.NavigationStarting -= OnNavigationStarting;
+                        _webView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
                         _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
                     }
                     _webView.Close();
@@ -94,6 +160,7 @@ namespace LumiereMediaPlayer.Pages
 
                 WebViewContainer.Children.Remove(_webView);
                 _webView = null;
+                _isInitialized = false;
                 System.Diagnostics.Debug.WriteLine("[TwitchPage] WebView2 components fully disposed.");
             }
         }
@@ -101,8 +168,11 @@ namespace LumiereMediaPlayer.Pages
         private void OnWebViewContainsFullScreenElementChanged(CoreWebView2 sender, object args)
         {
             var isFullScreen = sender.ContainsFullScreenElement;
-            PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
-            App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
+                App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
+            });
         }
     }
 }

@@ -268,13 +268,15 @@ public static class VideoMetadataHelper
                     newReleaseYear = show.FirstAirDate.Substring(0, 4);
                 }
 
-                string? newGenre = !string.IsNullOrWhiteSpace(episode?.Overview) ? episode.Overview : show.Overview;
+                string? newOverview = !string.IsNullOrWhiteSpace(episode?.Overview) ? episode.Overview : show.Overview;
+                string? newGenre = ResolveGenres(show.GenreIds);
 
                 App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
                 {
                     if (!string.IsNullOrEmpty(newPosterUrl)) item.PosterUrl = newPosterUrl;
                     item.Director = newDirector;
                     if (!string.IsNullOrEmpty(newReleaseYear)) item.ReleaseYear = newReleaseYear;
+                    if (!string.IsNullOrEmpty(newOverview)) item.Description = newOverview;
                     if (!string.IsNullOrEmpty(newGenre)) item.Genre = newGenre;
                 });
 
@@ -306,13 +308,15 @@ public static class VideoMetadataHelper
                     newReleaseYear = bestMatch.FirstAirDate.Substring(0, 4);
                 }
 
-                string? newGenre = bestMatch.Overview;
+                string? newOverview = bestMatch.Overview;
+                string? newGenre = ResolveGenres(bestMatch.GenreIds);
 
                 App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
                 {
                     if (!string.IsNullOrEmpty(newPosterUrl)) item.PosterUrl = newPosterUrl;
                     item.Director = "Movie";
                     if (!string.IsNullOrEmpty(newReleaseYear)) item.ReleaseYear = newReleaseYear;
+                    if (!string.IsNullOrEmpty(newOverview)) item.Description = newOverview;
                     if (!string.IsNullOrEmpty(newGenre)) item.Genre = newGenre;
                 });
 
@@ -322,6 +326,47 @@ public static class VideoMetadataHelper
         }
         catch { }
         return false;
+    }
+
+    private static readonly Dictionary<int, string> TmdbGenreNames = new()
+    {
+        { 28, "Action" },
+        { 12, "Adventure" },
+        { 16, "Animation" },
+        { 35, "Comedy" },
+        { 80, "Crime" },
+        { 99, "Documentary" },
+        { 18, "Drama" },
+        { 10751, "Family" },
+        { 14, "Fantasy" },
+        { 36, "History" },
+        { 27, "Horror" },
+        { 10402, "Music" },
+        { 9648, "Mystery" },
+        { 10749, "Romance" },
+        { 878, "Science Fiction" },
+        { 10770, "TV Movie" },
+        { 53, "Thriller" },
+        { 10752, "War" },
+        { 37, "Western" },
+        { 10759, "Action & Adventure" },
+        { 10762, "Kids" },
+        { 10763, "News" },
+        { 10764, "Reality" },
+        { 10765, "Sci-Fi & Fantasy" },
+        { 10766, "Soap" },
+        { 10767, "Talk" },
+        { 10768, "War & Politics" }
+    };
+
+    private static string? ResolveGenres(IEnumerable<int>? genreIds)
+    {
+        if (genreIds == null) return null;
+        var names = genreIds
+            .Where(id => TmdbGenreNames.ContainsKey(id))
+            .Select(id => TmdbGenreNames[id])
+            .ToList();
+        return names.Count > 0 ? string.Join(", ", names) : null;
     }
 
     public static void SyncWithRecentlyPlayed(MediaItem sourceItem, string? posterUrl, string? releaseYear)

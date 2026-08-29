@@ -247,10 +247,15 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"hotstar://search?q={qMatch.Groups[1].Value}");
                     }
-                    var idMatch = Regex.Match(uri.AbsolutePath, @"(?:/in)?/(?:movies|shows|sports)/[^/]+/(\d+)");
+                    var idMatch = Regex.Match(uri.AbsolutePath, @"(?:/in)?/(?:movies|shows|sports|watch)?(?:/[^/]+)?/(\d+)");
                     if (idMatch.Success)
                     {
                         return new Uri($"hotstar://content/{idMatch.Groups[1].Value}");
+                    }
+                    var rawIdMatch = Regex.Match(uri.AbsolutePath, @"/(\d{5,})");
+                    if (rawIdMatch.Success)
+                    {
+                        return new Uri($"hotstar://content/{rawIdMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("jiocinema.com"))
@@ -260,10 +265,15 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"jiocinema://search?q={searchMatch.Groups[1].Value}");
                     }
-                    var idMatch = Regex.Match(uri.AbsolutePath, @"/(?:movies|tv-shows|watch)/[^/]+/(\d+)");
+                    var idMatch = Regex.Match(uri.AbsolutePath, @"/(?:movies|tv-shows|tv|watch)?(?:/[^/]+)?/(\d+)");
                     if (idMatch.Success)
                     {
                         return new Uri($"jiocinema://content/{idMatch.Groups[1].Value}");
+                    }
+                    var rawIdMatch = Regex.Match(uri.AbsolutePath, @"/(\d{5,})");
+                    if (rawIdMatch.Success)
+                    {
+                        return new Uri($"jiocinema://content/{rawIdMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("youtube.com") || host.Contains("youtu.be"))
@@ -305,7 +315,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("hotstar.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/(?:watch|movies|shows)/[a-zA-Z0-9_-]+/([0-9]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"(?:/in)?/(?:watch|movies|shows)?(?:/[^/]+)?/([0-9]+)");
                     if (match.Success)
                     {
                         return new Uri($"hotstar://watch/{match.Groups[1].Value}");

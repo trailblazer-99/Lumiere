@@ -125,6 +125,8 @@ public static class AiAssistantService
 
     private static readonly (string ApiVersion, string Model)[] GeminiEndpoints = new[]
     {
+        ("v1beta", "gemini-2.5-flash"),
+        ("v1", "gemini-2.5-flash"),
         ("v1beta", "gemini-2.0-flash"),
         ("v1", "gemini-2.0-flash"),
         ("v1", "gemini-1.5-flash"),
@@ -168,8 +170,18 @@ public static class AiAssistantService
                         var parsed = ParseGeminiResponse(responseJson);
                         if (!string.IsNullOrWhiteSpace(parsed)) return parsed;
                     }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
+                             response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                             response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    {
+                        // Proxy route is unconfigured or unauthorized, abort immediately without wasting time on remaining models
+                        break;
+                    }
                 }
-                catch { }
+                catch 
+                { 
+                    break; 
+                }
             }
             return null;
         }
@@ -797,6 +809,37 @@ public static class AiAssistantService
         return new List<SettingSearchItem>();
     }
 
+    public static async Task<List<string>> RecommendTitlesForPromptAsync(string query, string mediaType = "movie")
+    {
+        if (string.IsNullOrWhiteSpace(query)) return new List<string>();
+
+        try
+        {
+            var promptBuilder = new StringBuilder();
+            promptBuilder.AppendLine($"You are an expert film and television curator. The user is looking for {mediaType}s using this natural language request: \"{query}\".");
+            promptBuilder.AppendLine($"Return ONLY a valid JSON array of 12 to 16 best, most famous, acclaimed, and relevant {mediaType} titles that match this genre, theme, or description. Example: [\"Title 1\", \"Title 2\"]");
+            promptBuilder.AppendLine("Do not include release years, markdown formatting, explanations, or quotes inside titles. Return ONLY the JSON array of title strings.");
+
+            string textResponse = await ExecuteAiPromptAsync(promptBuilder.ToString(), jsonMimeType: "application/json");
+            string json = ExtractJsonFromResponse(textResponse);
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var titles = JsonSerializer.Deserialize<List<string>>(json);
+                if (titles != null && titles.Count > 0)
+                {
+                    return titles.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiAssistant] RecommendTitlesForPromptAsync error: {ex.Message}");
+        }
+
+        return new List<string>();
+    }
+
     private static List<MediaItem> SemanticSearchLocal(string query, IReadOnlyList<MediaItem> tracks)
     {
         var queryWords = CleanAndTokenize(query);
@@ -804,25 +847,74 @@ public static class AiAssistantService
 
         var rankedList = new List<(MediaItem Item, double Score)>();
 
+        bool isAcoustic = IsAcousticQuery(queryWords);
+        bool isUpbeat = IsUpbeatQuery(queryWords);
+        bool isChill = IsChillQuery(queryWords);
+        bool isFocus = IsFocusQuery(queryWords);
+        bool isSad = IsSadQuery(queryWords);
+        bool isRomantic = IsRomanticQuery(queryWords);
+        bool isRock = IsRockQuery(queryWords);
+        bool isNight = IsNightQuery(queryWords);
+        int? targetDecade = ExtractDecade(query);
+
         foreach (var track in tracks)
         {
             double score = 0;
-            string trackText = $"{track.Title} {track.Artist} {track.Album} {track.Genre} {track.Resolution} {track.ReleaseYear}".ToLowerInvariant();
+            string title = track.Title ?? string.Empty;
+            string artist = track.Artist ?? string.Empty;
+            string album = track.Album ?? string.Empty;
+            string genre = track.Genre ?? string.Empty;
+            string trackText = $"{title} {artist} {album} {genre} {track.Resolution} {track.ReleaseYear}".ToLowerInvariant();
 
             foreach (var qWord in queryWords)
             {
-                if (track.Title != null && track.Title.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 5.0;
-                if (track.Artist != null && track.Artist.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 4.0;
-                if (track.Genre != null && track.Genre.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 3.0;
-                else if (trackText.Contains(qWord)) score += 1.0;
+                if (title.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 6.0;
+                else if (artist.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 5.0;
+                else if (genre.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 4.0;
+                else if (album.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 3.0;
+                else if (trackText.Contains(qWord)) score += 1.5;
+                else
+                {
+                    // Fuzzy / Typo tolerance (Levenshtein distance <= 2 for words >= 4 chars)
+                    if (qWord.Length >= 4)
+                    {
+                        if (FuzzyWordMatch(qWord, title) || FuzzyWordMatch(qWord, artist) || FuzzyWordMatch(qWord, genre))
+                        {
+                            score += 2.5;
+                        }
+                    }
+                }
             }
 
-            // Mood-trait bonuses (applied once per track, outside per-word loop)
-            if (IsAcousticQuery(queryWords) && IsTrackAcoustic(track)) score += 3.0;
-            if (IsUpbeatQuery(queryWords) && IsTrackUpbeat(track)) score += 3.0;
-            if (IsChillQuery(queryWords) && IsTrackChill(track)) score += 3.0;
+            // Semantic Mood & Theme matching bonuses
+            if (isAcoustic && IsTrackAcoustic(track)) score += 4.0;
+            if (isUpbeat && IsTrackUpbeat(track)) score += 4.0;
+            if (isChill && IsTrackChill(track)) score += 4.0;
+            if (isFocus && IsTrackFocus(track)) score += 4.0;
+            if (isSad && IsTrackSad(track)) score += 4.0;
+            if (isRomantic && IsTrackRomantic(track)) score += 4.0;
+            if (isRock && IsTrackRock(track)) score += 4.0;
+            if (isNight && IsTrackNight(track)) score += 4.0;
+
+            // Decade / Era matching
+            if (targetDecade.HasValue && int.TryParse(track.ReleaseYear, out int year))
+            {
+                int trackDecade = (year / 10) * 10;
+                if (trackDecade == targetDecade.Value)
+                {
+                    score += 5.0;
+                }
+            }
 
             if (score > 0) rankedList.Add((track, score));
+        }
+
+        // If no tracks scored positive, fallback to returning all tracks or best effort partial matches
+        if (rankedList.Count == 0)
+        {
+            return tracks.Where(t => 
+                queryWords.Any(w => (t.Title != null && t.Title.Contains(w, StringComparison.OrdinalIgnoreCase)) ||
+                                    (t.Artist != null && t.Artist.Contains(w, StringComparison.OrdinalIgnoreCase)))).ToList();
         }
 
         return rankedList.OrderByDescending(r => r.Score).Select(r => r.Item).ToList();
@@ -834,10 +926,73 @@ public static class AiAssistantService
         return Regex.Split(text.ToLowerInvariant(), @"\P{L}+").Where(s => s.Length > 1).ToList();
     }
 
-    private static bool IsAcousticQuery(List<string> words) => words.Any(w => w == "acoustic" || w == "relaxing" || w == "quiet" || w == "piano" || w == "slow" || w == "unplugged");
-    private static bool IsTrackAcoustic(MediaItem t) => t.Genre != null && (t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Piano", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase));
-    private static bool IsUpbeatQuery(List<string> words) => words.Any(w => w == "upbeat" || w == "workout" || w == "energetic" || w == "happy" || w == "fast" || w == "dance");
-    private static bool IsTrackUpbeat(MediaItem t) => t.Genre != null && (t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Dance", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase));
-    private static bool IsChillQuery(List<string> words) => words.Any(w => w == "chill" || w == "lofi" || w == "jazz" || w == "study" || w == "ambient" || w == "soft");
-    private static bool IsTrackChill(MediaItem t) => t.Genre != null && (t.Genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase));
+    private static bool FuzzyWordMatch(string queryWord, string target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return false;
+        var words = CleanAndTokenize(target);
+        foreach (var w in words)
+        {
+            if (Math.Abs(w.Length - queryWord.Length) <= 2 && ComputeLevenshteinDistance(queryWord, w) <= 2)
+                return true;
+        }
+        return false;
+    }
+
+    private static int ComputeLevenshteinDistance(string s, string t)
+    {
+        int n = s.Length;
+        int m = t.Length;
+        int[,] d = new int[n + 1, m + 1];
+        if (n == 0) return m;
+        if (m == 0) return n;
+        for (int i = 0; i <= n; d[i, 0] = i++) ;
+        for (int j = 0; j <= m; d[0, j] = j++) ;
+        for (int i = 1; i <= n; i++)
+        {
+            for (int j = 1; j <= m; j++)
+            {
+                int cost = (t[j - 1] == s[i - 1]) ? 0 : 1;
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
+            }
+        }
+        return d[n, m];
+    }
+
+    private static int? ExtractDecade(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var lower = text.ToLowerInvariant();
+        if (lower.Contains("90s") || lower.Contains("90's") || lower.Contains("nineties")) return 1990;
+        if (lower.Contains("80s") || lower.Contains("80's") || lower.Contains("eighties")) return 1980;
+        if (lower.Contains("70s") || lower.Contains("70's") || lower.Contains("seventies")) return 1970;
+        if (lower.Contains("60s") || lower.Contains("60's") || lower.Contains("sixties")) return 1960;
+        if (lower.Contains("2000s") || lower.Contains("00s") || lower.Contains("2000's")) return 2000;
+        if (lower.Contains("2010s") || lower.Contains("10s") || lower.Contains("2010's")) return 2010;
+        if (lower.Contains("2020s") || lower.Contains("20s") || lower.Contains("2020's")) return 2020;
+        return null;
+    }
+
+    private static bool IsAcousticQuery(List<string> words) => words.Any(w => w is "acoustic" or "relaxing" or "quiet" or "piano" or "slow" or "unplugged" or "calm" or "peaceful" or "soothing" or "folk" or "ambient");
+    private static bool IsTrackAcoustic(MediaItem t) => t.Genre != null && (t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Piano", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Folk", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsUpbeatQuery(List<string> words) => words.Any(w => w is "upbeat" or "workout" or "energetic" or "happy" or "fast" or "dance" or "party" or "club" or "fitness" or "running" or "gym" or "hype" or "pump");
+    private static bool IsTrackUpbeat(MediaItem t) => t.Genre != null && (t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Dance", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("EDM", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("House", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Hip Hop", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsChillQuery(List<string> words) => words.Any(w => w is "chill" or "lofi" or "jazz" or "study" or "ambient" or "soft" or "smooth" or "lounge" or "downtempo" or "sleep");
+    private static bool IsTrackChill(MediaItem t) => t.Genre != null && (t.Genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Lounge", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsFocusQuery(List<string> words) => words.Any(w => w is "focus" or "code" or "coding" or "work" or "instrumental" or "bgm" or "reading" or "concentration" or "study");
+    private static bool IsTrackFocus(MediaItem t) => t.Genre != null && (t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Instrumental", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Synthwave", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsSadQuery(List<string> words) => words.Any(w => w is "sad" or "melancholy" or "crying" or "heartbreak" or "emotional" or "gloom" or "depressed" or "ballad" or "blues" or "dark");
+    private static bool IsTrackSad(MediaItem t) => t.Genre != null && (t.Genre.Contains("Blues", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ballad", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Indie", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsRomanticQuery(List<string> words) => words.Any(w => w is "romantic" or "love" or "romance" or "date" or "sweet" or "candle" or "valentine" or "heart");
+    private static bool IsTrackRomantic(MediaItem t) => t.Genre != null && (t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Romance", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ballad", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsRockQuery(List<string> words) => words.Any(w => w is "rock" or "metal" or "heavy" or "electric" or "guitar" or "band" or "hard" or "punk" or "grunge" or "alternative");
+    private static bool IsTrackRock(MediaItem t) => t.Genre != null && (t.Genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Metal", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Punk", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Alternative", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Grunge", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNightQuery(List<string> words) => words.Any(w => w is "night" or "drive" or "driving" or "cruising" or "retro" or "synth" or "neon" or "midnight");
+    private static bool IsTrackNight(MediaItem t) => t.Genre != null && (t.Genre.Contains("Synthwave", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Retrowave", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase));
 }

@@ -42,12 +42,16 @@ public sealed partial class TransportBar : UserControl
         DependencyProperty.Register(nameof(IsInPipMode), typeof(bool), typeof(TransportBar),
             new PropertyMetadata(false, OnIsInPipModeChanged));
 
+    public static readonly DependencyProperty IsMutedProperty =
+        DependencyProperty.Register(nameof(IsMuted), typeof(bool), typeof(TransportBar),
+            new PropertyMetadata(false, OnIsMutedPropertyChanged));
+
     private bool _isSeeking;
+    private bool _isUpdatingVolume;
     private bool _isFullscreenPresentation;
     private MediaItem? _observedTrack;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
     private double _pendingScrubValue;
-    private double _previousVolume = 100;
 
     public event EventHandler? PlayPauseRequested;
     public event EventHandler? StopRequested;
@@ -57,6 +61,7 @@ public sealed partial class TransportBar : UserControl
     public event EventHandler<double>? ScrubbingPositionChanged;
     public event EventHandler<double>? ScrubbingEnded;
     public event EventHandler<double>? VolumeChanged;
+    public event EventHandler? MuteToggled;
     public event EventHandler? QueueRequested;
     public event EventHandler? PipRequested;
     public event EventHandler? FullscreenRequested;
@@ -69,6 +74,8 @@ public sealed partial class TransportBar : UserControl
         ActualThemeChanged += (_, _) => UpdateAcrylicBackground();
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
+        SyncVolumeUi();
+        Loaded += (_, _) => SyncVolumeUi();
         
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
         _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(100);
@@ -110,6 +117,12 @@ public sealed partial class TransportBar : UserControl
         set => SetValue(VolumeProperty, value);
     }
 
+    public bool IsMuted
+    {
+        get => (bool)GetValue(IsMutedProperty);
+        set => SetValue(IsMutedProperty, value);
+    }
+
     public bool IsInPipMode
     {
         get => (bool)GetValue(IsInPipModeProperty);
@@ -139,8 +152,40 @@ public sealed partial class TransportBar : UserControl
     {
         if (d is TransportBar bar && !bar._isSeeking) 
         {
-            bar.VolumeSlider.Value = (double)e.NewValue;
+            bar.SyncVolumeUi();
         }
+    }
+
+    private static void OnIsMutedPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is TransportBar bar)
+        {
+            bar.SyncVolumeUi();
+        }
+    }
+
+    public void SyncVolumeUi()
+    {
+        _isUpdatingVolume = true;
+        try
+        {
+            if (IsMuted)
+            {
+                if (VolumeSlider != null) VolumeSlider.Value = 0;
+                if (VolumeValueText != null) VolumeValueText.Text = "0";
+            }
+            else
+            {
+                double targetVal = Math.Clamp(Volume, 0, 100);
+                if (VolumeSlider != null) VolumeSlider.Value = targetVal;
+                if (VolumeValueText != null) VolumeValueText.Text = ((int)targetVal).ToString();
+            }
+        }
+        finally
+        {
+            _isUpdatingVolume = false;
+        }
+        UpdateVolumeIcon();
     }
 
     private static void OnIsInPipModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -154,21 +199,52 @@ public sealed partial class TransportBar : UserControl
         {
             TrackTitleText.Text = "Nothing playing";
             TrackArtistText.Text = "Select a track to begin";
+            ElapsedTimeText.Text = "0:00";
             TotalTimeText.Text = "0:00";
+            _isProgrammaticChange = true;
+            ProgressSlider.Value = 0;
             ProgressSlider.Maximum = 100;
+            _isProgrammaticChange = false;
+            ProgressSlider.IsEnabled = false;
+
             if (ArtImage != null)
             {
                 ArtImage.Source = null;
                 ArtImage.Visibility = Visibility.Collapsed;
                 if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Visible;
             }
+
+            // Disable playback controls when nothing is playing
+            if (ShuffleButton != null) ShuffleButton.IsEnabled = false;
+            if (RepeatButton != null) RepeatButton.IsEnabled = false;
+            if (PreviousButton != null) PreviousButton.IsEnabled = false;
+            if (NextButton != null) NextButton.IsEnabled = false;
+            if (SkipBackButton != null) SkipBackButton.IsEnabled = false;
+            if (SkipForwardButton != null) SkipForwardButton.IsEnabled = false;
+            if (ReplayButton != null) ReplayButton.IsEnabled = false;
+            if (StopButton != null) StopButton.IsEnabled = false;
+            if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
+            if (PipButton != null) PipButton.IsEnabled = false;
+            if (SubtitlesButton != null)
+            {
+                SubtitlesButton.IsEnabled = false;
+                SubtitlesButton.Visibility = Visibility.Collapsed;
+            }
+            if (AudioButton != null)
+            {
+                AudioButton.IsEnabled = false;
+                AudioButton.Visibility = Visibility.Collapsed;
+            }
             return;
         }
+
+        bool isVideo = CurrentTrack.IsVideo;
 
         TrackTitleText.Text = CurrentTrack.Title;
         TrackArtistText.Text = CurrentTrack.Artist;
         TotalTimeText.Text = CurrentTrack.DurationText;
         ProgressSlider.Maximum = CurrentTrack.Duration.TotalSeconds > 0 ? CurrentTrack.Duration.TotalSeconds : 100;
+        ProgressSlider.IsEnabled = CurrentTrack.Duration.TotalSeconds > 0;
 
         if (ArtImage != null)
         {
@@ -179,6 +255,46 @@ public sealed partial class TransportBar : UserControl
             {
                 FallbackIcon.Visibility = imgSource != null ? Visibility.Collapsed : Visibility.Visible;
             }
+        }
+
+        // Enable common playback buttons
+        if (ShuffleButton != null) ShuffleButton.IsEnabled = true;
+        if (RepeatButton != null) RepeatButton.IsEnabled = true;
+        if (PreviousButton != null) PreviousButton.IsEnabled = true;
+        if (NextButton != null) NextButton.IsEnabled = true;
+        if (SkipBackButton != null) SkipBackButton.IsEnabled = true;
+        if (SkipForwardButton != null) SkipForwardButton.IsEnabled = true;
+        if (ReplayButton != null) ReplayButton.IsEnabled = true;
+        if (StopButton != null) StopButton.IsEnabled = true;
+        if (PipButton != null) PipButton.IsEnabled = true;
+
+        if (isVideo)
+        {
+            if (SubtitlesButton != null)
+            {
+                SubtitlesButton.Visibility = Visibility.Visible;
+                SubtitlesButton.IsEnabled = true;
+            }
+            if (AudioButton != null)
+            {
+                AudioButton.Visibility = Visibility.Visible;
+                AudioButton.IsEnabled = true;
+            }
+            if (FullscreenButton != null) FullscreenButton.IsEnabled = true;
+        }
+        else
+        {
+            if (SubtitlesButton != null)
+            {
+                SubtitlesButton.Visibility = Visibility.Collapsed;
+                SubtitlesButton.IsEnabled = false;
+            }
+            if (AudioButton != null)
+            {
+                AudioButton.Visibility = Visibility.Collapsed;
+                AudioButton.IsEnabled = false;
+            }
+            if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
         }
     }
 
@@ -219,7 +335,7 @@ public sealed partial class TransportBar : UserControl
     private void UpdatePosition()
     {
         // CRITICAL FIX: Only update the slider if the user isn't currently dragging it
-        if (!_isSeeking)
+        if (!_isSeeking && ProgressSlider.IsEnabled)
         {
             _isProgrammaticChange = true;
             ProgressSlider.Value = Position;
@@ -234,7 +350,11 @@ public sealed partial class TransportBar : UserControl
     private void OnNextClick(object sender, RoutedEventArgs e) => NextRequested?.Invoke(this, EventArgs.Empty);
     private void OnQueueClick(object sender, RoutedEventArgs e) => QueueRequested?.Invoke(this, EventArgs.Empty);
     private void OnPipClick(object sender, RoutedEventArgs e) => PipRequested?.Invoke(this, EventArgs.Empty);
-    private void OnFullscreenClick(object sender, RoutedEventArgs e) => FullscreenRequested?.Invoke(this, EventArgs.Empty);
+    private void OnFullscreenClick(object sender, RoutedEventArgs e)
+    {
+        if (CurrentTrack is null || !CurrentTrack.IsVideo) return;
+        FullscreenRequested?.Invoke(this, EventArgs.Empty);
+    }
     private void OnTrackInfoClick(object sender, RoutedEventArgs e) => TrackClicked?.Invoke(this, EventArgs.Empty);
     private void OnInfoButtonClick(object sender, RoutedEventArgs e) => InfoButtonClicked?.Invoke(this, EventArgs.Empty);
 
@@ -256,6 +376,11 @@ public sealed partial class TransportBar : UserControl
     
     private void OnProgressPointerCapture(object sender, PointerRoutedEventArgs e)
     {
+        if (CurrentTrack is null || !ProgressSlider.IsEnabled)
+        {
+            e.Handled = true;
+            return;
+        }
         _isSeeking = true;
     }
     
@@ -270,7 +395,7 @@ public sealed partial class TransportBar : UserControl
 
     private void OnProgressSliderValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
-        if (_isProgrammaticChange) return;
+        if (_isProgrammaticChange || CurrentTrack is null || !ProgressSlider.IsEnabled) return;
 
         if (_isSeeking)
         {
@@ -590,31 +715,54 @@ public sealed partial class TransportBar : UserControl
     
     private void OnVolumeClick(object sender, RoutedEventArgs e)
     {
-        if (Volume > 0)
-        {
-            _previousVolume = Volume;
-            Volume = 0;
-            VolumeChanged?.Invoke(this, 0);
-        }
-        else
-        {
-            Volume = _previousVolume > 0 ? _previousVolume : 100;
-            VolumeChanged?.Invoke(this, Volume);
-        }
+        MuteToggled?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnVolumeFlyoutOpening(object? sender, object? e)
+    {
+        SyncVolumeUi();
     }
 
     private void OnVolumeValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
-        OnVolumeSliderValueChanged(sender, e);
-        
-        // Update volume icons
-        string glyph = e.NewValue switch
+        if (!_isUpdatingVolume && e.OldValue != e.NewValue)
         {
-            0 => "\uE74F", // Mute
-            <= 33 => "\uE992", // Volume 1
-            <= 66 => "\uE993", // Volume 2
-            _ => "\uE995" // Volume 3
-        };
+            double val = e.NewValue;
+            if (val > 0)
+            {
+                Volume = val;
+                if (IsMuted) IsMuted = false;
+                if (VolumeValueText != null) VolumeValueText.Text = ((int)val).ToString();
+                VolumeChanged?.Invoke(this, val);
+            }
+            else
+            {
+                if (!IsMuted) IsMuted = true;
+                if (VolumeValueText != null) VolumeValueText.Text = "0";
+                VolumeChanged?.Invoke(this, 0);
+            }
+        }
+        UpdateVolumeIcon();
+    }
+
+    public void UpdateVolumeIcon()
+    {
+        bool isSilenced = IsMuted || (VolumeSlider != null && VolumeSlider.Value == 0);
+        string glyph;
+        if (isSilenced)
+        {
+            glyph = "\uE74F"; // Mute
+        }
+        else
+        {
+            double val = VolumeSlider != null ? VolumeSlider.Value : Volume;
+            glyph = val switch
+            {
+                <= 33 => "\uE992", // Volume 1
+                <= 66 => "\uE993", // Volume 2
+                _ => "\uE995"      // Volume 3
+            };
+        }
         
         if (VolumeIcon != null) VolumeIcon.Glyph = glyph;
         if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Glyph = glyph;
@@ -864,9 +1012,39 @@ public sealed partial class TransportBar : UserControl
 
     private void OnMoreMenuOpening(object sender, object e)
     {
+        bool hasMedia = CurrentTrack != null;
+        bool isVideo = hasMedia && CurrentTrack!.IsVideo;
+
+        if (MenuPropertiesItem != null) MenuPropertiesItem.IsEnabled = hasMedia;
+        if (MenuEqualiserItem != null) MenuEqualiserItem.IsEnabled = hasMedia;
+        if (MenuSpeedSubItem != null) MenuSpeedSubItem.IsEnabled = hasMedia;
+        if (MenuSleepTimerSubItem != null) MenuSleepTimerSubItem.IsEnabled = hasMedia;
+        if (MenuCastItem != null) MenuCastItem.IsEnabled = hasMedia;
+
+        if (MenuClipchampItem != null)
+        {
+            MenuClipchampItem.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+            MenuClipchampItem.IsEnabled = isVideo;
+        }
+
+        if (MenuVideoSettingsSubItem != null)
+        {
+            MenuVideoSettingsSubItem.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+            MenuVideoSettingsSubItem.IsEnabled = isVideo;
+        }
+
+        if (MenuQueueItem != null)
+        {
+            MenuQueueItem.IsEnabled = hasMedia || (AppServices.PlaybackViewModel?.Queue?.Count > 0);
+        }
+
+        if (isVideo)
+        {
+            OnAspectRatioMenuOpening(sender, e);
+            OnZoomMenuOpening(sender, e);
+        }
+
         OnAudioDevicesMenuOpening(sender, e);
-        OnAspectRatioMenuOpening(sender, e);
-        OnZoomMenuOpening(sender, e);
         UpdateSleepTimerMenuChecks();
     }
 
@@ -1222,43 +1400,41 @@ public sealed partial class TransportBar : UserControl
             if (totalSeconds <= 0) totalSeconds = 100.0;
 
             double hoverSeconds = totalSeconds * percent;
-
-            if (totalSeconds >= 3600)
-            {
-                HoverTimeText.Text = TimeSpan.FromSeconds(hoverSeconds).ToString(@"h\:mm\:ss");
-            }
-            else
-            {
-                HoverTimeText.Text = TimeSpan.FromSeconds(hoverSeconds).ToString(@"m\:ss");
-            }
+            HoverTimeText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(hoverSeconds));
 
             var track = playback.CurrentTrack;
             if (track != null && track.IsVideo)
             {
-                HoverPreviewPopup.HorizontalOffset = pt.Position.X - 66;
-                HoverPreviewPopup.IsOpen = true;
-
-                var cachedImg = playback.Session.GetCachedThumbnail(hoverSeconds);
+                var cachedImg = playback.Session.GetCachedThumbnail(hoverSeconds) ?? track.Artwork;
                 if (cachedImg != null)
                 {
                     HoverThumbnailImage.Source = cachedImg;
-                    HoverThumbnailImage.Visibility = Visibility.Visible;
+                    HoverThumbnailBorder.Visibility = Visibility.Visible;
                 }
                 else
                 {
                     HoverThumbnailImage.Source = null;
-                    HoverThumbnailImage.Visibility = Visibility.Collapsed;
+                    HoverThumbnailBorder.Visibility = Visibility.Collapsed;
                 }
+
+                double popupWidth = (HoverThumbnailBorder.Visibility == Visibility.Visible) ? 156.0 : 64.0;
+                double clampedX = Math.Clamp(pt.Position.X - (popupWidth / 2), 0, Math.Max(0, slider.ActualWidth - popupWidth));
+                HoverPreviewPopup.HorizontalOffset = clampedX;
+                HoverPreviewPopup.VerticalOffset = (HoverThumbnailBorder.Visibility == Visibility.Visible) ? -126 : -48;
+                HoverPreviewPopup.IsOpen = true;
 
                 UpdateExactThumbnailAsync(hoverSeconds);
             }
             else
             {
-                HoverPreviewPopup.HorizontalOffset = pt.Position.X - 30;
+                double popupWidth = 64.0;
+                double clampedX = Math.Clamp(pt.Position.X - (popupWidth / 2), 0, Math.Max(0, slider.ActualWidth - popupWidth));
+                HoverPreviewPopup.HorizontalOffset = clampedX;
+                HoverPreviewPopup.VerticalOffset = -48;
                 HoverPreviewPopup.IsOpen = true;
 
                 HoverThumbnailImage.Source = null;
-                HoverThumbnailImage.Visibility = Visibility.Collapsed;
+                HoverThumbnailBorder.Visibility = Visibility.Collapsed;
             }
         }
         catch { }
@@ -1268,17 +1444,15 @@ public sealed partial class TransportBar : UserControl
     {
         try
         {
-            try
-            {
             _exactThumbnailCts?.Cancel();
             _exactThumbnailCts = new CancellationTokenSource();
             var token = _exactThumbnailCts.Token;
 
             try
             {
-                await Task.Delay(250, token); // Debounce to prevent overlapping decodes
+                await Task.Delay(150, token); // Debounce
 
-                if (_isExactThumbnailExtracting) return; // Prevent concurrent extraction
+                if (_isExactThumbnailExtracting) return;
                 _isExactThumbnailExtracting = true;
 
                 try
@@ -1294,10 +1468,10 @@ public sealed partial class TransportBar : UserControl
                     {
                         foreach (var item in session.VideoThumbnailCache)
                         {
-                            if (Math.Abs((item.Time - timeSpan).TotalSeconds) < 0.5)
+                            if (Math.Abs((item.Time - timeSpan).TotalSeconds) < 1.0)
                             {
                                 HoverThumbnailImage.Source = item.Image;
-                                HoverThumbnailImage.Visibility = Visibility.Visible;
+                                HoverThumbnailBorder.Visibility = Visibility.Visible;
                                 return;
                             }
                         }
@@ -1308,25 +1482,16 @@ public sealed partial class TransportBar : UserControl
                     {
                         stream = await session.GetExactThumbnailAsync(seconds);
 
-                        if (stream == null)
-                        {
-                            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
-                            var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-                            var composition = new Windows.Media.Editing.MediaComposition();
-                            composition.Clips.Add(clip);
-                            stream = await composition.GetThumbnailAsync(timeSpan, 120, 68, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
-                        }
-
                         if (token.IsCancellationRequested || stream == null) return;
 
                         var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                        bitmap.DecodePixelWidth = 120;
+                        bitmap.DecodePixelWidth = 160;
                         await bitmap.SetSourceAsync(stream);
 
                         if (token.IsCancellationRequested) return;
 
                         HoverThumbnailImage.Source = bitmap;
-                        HoverThumbnailImage.Visibility = Visibility.Visible;
+                        HoverThumbnailBorder.Visibility = Visibility.Visible;
 
                         session.AddCachedThumbnail(timeSpan, bitmap);
                     }
@@ -1340,11 +1505,9 @@ public sealed partial class TransportBar : UserControl
                     _isExactThumbnailExtracting = false;
                 }
             }
-            catch { }
-            }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"UpdateExactThumbnailAsync error: {ex.Message}");
             }
         }
         catch (Exception ex)

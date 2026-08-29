@@ -23,6 +23,7 @@
         <NavigationView
             x:Name="RootNavigationView"
             Grid.Row="0"
+            IsTabStop="False"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="True"
             IsPaneToggleButtonVisible="True"
@@ -67,6 +68,12 @@
                 <x:Double x:Key="NavigationViewHeaderMinHeight">0</x:Double>
                 <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent" />
                 <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewItemFocusVisualPrimaryBrush" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewItemFocusVisualSecondaryBrush" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewButtonFocusVisualPrimaryBrush" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewButtonFocusVisualSecondaryBrush" Color="Transparent" />
+                <SolidColorBrush x:Key="FocusStrokeColorOuter" Color="Transparent" />
+                <SolidColorBrush x:Key="FocusStrokeColorInner" Color="Transparent" />
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
@@ -451,204 +458,273 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom" />
 
-        <!-- Mini Player View (CompactOverlay Mode) -->
+        <!-- Mini Player View (CompactOverlay / PiP Mode) -->
         <Grid
             x:Name="MiniPlayerGrid"
             Grid.Row="0"
             Grid.RowSpan="2"
-            Background="#FF111111"
+            Background="#FF0C0C0E"
             Visibility="Collapsed"
             PointerMoved="OnMiniPlayerPointerMoved"
             PointerEntered="OnMiniPlayerPointerEntered"
             PointerExited="OnMiniPlayerPointerExited">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="48" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
 
-            <Grid.Resources>
-                <!-- Custom Circular Icon Button Style -->
-                <Style x:Key="MiniIconButtonStyle" TargetType="Button">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="BorderThickness" Value="0"/>
-                    <Setter Property="Padding" Value="0"/>
-                    <Setter Property="Width" Value="44"/>
-                    <Setter Property="Height" Value="44"/>
-                    <Setter Property="HorizontalAlignment" Value="Center"/>
-                    <Setter Property="VerticalAlignment" Value="Center"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="Button">
-                                <Grid x:Name="RootGrid" Background="Transparent" CornerRadius="22" RenderTransformOrigin="0.5,0.5">
-                                    <Grid.RenderTransform>
-                                        <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
-                                    </Grid.RenderTransform>
-                                    
-                                    <!-- Hover background circle -->
-                                    <Ellipse x:Name="HoverCircle" Fill="White" Opacity="0.0" Width="40" Height="40"/>
-                                    
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    
-                                    <VisualStateManager.VisualStateGroups>
-                                        <VisualStateGroup x:Name="CommonStates">
-                                            <VisualState x:Name="Normal">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="HoverCircle" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.1" />
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="PointerOver">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="HoverCircle" Storyboard.TargetProperty="Opacity" To="0.1" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.05" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.05" Duration="0:0:0.1" />
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="Pressed">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="HoverCircle" Storyboard.TargetProperty="Opacity" To="0.2" Duration="0:0:0.05" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="0.95" Duration="0:0:0.05" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="0.95" Duration="0:0:0.05" />
-                                                </Storyboard>
-                                            </VisualState>
-                                        </VisualStateGroup>
-                                    </VisualStateManager.VisualStateGroups>
-                                </Grid>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
+            <!-- Video Player Host (Video Mode) -->
+            <MediaPlayerElement
+                x:Name="MiniVideoPlayer"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                AreTransportControlsEnabled="False"
+                Stretch="Uniform"
+                Visibility="Collapsed"
+                AutoPlay="False" />
 
-                <!-- Large Custom Play/Pause Button Style -->
-                <Style x:Key="MiniPlayPauseButtonStyle" TargetType="Button">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="BorderThickness" Value="0"/>
-                    <Setter Property="Padding" Value="0"/>
-                    <Setter Property="Width" Value="64"/>
-                    <Setter Property="Height" Value="64"/>
-                    <Setter Property="HorizontalAlignment" Value="Center"/>
-                    <Setter Property="VerticalAlignment" Value="Center"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="Button">
-                                <Grid x:Name="RootGrid" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                    <Grid.RenderTransform>
-                                        <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
-                                    </Grid.RenderTransform>
-                                    
-                                    <!-- Outer Gradient Ring -->
-                                    <Border x:Name="OuterRing"
-                                            Width="60"
-                                            Height="60"
-                                            CornerRadius="30"
-                                            BorderThickness="3.5">
-                                        <Border.BorderBrush>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#FFFF7E40" Offset="0.0" />
-                                                <GradientStop Color="#FFFF2D55" Offset="0.5" />
-                                                <GradientStop Color="#FF8E52E8" Offset="1.0" />
-                                            </LinearGradientBrush>
-                                        </Border.BorderBrush>
-                                        
-                                        <!-- Inner Circle -->
-                                        <Grid x:Name="InnerCircle"
-                                              CornerRadius="27"
-                                              Background="#FF2A2A2D">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Border>
-                                    
-                                    <VisualStateManager.VisualStateGroups>
-                                        <VisualStateGroup x:Name="CommonStates">
-                                            <VisualState x:Name="Normal">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.1" />
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="PointerOver">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.06" Duration="0:0:0.1" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.06" Duration="0:0:0.1" />
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="Pressed">
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="0.94" Duration="0:0:0.05" />
-                                                    <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="0.94" Duration="0:0:0.05" />
-                                                </Storyboard>
-                                            </VisualState>
-                                        </VisualStateGroup>
-                                    </VisualStateManager.VisualStateGroups>
-                                </Grid>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </Grid.Resources>
-
-            <!-- Center Control Area -->
-            <Grid Grid.Row="1">
-                <!-- Video Player (Video mode) -->
-                <MediaPlayerElement x:Name="MiniVideoPlayer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" AutoPlay="False" />
+            <!-- Audio Artwork Host (Audio / Music Mode) -->
+            <Grid x:Name="MiniAudioHost" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <!-- Ambient Blurred Art Background -->
+                <Image
+                    x:Name="MiniAudioArtBlurred"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Stretch="UniformToFill"
+                    Opacity="0.30" />
                 
-                <!-- Album Art (Audio mode) -->
-                <Image x:Name="MiniAudioArt" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="UniformToFill" Opacity="0.3" Visibility="Collapsed" />
-                
-                <!-- Dimming overlay and control buttons wrapper -->
-                <Grid x:Name="MiniOverlayControls">
-                    <!-- Dimming overlay to make controls stand out -->
-                    <Grid x:Name="MiniControlsDimmer" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
+                <!-- Dark Vignette over ambient art -->
+                <Rectangle Fill="#85000000" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
-                    <!-- Center Control Buttons -->
-                    <StackPanel
-                        Orientation="Horizontal"
-                        Spacing="24"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center">
-                        
-                        <!-- Previous Button -->
-                        <Button
-                            Click="OnMiniPreviousClick"
-                            Style="{StaticResource MiniIconButtonStyle}"
-                            ToolTipService.ToolTip="Previous">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE892;" Foreground="White" />
-                        </Button>
+                <!-- Center Cover Art Card -->
+                <Border
+                    Width="105"
+                    Height="105"
+                    CornerRadius="14"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="0,0,0,36"
+                    BorderBrush="#35FFFFFF"
+                    BorderThickness="1">
+                    <Border.Shadow>
+                        <ThemeShadow />
+                    </Border.Shadow>
+                    <Grid CornerRadius="13">
+                        <Image
+                            x:Name="MiniAudioArt"
+                            Stretch="UniformToFill"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch" />
+                    </Grid>
+                </Border>
+            </Grid>
 
-                        <!-- Play/Pause Button -->
-                        <Button
-                            Style="{StaticResource MiniPlayPauseButtonStyle}"
-                            Click="OnMiniPlayPauseClick"
-                            ToolTipService.ToolTip="Play">
-                            <FontIcon
-                                x:Name="MiniPlayPauseIcon"
-                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="20"
-                                Glyph="&#xE768;"
-                                Foreground="White"
-                                Margin="2,0,0,0" />
-                        </Button>
+            <!-- Dimmer Overlay for readability -->
+            <Grid
+                x:Name="MiniControlsDimmer"
+                Background="#50000000"
+                Visibility="Collapsed"
+                IsHitTestVisible="False" />
 
-                        <!-- Next Button -->
-                        <Button
-                            Click="OnMiniNextClick"
-                            Style="{StaticResource MiniIconButtonStyle}"
-                            ToolTipService.ToolTip="Next">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Glyph="&#xE893;" Foreground="White" />
-                        </Button>
+            <!-- Modern Fluent PiP Interactive Overlay -->
+            <Grid x:Name="MiniOverlayControls">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Top Scrim & Header Bar -->
+                <Grid Grid.Row="0" Padding="12,10,12,8">
+                    <Grid.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#CC000000" Offset="0.0" />
+                            <GradientStop Color="#00000000" Offset="1.0" />
+                        </LinearGradientBrush>
+                    </Grid.Background>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Track Info & Brand -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="2,0,8,0">
+                        <TextBlock
+                            x:Name="MiniTrackTitle"
+                            Text="Track Title"
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Foreground="White"
+                            TextTrimming="CharacterEllipsis"
+                            MaxLines="1" />
+                        <TextBlock
+                            x:Name="MiniArtistTitle"
+                            Text="Artist Name"
+                            FontSize="10"
+                            Foreground="#B3FFFFFF"
+                            TextTrimming="CharacterEllipsis"
+                            MaxLines="1" />
                     </StackPanel>
 
-                    <!-- Revert / Exit PiP Button in Bottom Right -->
-                    <Button
-                        Click="OnMiniExitPipClick"
-                        Style="{StaticResource MiniIconButtonStyle}"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Bottom"
-                        Margin="0,0,16,16"
-                        ToolTipService.ToolTip="Exit Picture in Picture">
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" Glyph="&#xE93A;" Foreground="White" />
-                    </Button>
+                    <!-- Top Action Buttons (Mute & Expand to Window) positioned cleanly beside OS caption close button -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,40,0">
+                        <!-- Volume Mute Button -->
+                        <Button
+                            x:Name="MiniVolumeButton"
+                            Click="OnMiniVolumeClick"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            CornerRadius="6"
+                            Style="{StaticResource TransportIconButtonStyle}"
+                            ToolTipService.ToolTip="Mute / Unmute"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.08">
+                            <FontIcon
+                                x:Name="MiniVolumeIcon"
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="13"
+                                Glyph="&#xE767;"
+                                Foreground="White" />
+                        </Button>
+
+                        <!-- Expand / Exit PiP Button -->
+                        <Button
+                            Click="OnMiniExitPipClick"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            CornerRadius="6"
+                            Style="{StaticResource TransportIconButtonStyle}"
+                            ToolTipService.ToolTip="Expand to window"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.08">
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="13"
+                                Glyph="&#xE93A;"
+                                Foreground="White" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Center Floating Playback Controls Dock -->
+                <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border
+                        CornerRadius="26"
+                        Background="#80121216"
+                        BorderBrush="#35FFFFFF"
+                        BorderThickness="1"
+                        Padding="10,6">
+                        <Border.Shadow>
+                            <ThemeShadow />
+                        </Border.Shadow>
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="12"
+                            VerticalAlignment="Center">
+                            
+                            <!-- Previous Button -->
+                            <Button
+                                Click="OnMiniPreviousClick"
+                                Width="34"
+                                Height="34"
+                                Padding="0"
+                                CornerRadius="6"
+                                Style="{StaticResource TransportIconButtonStyle}"
+                                ToolTipService.ToolTip="Previous"
+                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                helpers:SpringAnimationHelper.HoverScale="1.08">
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="15" Glyph="&#xE892;" Foreground="White" />
+                            </Button>
+
+                            <!-- Play/Pause Button (Exact button used in Media Player) -->
+                            <Button
+                                x:Name="MiniPlayPauseButton"
+                                Style="{StaticResource CleanPlayPauseButtonStyle}"
+                                Click="OnMiniPlayPauseClick"
+                                ToolTipService.ToolTip="Play"
+                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                helpers:SpringAnimationHelper.HoverScale="1.08"
+                                helpers:SpringAnimationHelper.PressScale="0.92">
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <AnimatedVisualPlayer
+                                        AutoPlay="False"
+                                        Width="44"
+                                        Height="44"
+                                        Opacity="0.4"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                        <controls:LottieLogo1/>
+                                    </AnimatedVisualPlayer>
+                                    <FontIcon
+                                        x:Name="MiniPlayPauseIcon"
+                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                        FontSize="14"
+                                        Foreground="White"
+                                        Glyph="&#xE768;"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Margin="2,0,0,0" />
+                                </Grid>
+                            </Button>
+
+                            <!-- Next Button -->
+                            <Button
+                                Click="OnMiniNextClick"
+                                Width="34"
+                                Height="34"
+                                Padding="0"
+                                CornerRadius="6"
+                                Style="{StaticResource TransportIconButtonStyle}"
+                                ToolTipService.ToolTip="Next"
+                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                helpers:SpringAnimationHelper.HoverScale="1.08">
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="15" Glyph="&#xE893;" Foreground="White" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Bottom Scrim & Interactive Progress Bar -->
+                <Grid Grid.Row="2" Padding="14,8,14,10">
+                    <Grid.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0.0" />
+                            <GradientStop Color="#CC000000" Offset="1.0" />
+                        </LinearGradientBrush>
+                    </Grid.Background>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Interactive Seek Slider -->
+                    <Slider
+                        x:Name="MiniPositionSlider"
+                        Grid.Row="0"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="0"
+                        Height="20"
+                        Margin="0,-4,0,-4"
+                        IsThumbToolTipEnabled="False"
+                        ValueChanged="OnMiniSliderValueChanged"
+                        PointerCaptureLost="OnMiniSliderPointerCaptureLost" />
+
+                    <!-- Timestamp row -->
+                    <Grid Grid.Row="1" Margin="0,2,0,0">
+                        <TextBlock
+                            x:Name="MiniPositionText"
+                            Text="00:00"
+                            FontSize="10"
+                            FontWeight="Medium"
+                            Foreground="#B3FFFFFF"
+                            HorizontalAlignment="Left" />
+                        <TextBlock
+                            x:Name="MiniDurationText"
+                            Text="00:00"
+                            FontSize="10"
+                            FontWeight="Medium"
+                            Foreground="#B3FFFFFF"
+                            HorizontalAlignment="Right" />
+                    </Grid>
                 </Grid>
             </Grid>
         </Grid>

@@ -95,7 +95,7 @@ public static class MediaMetadataScanner
                 bitrate = videoProps.Bitrate;
 
                 var extraProps = await storageFile.Properties.RetrievePropertiesAsync(new[] { "System.Video.FourCC", "System.Video.FrameRate" });
-                if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr)
+                if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr && !string.IsNullOrWhiteSpace(fourCcStr) && !fourCcStr.Equals("und", StringComparison.OrdinalIgnoreCase))
                 {
                     codec = fourCcStr;
                 }
@@ -139,14 +139,14 @@ public static class MediaMetadataScanner
                 using (stream)
                 using (var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream)))
                 {
-                    if (codec == "Unknown" || string.IsNullOrEmpty(codec))
+                    if (codec == "Unknown" || codec == "und" || string.IsNullOrEmpty(codec))
                     {
                         var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
-                        if (!string.IsNullOrEmpty(videoCodec))
+                        if (!string.IsNullOrEmpty(videoCodec) && !videoCodec.Equals("und", StringComparison.OrdinalIgnoreCase))
                         {
                             codec = videoCodec;
                         }
-                        else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
+                        else if (!string.IsNullOrEmpty(tagFile.Properties.Description) && !tagFile.Properties.Description.Equals("und", StringComparison.OrdinalIgnoreCase))
                         {
                             codec = tagFile.Properties.Description;
                         }
@@ -163,7 +163,6 @@ public static class MediaMetadataScanner
                     }
 
                     // Extract container tracks and advanced stream metadata
-                    // Extract container tracks and advanced stream metadata
                     var containerTracks = MediaTrackFormatHelper.GetContainerTracks(playablePath);
                     var videoTrack = containerTracks.Find(t => t.TrackType == 1);
                     if (videoTrack != null)
@@ -172,6 +171,15 @@ public static class MediaMetadataScanner
                         else if (videoTrack.CodecId.Contains("AVC") || videoTrack.CodecId.Contains("H264")) codec = "AVC (H.264)";
                         else if (videoTrack.CodecId.Contains("AV1") || videoTrack.CodecId.Contains("AV01")) codec = "AV1";
                         else if (videoTrack.CodecId.Contains("VP9")) codec = "VP9";
+                    }
+
+                    if (codec == "Unknown" || codec == "und" || string.IsNullOrEmpty(codec))
+                    {
+                        string fNameLower = Path.GetFileName(playablePath).ToLowerInvariant();
+                        if (fNameLower.Contains("x265") || fNameLower.Contains("hevc") || fNameLower.Contains("h265")) codec = "HEVC (H.265)";
+                        else if (fNameLower.Contains("x264") || fNameLower.Contains("h264") || fNameLower.Contains("avc")) codec = "AVC (H.264)";
+                        else if (fNameLower.Contains("av1") || fNameLower.Contains("av01")) codec = "AV1";
+                        else if (fNameLower.Contains("vp9")) codec = "VP9";
                     }
 
                     // Extract embedded album art if poster is missing
@@ -230,7 +238,7 @@ public static class MediaMetadataScanner
                 {
                     item.Resolution = resolution;
                 }
-                if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown")
+                if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown" || item.Codec.Equals("und", StringComparison.OrdinalIgnoreCase))
                 {
                     item.Codec = codec;
                 }

@@ -13,6 +13,7 @@ namespace LumiereMediaPlayer.Pages;
 public sealed partial class MusicLibraryPage : Page
 {
     public MusicLibraryViewModel ViewModel { get; } = AppServices.MusicLibraryViewModel;
+    private string? _initialSearchQuery;
 
     public MusicLibraryPage()
     {
@@ -20,7 +21,14 @@ public sealed partial class MusicLibraryPage : Page
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
     }
 
-
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (e.Parameter is string query && !string.IsNullOrWhiteSpace(query))
+        {
+            _initialSearchQuery = query;
+        }
+    }
 
     private void OnTrackDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
@@ -32,12 +40,28 @@ public sealed partial class MusicLibraryPage : Page
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        foreach (var track in ViewModel.Tracks)
+        {
+            track.IsSelected = false;
+        }
+        MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
+        if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+
         PlayEntranceAnimation();
         try
         {
             AiSearchToggle.IsChecked = AppServices.Settings.Current.AiSemanticSearchEnabled;
         }
         catch { }
+
+        if (!string.IsNullOrWhiteSpace(_initialSearchQuery))
+        {
+            string q = _initialSearchQuery;
+            _initialSearchQuery = null;
+            if (SearchBox != null) SearchBox.Text = q;
+            if (AiSearchToggle != null) AiSearchToggle.IsChecked = true;
+            _ = ViewModel.SearchLibraryAsync(q, useAi: true, debounce: false);
+        }
     }
 
     private void PlayEntranceAnimation()
@@ -125,8 +149,9 @@ public sealed partial class MusicLibraryPage : Page
             {
                 if (AiSearchIcon != null)
                 {
-                    AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                    AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiCheckedIconBrush();
                 }
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, true);
                 if (SearchBox != null)
                 {
                     SearchBox.PlaceholderText = "Describe what you want to hear...";
@@ -153,8 +178,9 @@ public sealed partial class MusicLibraryPage : Page
             {
                 if (AiSearchIcon != null)
                 {
-                    AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                    AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
                 }
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
                 if (SearchBox != null)
                 {
                     SearchBox.PlaceholderText = "Search collection...";
@@ -213,6 +239,73 @@ public sealed partial class MusicLibraryPage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Exception in OnSaveAiPlaylistClick: {ex.Message}");
+        }
+    }
+
+    private void OnTrackCheckBoxChanged(object sender, RoutedEventArgs e)
+    {
+        MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
+        if (HeaderSelectAllCheckBox != null)
+        {
+            int selectedCount = ViewModel.Tracks.Count(t => t.IsSelected);
+            if (selectedCount == 0) HeaderSelectAllCheckBox.IsChecked = false;
+            else if (selectedCount == ViewModel.Tracks.Count) HeaderSelectAllCheckBox.IsChecked = true;
+            else HeaderSelectAllCheckBox.IsChecked = null;
+        }
+    }
+
+    private void OnHeaderSelectAllChecked(object sender, RoutedEventArgs e)
+    {
+        foreach (var t in ViewModel.Tracks) t.IsSelected = true;
+        MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
+    }
+
+    private void OnHeaderSelectAllUnchecked(object sender, RoutedEventArgs e)
+    {
+        foreach (var t in ViewModel.Tracks) t.IsSelected = false;
+        MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
+    }
+
+    private void OnMusicSelectAllRequested(object? sender, EventArgs e)
+    {
+        foreach (var t in ViewModel.Tracks) t.IsSelected = true;
+        MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
+        if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = true;
+    }
+
+    private void OnMusicClearRequested(object? sender, EventArgs e)
+    {
+        foreach (var t in ViewModel.Tracks) t.IsSelected = false;
+        if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+    }
+
+    private async void OnMusicRemoveRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            await SampleMediaLibrary.RemoveTracksAsync(selected);
+            MusicSelectionRibbon?.ClearSelection();
+            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+        }
+    }
+
+    private void OnTrackMoreClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement btn && btn.DataContext is MediaItem item)
+        {
+            var flyout = Helpers.MediaFlyoutHelper.CreateMediaFlyout(item, btn);
+            flyout.ShowAt(btn);
+        }
+    }
+
+    private void OnTrackRowRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is MediaItem item)
+        {
+            var flyout = Helpers.MediaFlyoutHelper.CreateMediaFlyout(item, element);
+            flyout.ShowAt(element, e.GetPosition(element));
+            e.Handled = true;
         }
     }
 }

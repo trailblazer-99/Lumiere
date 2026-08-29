@@ -111,18 +111,32 @@
                                 </TransitionCollection>
                             </Button.Transitions>
                             <controls:MediaCard
+                                Item="{Binding}"
                                 CardWidth="150"
                                 CardHeight="225"
                                 AccentColor="{Binding AccentColor}"
                                 Artwork="{Binding Artwork}"
                                 PosterUrl="{Binding PosterUrl}"
                                 Subtitle="{Binding ReleaseYear}"
-                                Title="{Binding Title}" />
+                                Title="{Binding Title}"
+                                SelectionChanged="OnCardSelectionChanged" />
                         </Button>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
         </ScrollViewer>
+
+        <!-- Floating Selection Action Ribbon for Video Library -->
+        <controls:SelectionRibbon
+            x:Name="VideoSelectionRibbon"
+            Grid.Row="1"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,16"
+            Canvas.ZIndex="100"
+            SelectAllRequested="OnVideoSelectAllRequested"
+            ClearRequested="OnVideoClearRequested"
+            RemoveRequested="OnVideoRemoveRequested" />
 
         <!-- Player & Sidebar Layout -->
         <Grid Grid.Row="1" ColumnSpacing="16" Visibility="{x:Bind ViewModel.PlayerVisibility, Mode=OneWay}">

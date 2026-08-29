@@ -1,4 +1,5 @@
 using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -34,6 +35,102 @@ public sealed partial class MediaCard : UserControl
     public static readonly DependencyProperty PosterUrlProperty =
         DependencyProperty.Register(nameof(PosterUrl), typeof(string), typeof(MediaCard),
             new PropertyMetadata(null, (d, e) => ((MediaCard)d).UpdateDisplayImage()));
+
+    public static readonly DependencyProperty IsSelectedProperty =
+        DependencyProperty.Register(nameof(IsSelected), typeof(bool), typeof(MediaCard),
+            new PropertyMetadata(false, (d, e) => ((MediaCard)d).OnIsSelectedChanged((bool)e.NewValue)));
+
+    public static readonly DependencyProperty ItemProperty =
+        DependencyProperty.Register(nameof(Item), typeof(MediaItem), typeof(MediaCard),
+            new PropertyMetadata(null, (d, e) => ((MediaCard)d).OnItemChanged(e.NewValue as MediaItem)));
+
+    public event EventHandler? SelectionChanged;
+
+    public bool IsSelected
+    {
+        get => (bool)GetValue(IsSelectedProperty);
+        set => SetValue(IsSelectedProperty, value);
+    }
+
+    public MediaItem? Item
+    {
+        get => (MediaItem?)GetValue(ItemProperty);
+        set => SetValue(ItemProperty, value);
+    }
+
+    private void OnItemChanged(MediaItem? newItem)
+    {
+        if (newItem != null)
+        {
+            IsSelected = newItem.IsSelected;
+        }
+    }
+
+    private void OnIsSelectedChanged(bool isSelected)
+    {
+        if (SelectionBorder != null)
+        {
+            SelectionBorder.Visibility = isSelected ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (SelectionHost != null)
+        {
+            SelectionHost.Opacity = isSelected || _isHovered ? 1.0 : 0.0;
+        }
+        if (Item != null && Item.IsSelected != isSelected)
+        {
+            Item.IsSelected = isSelected;
+        }
+        else if (DataContext is MediaItem ctxItem && ctxItem.IsSelected != isSelected)
+        {
+            ctxItem.IsSelected = isSelected;
+        }
+
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnCardCheckBoxChanged(object sender, RoutedEventArgs e)
+    {
+        if (CardCheckBox != null)
+        {
+            IsSelected = CardCheckBox.IsChecked == true;
+        }
+    }
+
+    private MediaItem? GetAssociatedMediaItem()
+    {
+        if (Item != null) return Item;
+        if (DataContext is MediaItem ctx) return ctx;
+        return null;
+    }
+
+    private void OnMoreOptionsClick(object sender, RoutedEventArgs e)
+    {
+        var mediaItem = GetAssociatedMediaItem();
+        if (mediaItem == null)
+        {
+            mediaItem = new MediaItem
+            {
+                Title = this.Title,
+                Artist = this.Subtitle,
+                PosterUrl = this.PosterUrl,
+                AccentColor = this.AccentColor
+            };
+        }
+
+        var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, MoreOptionsButton);
+        flyout.ShowAt(MoreOptionsButton);
+    }
+
+    private void OnCardRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        var mediaItem = GetAssociatedMediaItem();
+        if (mediaItem != null)
+        {
+            var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, this);
+            flyout.ShowAt(this, e.GetPosition(this));
+            e.Handled = true;
+        }
+    }
 
     public ImageSource? DisplayImage
     {
@@ -186,13 +283,18 @@ public sealed partial class MediaCard : UserControl
         }
     }
 
+    private bool _isHovered;
+
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         try
         {
+            _isHovered = true;
             AnimateOverlay(1.0);
             AnimateScale(1.03);
             AnimateShadow(0.55, 12f);
+            if (SelectionHost != null) SelectionHost.Opacity = 1.0;
+            if (MoreOptionsButton != null) MoreOptionsButton.Opacity = 1.0;
         }
         catch { }
     }
@@ -201,9 +303,12 @@ public sealed partial class MediaCard : UserControl
     {
         try
         {
+            _isHovered = false;
             AnimateOverlay(0.0);
             AnimateScale(1.0);
             AnimateShadow(0.0, 4f);
+            if (SelectionHost != null && !IsSelected) SelectionHost.Opacity = 0.0;
+            if (MoreOptionsButton != null) MoreOptionsButton.Opacity = 0.0;
         }
         catch { }
     }
@@ -238,6 +343,7 @@ public sealed partial class MediaCard : UserControl
         {
             var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
             var overlayVisual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
+            var selectionVisual = SelectionBorder != null ? ElementCompositionPreview.GetElementVisual(SelectionBorder) : null;
             if (artVisual == null || overlayVisual == null) return;
 
             var centerPoint = new System.Numerics.Vector3(
@@ -246,6 +352,10 @@ public sealed partial class MediaCard : UserControl
                 0);
             artVisual.CenterPoint = centerPoint;
             overlayVisual.CenterPoint = centerPoint;
+            if (selectionVisual != null)
+            {
+                selectionVisual.CenterPoint = centerPoint;
+            }
 
             var compositor = artVisual.Compositor;
             if (compositor == null) return;
@@ -262,6 +372,7 @@ public sealed partial class MediaCard : UserControl
 
             artVisual.StartAnimation("Scale", _springAnimation);
             overlayVisual.StartAnimation("Scale", _springAnimation);
+            selectionVisual?.StartAnimation("Scale", _springAnimation);
         }
         catch { }
     }

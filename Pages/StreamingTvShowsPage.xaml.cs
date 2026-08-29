@@ -22,15 +22,30 @@ namespace LumiereMediaPlayer.Pages
             this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
             this.Unloaded += OnUnloaded;
+            ViewModel.OnSurpriseMeRequested += OnSurpriseMePicked;
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             this.Unloaded -= OnUnloaded;
+            ViewModel.OnSurpriseMeRequested -= OnSurpriseMePicked;
             _heroTimer?.Stop();
             if (TrendingHeroCarousel != null) TrendingHeroCarousel.ItemsSource = null;
             if (TrendingGridView != null) TrendingGridView.ItemsSource = null;
             if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
+        }
+
+        private void OnSurpriseMePicked(WatchmodeTitle tvShow)
+        {
+            if (tvShow == null) return;
+            if (tvShow.TmdbId.HasValue && (tvShow.Id == 0 || tvShow.Id == tvShow.TmdbId.Value))
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tvShow.TmdbId.Value}", ViewModel.SelectedRegion));
+            }
+            else
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion));
+            }
         }
 
         protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -157,7 +172,8 @@ namespace LumiereMediaPlayer.Pages
         private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
         {
             if (AiSearchIcon != null)
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiCheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, true);
             if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
             {
                 OnSearchBoxQuerySubmitted(SearchBox, null!);
@@ -167,7 +183,8 @@ namespace LumiereMediaPlayer.Pages
         private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
         {
             if (AiSearchIcon != null)
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
             if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
             {
                 OnSearchBoxQuerySubmitted(SearchBox, null!);
@@ -230,9 +247,21 @@ namespace LumiereMediaPlayer.Pages
                 var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
                 if (container != null)
                 {
-                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
+                    try
+                    {
+                        Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
+                    }
+                    catch { }
                 }
-                Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion));
+
+                if (tvShow.TmdbId.HasValue && (tvShow.Id == 0 || tvShow.Id == tvShow.TmdbId.Value))
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tvShow.TmdbId.Value}", ViewModel.SelectedRegion));
+                }
+                else
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion));
+                }
             }
         }
 

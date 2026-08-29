@@ -79,6 +79,74 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
         }
 
+        public async Task<List<TmdbPerson>> SearchPersonAsync(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return new List<TmdbPerson>();
+            var servicePath = $"tmdb/search/person?query={Uri.EscapeDataString(query)}";
+            var url = $"{BaseUrl}/search/person?api_key={ApiKey}&query={Uri.EscapeDataString(query)}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var data = JsonSerializer.Deserialize<TmdbResponse<TmdbPerson>>(response, _jsonOptions);
+                return data?.Results ?? new List<TmdbPerson>();
+            }
+            catch
+            {
+                return new List<TmdbPerson>();
+            }
+        }
+
+        public async Task<List<TmdbMedia>> GetPersonMovieCreditsAsync(int personId)
+        {
+            var servicePath = $"tmdb/person/{personId}/movie_credits";
+            var url = $"{BaseUrl}/person/{personId}/movie_credits?api_key={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var data = JsonSerializer.Deserialize<TmdbPersonCreditsResponse>(response, _jsonOptions);
+                if (data == null) return new List<TmdbMedia>();
+
+                // Prioritize directing/writing if director, combined with cast
+                var directed = data.Crew.Where(c => c.Job is "Director" or "Screenplay" or "Writer" or "Producer").Cast<TmdbMedia>().ToList();
+                var cast = data.Cast;
+                var all = directed.Concat(cast)
+                    .DistinctBy(m => m.Id)
+                    .OrderByDescending(m => m.VoteAverage > 0 ? m.VoteAverage : 0)
+                    .ThenByDescending(m => m.DisplayYear)
+                    .ToList();
+                return all;
+            }
+            catch
+            {
+                return new List<TmdbMedia>();
+            }
+        }
+
+        public async Task<List<TmdbMedia>> GetPersonTvCreditsAsync(int personId)
+        {
+            var servicePath = $"tmdb/person/{personId}/tv_credits";
+            var url = $"{BaseUrl}/person/{personId}/tv_credits?api_key={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                var data = JsonSerializer.Deserialize<TmdbPersonCreditsResponse>(response, _jsonOptions);
+                if (data == null) return new List<TmdbMedia>();
+
+                var created = data.Crew.Where(c => c.Job is "Executive Producer" or "Creator" or "Director" or "Writer").Cast<TmdbMedia>().ToList();
+                var cast = data.Cast;
+                var all = created.Concat(cast)
+                    .DistinctBy(m => m.Id)
+                    .OrderByDescending(m => m.VoteAverage > 0 ? m.VoteAverage : 0)
+                    .ThenByDescending(m => m.DisplayYear)
+                    .ToList();
+                return all;
+            }
+            catch
+            {
+                return new List<TmdbMedia>();
+            }
+        }
+
         /// <summary>
         /// Search movies with an optional filter category (unused for now, reserved for future advanced search).
         /// </summary>

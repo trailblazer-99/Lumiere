@@ -126,7 +126,8 @@ namespace LumiereMediaPlayer.Pages
         private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
         {
             if (AiSearchIcon != null)
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiCheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, true);
             if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
             {
                 ViewModel.PerformSearchCommand.Execute(SearchBox.Text);
@@ -136,7 +137,8 @@ namespace LumiereMediaPlayer.Pages
         private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
         {
             if (AiSearchIcon != null)
-                AiSearchIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
             if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
             {
                 ViewModel.PerformSearchCommand.Execute(SearchBox.Text);

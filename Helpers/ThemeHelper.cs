@@ -40,16 +40,24 @@ public static class ThemeHelper
             UpdateBrushResource("AccentFillColorSecondaryBrush", palette.Light1);
             UpdateBrushResource("AccentFillColorTertiaryBrush", palette.Light2);
             UpdateBrushResource("AccentFillColorDisabledBrush", Mix(palette.Default, Gray, 0.72));
+            UpdateBrushResource("SystemControlHighlightAccentBrush", palette.Default);
+            UpdateBrushResource("SystemControlBackgroundAccentBrush", palette.Default);
+
             UpdateBrushResource("AccentButtonBackground", palette.Default);
             UpdateBrushResource("AccentButtonBackgroundPointerOver", palette.Light1);
             UpdateBrushResource("AccentButtonBackgroundPressed", palette.Dark1);
             UpdateBrushResource("AccentButtonBackgroundDisabled", Mix(palette.Default, Gray, 0.72));
+            UpdateBrushResource("AccentButtonBorderBrush", palette.Default);
+            UpdateBrushResource("AccentButtonBorderBrushPointerOver", palette.Light1);
+            UpdateBrushResource("AccentButtonBorderBrushPressed", palette.Dark1);
+
             UpdateBrushResource("SliderTrackValueFill", palette.Default);
             UpdateBrushResource("SliderTrackValueFillPointerOver", palette.Light1);
             UpdateBrushResource("SliderTrackValueFillPressed", palette.Dark1);
             UpdateBrushResource("SliderThumbBackground", palette.Default);
             UpdateBrushResource("SliderThumbBackgroundPointerOver", palette.Light1);
             UpdateBrushResource("SliderThumbBackgroundPressed", palette.Dark1);
+
             UpdateBrushResource("ToggleSwitchFillOn", palette.Default);
             UpdateBrushResource("ToggleSwitchFillOnPointerOver", palette.Light1);
             UpdateBrushResource("ToggleSwitchFillOnPressed", palette.Dark1);
@@ -59,10 +67,145 @@ public static class ThemeHelper
             UpdateBrushResource("ToggleSwitchKnobFillOn", White);
             UpdateBrushResource("ToggleSwitchKnobFillOnPointerOver", White);
             UpdateBrushResource("ToggleSwitchKnobFillOnPressed", White);
+
+            UpdateBrushResource("ProgressBarProgressFill", palette.Default);
+            UpdateBrushResource("CheckBoxBackgroundSelected", palette.Default);
+            UpdateBrushResource("CheckBoxBorderBrushSelected", palette.Default);
+            UpdateBrushResource("RadioButtonBackgroundSelected", palette.Default);
+            UpdateBrushResource("RadioButtonBorderBrushSelected", palette.Default);
+
+            // Synchronize MainWindow root resources if present
+            if (App.MainWindowContent != null)
+            {
+                if (option == AccentColorOption.SystemDefault)
+                {
+                    string[] keysToRemove =
+                    {
+                        "SystemAccentColor", "SystemAccentColorLight1", "SystemAccentColorLight2", "SystemAccentColorLight3",
+                        "SystemAccentColorDark1", "SystemAccentColorDark2", "SystemAccentColorDark3",
+                        "AccentFillColorDefaultBrush", "AccentFillColorSecondaryBrush", "AccentFillColorTertiaryBrush",
+                        "SystemControlHighlightAccentBrush", "SystemControlBackgroundAccentBrush",
+                        "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed",
+                        "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
+                        "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver", "ToggleSwitchFillOnPressed",
+                        "ToggleSwitchStrokeOn", "ToggleSwitchStrokeOnPointerOver", "ToggleSwitchStrokeOnPressed",
+                        "ProgressBarProgressFill", "CheckBoxBackgroundSelected", "CheckBoxBorderBrushSelected",
+                        "RadioButtonBackgroundSelected", "RadioButtonBorderBrushSelected",
+                        "AccentButtonBackground", "AccentButtonBackgroundPointerOver", "AccentButtonBackgroundPressed",
+                        "AccentButtonBorderBrush", "AccentButtonBorderBrushPointerOver", "AccentButtonBorderBrushPressed"
+                    };
+                    foreach (var key in keysToRemove)
+                    {
+                        App.MainWindowContent.Resources.Remove(key);
+                    }
+                }
+                else
+                {
+                    App.MainWindowContent.Resources["SystemAccentColor"] = palette.Default;
+                    App.MainWindowContent.Resources["SystemAccentColorLight1"] = palette.Light1;
+                    App.MainWindowContent.Resources["SystemAccentColorLight2"] = palette.Light2;
+                    App.MainWindowContent.Resources["SystemAccentColorLight3"] = palette.Light3;
+                    App.MainWindowContent.Resources["SystemAccentColorDark1"] = palette.Dark1;
+                    App.MainWindowContent.Resources["SystemAccentColorDark2"] = palette.Dark2;
+                    App.MainWindowContent.Resources["SystemAccentColorDark3"] = palette.Dark3;
+
+                    var defaultBrush = new SolidColorBrush(palette.Default);
+                    var secondaryBrush = new SolidColorBrush(palette.Light1);
+                    var tertiaryBrush = new SolidColorBrush(palette.Light2);
+
+                    App.MainWindowContent.Resources["AccentFillColorDefaultBrush"] = defaultBrush;
+                    App.MainWindowContent.Resources["AccentFillColorSecondaryBrush"] = secondaryBrush;
+                    App.MainWindowContent.Resources["AccentFillColorTertiaryBrush"] = tertiaryBrush;
+                    App.MainWindowContent.Resources["SystemControlHighlightAccentBrush"] = defaultBrush;
+                    App.MainWindowContent.Resources["SystemControlBackgroundAccentBrush"] = defaultBrush;
+
+                    App.MainWindowContent.Resources["SliderTrackValueFill"] = defaultBrush;
+                    App.MainWindowContent.Resources["SliderTrackValueFillPointerOver"] = secondaryBrush;
+                    App.MainWindowContent.Resources["SliderTrackValueFillPressed"] = tertiaryBrush;
+                    App.MainWindowContent.Resources["SliderThumbBackground"] = defaultBrush;
+                    App.MainWindowContent.Resources["SliderThumbBackgroundPointerOver"] = defaultBrush;
+                    App.MainWindowContent.Resources["SliderThumbBackgroundPressed"] = defaultBrush;
+
+                    App.MainWindowContent.Resources["ToggleSwitchFillOn"] = defaultBrush;
+                    App.MainWindowContent.Resources["ToggleSwitchFillOnPointerOver"] = secondaryBrush;
+                    App.MainWindowContent.Resources["ToggleSwitchFillOnPressed"] = tertiaryBrush;
+                    App.MainWindowContent.Resources["ToggleSwitchStrokeOn"] = defaultBrush;
+                    App.MainWindowContent.Resources["ToggleSwitchStrokeOnPointerOver"] = secondaryBrush;
+                    App.MainWindowContent.Resources["ToggleSwitchStrokeOnPressed"] = tertiaryBrush;
+
+                    App.MainWindowContent.Resources["ProgressBarProgressFill"] = defaultBrush;
+                    App.MainWindowContent.Resources["CheckBoxBackgroundSelected"] = defaultBrush;
+                    App.MainWindowContent.Resources["CheckBoxBorderBrushSelected"] = defaultBrush;
+                    App.MainWindowContent.Resources["RadioButtonBackgroundSelected"] = defaultBrush;
+                    App.MainWindowContent.Resources["RadioButtonBorderBrushSelected"] = defaultBrush;
+
+                    App.MainWindowContent.Resources["AccentButtonBackground"] = defaultBrush;
+                    App.MainWindowContent.Resources["AccentButtonBackgroundPointerOver"] = secondaryBrush;
+                    App.MainWindowContent.Resources["AccentButtonBackgroundPressed"] = tertiaryBrush;
+                    App.MainWindowContent.Resources["AccentButtonBorderBrush"] = defaultBrush;
+                    App.MainWindowContent.Resources["AccentButtonBorderBrushPointerOver"] = secondaryBrush;
+                    App.MainWindowContent.Resources["AccentButtonBorderBrushPressed"] = tertiaryBrush;
+                }
+            }
+
+            // Immediately force theme bindings across the visual tree (including current Page)
+            RefreshThemeBindings();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to apply accent color: {ex.Message}");
+        }
+    }
+
+    public static void RefreshThemeBindings()
+    {
+        try
+        {
+            // 1. Root visual tree (MainWindowContent)
+            NudgeTheme(App.MainWindowContent);
+
+            // 2. Currently hosted Page in ContentFrame (e.g. SettingsPage)
+            if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement activePage)
+            {
+                NudgeTheme(activePage);
+            }
+
+            // 3. TransportControls
+            if (App.MainWindowInstance?.TransportBarElement is FrameworkElement transportControls)
+            {
+                NudgeTheme(transportControls);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ThemeHelper.RefreshThemeBindings] Error: {ex.Message}");
+        }
+    }
+
+    private static void NudgeTheme(FrameworkElement? element)
+    {
+        if (element == null) return;
+
+        try
+        {
+            var current = element.RequestedTheme;
+            ElementTheme temp;
+            if (current == ElementTheme.Default)
+            {
+                var actual = Application.Current.RequestedTheme;
+                temp = actual == ApplicationTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
+            }
+            else
+            {
+                temp = current == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
+            }
+
+            element.RequestedTheme = temp;
+            element.RequestedTheme = current;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ThemeHelper.NudgeTheme] Error on {element.GetType().Name}: {ex.Message}");
         }
     }
 
