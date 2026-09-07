@@ -185,11 +185,31 @@
                         Text="NOW PLAYING" />
                 </Border>
 
-                <!-- Title -->
-                <TextBlock
-                    Style="{StaticResource DisplayTextStyle}"
-                    Margin="0,8,0,0"
-                    Text="{x:Bind ViewModel.Title, Mode=OneWay}" />
+                <!-- Title & Location Rep -->
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                    <TextBlock
+                        Style="{StaticResource DisplayTextStyle}"
+                        Text="{x:Bind ViewModel.Title, Mode=OneWay}"
+                        VerticalAlignment="Center" />
+                    <Border
+                        Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(ViewModel.HasLocationRep), Mode=OneWay}"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.SourcePath, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.LocationRep, Mode=OneWay}"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
                 <!-- Artist -->
                 <TextBlock

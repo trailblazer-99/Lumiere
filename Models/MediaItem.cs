@@ -14,8 +14,36 @@ public sealed class MediaItem : INotifyPropertyChanged
     public string Title
     {
         get => _title;
-        set { if (_title != value) { _title = value; OnPropertyChanged(); } }
+        set
+        {
+            if (_title != value)
+            {
+                _title = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayTitle));
+            }
+        }
     }
+
+    private string? _locationRep;
+    public string? LocationRep
+    {
+        get => _locationRep;
+        set
+        {
+            if (_locationRep != value)
+            {
+                _locationRep = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasLocationRep));
+                OnPropertyChanged(nameof(DisplayTitle));
+            }
+        }
+    }
+
+    public bool HasLocationRep => !string.IsNullOrWhiteSpace(_locationRep);
+
+    public string DisplayTitle => HasLocationRep ? $"{Title} ({LocationRep})" : Title;
 
     private string _artist = string.Empty;
     public string Artist

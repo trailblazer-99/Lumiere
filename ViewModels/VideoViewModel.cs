@@ -187,6 +187,14 @@ public partial class VideoViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task RefreshAsync()
+    {
+        await SampleMediaLibrary.SynchronizeLibraryMediaAsync();
+        _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
+        ApplySortAndFilter();
+    }
+
+    [RelayCommand]
     public async Task AddFolderAsync()
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();
@@ -197,6 +205,9 @@ public partial class VideoViewModel : ObservableObject
         var folder = await picker.PickSingleFolderAsync();
         if (folder != null)
         {
+            AppServices.Settings.AddLibraryFolder(folder.Path);
+            SampleMediaLibrary.StartWatchingDirectory(folder.Path);
+
             var options = new Windows.Storage.Search.QueryOptions(Windows.Storage.Search.CommonFileQuery.OrderByName, new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv" });
             var query = folder.CreateFileQueryWithOptions(options);
             var files = await query.GetFilesAsync();

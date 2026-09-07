@@ -82,13 +82,23 @@ public static class AccessibilityHelper
                 return;
             }
 
-            var mode = AppServices.Settings.Current.CaptionsAlwaysOn
-                ? TimedMetadataTrackPresentationMode.PlatformPresented
-                : TimedMetadataTrackPresentationMode.Disabled;
+            var playback = AppServices.PlaybackViewModel?.Session;
+            int activeIndex = playback?.GetActiveSubtitleTrackIndex() ?? -1;
 
-            for (uint i = 0; i < item.TimedMetadataTracks.Count; i++)
+            if (activeIndex >= 0 && activeIndex < item.TimedMetadataTracks.Count)
             {
-                item.TimedMetadataTracks.SetPresentationMode(i, mode);
+                playback?.SetSubtitleTrack(activeIndex);
+            }
+            else if (AppServices.Settings.Current.CaptionsAlwaysOn && item.TimedMetadataTracks.Count > 0)
+            {
+                playback?.SetSubtitleTrack(0);
+            }
+            else
+            {
+                for (uint i = 0; i < item.TimedMetadataTracks.Count; i++)
+                {
+                    item.TimedMetadataTracks.SetPresentationMode(i, TimedMetadataTrackPresentationMode.Disabled);
+                }
             }
         }
         catch (Exception ex)

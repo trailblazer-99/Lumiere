@@ -590,8 +590,9 @@ namespace LumiereMediaPlayer.Pages
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.06f, 1.06f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.05f, 1.05f, 1.0f), compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
                     
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -613,17 +614,15 @@ namespace LumiereMediaPlayer.Pages
 
                     if (overlay != null)
                     {
-                        var anim = new DoubleAnimation
+                        var overlayVisual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(overlay);
+                        if (overlayVisual != null)
                         {
-                            To = 1.0,
-                            Duration = TimeSpan.FromMilliseconds(250),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var sb = new Storyboard();
-                        Storyboard.SetTarget(anim, overlay);
-                        Storyboard.SetTargetProperty(anim, "Opacity");
-                        sb.Children.Add(anim);
-                        sb.Begin();
+                            var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
+                            overlayAnim.InsertKeyFrame(1.0f, 1.0f, compositor.CreateCubicBezierEasingFunction(
+                                new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(100);
+                            overlayVisual.StartAnimation("Opacity", overlayAnim);
+                        }
                     }
 
                     if (Application.Current.Resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentBrush))
@@ -651,18 +650,18 @@ namespace LumiereMediaPlayer.Pages
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
                         opacityAnim.InsertKeyFrame(1.0f, 0.0f);
-                        opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
                         
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 6, 12));
-                        offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Offset", offsetAnim);
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(200);
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
                     
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -684,17 +683,14 @@ namespace LumiereMediaPlayer.Pages
 
                     if (overlay != null)
                     {
-                        var anim = new DoubleAnimation
+                        var overlayVisual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(overlay);
+                        if (overlayVisual != null)
                         {
-                            To = 0.0,
-                            Duration = TimeSpan.FromMilliseconds(200),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var sb = new Storyboard();
-                        Storyboard.SetTarget(anim, overlay);
-                        Storyboard.SetTargetProperty(anim, "Opacity");
-                        sb.Children.Add(anim);
-                        sb.Begin();
+                            var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
+                            overlayAnim.InsertKeyFrame(1.0f, 0.0f);
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(80);
+                            overlayVisual.StartAnimation("Opacity", overlayAnim);
+                        }
                     }
 
                     if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBrush))

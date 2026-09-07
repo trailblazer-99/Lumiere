@@ -78,13 +78,17 @@
                     VerticalAlignment="Top"
                     Opacity="0"
                     Background="#80000000"
-                    CornerRadius="6"
-                    Padding="2">
+                    CornerRadius="8"
+                    Padding="2"
+                    PointerPressed="OnSubControlPointerPressed"
+                    PointerReleased="OnSubControlPointerReleased">
                     <CheckBox
                         x:Name="CardCheckBox"
                         IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
                         Checked="OnCardCheckBoxChanged"
                         Unchecked="OnCardCheckBoxChanged"
+                        PointerPressed="OnSubControlPointerPressed"
+                        PointerReleased="OnSubControlPointerReleased"
                         MinWidth="20"
                         MinHeight="20"
                         Padding="0"
@@ -98,6 +102,8 @@
                 <Button
                     x:Name="MoreOptionsButton"
                     Click="OnMoreOptionsClick"
+                    PointerPressed="OnSubControlPointerPressed"
+                    PointerReleased="OnSubControlPointerReleased"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
                     Width="28"
@@ -121,12 +127,41 @@
         </Grid>
 
         <StackPanel Spacing="2">
-            <TextBlock
-                FontWeight="SemiBold"
-                FontSize="13"
-                MaxLines="1"
-                Text="{x:Bind Title, Mode=OneWay}"
-                TextTrimming="CharacterEllipsis" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    FontWeight="SemiBold"
+                    FontSize="13"
+                    MaxLines="1"
+                    Text="{x:Bind Title, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
+                <Border
+                    Grid.Column="1"
+                    Visibility="{x:Bind LocationRepVisibility, Mode=OneWay}"
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="4,1"
+                    Margin="4,0,0,0"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="{x:Bind EffectiveToolTip, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <FontIcon Glyph="&#xE8B7;" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock
+                            Text="{x:Bind EffectiveLocationRep, Mode=OneWay}"
+                            FontSize="10"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            VerticalAlignment="Center"
+                            MaxLines="1"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+            </Grid>
             <TextBlock
                 Style="{StaticResource SubtleCaptionTextStyle}"
                 MaxLines="1"

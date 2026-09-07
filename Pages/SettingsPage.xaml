@@ -423,6 +423,20 @@
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=TwoWay}"/>
                     </Grid>
                 </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE793;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Acrylic transport bar"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use translucent frosted acrylic material for the playback transport bar."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AcrylicTransportBar, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
             </StackPanel>
 
             <!-- 5. CONTROLS & INTERFACE -->
@@ -701,6 +715,37 @@
                     </Grid>
                 </Border>
 
+                <!-- App Lock with Windows Hello -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE8D7;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="App lock (Windows Hello / PIN)"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Require Windows Hello biometric recognition or Windows PIN to unlock Lumière."/>
+                            <TextBlock Text="{x:Bind ViewModel.WindowsHelloStatusText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource AccentFillColorDefaultBrush}" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.EnableAppLock, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Re-lock when minimized -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE72E;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Lock when minimized"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically lock Lumière and pause playback when minimized to protect your media."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AppLockWhenMinimized, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.EnableAppLock, Mode=OneWay}"/>
+                    </Grid>
+                </Border>
+
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
@@ -818,6 +863,34 @@
                 </Border>
 
                 <TextBlock Text="Hearing" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="4,12,0,4"/>
+
+                <!-- Subtitles Style Preset from Windows OS -->
+                <Border x:Name="SubtitlesStyleCard" Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xED1E;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Subtitles style"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Select Windows subtitle appearance style, or configure custom presets in Windows Settings."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <ComboBox x:Name="SubtitlesStyleComboBox"
+                                      MinWidth="160"
+                                      VerticalAlignment="Center"
+                                      SelectionChanged="OnSubtitlesStyleSelectionChanged" />
+                            <Button Click="OnOpenWindowsCaptionsSettingsClick"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Open Windows Accessibility Captions Settings">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE8A7;" FontSize="12"/>
+                                    <TextBlock Text="Windows Settings" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid ColumnSpacing="16">

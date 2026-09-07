@@ -9,4 +9,6 @@ public sealed class QueueEntry
     public string Title => Track.Title;
     public string Artist => Track.Artist;
     public string DurationText => Track.DurationText;
+    public string? LocationRep => Track.LocationRep;
+    public bool HasLocationRep => Track.HasLocationRep;
 }

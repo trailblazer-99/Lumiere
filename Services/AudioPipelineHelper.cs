@@ -13,24 +13,27 @@ public static class AudioPipelineHelper
     private static readonly Dictionary<string, string> _transcodedCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _cacheLock = new();
 
-    static AudioPipelineHelper()
+    public static void CleanupTempTranscodedFiles()
     {
-        try
+        Task.Run(() =>
         {
-            var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
-            if (Directory.Exists(tempFolder))
+            try
             {
-                foreach (var file in Directory.GetFiles(tempFolder, "transcoded_*"))
+                var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+                if (Directory.Exists(tempFolder))
                 {
-                    try
+                    foreach (var file in Directory.GetFiles(tempFolder, "transcoded_*"))
                     {
-                        File.Delete(file);
+                        try
+                        {
+                            File.Delete(file);
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
-        }
-        catch { }
+            catch { }
+        });
     }
 
     public static async Task<string?> GetPlayableFileAsync(string sourcePath)

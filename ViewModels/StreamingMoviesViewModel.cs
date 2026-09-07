@@ -90,14 +90,6 @@ namespace LumiereMediaPlayer.ViewModels
         }
 
         [RelayCommand]
-        public void QuickFilterTrending()
-        {
-            SelectedSortOrder = "Popularity";
-            SelectedRating = "All Ratings";
-            SelectedGenre = "All Genres";
-        }
-
-        [RelayCommand]
         public void QuickFilterFree()
         {
             SelectedAccessType = "Free";

@@ -199,8 +199,9 @@ namespace LumiereMediaPlayer.Pages
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.04f, 1.04f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.04f, 1.04f, 1.0f), compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
                     
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -208,7 +209,6 @@ namespace LumiereMediaPlayer.Pages
                     border.Translation = new System.Numerics.Vector3(0, 0, 16);
 
                     Border? overlay = null;
-                    Border? playIcon = null;
                     if (border.Child is Grid grid)
                     {
                         foreach (var child in grid.Children)
@@ -216,17 +216,6 @@ namespace LumiereMediaPlayer.Pages
                             if (child is Border b && b.Name == "HoverOverlay")
                             {
                                 overlay = b;
-                                if (b.Child is Grid innerGrid)
-                                {
-                                    foreach (var innerChild in innerGrid.Children)
-                                    {
-                                        if (innerChild is Border iconBorder && iconBorder.Name == "PlayButtonIcon")
-                                        {
-                                            playIcon = iconBorder;
-                                            break;
-                                        }
-                                    }
-                                }
                                 break;
                             }
                         }
@@ -234,41 +223,15 @@ namespace LumiereMediaPlayer.Pages
 
                     if (overlay != null)
                     {
-                        var anim = new DoubleAnimation
+                        var overlayVisual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(overlay);
+                        if (overlayVisual != null)
                         {
-                            To = 1.0,
-                            Duration = TimeSpan.FromMilliseconds(200),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var sb = new Storyboard();
-                        Storyboard.SetTarget(anim, overlay);
-                        Storyboard.SetTargetProperty(anim, "Opacity");
-                        sb.Children.Add(anim);
-                        sb.Begin();
-                    }
-
-                    if (playIcon != null && playIcon.RenderTransform is ScaleTransform scaleTransform)
-                    {
-                        var scaleXAnim = new DoubleAnimation
-                        {
-                            To = 1.0,
-                            Duration = TimeSpan.FromMilliseconds(300),
-                            EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut }
-                        };
-                        var scaleYAnim = new DoubleAnimation
-                        {
-                            To = 1.0,
-                            Duration = TimeSpan.FromMilliseconds(300),
-                            EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut }
-                        };
-                        var iconSb = new Storyboard();
-                        Storyboard.SetTarget(scaleXAnim, scaleTransform);
-                        Storyboard.SetTargetProperty(scaleXAnim, "ScaleX");
-                        Storyboard.SetTarget(scaleYAnim, scaleTransform);
-                        Storyboard.SetTargetProperty(scaleYAnim, "ScaleY");
-                        iconSb.Children.Add(scaleXAnim);
-                        iconSb.Children.Add(scaleYAnim);
-                        iconSb.Begin();
+                            var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
+                            overlayAnim.InsertKeyFrame(1.0f, 1.0f, compositor.CreateCubicBezierEasingFunction(
+                                new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(100);
+                            overlayVisual.StartAnimation("Opacity", overlayAnim);
+                        }
                     }
 
                     if (Application.Current.Resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentBrush))
@@ -296,18 +259,18 @@ namespace LumiereMediaPlayer.Pages
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
                         opacityAnim.InsertKeyFrame(1.0f, 0.0f);
-                        opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
                         
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 4, 8));
-                        offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Offset", offsetAnim);
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(200);
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
                     
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -315,7 +278,6 @@ namespace LumiereMediaPlayer.Pages
                     border.Translation = new System.Numerics.Vector3(0, 0, 8);
 
                     Border? overlay = null;
-                    Border? playIcon = null;
                     if (border.Child is Grid grid)
                     {
                         foreach (var child in grid.Children)
@@ -323,17 +285,6 @@ namespace LumiereMediaPlayer.Pages
                             if (child is Border b && b.Name == "HoverOverlay")
                             {
                                 overlay = b;
-                                if (b.Child is Grid innerGrid)
-                                {
-                                    foreach (var innerChild in innerGrid.Children)
-                                    {
-                                        if (innerChild is Border iconBorder && iconBorder.Name == "PlayButtonIcon")
-                                        {
-                                            playIcon = iconBorder;
-                                            break;
-                                        }
-                                    }
-                                }
                                 break;
                             }
                         }
@@ -341,41 +292,14 @@ namespace LumiereMediaPlayer.Pages
 
                     if (overlay != null)
                     {
-                        var anim = new DoubleAnimation
+                        var overlayVisual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(overlay);
+                        if (overlayVisual != null)
                         {
-                            To = 0.0,
-                            Duration = TimeSpan.FromMilliseconds(200),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var sb = new Storyboard();
-                        Storyboard.SetTarget(anim, overlay);
-                        Storyboard.SetTargetProperty(anim, "Opacity");
-                        sb.Children.Add(anim);
-                        sb.Begin();
-                    }
-
-                    if (playIcon != null && playIcon.RenderTransform is ScaleTransform scaleTransform)
-                    {
-                        var scaleXAnim = new DoubleAnimation
-                        {
-                            To = 0.6,
-                            Duration = TimeSpan.FromMilliseconds(200),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var scaleYAnim = new DoubleAnimation
-                        {
-                            To = 0.6,
-                            Duration = TimeSpan.FromMilliseconds(200),
-                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        var iconSb = new Storyboard();
-                        Storyboard.SetTarget(scaleXAnim, scaleTransform);
-                        Storyboard.SetTargetProperty(scaleXAnim, "ScaleX");
-                        Storyboard.SetTarget(scaleYAnim, scaleTransform);
-                        Storyboard.SetTargetProperty(scaleYAnim, "ScaleY");
-                        iconSb.Children.Add(scaleXAnim);
-                        iconSb.Children.Add(scaleYAnim);
-                        iconSb.Begin();
+                            var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
+                            overlayAnim.InsertKeyFrame(1.0f, 0.0f);
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(80);
+                            overlayVisual.StartAnimation("Opacity", overlayAnim);
+                        }
                     }
 
                     if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBrush))

@@ -14,6 +14,8 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media.Animation;
 
 namespace LumiereMediaPlayer;
@@ -24,8 +26,8 @@ public sealed partial class MainWindow : Window
     public PlaybackViewModel Playback => _playback;
     public TransportBar? TransportBarElement => TransportControls;
     private readonly DispatcherTimer _positionTimer;
-    private readonly QueuePanel _queuePanel;
-    private readonly Flyout _queueFlyout;
+    private QueuePanel? _queuePanel;
+    private Flyout? _queueFlyout;
     private bool _isNavigating;
     private VideoPage? _activeVideoPage;
     private AccentColorOption _lastAccentColor = AppServices.Settings.Current.AccentColor;
@@ -159,20 +161,11 @@ public sealed partial class MainWindow : Window
         _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _positionTimer.Tick += OnPositionTimerTick;
 
-        _queuePanel = new QueuePanel();
-
-        _queueFlyout = new Flyout
-        {
-            Content = _queuePanel,
-            Placement = FlyoutPlacementMode.TopEdgeAlignedRight
-        };
-
         ConfigureWindow();
         WireTransportBar();
         NavigateToHome();
-        SyncTransportBar();
-        UpdateTransportBarVisibility();
-        UpdateTransportBarTheme();
+
+        // Settings change listener — lightweight, keep in constructor
         AppServices.Settings.SettingsChanged += (s, e) => {
             DispatcherQueue.TryEnqueue(() => {
                 var currentTheme = AppServices.Settings.Current.Theme;
@@ -202,19 +195,42 @@ public sealed partial class MainWindow : Window
         try { UpdateLayoutForPip(AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay); } catch { }
         try { ApplyBackdrop(AppServices.Settings.Current.BackdropType); } catch { }
 
-        // Initialise display manager first — HdrPipelineService reads capability from it.
+        // Defer non-critical work to after the first frame renders
+        ((FrameworkElement)Content).Loaded += OnFirstFrameLoaded;
+    }
+
+    private void OnFirstFrameLoaded(object sender, RoutedEventArgs e)
+    {
+        // Unhook immediately — this is a one-shot handler
+        ((FrameworkElement)Content).Loaded -= OnFirstFrameLoaded;
+
+        // Queue panel (only needed when user clicks Queue button)
+        _queuePanel = new QueuePanel();
+        _queueFlyout = new Flyout
+        {
+            Content = _queuePanel,
+            Placement = FlyoutPlacementMode.TopEdgeAlignedRight
+        };
+
+        // Transport bar sync
+        SyncTransportBar();
+        UpdateTransportBarVisibility();
+        UpdateTransportBarTheme();
+
+        // Display & HDR pipeline
         try { AppServices.DisplayManager.InitializeForWindow(this); } catch { }
         try { AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged; } catch { }
-
-        // Initialise HDR pipeline after DisplayManager so the first RefreshDisplayCapability()
-        // call inside Initialize() sees valid display state.
         try { AppServices.HdrPipeline.Initialize(this); } catch { }
+
+        // Visual animations
+        try { if (MiniPlayerVisual != null) MiniPlayerVisual.Source = new Controls.LottieLogo1(); } catch { }
 
         if (PlaybackInfoBadge != null)
         {
             PlaybackInfoBadge.Visibility = _playback.IsPlaying ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        // Autoplay on launch
         try
         {
             if (AppServices.Settings.Current.AutoplayOnLaunch)
@@ -304,7 +320,18 @@ public sealed partial class MainWindow : Window
         TransportControls.VolumeChanged += (_, volume) => _playback.SetVolume(volume);
         TransportControls.MuteToggled += (_, _) => ToggleMute();
         TransportControls.QueueRequested += (_, _) =>
+        {
+            if (_queueFlyout == null)
+            {
+                _queuePanel = new QueuePanel();
+                _queueFlyout = new Flyout
+                {
+                    Content = _queuePanel,
+                    Placement = FlyoutPlacementMode.TopEdgeAlignedRight
+                };
+            }
             _queueFlyout.ShowAt(TransportControls.QueueButtonControl);
+        };
         TransportControls.PipRequested += (_, _) => TogglePipMode();
         TransportControls.FullscreenRequested += (_, _) => OnFullscreenRequested();
         TransportControls.BarGridTapped += (_, _) =>
@@ -389,21 +416,40 @@ public sealed partial class MainWindow : Window
 
     private DispatcherTimer? _saveBoundsTimer;
 
+    private bool _isLocked = false;
+    private bool _isMinimizedForLock = false;
+
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if (args.DidVisibilityChange && !sender.IsVisible)
+        if (args.DidVisibilityChange)
         {
-            _ = Task.Run(() =>
+            if (!sender.IsVisible)
             {
-                try
+                _ = Task.Run(() =>
                 {
-                    Helpers.ImageBindHelper.ClearCache();
-                    GC.Collect(2, GCCollectionMode.Forced, true, true);
-                    GC.WaitForPendingFinalizers();
-                    EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+                    try
+                    {
+                        Helpers.ImageBindHelper.ClearCache();
+                        GC.Collect(2, GCCollectionMode.Forced, true, true);
+                        GC.WaitForPendingFinalizers();
+                        EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+                    }
+                    catch { }
+                });
+
+                if (AppServices.Settings.Current.EnableAppLock && AppServices.Settings.Current.AppLockWhenMinimized)
+                {
+                    _isMinimizedForLock = true;
                 }
-                catch { }
-            });
+            }
+            else if (_isMinimizedForLock)
+            {
+                _isMinimizedForLock = false;
+                if (AppServices.Settings.Current.EnableAppLock && !_isLocked)
+                {
+                    LockApp(autoPrompt: true);
+                }
+            }
         }
 
         if (args.DidSizeChange || args.DidPositionChange)
@@ -745,6 +791,35 @@ public sealed partial class MainWindow : Window
                     NavigateTo(typeof(StreamingTwitchPage));
                     break;
             }
+        }
+    }
+
+    public void NavigateToSettingsPage(string? target = null)
+    {
+        try
+        {
+            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+            {
+                SetFullScreenMode(false);
+            }
+
+            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+            {
+                _expectedPresenterKind = AppWindowPresenterKind.Overlapped;
+                AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+            }
+
+            if (_playback.IsVideoPlayerActive)
+            {
+                _playback.IsVideoPlayerActive = false;
+            }
+
+            SafeSetSelectedItem(RootNavigationView.SettingsItem);
+            NavigateTo(typeof(SettingsPage), target);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainWindow] NavigateToSettingsPage error: {ex.Message}");
         }
     }
 
@@ -1507,6 +1582,130 @@ public sealed partial class MainWindow : Window
         {
             _ = Services.SampleMediaLibrary.ScanAllLibraryFoldersAsync();
         }
+
+        if (AppServices.Settings.Current.EnableAppLock)
+        {
+            LockApp(autoPrompt: true);
+        }
+    }
+
+    public void LockApp(bool autoPrompt = true)
+    {
+        _isLocked = true;
+        if (_playback.IsPlaying)
+        {
+            _playback.Pause();
+        }
+
+        if (AppLockOverlay != null)
+        {
+            AppLockOverlay.Opacity = 1.0;
+            AppLockOverlay.Visibility = Visibility.Visible;
+            if (AppLockStatusMessage != null)
+            {
+                AppLockStatusMessage.Visibility = Visibility.Collapsed;
+            }
+            if (AppLockUnlockButton != null)
+            {
+                AppLockUnlockButton.IsEnabled = true;
+            }
+        }
+
+        if (autoPrompt)
+        {
+            _ = RequestAppUnlockAsync();
+        }
+    }
+
+    private async Task RequestAppUnlockAsync()
+    {
+        if (AppLockUnlockButton != null) AppLockUnlockButton.IsEnabled = false;
+        if (AppLockStatusMessage != null)
+        {
+            AppLockStatusMessage.Text = "Waiting for Windows Hello verification...";
+            AppLockStatusMessage.Visibility = Visibility.Visible;
+        }
+
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var result = await WindowsHelloHelper.RequestVerificationAsync(hwnd, "Unlock Lumière Media Player");
+
+            if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+            {
+                _isLocked = false;
+                UnlockAppWithAnimation();
+            }
+            else
+            {
+                if (AppLockStatusMessage != null)
+                {
+                    AppLockStatusMessage.Text = result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Canceled
+                        ? "Authentication canceled. Click 'Unlock with Windows Hello' to try again."
+                        : "Authentication not recognized. Click 'Unlock with Windows Hello' to try again.";
+                    AppLockStatusMessage.Visibility = Visibility.Visible;
+                }
+                if (AppLockUnlockButton != null) AppLockUnlockButton.IsEnabled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (AppLockStatusMessage != null)
+            {
+                AppLockStatusMessage.Text = $"Authentication error: {ex.Message}";
+                AppLockStatusMessage.Visibility = Visibility.Visible;
+            }
+            if (AppLockUnlockButton != null) AppLockUnlockButton.IsEnabled = true;
+        }
+    }
+
+    private void UnlockAppWithAnimation()
+    {
+        if (AppLockOverlay == null) return;
+
+        try
+        {
+            if (AppServices.Settings.Current.ReduceMotion)
+            {
+                AppLockOverlay.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var visual = ElementCompositionPreview.GetElementVisual(AppLockOverlay);
+            if (visual != null && visual.Compositor is { } compositor)
+            {
+                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
+                fadeAnim.InsertKeyFrame(1.0f, 0.0f, compositor.CreateCubicBezierEasingFunction(new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
+                fadeAnim.Duration = TimeSpan.FromMilliseconds(250);
+
+                var scopedBatch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+                scopedBatch.Completed += (s, e) =>
+                {
+                    AppLockOverlay.Visibility = Visibility.Collapsed;
+                    AppLockOverlay.Opacity = 1.0;
+                };
+                visual.StartAnimation("Opacity", fadeAnim);
+                scopedBatch.End();
+            }
+            else
+            {
+                AppLockOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch
+        {
+            AppLockOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnAppLockUnlockClicked(object sender, RoutedEventArgs e)
+    {
+        _ = RequestAppUnlockAsync();
+    }
+
+    private void OnAppLockExitClicked(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 
     private void RestoreWindowBounds()

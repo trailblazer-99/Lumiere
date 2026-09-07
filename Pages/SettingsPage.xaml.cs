@@ -22,6 +22,103 @@ public sealed partial class SettingsPage : Page
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
     }
 
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+
+        PopulateSubtitlesStyles();
+
+        if (e.Parameter is string target)
+        {
+            if (target.Equals("Subtitles", StringComparison.OrdinalIgnoreCase) ||
+                target.Equals("Captions", StringComparison.OrdinalIgnoreCase) ||
+                target.Equals("Subtitles styles", StringComparison.OrdinalIgnoreCase))
+            {
+                DispatcherQueue?.TryEnqueue(async () =>
+                {
+                    await Task.Delay(200);
+                    if (SubtitlesStyleCard != null)
+                    {
+                        ScrollAndHighlightCard(SubtitlesStyleCard);
+                    }
+                });
+            }
+        }
+    }
+
+    private bool _isPopulatingSubtitlesStyles;
+
+    private void PopulateSubtitlesStyles()
+    {
+        try
+        {
+            if (SubtitlesStyleComboBox == null) return;
+            _isPopulatingSubtitlesStyles = true;
+            var themes = WindowsCaptionHelper.GetWindowsCaptionThemes();
+            SubtitlesStyleComboBox.DisplayMemberPath = "Name";
+            SubtitlesStyleComboBox.ItemsSource = themes;
+            var selected = themes.FirstOrDefault(t => t.IsSelected) ?? themes.FirstOrDefault();
+            SubtitlesStyleComboBox.SelectedItem = selected;
+            _isPopulatingSubtitlesStyles = false;
+        }
+        catch
+        {
+            _isPopulatingSubtitlesStyles = false;
+        }
+    }
+
+    private void OnSubtitlesStyleSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isPopulatingSubtitlesStyles) return;
+        if (SubtitlesStyleComboBox.SelectedItem is CaptionThemeInfo theme)
+        {
+            WindowsCaptionHelper.SetWindowsCaptionTheme(theme.Id);
+        }
+    }
+
+    private void OnOpenWindowsCaptionsSettingsClick(object sender, RoutedEventArgs e)
+    {
+        WindowsCaptionHelper.OpenWindowsCaptionSettings();
+    }
+
+    public async void ScrollAndHighlightCard(FrameworkElement target)
+    {
+        try
+        {
+            if (PageScrollViewer == null || target == null) return;
+
+            var transform = target.TransformToVisual(PageScrollViewer);
+            var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+            double currentOffset = PageScrollViewer.VerticalOffset;
+            double targetOffset = Math.Max(0, currentOffset + point.Y - 90);
+            
+            PageScrollViewer.ChangeView(null, targetOffset, null, false);
+
+            if (target is Border borderCard)
+            {
+                var originalBorder = borderCard.BorderBrush;
+                var originalThickness = borderCard.BorderThickness;
+                var originalBackground = borderCard.Background;
+
+                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush 
+                                  ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0));
+
+                var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 140, 0));
+
+                borderCard.BorderBrush = accentBrush;
+                borderCard.BorderThickness = new Thickness(2);
+                borderCard.Background = glowBackground;
+
+                await Task.Delay(2000);
+
+                borderCard.BorderBrush = originalBorder;
+                borderCard.BorderThickness = originalThickness;
+                borderCard.Background = originalBackground;
+            }
+        }
+        catch { }
+    }
+
     private async void OnAddFolderClick(object sender, RoutedEventArgs e)
     {
         try
@@ -143,6 +240,7 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Backdrop type", Description = "Change window material (Mica, Mica Alt, Acrylic, Solid)", Section = "Appearance & Visuals", Keywords = "backdrop, mica, mica alt, acrylic, solid, blur, transparency, glass, material, aero, window background", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Accent color", Description = "Choose primary highlight color (Orange, Purple, Blue, Teal, Red, Pink)", Section = "Appearance & Visuals", Keywords = "accent, color, tint, orange, purple, blue, teal, red, pink, custom color, system default", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show transport bar", Description = "Toggle playback controls bar visibility across the app", Section = "Appearance & Visuals", Keywords = "transport bar, show transport bar, hide transport bar, player bar, bottom bar, playback bar, mini bar, toggle transport bar, transport", TargetElement = AppearanceSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Acrylic transport bar", Description = "Toggle frosted acrylic material for playback transport controls bar", Section = "Appearance & Visuals", Keywords = "acrylic, transport bar, frosted glass, blur, transparency, translucent, player bar, material", TargetElement = AppearanceSection });
 
         // 5. Controls & Interface
         _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Controls & Interface", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = ControlsSection });
@@ -165,6 +263,8 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Dynamic Volume Leveler (Night Mode)", Description = "Level loud explosions and boost quiet dialogue for night viewing", Section = "AI Features", Keywords = "night mode, volume leveler, dynamic range, quiet dialogue, loud explosions, late night, compression, drc", TargetElement = AiSection });
 
         // 8. Privacy & History
+        _allSearchItems.Add(new SettingSearchItem { Title = "App lock (Windows Hello / PIN)", Description = "Require Windows Hello biometric recognition or Windows PIN to unlock Lumière", Section = "Privacy & History", Keywords = "app lock, lock, windows hello, pin, biometric, face recognition, fingerprint, password, security, lock app, privacy, authentication, protect, secure", TargetElement = PrivacySection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Lock when minimized", Description = "Automatically lock Lumière and pause playback when minimized to protect your media", Section = "Privacy & History", Keywords = "minimize lock, lock on minimize, background lock, auto lock, pause on lock, privacy", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "API Data Attribution", Description = "Metadata and streaming availability provided by TMDB & Watchmode", Section = "Privacy & History", Keywords = "tmdb, watchmode, api, attribution, license, credits, terms", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Remember playback position per track", Description = "Store and resume last position for each individual track", Section = "Privacy & History", Keywords = "position, per track, remember time, bookmark, track history, resume time", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Clear data", Description = "Clear search history or recent files", Section = "Privacy & History", Keywords = "clear, delete, reset history, wipe cache, clear recent, remove history, purge data", TargetElement = PrivacySection });
@@ -175,6 +275,7 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Color blind mode", Description = "Color filters for Protanopia, Deuteranopia, and Tritanopia", Section = "Accessibility", Keywords = "color blind, protanopia, deuteranopia, tritanopia, daltonism, color vision deficiency, palette", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Screen reader optimization", Description = "Optimize UI automation peer labels for Narrator & NVDA", Section = "Accessibility", Keywords = "screen reader, narrator, jaws, nvda, accessibility, aria, automation, speech, voice", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Focus indicator thickness", Description = "Adjust thickness of focus rectangle borders around controls", Section = "Accessibility", Keywords = "focus indicator, focus border, keyboard focus, outline, thickness, 1px, 2px, 3px, 4px, 5px, border", TargetElement = AccessibilitySection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Subtitles style", Description = "Select Windows subtitle appearance style preset or configure in Windows Settings", Section = "Accessibility", Keywords = "subtitles, subtitle styles, captions, closed captions, white on black, yellow on blue, large text, small caps, videos, cc, subtitle settings", TargetElement = SubtitlesStyleCard });
         _allSearchItems.Add(new SettingSearchItem { Title = "Captions always on", Description = "Automatically enable captions for all media playback", Section = "Accessibility", Keywords = "captions, closed captions, cc, always on, subtitles, forced captions, deaf, hard of hearing", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Visual notifications for sound", Description = "Flash visual indicators when audio cues play", Section = "Accessibility", Keywords = "visual notifications, sound cues, flash, screen flash, audio indicator, deaf, alert flash", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Keyboard navigation highlight", Description = "Show prominent high-visibility focus borders during keyboard navigation", Section = "Accessibility", Keywords = "keyboard navigation, highlight, orange focus, tab navigation, arrows, hotkey focus", TargetElement = AccessibilitySection });

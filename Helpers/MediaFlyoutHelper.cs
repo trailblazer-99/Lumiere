@@ -137,12 +137,13 @@ public static class MediaFlyoutHelper
         // 8. Delete / Remove
         var removeItem = new MenuFlyoutItem
         {
-            Text = "Remove from library",
+            Text = "Remove",
             Icon = new FontIcon { Glyph = "\uE74D" }
         };
         removeItem.Click += async (s, e) =>
         {
             await SampleMediaLibrary.RemoveTrackAsync(item);
+            await AppServices.History.RemoveFromHistoryAsync(item);
             onRemoved?.Invoke();
         };
         flyout.Items.Add(removeItem);

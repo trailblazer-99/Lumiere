@@ -113,14 +113,6 @@
                                 </StackPanel>
                             </Button>
 
-                            <!-- Trending Filter -->
-                            <Button Command="{x:Bind ViewModel.QuickFilterTrendingCommand}" ToolTipService.ToolTip="Show Trending TV Shows" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="13" Glyph="&#xE945;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                                    <TextBlock Text="Trending" FontSize="13"/>
-                                </StackPanel>
-                            </Button>
-
                             <!-- Free Shows Filter -->
                             <Button Command="{x:Bind ViewModel.QuickFilterFreeCommand}" ToolTipService.ToolTip="Show Free to Stream TV Shows" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -190,10 +182,10 @@
                             </GridView.ItemTemplate>
                         </GridView>
                         
-                        <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <ProgressRing Grid.Column="1" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
                         <!-- Empty State Container -->
-                        <StackPanel x:Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                        <StackPanel Grid.Column="1" x:Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
                                     Visibility="{x:Bind GetDiscoverEmptyState(ViewModel.IsLoading, ViewModel.HasError), Mode=OneWay}">
                             <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
                                 <FontIcon Glyph="&#xE7F4;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>

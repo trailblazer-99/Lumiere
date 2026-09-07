@@ -71,11 +71,19 @@ public sealed partial class TransportBar : UserControl
     public TransportBar()
     {
         InitializeComponent();
+        try { if (Player != null) Player.Source = new LottieLogo1(); } catch { }
         ActualThemeChanged += (_, _) => UpdateAcrylicBackground();
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
         SyncVolumeUi();
-        Loaded += (_, _) => SyncVolumeUi();
+        Loaded += (_, _) =>
+        {
+            SyncVolumeUi();
+            if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+            {
+                HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            }
+        };
         
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
         _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(100);
@@ -86,6 +94,9 @@ public sealed partial class TransportBar : UserControl
         };
         
         // WinUI 3 Slider consumes pointer events, so we must register with handledEventsToo = true
+        ProgressSlider.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler(OnProgressSliderPointerEntered), true);
+        ProgressSlider.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnProgressSliderPointerMoved), true);
+        ProgressSlider.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(OnProgressSliderPointerExited), true);
         ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnProgressPointerCapture), true);
         ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(OnProgressPointerReleased), true);
         ProgressSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(OnProgressPointerReleased), true);
@@ -197,8 +208,9 @@ public sealed partial class TransportBar : UserControl
     {
         if (CurrentTrack is null)
         {
-            TrackTitleText.Text = "Nothing playing";
-            TrackArtistText.Text = "Select a track to begin";
+            TrackTitleText.Text = "No track selected";
+            if (TrackLocationBadge != null) TrackLocationBadge.Visibility = Visibility.Collapsed;
+            TrackArtistText.Text = "Choose something to play";
             ElapsedTimeText.Text = "0:00";
             TotalTimeText.Text = "0:00";
             _isProgrammaticChange = true;
@@ -211,8 +223,10 @@ public sealed partial class TransportBar : UserControl
             {
                 ArtImage.Source = null;
                 ArtImage.Visibility = Visibility.Collapsed;
-                if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Visible;
             }
+            if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Visible;
+            if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
+            if (TrackArtistText != null) TrackArtistText.Visibility = Visibility.Visible;
 
             // Disable playback controls when nothing is playing
             if (ShuffleButton != null) ShuffleButton.IsEnabled = false;
@@ -235,17 +249,33 @@ public sealed partial class TransportBar : UserControl
                 AudioButton.IsEnabled = false;
                 AudioButton.Visibility = Visibility.Collapsed;
             }
+            UpdateAcrylicBackground();
             return;
         }
 
         bool isVideo = CurrentTrack.IsVideo;
 
         TrackTitleText.Text = CurrentTrack.Title;
+        if (TrackLocationBadge != null && TrackLocationText != null)
+        {
+            if (CurrentTrack.HasLocationRep)
+            {
+                TrackLocationText.Text = CurrentTrack.LocationRep;
+                TrackLocationBadge.Visibility = Visibility.Visible;
+                ToolTipService.SetToolTip(TrackLocationBadge, CurrentTrack.SourcePath);
+            }
+            else
+            {
+                TrackLocationBadge.Visibility = Visibility.Collapsed;
+            }
+        }
         TrackArtistText.Text = CurrentTrack.Artist;
         TotalTimeText.Text = CurrentTrack.DurationText;
         ProgressSlider.Maximum = CurrentTrack.Duration.TotalSeconds > 0 ? CurrentTrack.Duration.TotalSeconds : 100;
         ProgressSlider.IsEnabled = CurrentTrack.Duration.TotalSeconds > 0;
 
+        // Preserve thumbnail art and populate poster image across both fullscreen and windowed modes
+        if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
         if (ArtImage != null)
         {
             var imgSource = Helpers.ImageBindHelper.SafeImageFromUrl(CurrentTrack.PosterUrl);
@@ -255,6 +285,30 @@ public sealed partial class TransportBar : UserControl
             {
                 FallbackIcon.Visibility = imgSource != null ? Visibility.Collapsed : Visibility.Visible;
             }
+        }
+
+        if (_isFullscreenPresentation)
+        {
+            if (TrackArtistText != null)
+            {
+                TrackArtistText.Visibility = string.IsNullOrWhiteSpace(CurrentTrack.Artist)
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
+                TrackArtistText.Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(204, 255, 255, 255));
+            }
+            if (TrackTitleText != null)
+            {
+                TrackTitleText.VerticalAlignment = string.IsNullOrWhiteSpace(CurrentTrack.Artist)
+                    ? VerticalAlignment.Center
+                    : VerticalAlignment.Stretch;
+                TrackTitleText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            }
+        }
+        else
+        {
+            // Windowed / normal mode: show album art thumbnail and artist
+            if (TrackArtistText != null) TrackArtistText.Visibility = Visibility.Visible;
+            if (TrackTitleText != null) TrackTitleText.VerticalAlignment = VerticalAlignment.Stretch;
         }
 
         // Enable common playback buttons
@@ -296,6 +350,8 @@ public sealed partial class TransportBar : UserControl
             }
             if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
         }
+
+        UpdateAcrylicBackground();
     }
 
     private void ObserveCurrentTrack(MediaItem? oldTrack, MediaItem? newTrack)
@@ -362,16 +418,39 @@ public sealed partial class TransportBar : UserControl
 
     private void OnProgressSliderPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        // Ignore hovering, seek only happens on drag
+        try
+        {
+            var slider = ProgressSlider;
+            if (slider == null || slider.ActualWidth <= 0 || !slider.IsEnabled) return;
+            if (CurrentTrack is null) return;
+
+            if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+            {
+                HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            }
+
+            if (!_isSeeking)
+            {
+                var pt = e.GetCurrentPoint(slider);
+                double trackTravel = Math.Max(1.0, slider.ActualWidth - 20.0);
+                double percent = Math.Clamp((pt.Position.X - 10.0) / trackTravel, 0.0, 1.0);
+                double totalSeconds = slider.Maximum > 0 ? slider.Maximum : 100.0;
+                UpdateSeekPreview(totalSeconds * percent, isDragging: false, pointerX: pt.Position.X);
+            }
+        }
+        catch { }
     }
 
     private void OnProgressSliderPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (HoverPreviewPopup != null)
+        if (!_isSeeking && HoverPreviewPopup != null)
         {
             HoverPreviewPopup.IsOpen = false;
+            _exactThumbnailCts?.Cancel();
+            _activeHoverSeconds = -1;
+            if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
+            if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
         }
-        _exactThumbnailCts?.Cancel();
     }
     
     private void OnProgressPointerCapture(object sender, PointerRoutedEventArgs e)
@@ -382,6 +461,11 @@ public sealed partial class TransportBar : UserControl
             return;
         }
         _isSeeking = true;
+        if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+        {
+            HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+        }
+        UpdateSeekPreview(ProgressSlider.Value, isDragging: true);
     }
     
     private void OnProgressPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -391,6 +475,14 @@ public sealed partial class TransportBar : UserControl
         _scrubThrottleTimer?.Stop();
         ScrubbingEnded?.Invoke(this, ProgressSlider.Value);
         PositionChanged?.Invoke(this, ProgressSlider.Value);
+        if (HoverPreviewPopup != null)
+        {
+            HoverPreviewPopup.IsOpen = false;
+        }
+        _exactThumbnailCts?.Cancel();
+        _activeHoverSeconds = -1;
+        if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
+        if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
     }
 
     private void OnProgressSliderValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -405,6 +497,7 @@ public sealed partial class TransportBar : UserControl
             {
                 _scrubThrottleTimer.Start();
             }
+            UpdateSeekPreview(e.NewValue, isDragging: true);
         }
         else
         {
@@ -445,15 +538,102 @@ public sealed partial class TransportBar : UserControl
     {
         if (BarGrid != null)
         {
-            BarGrid.BorderThickness = thickness;
+            if (_isFullscreenPresentation)
+            {
+                BarGrid.BorderThickness = new Thickness(0);
+                BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+            else
+            {
+                BarGrid.BorderThickness = thickness;
+            }
         }
     }
 
     public void SetFullscreenPresentation(bool isFullscreen)
     {
         _isFullscreenPresentation = isFullscreen;
+
+        if (isFullscreen)
+        {
+            // Increase height slightly in fullscreen for cinematic presence and thumbnail art breathing room
+            this.Height = 132;
+
+            // Fullscreen presentation: preserve thumbnail art and adjust typography
+            if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
+            if (TrackArtistText != null)
+            {
+                TrackArtistText.Visibility = string.IsNullOrWhiteSpace(CurrentTrack?.Artist)
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
+                TrackArtistText.Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(204, 255, 255, 255));
+            }
+            if (TrackTitleText != null)
+            {
+                TrackTitleText.VerticalAlignment = string.IsNullOrWhiteSpace(CurrentTrack?.Artist)
+                    ? VerticalAlignment.Center
+                    : VerticalAlignment.Stretch;
+                TrackTitleText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            }
+
+            if (ReplayButton != null) ReplayButton.Visibility = Visibility.Collapsed;
+            if (StopButton != null) StopButton.Visibility = Visibility.Collapsed;
+            if (Player != null) Player.Visibility = Visibility.Collapsed;
+
+            if (ProgressRowGrid != null)
+            {
+                ProgressRowGrid.Margin = new Thickness(24, 10, 24, 4);
+                ProgressRowGrid.ColumnSpacing = 14;
+            }
+            if (ControlsRowGrid != null)
+            {
+                ControlsRowGrid.Padding = new Thickness(24, 6, 24, 14);
+            }
+            if (ProgressSlider != null)
+            {
+                // Seek color matches accent color (never hardcoded orange)
+                ProgressSlider.ClearValue(Slider.ForegroundProperty);
+            }
+        }
+        else
+        {
+            // Windowed / normal mode: revert back to exact previous appearance and height
+            this.ClearValue(FrameworkElement.HeightProperty);
+
+            if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
+            if (TrackArtistText != null)
+            {
+                TrackArtistText.Visibility = Visibility.Visible;
+                TrackArtistText.ClearValue(TextBlock.ForegroundProperty);
+            }
+            if (TrackTitleText != null)
+            {
+                TrackTitleText.VerticalAlignment = VerticalAlignment.Stretch;
+                TrackTitleText.ClearValue(TextBlock.ForegroundProperty);
+            }
+
+            if (ReplayButton != null) ReplayButton.Visibility = Visibility.Visible;
+            if (StopButton != null) StopButton.Visibility = Visibility.Visible;
+            if (Player != null) Player.Visibility = Visibility.Visible;
+
+            if (ProgressRowGrid != null)
+            {
+                ProgressRowGrid.Margin = new Thickness(16, 6, 16, 0);
+                ProgressRowGrid.ColumnSpacing = 12;
+            }
+            if (ControlsRowGrid != null)
+            {
+                ControlsRowGrid.Padding = new Thickness(16, 4, 16, 8);
+            }
+            if (ProgressSlider != null)
+            {
+                ProgressSlider.ClearValue(Slider.ForegroundProperty);
+            }
+        }
+
         UpdateAcrylicBackground();
         UpdateFullscreenFontColors(isFullscreen);
+        UpdateTrackInfo();
     }
 
     public void RefreshTheme()
@@ -660,15 +840,48 @@ public sealed partial class TransportBar : UserControl
 
         if (_isFullscreenPresentation)
         {
-            // Fullscreen video presentation overlay mode: dark frosted translucent acrylic
+            // Fullscreen video presentation overlay mode: smooth vertical gradient scrim float over video
+            BarGrid.Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
+                }
+            };
+            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            BarGrid.BorderThickness = new Thickness(0);
+        }
+        else if (AppServices.Settings.Current.AcrylicTransportBar)
+        {
+            // Normal Windowed mode: Frosted Acrylic Glass material
+            bool isLight = ActualTheme == ElementTheme.Light;
             BarGrid.Background = new AcrylicBrush
             {
-                TintColor = Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 24),
-                TintOpacity = 0.72,
-                TintLuminosityOpacity = 0.78,
-                FallbackColor = Microsoft.UI.ColorHelper.FromArgb(230, 24, 24, 24)
+                TintColor = isLight
+                    ? Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 248)
+                    : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 26),
+                TintOpacity = isLight ? 0.78 : 0.65,
+                TintLuminosityOpacity = isLight ? 0.85 : 0.72,
+                FallbackColor = isLight
+                    ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 242)
+                    : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 26)
             };
-            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(32, 255, 255, 255));
+
+            if (Application.Current.Resources.TryGetValue("DividerStrokeColorDefaultBrush", out var dividerBrush) && dividerBrush is Brush borderB)
+            {
+                BarGrid.BorderBrush = borderB;
+            }
+            else
+            {
+                BarGrid.BorderBrush = new SolidColorBrush(isLight
+                    ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
+                    : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255));
+            }
             BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
         }
         else
@@ -1174,32 +1387,24 @@ public sealed partial class TransportBar : UserControl
     {
         SubtitlesMenuFlyout.Items.Clear();
         
-        var offItem = new ToggleMenuFlyoutItem { Text = "Off", IsChecked = true };
+        var playback = AppServices.PlaybackViewModel.Session;
+        int activeIndex = playback.GetActiveSubtitleTrackIndex();
+
+        var offItem = new RadioMenuFlyoutItem
+        {
+            Text = "Off",
+            GroupName = "SubtitleLanguageGroup",
+            IsChecked = activeIndex < 0
+        };
+        offItem.Click += (s, args) =>
+        {
+            playback.SetSubtitleTrack(-1);
+        };
         SubtitlesMenuFlyout.Items.Add(offItem);
         
-        var playback = AppServices.PlaybackViewModel.Session;
         if (playback.MediaPlayer.Source is MediaPlaybackItem playbackItem)
         {
             var tracks = playbackItem.TimedMetadataTracks;
-            int selectedIndex = -1;
-            
-            for (int i = 0; i < tracks.Count; i++)
-            {
-                if (playbackItem.TimedMetadataTracks.GetPresentationMode((uint)i) == TimedMetadataTrackPresentationMode.PlatformPresented)
-                {
-                    selectedIndex = i;
-                    offItem.IsChecked = false;
-                    break;
-                }
-            }
-
-            offItem.Click += (s, args) =>
-            {
-                for (uint i = 0; i < tracks.Count; i++)
-                {
-                    playbackItem.TimedMetadataTracks.SetPresentationMode(i, TimedMetadataTrackPresentationMode.Disabled);
-                }
-            };
 
             for (int i = 0; i < tracks.Count; i++)
             {
@@ -1207,19 +1412,16 @@ public sealed partial class TransportBar : UserControl
                 var track = tracks[i];
                 var name = MediaTrackFormatHelper.FormatSubtitleTrack(track, i);
                 
-                var trackItem = new ToggleMenuFlyoutItem
+                var trackItem = new RadioMenuFlyoutItem
                 {
                     Text = name,
-                    IsChecked = i == selectedIndex
+                    GroupName = "SubtitleLanguageGroup",
+                    IsChecked = (i == activeIndex)
                 };
                 
                 trackItem.Click += (s, args) =>
                 {
-                    for (uint j = 0; j < tracks.Count; j++)
-                    {
-                        playbackItem.TimedMetadataTracks.SetPresentationMode(j, TimedMetadataTrackPresentationMode.Disabled);
-                    }
-                    playbackItem.TimedMetadataTracks.SetPresentationMode((uint)index, TimedMetadataTrackPresentationMode.PlatformPresented);
+                    playback.SetSubtitleTrack(index);
                 };
                 
                 SubtitlesMenuFlyout.Items.Add(trackItem);
@@ -1236,10 +1438,9 @@ public sealed partial class TransportBar : UserControl
 
                 foreach (var extSub in externalSubs)
                 {
-                    var extItem = new ToggleMenuFlyoutItem
+                    var extItem = new MenuFlyoutItem
                     {
-                        Text = extSub.DisplayName,
-                        IsChecked = false
+                        Text = extSub.DisplayName
                     };
                     extItem.Click += async (s, args) =>
                     {
@@ -1248,12 +1449,122 @@ public sealed partial class TransportBar : UserControl
                             var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(extSub.FilePath);
                             var timedTextSource = Windows.Media.Core.TimedTextSource.CreateFromStream(await storageFile.OpenReadAsync());
                             playbackItem.Source.ExternalTimedTextSources.Add(timedTextSource);
+                            await Task.Delay(200);
+                            if (playbackItem.TimedMetadataTracks.Count > 0)
+                            {
+                                playback.SetSubtitleTrack(playbackItem.TimedMetadataTracks.Count - 1);
+                            }
                         }
                         catch { }
                     };
                     SubtitlesMenuFlyout.Items.Add(extItem);
                 }
             }
+        }
+
+        // Always provide "Choose subtitle file" and "Subtitles styles"
+        SubtitlesMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+        var chooseFileItem = new MenuFlyoutItem
+        {
+            Text = "Choose subtitle file"
+        };
+        chooseFileItem.Click += async (s, args) =>
+        {
+            await PickAndLoadSubtitleFileAsync();
+        };
+        SubtitlesMenuFlyout.Items.Add(chooseFileItem);
+
+        var stylesSubItem = new MenuFlyoutSubItem
+        {
+            Text = "Subtitles styles"
+        };
+
+        var captionThemes = WindowsCaptionHelper.GetWindowsCaptionThemes();
+        foreach (var theme in captionThemes)
+        {
+            var themeItem = new RadioMenuFlyoutItem
+            {
+                Text = theme.Name,
+                IsChecked = theme.IsSelected,
+                GroupName = "CaptionStylesGroup"
+            };
+            string themeId = theme.Id;
+            themeItem.Click += (s, args) =>
+            {
+                WindowsCaptionHelper.SetWindowsCaptionTheme(themeId);
+            };
+            stylesSubItem.Items.Add(themeItem);
+        }
+
+        stylesSubItem.Items.Add(new MenuFlyoutSeparator());
+
+        var settingsItem = new MenuFlyoutItem
+        {
+            Text = "Subtitles settings"
+        };
+        settingsItem.Click += (s, args) =>
+        {
+            NavigateToSubtitlesSettings();
+        };
+        stylesSubItem.Items.Add(settingsItem);
+
+        SubtitlesMenuFlyout.Items.Add(stylesSubItem);
+    }
+
+    private async Task PickAndLoadSubtitleFileAsync()
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            {
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.VideosLibrary
+            };
+            picker.FileTypeFilter.Add(".srt");
+            picker.FileTypeFilter.Add(".vtt");
+            picker.FileTypeFilter.Add(".ass");
+            picker.FileTypeFilter.Add(".ssa");
+            picker.FileTypeFilter.Add(".sub");
+
+            FilePickerHelper.Initialize(picker);
+
+            var file = await picker.PickSingleFileAsync();
+            if (file != null)
+            {
+                var playback = AppServices.PlaybackViewModel.Session;
+                if (playback.MediaPlayer.Source is MediaPlaybackItem playbackItem)
+                {
+                    var timedTextSource = Windows.Media.Core.TimedTextSource.CreateFromStream(await file.OpenReadAsync());
+                    playbackItem.Source.ExternalTimedTextSources.Add(timedTextSource);
+
+                    await Task.Delay(250);
+                    var tracks = playbackItem.TimedMetadataTracks;
+                    if (tracks.Count > 0)
+                    {
+                        playback.SetSubtitleTrack(tracks.Count - 1);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TransportBar] PickAndLoadSubtitleFileAsync error: {ex.Message}");
+        }
+    }
+
+    private void NavigateToSubtitlesSettings()
+    {
+        try
+        {
+            if (App.MainWindowInstance is MainWindow mainWindow)
+            {
+                mainWindow.NavigateToSettingsPage("Subtitles");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TransportBar] NavigateToSubtitlesSettings error: {ex.Message}");
         }
     }
 
@@ -1359,7 +1670,9 @@ public sealed partial class TransportBar : UserControl
     }
 
     private CancellationTokenSource? _exactThumbnailCts;
-    private bool _isExactThumbnailExtracting;
+    private double _activeHoverSeconds = -1;
+    private bool _isThumbnailDecoding;
+    private double _decodingSeconds = -1;
 
     private void OnProgressSliderPointerMoved(object sender, PointerRoutedEventArgs e)
     {
@@ -1371,148 +1684,200 @@ public sealed partial class TransportBar : UserControl
             var playback = AppServices.PlaybackViewModel;
             if (playback.CurrentTrack == null)
             {
-                HoverPreviewPopup.IsOpen = false;
+                if (HoverPreviewPopup != null) HoverPreviewPopup.IsOpen = false;
                 return;
             }
 
+            // If dragging, ValueChanged handles updating the preview
+            if (_isSeeking) return;
+
             var pt = e.GetCurrentPoint(slider);
-            
-            double trackPadding = 8.0;
-            double usableWidth = slider.ActualWidth - (trackPadding * 2);
-            double relativeX = pt.Position.X - trackPadding;
-            double percent = Math.Clamp(relativeX / usableWidth, 0.0, 1.0);
+            double trackTravel = Math.Max(1.0, slider.ActualWidth - 20.0);
+            double percent = Math.Clamp((pt.Position.X - 10.0) / trackTravel, 0.0, 1.0);
 
             double totalSeconds = slider.Maximum;
-            
-            if (totalSeconds <= 100.0)
-            {
-                var naturalDur = playback.Session.MediaPlayer.PlaybackSession.NaturalDuration;
-                if (naturalDur.TotalSeconds > 0)
-                {
-                    totalSeconds = naturalDur.TotalSeconds;
-                }
-                else if (playback.CurrentTrack != null && playback.CurrentTrack.Duration.TotalSeconds > 0)
-                {
-                    totalSeconds = playback.CurrentTrack.Duration.TotalSeconds;
-                }
-            }
-
             if (totalSeconds <= 0) totalSeconds = 100.0;
 
             double hoverSeconds = totalSeconds * percent;
-            HoverTimeText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(hoverSeconds));
+            UpdateSeekPreview(hoverSeconds, isDragging: false, pointerX: pt.Position.X);
+        }
+        catch { }
+    }
+
+    private void RepositionHoverPreview(double seconds, double pointerX = -1, bool isDragging = false, bool? isThumbnailMode = null)
+    {
+        var slider = ProgressSlider;
+        if (slider == null || slider.ActualWidth <= 0 || HoverPreviewPopup == null) return;
+
+        bool showThumbnail = isThumbnailMode ?? (HoverThumbnailBorder?.Visibility == Visibility.Visible && HoverThumbnailImage?.Source != null);
+        double popupWidth = showThumbnail ? 158.0 : 72.0;
+
+        double centerX;
+        if (isDragging || pointerX < 0)
+        {
+            double ratio = Math.Clamp(seconds / Math.Max(1.0, slider.Maximum), 0.0, 1.0);
+            centerX = 10.0 + (ratio * Math.Max(0.0, slider.ActualWidth - 20.0));
+        }
+        else
+        {
+            centerX = pointerX;
+        }
+
+        double clampedX = Math.Clamp(centerX - (popupWidth / 2.0), 0.0, Math.Max(0.0, slider.ActualWidth - popupWidth));
+        HoverPreviewPopup.HorizontalOffset = clampedX;
+        HoverPreviewPopup.VerticalOffset = showThumbnail ? -126 : -44;
+        HoverPreviewPopup.IsOpen = true;
+    }
+
+    private void UpdateSeekPreview(double seconds, bool isDragging, double pointerX = -1)
+    {
+        try
+        {
+            var slider = ProgressSlider;
+            if (slider == null || slider.ActualWidth <= 0) return;
+
+            var playback = AppServices.PlaybackViewModel;
+            if (playback.CurrentTrack == null)
+            {
+                if (HoverPreviewPopup != null) HoverPreviewPopup.IsOpen = false;
+                return;
+            }
+
+            if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+            {
+                HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            }
+
+            _activeHoverSeconds = seconds;
+            HoverTimeText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(seconds));
 
             var track = playback.CurrentTrack;
+            bool showThumbnail = false;
+
             if (track != null && track.IsVideo)
             {
-                var cachedImg = playback.Session.GetCachedThumbnail(hoverSeconds) ?? track.Artwork;
+                var session = playback.Session;
+                // Check if we have a keyframe within 120 seconds of this exact scene
+                var cachedImg = session.GetCachedThumbnail(seconds, 120.0);
                 if (cachedImg != null)
                 {
                     HoverThumbnailImage.Source = cachedImg;
                     HoverThumbnailBorder.Visibility = Visibility.Visible;
+                    showThumbnail = true;
                 }
                 else
                 {
-                    HoverThumbnailImage.Source = null;
-                    HoverThumbnailBorder.Visibility = Visibility.Collapsed;
+                    // Keep existing thumbnail image displayed while fetching the new one so popup doesn't jitter/collapse
+                    if (HoverThumbnailImage.Source != null)
+                    {
+                        showThumbnail = true;
+                    }
+                    else
+                    {
+                        HoverThumbnailBorder.Visibility = Visibility.Collapsed;
+                        showThumbnail = false;
+                    }
                 }
 
-                double popupWidth = (HoverThumbnailBorder.Visibility == Visibility.Visible) ? 156.0 : 64.0;
-                double clampedX = Math.Clamp(pt.Position.X - (popupWidth / 2), 0, Math.Max(0, slider.ActualWidth - popupWidth));
-                HoverPreviewPopup.HorizontalOffset = clampedX;
-                HoverPreviewPopup.VerticalOffset = (HoverThumbnailBorder.Visibility == Visibility.Visible) ? -126 : -48;
-                HoverPreviewPopup.IsOpen = true;
-
-                UpdateExactThumbnailAsync(hoverSeconds);
+                UpdateExactThumbnailAsync(seconds);
             }
             else
             {
-                double popupWidth = 64.0;
-                double clampedX = Math.Clamp(pt.Position.X - (popupWidth / 2), 0, Math.Max(0, slider.ActualWidth - popupWidth));
-                HoverPreviewPopup.HorizontalOffset = clampedX;
-                HoverPreviewPopup.VerticalOffset = -48;
-                HoverPreviewPopup.IsOpen = true;
-
                 HoverThumbnailImage.Source = null;
                 HoverThumbnailBorder.Visibility = Visibility.Collapsed;
+                showThumbnail = false;
             }
+
+            RepositionHoverPreview(seconds, pointerX, isDragging, showThumbnail);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"UpdateSeekPreview error: {ex.Message}");
+        }
     }
 
     private async void UpdateExactThumbnailAsync(double seconds)
     {
         try
         {
+            var playback = AppServices.PlaybackViewModel;
+            var track = playback.CurrentTrack;
+            if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath)) return;
+
+            var session = playback.Session;
+            var timeSpan = TimeSpan.FromSeconds(seconds);
+
+            // 1. If an exact/near keyframe is already cached within 5 seconds, use it immediately
+            var cached = session.GetCachedThumbnail(seconds, 5.0);
+            if (cached != null)
+            {
+                if (HoverThumbnailImage != null) HoverThumbnailImage.Source = cached;
+                if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
+                RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
+                return;
+            }
+
+            // 2. If a decode is currently running for a timestamp within 15 seconds, let it finish
+            if (_isThumbnailDecoding && Math.Abs(_decodingSeconds - seconds) < 15.0)
+            {
+                return;
+            }
+
+            // 3. Debounce: cancel previous pending debounce and wait 100ms
             _exactThumbnailCts?.Cancel();
             _exactThumbnailCts = new CancellationTokenSource();
             var token = _exactThumbnailCts.Token;
 
+            await Task.Delay(100, token);
+            if (token.IsCancellationRequested) return;
+
+            // 4. Double check cache after debounce in case background prefetch populated it
+            cached = session.GetCachedThumbnail(seconds, 5.0);
+            if (cached != null)
+            {
+                if (HoverThumbnailImage != null) HoverThumbnailImage.Source = cached;
+                if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
+                RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
+                return;
+            }
+
+            // 5. Begin decoding nearest keyframe
+            _isThumbnailDecoding = true;
+            _decodingSeconds = seconds;
+            Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
             try
             {
-                await Task.Delay(150, token); // Debounce
+                stream = await session.GetExactThumbnailAsync(seconds);
+                if (stream == null) return;
 
-                if (_isExactThumbnailExtracting) return;
-                _isExactThumbnailExtracting = true;
+                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage { DecodePixelWidth = 160 };
+                await bitmap.SetSourceAsync(stream);
 
-                try
+                // Always add successfully decoded frame to cache so subsequent seeks/hovers are 0ms
+                session.AddCachedThumbnail(timeSpan, bitmap);
+
+                // If user is still hovering near this scene, update the preview display
+                if (HoverPreviewPopup != null && HoverPreviewPopup.IsOpen)
                 {
-                    var playback = AppServices.PlaybackViewModel;
-                    var track = playback.CurrentTrack;
-                    if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath)) return;
-
-                    var session = playback.Session;
-                    var timeSpan = TimeSpan.FromSeconds(seconds);
-                
-                    lock (session.VideoThumbnailCacheLock)
+                    double allowedDiff = Math.Max(60.0, (ProgressSlider?.Maximum ?? 100.0) * 0.04);
+                    if (Math.Abs(_activeHoverSeconds - seconds) <= allowedDiff)
                     {
-                        foreach (var item in session.VideoThumbnailCache)
-                        {
-                            if (Math.Abs((item.Time - timeSpan).TotalSeconds) < 1.0)
-                            {
-                                HoverThumbnailImage.Source = item.Image;
-                                HoverThumbnailBorder.Visibility = Visibility.Visible;
-                                return;
-                            }
-                        }
+                        if (HoverThumbnailImage != null) HoverThumbnailImage.Source = bitmap;
+                        if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
+                        RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
                     }
-
-                    Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
-                    try
-                    {
-                        stream = await session.GetExactThumbnailAsync(seconds);
-
-                        if (token.IsCancellationRequested || stream == null) return;
-
-                        var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                        bitmap.DecodePixelWidth = 160;
-                        await bitmap.SetSourceAsync(stream);
-
-                        if (token.IsCancellationRequested) return;
-
-                        HoverThumbnailImage.Source = bitmap;
-                        HoverThumbnailBorder.Visibility = Visibility.Visible;
-
-                        session.AddCachedThumbnail(timeSpan, bitmap);
-                    }
-                    finally
-                    {
-                        stream?.Dispose();
-                    }
-                }
-                finally
-                {
-                    _isExactThumbnailExtracting = false;
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                System.Diagnostics.Debug.WriteLine($"UpdateExactThumbnailAsync error: {ex.Message}");
+                stream?.Dispose();
+                _isThumbnailDecoding = false;
             }
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Exception in UpdateExactThumbnailAsync: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"UpdateExactThumbnailAsync error: {ex.Message}");
         }
     }
 

@@ -25,32 +25,88 @@ namespace LumiereMediaPlayer.Services
                     var loaded = JsonSerializer.Deserialize<MediaItem[]>(json);
                     if (loaded != null)
                     {
-                        foreach (var item in loaded)
+                        var validItems = loaded
+                            .Where(item =>
+                            {
+                                if (!string.IsNullOrEmpty(item.SourcePath) && Path.IsPathRooted(item.SourcePath))
+                                {
+                                    return File.Exists(item.SourcePath);
+                                }
+                                return true;
+                            })
+                            .ToArray();
+
+                        foreach (var item in validItems)
                         {
                             item.IsSelected = false;
                         }
 
                         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
                         {
-                            if (RecentlyPlayed.Count == loaded.Length)
+                            if (RecentlyPlayed.Count == validItems.Length)
                             {
-                                for (int i = 0; i < loaded.Length; i++)
+                                for (int i = 0; i < validItems.Length; i++)
                                 {
-                                    RecentlyPlayed[i] = loaded[i];
+                                    RecentlyPlayed[i] = validItems[i];
                                 }
                             }
                             else
                             {
                                 RecentlyPlayed.Clear();
-                                foreach (var item in loaded)
+                                foreach (var item in validItems)
                                 {
                                     RecentlyPlayed.Add(item);
                                 }
                             }
                         });
+
+                        if (validItems.Length != loaded.Length)
+                        {
+                            await SaveHistoryAsync();
+                        }
                     }
                 }
                 catch { }
+            }
+        }
+
+        public async Task RemoveMissingItemsAsync()
+        {
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var dispatched = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    var toRemove = RecentlyPlayed
+                        .Where(item => !string.IsNullOrEmpty(item.SourcePath) && Path.IsPathRooted(item.SourcePath) && !File.Exists(item.SourcePath))
+                        .ToList();
+
+                    if (toRemove.Count > 0)
+                    {
+                        foreach (var item in toRemove)
+                        {
+                            RecentlyPlayed.Remove(item);
+                        }
+                        tcs.TrySetResult(true);
+                    }
+                    else
+                    {
+                        tcs.TrySetResult(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+
+            if (dispatched == true)
+            {
+                bool removed = await tcs.Task;
+                if (removed)
+                {
+                    await SaveHistoryAsync();
+                }
             }
         }
 
@@ -108,33 +164,157 @@ namespace LumiereMediaPlayer.Services
         public async Task RemoveFromHistoryAsync(MediaItem item)
         {
             if (item == null) return;
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var dispatched = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
             {
-                RecentlyPlayed.Remove(item);
+                try
+                {
+                    var matches = RecentlyPlayed.Where(x =>
+                        (!string.IsNullOrEmpty(item.Id) && x.Id == item.Id) ||
+                        (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, item.Title, StringComparison.OrdinalIgnoreCase) &&
+                         (string.IsNullOrEmpty(item.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, item.Artist, StringComparison.OrdinalIgnoreCase))))
+                        .ToList();
+
+                    bool removed = false;
+                    foreach (var m in matches)
+                    {
+                        RecentlyPlayed.Remove(m);
+                        removed = true;
+                    }
+
+                    if (!removed)
+                    {
+                        removed = RecentlyPlayed.Remove(item);
+                    }
+
+                    tcs.TrySetResult(removed);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
             });
-            await SaveHistoryAsync();
+
+            if (dispatched == true)
+            {
+                try
+                {
+                    bool removed = await tcs.Task;
+                    if (removed)
+                    {
+                        await SaveHistoryAsync();
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                // Fallback direct removal if dispatcher unavailable
+                var match = RecentlyPlayed.FirstOrDefault(x =>
+                    (!string.IsNullOrEmpty(item.Id) && x.Id == item.Id) ||
+                    (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, item.Title, StringComparison.OrdinalIgnoreCase)));
+                if (match != null) RecentlyPlayed.Remove(match);
+                else RecentlyPlayed.Remove(item);
+                await SaveHistoryAsync();
+            }
         }
 
         public async Task RemoveRangeFromHistoryAsync(IEnumerable<MediaItem> items)
         {
             if (items == null) return;
             var list = items.ToList();
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            if (list.Count == 0) return;
+
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var dispatched = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    bool anyRemoved = false;
+                    foreach (var it in list)
+                    {
+                        var matches = RecentlyPlayed.Where(x =>
+                            (!string.IsNullOrEmpty(it.Id) && x.Id == it.Id) ||
+                            (!string.IsNullOrEmpty(it.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, it.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(it.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, it.Title, StringComparison.OrdinalIgnoreCase) &&
+                             (string.IsNullOrEmpty(it.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, it.Artist, StringComparison.OrdinalIgnoreCase))))
+                            .ToList();
+
+                        foreach (var m in matches)
+                        {
+                            RecentlyPlayed.Remove(m);
+                            anyRemoved = true;
+                        }
+
+                        if (matches.Count == 0)
+                        {
+                            if (RecentlyPlayed.Remove(it)) anyRemoved = true;
+                        }
+                    }
+
+                    tcs.TrySetResult(anyRemoved);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+
+            if (dispatched == true)
+            {
+                try
+                {
+                    bool removed = await tcs.Task;
+                    if (removed)
+                    {
+                        await SaveHistoryAsync();
+                    }
+                }
+                catch { }
+            }
+            else
             {
                 foreach (var it in list)
                 {
-                    RecentlyPlayed.Remove(it);
+                    var match = RecentlyPlayed.FirstOrDefault(x =>
+                        (!string.IsNullOrEmpty(it.Id) && x.Id == it.Id) ||
+                        (!string.IsNullOrEmpty(it.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, it.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(it.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, it.Title, StringComparison.OrdinalIgnoreCase)));
+                    if (match != null) RecentlyPlayed.Remove(match);
+                    else RecentlyPlayed.Remove(it);
                 }
-            });
-            await SaveHistoryAsync();
+                await SaveHistoryAsync();
+            }
         }
 
         public async Task ClearHistoryAsync()
         {
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var dispatched = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    RecentlyPlayed.Clear();
+                    tcs.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+
+            if (dispatched == true)
+            {
+                try { await tcs.Task; } catch { }
+            }
+            else
             {
                 RecentlyPlayed.Clear();
-            });
+            }
+
             await SaveHistoryAsync();
         }
     }

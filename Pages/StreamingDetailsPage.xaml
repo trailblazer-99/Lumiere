@@ -9,6 +9,14 @@
     Unloaded="OnPageUnloaded">
 
     <Grid x:Name="PageContent">
+        <!-- Loading Overlay -->
+        <Grid x:Name="LoadingOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Canvas.ZIndex="100">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                <ProgressRing IsActive="True" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Text="Loading title details..." FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
         <!-- Main Scrollable Details Area -->
         <ScrollViewer>
             <StackPanel Padding="24,0,24,24" Spacing="24">

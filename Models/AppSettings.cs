@@ -53,6 +53,7 @@ public sealed class AppSettings
     public AppThemeBackdrop BackdropType { get; set; } = AppThemeBackdrop.Mica;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
     public bool AlwaysShowTransportBar { get; set; } = false;
+    public bool AcrylicTransportBar { get; set; } = true;
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;
@@ -61,8 +62,10 @@ public sealed class AppSettings
     // ── Media Library & Files ──────────────────────────────────────
     public bool AutomaticLibraryScan { get; set; } = true;
 
-    // ── Privacy & History ──────────────────────────────────────────
+    // ── Privacy & Security ────────────────────────────────────────
     public bool RememberPlaybackPositionPerTrack { get; set; } = true;
+    public bool EnableAppLock { get; set; } = false;
+    public bool AppLockWhenMinimized { get; set; } = false;
 
     // ── Accessibility ──────────────────────────────────────────
     public bool HighContrastMode { get; set; } = false;
@@ -81,7 +84,12 @@ public sealed class AppSettings
     public bool AiLyricsTranslationEnabled { get; set; } = false;
     public string AiTranslationTargetLanguage { get; set; } = "Hindi";
     public bool AiSemanticSearchEnabled { get; set; } = false;
-    public string GeminiApiKey { get; set; } = "";
+    private string? _geminiApiKey;
+    public string GeminiApiKey
+    {
+        get => _geminiApiKey ??= Helpers.SecureStorageHelper.GetSecret("GeminiApiKey");
+        set => _geminiApiKey = value;
+    }
     public bool UseLocalAi { get; set; } = false;
     public string OllamaModelName { get; set; } = "llama3.2";
     public bool AiEqualizerMatcherEnabled { get; set; } = false;

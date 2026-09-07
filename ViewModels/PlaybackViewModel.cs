@@ -46,6 +46,8 @@ public partial class PlaybackViewModel : ObservableObject
     [RelayCommand]
     private void TogglePlayPause() => _session.TogglePlayPause();
 
+    public void Pause() => _session.Pause();
+
     [RelayCommand]
     public void ToggleMute()
     {

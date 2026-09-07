@@ -56,6 +56,7 @@ public sealed partial class VideoPage : Page
 
         SyncMediaPlayer(true);
         UpdateUiLuminance();
+        this.KeyDown += OnPageKeyDown;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -63,6 +64,7 @@ public sealed partial class VideoPage : Page
         if (_eventHandlersDetached) return;
         _eventHandlersDetached = true;
 
+        this.KeyDown -= OnPageKeyDown;
         this.Unloaded -= OnUnloaded;
         ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
@@ -543,6 +545,33 @@ public sealed partial class VideoPage : Page
         {
             await SampleMediaLibrary.RemoveTracksAsync(selected);
             VideoSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Delete)
+        {
+            var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                e.Handled = true;
+                await SampleMediaLibrary.RemoveTracksAsync(selected);
+                VideoSelectionRibbon?.ClearSelection();
+            }
+        }
+    }
+
+    private void OnVideoRowRightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is MediaItem video)
+        {
+            var flyout = Helpers.MediaFlyoutHelper.CreateMediaFlyout(video, element, () =>
+            {
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+            });
+            flyout.ShowAt(element, e.GetPosition(element));
+            e.Handled = true;
         }
     }
 }

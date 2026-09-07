@@ -1,3 +1,4 @@
+using System;
 using LumiereMediaPlayer.Services;
 using LumiereMediaPlayer.ViewModels;
 using LumiereMediaPlayer.Services.Streaming;
@@ -6,6 +7,7 @@ namespace LumiereMediaPlayer;
 
 public static class AppServices
 {
+    // ── Critical-path services (eager) ──────────────────────────────
     public static StreamingLibraryService StreamingLibrary { get; } = new();
 
     public static HistoryService History { get; } = new();
@@ -23,23 +25,34 @@ public static class AppServices
 
     public static PlaybackViewModel PlaybackViewModel { get; } = new(Playback);
 
-    public static HomeViewModel HomeViewModel { get; } = new(PlaybackViewModel);
+    // ── Deferred ViewModels (lazy — constructed on first page navigation) ──
+    private static readonly Lazy<HomeViewModel> _homeViewModel = new(() => new(PlaybackViewModel));
+    public static HomeViewModel HomeViewModel => _homeViewModel.Value;
 
-    public static MusicLibraryViewModel MusicLibraryViewModel { get; } = new(PlaybackViewModel);
+    private static readonly Lazy<MusicLibraryViewModel> _musicLibraryViewModel = new(() => new(PlaybackViewModel));
+    public static MusicLibraryViewModel MusicLibraryViewModel => _musicLibraryViewModel.Value;
 
-    public static NowPlayingViewModel NowPlayingViewModel { get; } = new(PlaybackViewModel);
+    private static readonly Lazy<NowPlayingViewModel> _nowPlayingViewModel = new(() => new(PlaybackViewModel));
+    public static NowPlayingViewModel NowPlayingViewModel => _nowPlayingViewModel.Value;
 
-    public static SettingsViewModel SettingsViewModel { get; } = new(Settings);
+    private static readonly Lazy<SettingsViewModel> _settingsViewModel = new(() => new(Settings));
+    public static SettingsViewModel SettingsViewModel => _settingsViewModel.Value;
 
-    public static PlaylistsViewModel PlaylistsViewModel { get; } = new(PlaybackViewModel);
+    private static readonly Lazy<PlaylistsViewModel> _playlistsViewModel = new(() => new(PlaybackViewModel));
+    public static PlaylistsViewModel PlaylistsViewModel => _playlistsViewModel.Value;
 
-    public static VideoViewModel VideoViewModel { get; } = new(PlaybackViewModel);
+    private static readonly Lazy<VideoViewModel> _videoViewModel = new(() => new(PlaybackViewModel));
+    public static VideoViewModel VideoViewModel => _videoViewModel.Value;
 
-    public static QueueViewModel QueueViewModel { get; } = new(PlaybackViewModel);
+    private static readonly Lazy<QueueViewModel> _queueViewModel = new(() => new(PlaybackViewModel));
+    public static QueueViewModel QueueViewModel => _queueViewModel.Value;
 
-    public static StreamingMoviesViewModel StreamingMoviesViewModel { get; } = new();
+    private static readonly Lazy<StreamingMoviesViewModel> _streamingMoviesViewModel = new(() => new());
+    public static StreamingMoviesViewModel StreamingMoviesViewModel => _streamingMoviesViewModel.Value;
 
-    public static StreamingTvShowsViewModel StreamingTvShowsViewModel { get; } = new();
+    private static readonly Lazy<StreamingTvShowsViewModel> _streamingTvShowsViewModel = new(() => new());
+    public static StreamingTvShowsViewModel StreamingTvShowsViewModel => _streamingTvShowsViewModel.Value;
 
-    public static StreamingMusicViewModel StreamingMusicViewModel { get; } = new();
+    private static readonly Lazy<StreamingMusicViewModel> _streamingMusicViewModel = new(() => new());
+    public static StreamingMusicViewModel StreamingMusicViewModel => _streamingMusicViewModel.Value;
 }

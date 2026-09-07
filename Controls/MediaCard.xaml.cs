@@ -44,6 +44,9 @@ public sealed partial class MediaCard : UserControl
         DependencyProperty.Register(nameof(Item), typeof(MediaItem), typeof(MediaCard),
             new PropertyMetadata(null, (d, e) => ((MediaCard)d).OnItemChanged(e.NewValue as MediaItem)));
 
+    public static readonly DependencyProperty LocationRepProperty =
+        DependencyProperty.Register(nameof(LocationRep), typeof(string), typeof(MediaCard), new PropertyMetadata(null));
+
     public event EventHandler? SelectionChanged;
 
     public bool IsSelected
@@ -58,11 +61,25 @@ public sealed partial class MediaCard : UserControl
         set => SetValue(ItemProperty, value);
     }
 
+    public string? LocationRep
+    {
+        get => (string?)GetValue(LocationRepProperty);
+        set => SetValue(LocationRepProperty, value);
+    }
+
+    public Visibility LocationRepVisibility => VisibilityHelper.FromBoolean(!string.IsNullOrWhiteSpace(LocationRep) || (Item?.HasLocationRep == true));
+    public string EffectiveLocationRep => !string.IsNullOrWhiteSpace(LocationRep) ? LocationRep : (Item?.LocationRep ?? string.Empty);
+    public string EffectiveToolTip => Item?.SourcePath ?? EffectiveLocationRep;
+
     private void OnItemChanged(MediaItem? newItem)
     {
         if (newItem != null)
         {
             IsSelected = newItem.IsSelected;
+            if (string.IsNullOrEmpty(LocationRep))
+            {
+                LocationRep = newItem.LocationRep;
+            }
         }
     }
 
@@ -86,6 +103,16 @@ public sealed partial class MediaCard : UserControl
         }
 
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnSubControlPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void OnSubControlPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
     }
 
     private void OnCardCheckBoxChanged(object sender, RoutedEventArgs e)
@@ -117,19 +144,33 @@ public sealed partial class MediaCard : UserControl
             };
         }
 
-        var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, MoreOptionsButton);
+        var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, MoreOptionsButton, () =>
+        {
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        });
         flyout.ShowAt(MoreOptionsButton);
     }
 
     private void OnCardRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
+        e.Handled = true;
         var mediaItem = GetAssociatedMediaItem();
-        if (mediaItem != null)
+        if (mediaItem == null)
         {
-            var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, this);
-            flyout.ShowAt(this, e.GetPosition(this));
-            e.Handled = true;
+            mediaItem = new MediaItem
+            {
+                Title = this.Title,
+                Artist = this.Subtitle,
+                PosterUrl = this.PosterUrl,
+                AccentColor = this.AccentColor
+            };
         }
+
+        var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, this, () =>
+        {
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        });
+        flyout.ShowAt(this, e.GetPosition(this));
     }
 
     public ImageSource? DisplayImage
@@ -284,6 +325,8 @@ public sealed partial class MediaCard : UserControl
     }
 
     private bool _isHovered;
+    private ScalarKeyFrameAnimation? _overlayInAnim;
+    private ScalarKeyFrameAnimation? _overlayOutAnim;
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
@@ -293,8 +336,8 @@ public sealed partial class MediaCard : UserControl
             AnimateOverlay(1.0);
             AnimateScale(1.03);
             AnimateShadow(0.55, 12f);
-            if (SelectionHost != null) SelectionHost.Opacity = 1.0;
-            if (MoreOptionsButton != null) MoreOptionsButton.Opacity = 1.0;
+            AnimateSubControlOpacity(SelectionHost, 1.0);
+            AnimateSubControlOpacity(MoreOptionsButton, 1.0);
         }
         catch { }
     }
@@ -307,8 +350,26 @@ public sealed partial class MediaCard : UserControl
             AnimateOverlay(0.0);
             AnimateScale(1.0);
             AnimateShadow(0.0, 4f);
-            if (SelectionHost != null && !IsSelected) SelectionHost.Opacity = 0.0;
-            if (MoreOptionsButton != null) MoreOptionsButton.Opacity = 0.0;
+            if (!IsSelected) AnimateSubControlOpacity(SelectionHost, 0.0);
+            AnimateSubControlOpacity(MoreOptionsButton, 0.0);
+        }
+        catch { }
+    }
+
+    private void AnimateSubControlOpacity(UIElement? element, double targetOpacity)
+    {
+        if (element == null) return;
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(element);
+            if (visual == null) return;
+            var compositor = visual.Compositor;
+            if (compositor == null) return;
+
+            var anim = compositor.CreateScalarKeyFrameAnimation();
+            anim.Duration = TimeSpan.FromMilliseconds(90);
+            anim.InsertKeyFrame(1.0f, (float)targetOpacity);
+            visual.StartAnimation("Opacity", anim);
         }
         catch { }
     }
@@ -323,13 +384,28 @@ public sealed partial class MediaCard : UserControl
             var compositor = visual.Compositor;
             if (compositor == null) return;
 
-            var animation = compositor.CreateScalarKeyFrameAnimation();
-            animation.Duration = TimeSpan.FromMilliseconds(200);
-            var easing = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f),
-                new System.Numerics.Vector2(0.2f, 1.0f));
-            animation.InsertKeyFrame(1.0f, (float)targetOpacity, easing);
-            visual.StartAnimation("Opacity", animation);
+            if (targetOpacity > 0.5)
+            {
+                if (_overlayInAnim == null)
+                {
+                    _overlayInAnim = compositor.CreateScalarKeyFrameAnimation();
+                    _overlayInAnim.Duration = TimeSpan.FromMilliseconds(90);
+                    _overlayInAnim.InsertKeyFrame(1.0f, 1.0f, compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(0.0f, 0.0f),
+                        new System.Numerics.Vector2(0.2f, 1.0f)));
+                }
+                visual.StartAnimation("Opacity", _overlayInAnim);
+            }
+            else
+            {
+                if (_overlayOutAnim == null)
+                {
+                    _overlayOutAnim = compositor.CreateScalarKeyFrameAnimation();
+                    _overlayOutAnim.Duration = TimeSpan.FromMilliseconds(80);
+                    _overlayOutAnim.InsertKeyFrame(1.0f, 0.0f);
+                }
+                visual.StartAnimation("Opacity", _overlayOutAnim);
+            }
         }
         catch { }
     }

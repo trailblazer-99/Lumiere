@@ -41,14 +41,8 @@ public partial class App : Application
     {
         try
         {
-            try { AppServices.Settings.Load(); } catch { }
-            _ = AppServices.History.LoadHistoryAsync();
-            _ = AppServices.WatchmodeSync.SyncLibraryAsync();
             MainDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-            
-            // Load the persistent media library in the background
-            _ = LumiereMediaPlayer.Services.SampleMediaLibrary.LoadLibraryAsync();
-            
+
             var mainWindow = new MainWindow();
             _window = mainWindow;
             MainWindowInstance = mainWindow;
@@ -60,6 +54,26 @@ public partial class App : Application
             try { mainWindow.ApplyBackdrop(AppServices.Settings.Current.BackdropType); } catch { }
 
             _window.Activate();
+
+            // Background initialization after window is visible on screen
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Fast local disk operations
+                    await AppServices.History.LoadHistoryAsync();
+                    await LumiereMediaPlayer.Services.SampleMediaLibrary.LoadLibraryAsync();
+                    AudioPipelineHelper.CleanupTempTranscodedFiles();
+
+                    // Non-critical network sync deferred slightly to prevent network/socket contention
+                    await Task.Delay(1500);
+                    await AppServices.WatchmodeSync.SyncLibraryAsync();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[App.BackgroundInit] error: {ex.Message}");
+                }
+            });
         }
         catch (Exception ex)
         {

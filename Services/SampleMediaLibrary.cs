@@ -18,6 +18,9 @@ public static class SampleMediaLibrary
     private static readonly HashSet<string> _seenPaths = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _seenIds = new(StringComparer.OrdinalIgnoreCase);
     private static System.Threading.CancellationTokenSource? _saveDebounceCts;
+    private static readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _watcherLock = new();
+    private static System.Threading.CancellationTokenSource? _watcherDebounceCts;
 
     public static event EventHandler? LibraryChanged;
 
@@ -43,6 +46,7 @@ public static class SampleMediaLibrary
             _seenPaths.Clear();
             _seenIds.Clear();
         }
+        StopAllWatchers();
         LibraryChanged?.Invoke(null, EventArgs.Empty);
     }
 
@@ -61,6 +65,12 @@ public static class SampleMediaLibrary
                 return null;
             }
             _allTracks.Add(item);
+            UpdateLocationRepresentations();
+        }
+        if (!string.IsNullOrEmpty(item.SourcePath) && Path.IsPathRooted(item.SourcePath))
+        {
+            var dir = Path.GetDirectoryName(item.SourcePath);
+            if (!string.IsNullOrEmpty(dir)) StartWatchingDirectory(dir);
         }
         LibraryChanged?.Invoke(null, EventArgs.Empty);
         return await Task.FromResult(item);
@@ -120,14 +130,18 @@ public static class SampleMediaLibrary
         {
             foreach (var track in toRemove)
             {
-                _allTracks.RemoveAll(t => t.Id == track.Id || (!string.IsNullOrEmpty(t.SourcePath) && t.SourcePath == track.SourcePath));
+                _allTracks.RemoveAll(t => 
+                    (!string.IsNullOrEmpty(track.Id) && t.Id == track.Id) || 
+                    (!string.IsNullOrEmpty(t.SourcePath) && !string.IsNullOrEmpty(track.SourcePath) && string.Equals(t.SourcePath, track.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(t.Title) && !string.IsNullOrEmpty(track.Title) && string.Equals(t.Title, track.Title, StringComparison.OrdinalIgnoreCase)));
                 if (!string.IsNullOrEmpty(track.SourcePath)) _seenPaths.Remove(track.SourcePath);
                 if (!string.IsNullOrEmpty(track.Id)) _seenIds.Remove(track.Id);
             }
+            UpdateLocationRepresentations();
         }
+        await AppServices.History.RemoveRangeFromHistoryAsync(toRemove);
         LibraryChanged?.Invoke(null, EventArgs.Empty);
         RequestDebouncedSave();
-        await Task.CompletedTask;
     }
 
     public static async Task RemoveTrackAsync(MediaItem track)
@@ -221,8 +235,22 @@ public static class SampleMediaLibrary
                     foreach (var item in toRemove)
                     {
                         _allTracks.Remove(item);
+                        if (!string.IsNullOrEmpty(item.SourcePath)) _seenPaths.Remove(item.SourcePath);
+                        if (!string.IsNullOrEmpty(item.Id)) _seenIds.Remove(item.Id);
+                    }
+
+                    foreach (var playlist in _playlists)
+                    {
+                        if (playlist.Tracks.Any(t => toRemove.Any(r => r.Id == t.Id || (!string.IsNullOrEmpty(r.SourcePath) && r.SourcePath == t.SourcePath))))
+                        {
+                            playlist.Tracks = playlist.Tracks
+                                .Where(t => !toRemove.Any(r => r.Id == t.Id || (!string.IsNullOrEmpty(r.SourcePath) && r.SourcePath == t.SourcePath)))
+                                .ToList();
+                        }
                     }
                 }
+
+                _ = AppServices.History.RemoveMissingItemsAsync();
             }
 
             // 2. Check monitored library folders & parent directories for ADDITION
@@ -260,6 +288,9 @@ public static class SampleMediaLibrary
             {
                 wasModified |= await SynchronizeDirectoryAsync(dirPath, seenPaths);
             }
+
+            UpdateLocationRepresentations();
+            UpdateWatchers();
 
             if (wasModified)
             {
@@ -423,6 +454,17 @@ public static class SampleMediaLibrary
                         foreach (var track in validTracks)
                         {
                             track.IsSelected = false;
+
+                            // Prune items that are no longer available in the local directory
+                            if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath))
+                            {
+                                if (!File.Exists(track.SourcePath))
+                                {
+                                    wasModified = true;
+                                    continue;
+                                }
+                            }
+
                             bool isDuplicate = false;
                             if (!string.IsNullOrEmpty(track.SourcePath))
                             {
@@ -460,6 +502,8 @@ public static class SampleMediaLibrary
                         _seenIds.Clear();
                         foreach (var p in seenPaths) _seenPaths.Add(p);
                         foreach (var id in seenIds) _seenIds.Add(id);
+
+                        UpdateLocationRepresentations();
                     }
                     try { LibraryChanged?.Invoke(null, EventArgs.Empty); } catch { }
 
@@ -467,16 +511,232 @@ public static class SampleMediaLibrary
                     {
                         _ = SaveLibraryAsync();
                     }
-                    if (AppServices.Settings.Current.AutomaticLibraryScan)
-                    {
-                        _ = SynchronizeLibraryMediaAsync();
-                    }
+
+                    UpdateWatchers();
+
+                    _ = SynchronizeLibraryMediaAsync();
                 }
             }
         }
         catch
         {
             // First run or file deleted
+        }
+    }
+
+    /// <summary>
+    /// Computes and assigns distinct location representations (LocationRep) for items
+    /// that share the same title but reside in different locations/paths.
+    /// </summary>
+    public static void UpdateLocationRepresentations()
+    {
+        lock (_lock)
+        {
+            var groups = _allTracks
+                .GroupBy(t => string.IsNullOrWhiteSpace(t.Title) ? string.Empty : t.Title.Trim(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in groups)
+            {
+                var items = group.ToList();
+
+                var distinctLocations = items
+                    .Select(i => i.SourcePath ?? string.Empty)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (items.Count <= 1 || distinctLocations.Count <= 1 || string.IsNullOrEmpty(group.Key))
+                {
+                    foreach (var item in items)
+                    {
+                        item.LocationRep = null;
+                    }
+                    continue;
+                }
+
+                // Disambiguate duplicate titles across different locations
+                var folderNames = new Dictionary<MediaItem, string>();
+                foreach (var item in items)
+                {
+                    folderNames[item] = GetImmediateFolderRep(item.SourcePath);
+                }
+
+                bool foldersDistinct = folderNames.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count() == items.Count;
+
+                foreach (var item in items)
+                {
+                    if (foldersDistinct)
+                    {
+                        item.LocationRep = folderNames[item];
+                    }
+                    else
+                    {
+                        item.LocationRep = GetDistinctivePathRep(item.SourcePath);
+                    }
+                }
+            }
+        }
+    }
+
+    private static string GetImmediateFolderRep(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "Unknown";
+        try
+        {
+            if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.Host;
+            }
+
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                var folderName = Path.GetFileName(dir);
+                if (!string.IsNullOrWhiteSpace(folderName)) return folderName;
+                return dir;
+            }
+        }
+        catch { }
+        return "Local";
+    }
+
+    private static string GetDistinctivePathRep(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "Unknown";
+        try
+        {
+            if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.Host;
+            }
+
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                var folderName = Path.GetFileName(dir);
+                var parentDir = Path.GetDirectoryName(dir);
+                if (!string.IsNullOrEmpty(parentDir))
+                {
+                    var parentFolderName = Path.GetFileName(parentDir);
+                    if (!string.IsNullOrWhiteSpace(parentFolderName))
+                    {
+                        return $"{parentFolderName}\\{folderName}";
+                    }
+                    var root = Path.GetPathRoot(dir);
+                    if (!string.IsNullOrEmpty(root))
+                    {
+                        return $"{root.TrimEnd('\\')}\\...\\{folderName}";
+                    }
+                }
+                return dir;
+            }
+        }
+        catch { }
+        return "Local";
+    }
+
+    public static void StartWatchingDirectory(string dirPath)
+    {
+        if (string.IsNullOrWhiteSpace(dirPath) || !Directory.Exists(dirPath)) return;
+        lock (_watcherLock)
+        {
+            if (_activeWatchers.ContainsKey(dirPath)) return;
+            try
+            {
+                var watcher = new FileSystemWatcher(dirPath)
+                {
+                    IncludeSubdirectories = false,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size
+                };
+                watcher.Created += OnDirectoryChanged;
+                watcher.Deleted += OnDirectoryChanged;
+                watcher.Renamed += (s, e) => OnDirectoryChanged(s, e);
+                watcher.EnableRaisingEvents = true;
+                _activeWatchers[dirPath] = watcher;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StartWatchingDirectory] Failed for {dirPath}: {ex.Message}");
+            }
+        }
+    }
+
+    public static void StopAllWatchers()
+    {
+        lock (_watcherLock)
+        {
+            foreach (var kvp in _activeWatchers)
+            {
+                try
+                {
+                    kvp.Value.EnableRaisingEvents = false;
+                    kvp.Value.Dispose();
+                }
+                catch { }
+            }
+            _activeWatchers.Clear();
+        }
+    }
+
+    public static void UpdateWatchers()
+    {
+        try
+        {
+            var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var libraryFolders = AppServices.Settings.Current.LibraryFolders;
+            if (libraryFolders != null)
+            {
+                foreach (var folder in libraryFolders)
+                {
+                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                    {
+                        dirs.Add(folder);
+                    }
+                }
+            }
+
+            lock (_lock)
+            {
+                foreach (var t in _allTracks)
+                {
+                    if (!string.IsNullOrEmpty(t.SourcePath) && Path.IsPathRooted(t.SourcePath))
+                    {
+                        var dir = Path.GetDirectoryName(t.SourcePath);
+                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                        {
+                            dirs.Add(dir);
+                        }
+                    }
+                }
+            }
+
+            foreach (var d in dirs)
+            {
+                StartWatchingDirectory(d);
+            }
+        }
+        catch { }
+    }
+
+    private static void OnDirectoryChanged(object sender, FileSystemEventArgs e)
+    {
+        lock (_watcherLock)
+        {
+            _watcherDebounceCts?.Cancel();
+            _watcherDebounceCts = new System.Threading.CancellationTokenSource();
+            var cts = _watcherDebounceCts;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(500, cts.Token);
+                    await SynchronizeLibraryMediaAsync();
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[FileSystemWatcher] Error handling directory change: {ex.Message}");
+                }
+            });
         }
     }
 }

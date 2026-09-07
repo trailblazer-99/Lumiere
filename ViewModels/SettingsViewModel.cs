@@ -42,6 +42,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial AppThemeBackdrop SelectedBackdrop { get; set; }
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
+    [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
 
     // ── Controls & Interface ───────────────────────────────────────
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
@@ -50,8 +51,12 @@ public partial class SettingsViewModel : ObservableObject
     // ── Library ────────────────────────────────────────────────────
     [ObservableProperty] public partial bool AutomaticLibraryScan { get; set; }
 
-    // ── Privacy ────────────────────────────────────────────────────
+    // ── Privacy & Security ─────────────────────────────────────────
     [ObservableProperty] public partial bool RememberPlaybackPositionPerTrack { get; set; }
+    [ObservableProperty] public partial bool EnableAppLock { get; set; }
+    [ObservableProperty] public partial bool AppLockWhenMinimized { get; set; }
+    [ObservableProperty] public partial bool IsWindowsHelloAvailable { get; set; }
+    [ObservableProperty] public partial string WindowsHelloStatusText { get; set; } = string.Empty;
 
     // ── Accessibility ──────────────────────────────────────────────
     [ObservableProperty] public partial bool HighContrastMode { get; set; }
@@ -115,6 +120,17 @@ public partial class SettingsViewModel : ObservableObject
 
         // Analyze hardware async in background
         _ = AnalyzeHardwareBackgroundAsync();
+        _ = CheckWindowsHelloStatusAsync();
+    }
+
+    private async System.Threading.Tasks.Task CheckWindowsHelloStatusAsync()
+    {
+        var availability = await WindowsHelloHelper.CheckAvailabilityAsync();
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            IsWindowsHelloAvailable = (availability == Windows.Security.Credentials.UI.UserConsentVerifierAvailability.Available);
+            WindowsHelloStatusText = WindowsHelloHelper.GetAvailabilityDescription(availability);
+        });
     }
 
     private async System.Threading.Tasks.Task AnalyzeHardwareBackgroundAsync()
@@ -428,6 +444,16 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    partial void OnAcrylicTransportBarChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AcrylicTransportBar = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+        }
+    }
+
     // Controls & Interface
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
 
@@ -442,8 +468,60 @@ public partial class SettingsViewModel : ObservableObject
     // Library
     partial void OnAutomaticLibraryScanChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutomaticLibraryScan = value; _settingsService.Save(); } }
 
-    // Privacy
+    // Privacy & Security
     partial void OnRememberPlaybackPositionPerTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberPlaybackPositionPerTrack = value; _settingsService.Save(); } }
+
+    partial void OnEnableAppLockChanged(bool value)
+    {
+        if (_isSyncing) return;
+
+        if (value)
+        {
+            // Prompt Windows Hello verification to confirm authentication before enabling
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                var hwnd = App.MainWindowInstance != null ? WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero;
+                var result = await WindowsHelloHelper.RequestVerificationAsync(hwnd, "Verify your identity to enable Lumière App Lock");
+
+                App.MainDispatcher?.TryEnqueue(() =>
+                {
+                    if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                    {
+                        _settingsService.Current.EnableAppLock = true;
+                        _settingsService.Save();
+                        WindowsHelloStatusText = "App Lock is active. Authentication is required to unlock Lumière.";
+                    }
+                    else
+                    {
+                        // Failed or cancelled - revert toggle
+                        _isSyncing = true;
+                        EnableAppLock = false;
+                        _isSyncing = false;
+                        _settingsService.Current.EnableAppLock = false;
+                        _settingsService.Save();
+                        WindowsHelloStatusText = result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Canceled
+                            ? "Authentication canceled. App Lock remains off."
+                            : "Authentication failed. App Lock could not be enabled.";
+                    }
+                });
+            });
+        }
+        else
+        {
+            _settingsService.Current.EnableAppLock = false;
+            _settingsService.Save();
+            WindowsHelloStatusText = "App Lock is disabled.";
+        }
+    }
+
+    partial void OnAppLockWhenMinimizedChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AppLockWhenMinimized = value;
+            _settingsService.Save();
+        }
+    }
 
     // Accessibility
     partial void OnHighContrastModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HighContrastMode = value; SaveAndApplyAccessibility(); } }
@@ -618,6 +696,16 @@ public partial class SettingsViewModel : ObservableObject
         catch { }
     }
 
+    [RelayCommand]
+    private async System.Threading.Tasks.Task OpenWindowsSignInSettings()
+    {
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:signinoptions"));
+        }
+        catch { }
+    }
+
     // ── Sync ───────────────────────────────────────────────────────
 
     private void SyncFromSettings()
@@ -651,13 +739,17 @@ public partial class SettingsViewModel : ObservableObject
         SelectedBackdrop = c.BackdropType;
         SelectedAccentColor = c.AccentColor;
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
+        AcrylicTransportBar = c.AcrylicTransportBar;
 
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
 
         AutomaticLibraryScan = c.AutomaticLibraryScan;
 
+        // Privacy & Security
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;
+        EnableAppLock = c.EnableAppLock;
+        AppLockWhenMinimized = c.AppLockWhenMinimized;
 
         HighContrastMode = c.HighContrastMode;
         TextScale = c.TextScale;

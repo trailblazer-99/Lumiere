@@ -192,6 +192,13 @@ public partial class MusicLibraryViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task RefreshAsync()
+    {
+        await SampleMediaLibrary.SynchronizeLibraryMediaAsync();
+        SyncTracks();
+    }
+
+    [RelayCommand]
     public async Task AddFolderAsync()
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();
@@ -202,6 +209,9 @@ public partial class MusicLibraryViewModel : ObservableObject
         var folder = await picker.PickSingleFolderAsync();
         if (folder != null)
         {
+            AppServices.Settings.AddLibraryFolder(folder.Path);
+            SampleMediaLibrary.StartWatchingDirectory(folder.Path);
+
             var files = Directory.GetFiles(folder.Path, "*.*", SearchOption.AllDirectories)
                 .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
                             f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase) ||

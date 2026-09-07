@@ -30,6 +30,7 @@ public sealed class SettingsService
     private const string BackdropTypeKey = "BackdropType";
     private const string AccentColorKey = "AccentColor";
     private const string AlwaysShowTransportBarKey = "AlwaysShowTransportBar";
+    private const string AcrylicTransportBarKey = "AcrylicTransportBar";
 
     // Controls & Interface
     private const string ShowOpenFilesOnHomeKey = "ShowOpenFilesOnHome";
@@ -43,8 +44,10 @@ public sealed class SettingsService
     // Library
     private const string AutomaticLibraryScanKey = "AutomaticLibraryScan";
 
-    // Privacy
+    // Privacy & Security
     private const string RememberPlaybackPositionPerTrackKey = "RememberPlaybackPositionPerTrack";
+    private const string EnableAppLockKey = "EnableAppLock";
+    private const string AppLockWhenMinimizedKey = "AppLockWhenMinimized";
 
     // Accessibility
     private const string HighContrastModeKey = "HighContrastMode";
@@ -128,6 +131,7 @@ public sealed class SettingsService
             BackdropType = ParseEnum(settingsValues, BackdropTypeKey, AppThemeBackdrop.Mica),
             AccentColor = ParseEnum(settingsValues, AccentColorKey, AccentColorOption.SystemDefault),
             AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
+            AcrylicTransportBar = ReadBool(settingsValues, AcrylicTransportBarKey, true),
 
             // Controls & Interface
             ShowOpenFilesOnHome = ReadBool(settingsValues, ShowOpenFilesOnHomeKey, true),
@@ -141,8 +145,10 @@ public sealed class SettingsService
             // Library
             AutomaticLibraryScan = ReadBool(settingsValues, AutomaticLibraryScanKey, true),
 
-            // Privacy
+            // Privacy & Security
             RememberPlaybackPositionPerTrack = ReadBool(settingsValues, RememberPlaybackPositionPerTrackKey, true),
+            EnableAppLock = ReadBool(settingsValues, EnableAppLockKey, false),
+            AppLockWhenMinimized = ReadBool(settingsValues, AppLockWhenMinimizedKey, false),
 
             // Accessibility
             HighContrastMode = ReadBool(settingsValues, HighContrastModeKey, false),
@@ -161,7 +167,6 @@ public sealed class SettingsService
             AiLyricsTranslationEnabled = ReadBool(settingsValues, AiLyricsTranslationEnabledKey, false),
             AiTranslationTargetLanguage = settingsValues.TryGetValue(AiTranslationTargetLanguageKey, out var aiLang) && aiLang is string sAiLang ? sAiLang : "Hindi",
             AiSemanticSearchEnabled = ReadBool(settingsValues, AiSemanticSearchEnabledKey, false),
-            GeminiApiKey = Helpers.SecureStorageHelper.GetSecret("GeminiApiKey"),
             UseLocalAi = ReadBool(settingsValues, UseLocalAiKey, false),
             OllamaModelName = settingsValues.TryGetValue(OllamaModelNameKey, out var oModel) && oModel is string sOModel ? sOModel : "llama3.2",
             AiEqualizerMatcherEnabled = ReadBool(settingsValues, AiEqualizerMatcherEnabledKey, false),
@@ -228,6 +233,7 @@ public sealed class SettingsService
         s.Values[BackdropTypeKey] = Current.BackdropType.ToString();
         s.Values[AccentColorKey] = Current.AccentColor.ToString();
         s.Values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
+        s.Values[AcrylicTransportBarKey] = Current.AcrylicTransportBar;
 
         // Controls & Interface
         s.Values[ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome;
@@ -236,8 +242,10 @@ public sealed class SettingsService
         // Library
         s.Values[AutomaticLibraryScanKey] = Current.AutomaticLibraryScan;
 
-        // Privacy
+        // Privacy & Security
         s.Values[RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack;
+        s.Values[EnableAppLockKey] = Current.EnableAppLock;
+        s.Values[AppLockWhenMinimizedKey] = Current.AppLockWhenMinimized;
 
         // Accessibility
         s.Values[HighContrastModeKey] = Current.HighContrastMode;
@@ -317,7 +325,7 @@ public sealed class SettingsService
             EqualizerPresetKey, DefaultVolumeKey,
             DefaultAspectRatioKey,
             BackdropTypeKey,
-            AccentColorKey, AlwaysShowTransportBarKey,
+            AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey,
             ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
             AutomaticLibraryScanKey,
             RememberPlaybackPositionPerTrackKey,

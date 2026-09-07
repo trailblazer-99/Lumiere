@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models.Streaming;
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Services.Streaming
 {
@@ -233,13 +234,19 @@ namespace LumiereMediaPlayer.Services.Streaming
 
                 if (!hasDirectSub)
                 {
+                    string targetReg = string.IsNullOrEmpty(region) ? "us" : region.ToLowerInvariant();
+                    string? canonicalPath = AppleTvDeepLinkHelper.GetKnownCanonicalPath(clean);
+                    string targetUrl = !string.IsNullOrEmpty(canonicalPath)
+                        ? $"https://tv.apple.com/{targetReg}/{canonicalPath}"
+                        : $"https://tv.apple.com/{targetReg}/search?term={Uri.EscapeDataString(clean)}";
+
                     sources.Add(new WatchmodeSource
                     {
                         SourceId = 350,
                         Name = "Apple TV+",
                         Type = "sub",
                         Region = string.IsNullOrEmpty(region) ? "US" : region.ToUpperInvariant(),
-                        WebUrl = "https://tv.apple.com",
+                        WebUrl = targetUrl,
                         Format = "4K"
                     });
                 }

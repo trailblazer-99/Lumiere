@@ -11,6 +11,7 @@ using LumiereMediaPlayer.Models.Streaming;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services.Streaming;
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Pages
 {
@@ -147,16 +148,19 @@ namespace LumiereMediaPlayer.Pages
 
         private async Task LoadDetailsAsync()
         {
-            Task<WatchmodeDetails?> detailsTask;
-            Task<List<WatchmodeCastCrew>> castTask;
-            Task<List<WatchmodeSeason>> seasonsTask;
-            Task<List<WatchmodeEpisode>> episodesTask;
-            Task<List<WatchmodeSource>> sourcesTask;
-            Task<List<WatchmodeTitle>> similarTask;
-            Task<WatchmodeScores?> scoresTask;
-            Task<List<WatchmodeRelease>> releasesTask;
+            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Visible;
+            try
+            {
+                Task<WatchmodeDetails?> detailsTask;
+                Task<List<WatchmodeCastCrew>> castTask;
+                Task<List<WatchmodeSeason>> seasonsTask;
+                Task<List<WatchmodeEpisode>> episodesTask;
+                Task<List<WatchmodeSource>> sourcesTask;
+                Task<List<WatchmodeTitle>> similarTask;
+                Task<WatchmodeScores?> scoresTask;
+                Task<List<WatchmodeRelease>> releasesTask;
 
-            if (_watchmodeId > 0)
+                if (_watchmodeId > 0)
             {
                 detailsTask = _watchmodeService.GetDetailsAsync(_watchmodeId);
                 castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
@@ -393,6 +397,11 @@ namespace LumiereMediaPlayer.Pages
                 }
             }
         }
+        finally
+        {
+            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
 
         private void UpdateLibraryButtonStatus()
         {
@@ -665,13 +674,19 @@ namespace LumiereMediaPlayer.Pages
 
                 if (!hasDirectAppleTvSub)
                 {
+                    string cleanTitle = _details?.Title?.Trim() ?? "";
+                    string? canonicalPath = AppleTvDeepLinkHelper.GetKnownCanonicalPath(cleanTitle);
+                    string targetUrl = !string.IsNullOrEmpty(canonicalPath)
+                        ? $"https://tv.apple.com/{targetRegion.ToLowerInvariant()}/{canonicalPath}"
+                        : $"https://tv.apple.com/{targetRegion.ToLowerInvariant()}/search?term={Uri.EscapeDataString(cleanTitle)}";
+
                     regionalSources.Add(new WatchmodeSource
                     {
                         SourceId = 350,
                         Name = "Apple TV+",
                         Type = "sub",
                         Region = targetRegion,
-                        WebUrl = "https://tv.apple.com",
+                        WebUrl = targetUrl,
                         Format = "4K"
                     });
                 }
@@ -1214,51 +1229,13 @@ namespace LumiereMediaPlayer.Pages
                         {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(url);
 
-                            // Intercept Apple TV URLs to guarantee canonical Show ID extraction instead of Episode IDs
-                            if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) && 
-                                (cleanUrl.Contains("/search", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("/episode/", StringComparison.OrdinalIgnoreCase)))
+                            // Intercept Apple TV / iTunes URLs to guarantee canonical direct deep linking
+                            if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                             {
-                                string term = "";
-                                var qMatch = System.Text.RegularExpressions.Regex.Match(cleanUrl, @"[?&]term=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                                if (qMatch.Success) term = qMatch.Groups[1].Value;
-                                else term = _details?.Title ?? "";
-
-                                if (!string.IsNullOrEmpty(term))
-                                {
-                                    try
-                                    {
-                                        string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
-                                        string itunesUrl = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&media={mediaType}&limit=10";
-                                        
-                                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-                                        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                                        var response = await client.GetStringAsync(itunesUrl);
-                                        using var doc = System.Text.Json.JsonDocument.Parse(response);
-                                        var results = doc.RootElement.GetProperty("results");
-                                        
-                                        if (results.GetArrayLength() > 0)
-                                        {
-                                            foreach (var result in results.EnumerateArray())
-                                            {
-                                                var trackName = result.GetProperty("trackName").GetString() ?? "";
-                                                if (trackName.Contains(term, StringComparison.OrdinalIgnoreCase) || term.Contains(trackName, StringComparison.OrdinalIgnoreCase))
-                                                {
-                                                    var trackViewUrl = result.GetProperty("trackViewUrl").GetString();
-                                                    if (!string.IsNullOrEmpty(trackViewUrl))
-                                                    {
-                                                        cleanUrl = trackViewUrl;
-                                                        AntiGravityLogger.Log($"iTunes API upgraded URL to: {cleanUrl}");
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        AntiGravityLogger.Log($"Apple TV / iTunes URL upgrade failed: {ex.Message}");
-                                    }
-                                }
+                                string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
+                                string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
+                                cleanUrl = await AppleTvDeepLinkHelper.ResolveAppleTvUrlAsync(_details?.Title ?? "", mediaType, cleanUrl, targetRegion);
+                                AntiGravityLogger.Log($"Apple TV URL resolved to canonical deep link: {cleanUrl}");
                             }
 
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
@@ -1319,44 +1296,17 @@ namespace LumiereMediaPlayer.Pages
 
             if (name.Contains("apple"))
             {
-                // Rewrite any tv.apple.com or itunes.apple.com URL to be region-aware based on local OS storefront region
-                if ((webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || 
-                     webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase)) &&
-                    !webUrl.Contains("/search", StringComparison.OrdinalIgnoreCase))
-                {
-                    string targetRegion = "us";
-                    try
-                    {
-                        string osRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToLowerInvariant();
-                        if (!string.IsNullOrEmpty(osRegion))
-                        {
-                            targetRegion = osRegion;
-                        }
-                    }
-                    catch { }
+                string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
+                string cleanTitle = _details?.Title?.Trim() ?? "";
 
-                    var match = System.Text.RegularExpressions.Regex.Match(webUrl, @"((?:tv|itunes)\.apple\.com)/([a-zA-Z]{2})(/|$)");
-                    if (match.Success)
-                    {
-                        string foundRegion = match.Groups[2].Value;
-                        if (!foundRegion.Equals(targetRegion, StringComparison.OrdinalIgnoreCase))
-                        {
-                            webUrl = System.Text.RegularExpressions.Regex.Replace(webUrl, @"((?:tv|itunes)\.apple\.com/)[a-zA-Z]{2}(/|$)", $"$1{targetRegion}$2");
-                            AntiGravityLogger.Log($"Apple TV: Rewrote URL region from '{foundRegion}' to '{targetRegion}'. Result: {webUrl}");
-                        }
-                    }
-                    else
-                    {
-                        webUrl = System.Text.RegularExpressions.Regex.Replace(webUrl, @"(tv\.apple\.com|itunes\.apple\.com)(/|$)", $"$1/{targetRegion}/");
-                        AntiGravityLogger.Log($"Apple TV: Inserted region '{targetRegion}'. Result: {webUrl}");
-                    }
+                string? knownPath = AppleTvDeepLinkHelper.GetKnownCanonicalPath(cleanTitle);
+                if (!string.IsNullOrEmpty(knownPath))
+                {
+                    webUrl = $"https://tv.apple.com/{targetRegion}/{knownPath}";
                 }
-
-                // If this is a series page, try to deep link directly to the first season's episodes
-                if (webUrl.Contains("/show/", StringComparison.OrdinalIgnoreCase) && !webUrl.Contains("/season/", StringComparison.OrdinalIgnoreCase))
+                else if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    var sep = webUrl.EndsWith("/") ? "" : "/";
-                    webUrl = $"{webUrl}{sep}season/1";
+                    webUrl = AppleTvDeepLinkHelper.RewriteUrlRegion(webUrl, targetRegion);
                 }
             }
 
@@ -1435,8 +1385,24 @@ namespace LumiereMediaPlayer.Pages
                     webUrl = !string.IsNullOrEmpty(query) ? $"https://www.crunchyroll.com/search?q={encoded}" : "https://www.crunchyroll.com";
                 else if (name.Contains("vudu") || name.Contains("fandango"))
                     webUrl = !string.IsNullOrEmpty(query) ? $"https://www.vudu.com/content/movies/search?minVisible=0&returnUrl=%252F&searchString={encoded}" : "https://www.vudu.com";
+                else if (name.Contains("zee5") || name.Contains("zee 5"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.zee5.com/search?q={encoded}" : "https://www.zee5.com";
+                else if (name.Contains("sonyliv") || name.Contains("sony liv"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.sonyliv.com/search/{encoded}" : "https://www.sonyliv.com";
+                else if (name.Contains("discovery"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.discoveryplus.com/search?q={encoded}" : "https://www.discoveryplus.com";
+                else if (name.Contains("tubi"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://tubitv.com/search/{encoded}" : "https://tubitv.com";
+                else if (name.Contains("pluto"))
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://pluto.tv/search/details?q={encoded}" : "https://pluto.tv";
                 else if (name.Contains("apple") || name.Contains("itunes"))
-                    webUrl = !string.IsNullOrEmpty(query) ? $"https://tv.apple.com/search?term={encoded}" : "https://tv.apple.com";
+                {
+                    string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
+                    string? knownPath = AppleTvDeepLinkHelper.GetKnownCanonicalPath(query);
+                    webUrl = !string.IsNullOrEmpty(knownPath)
+                        ? $"https://tv.apple.com/{targetRegion}/{knownPath}"
+                        : (!string.IsNullOrEmpty(query) ? $"https://tv.apple.com/{targetRegion}/search?term={encoded}" : $"https://tv.apple.com/{targetRegion}/");
+                }
                 else if (!string.IsNullOrEmpty(query))
                     webUrl = $"https://www.google.com/search?q={Uri.EscapeDataString(query + " watch on " + source.Name)}";
             }

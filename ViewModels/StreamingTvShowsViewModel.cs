@@ -86,16 +86,8 @@ namespace LumiereMediaPlayer.ViewModels
         [RelayCommand]
         public void QuickFilterTopRated()
         {
-            SelectedRating = "⭐ 8.0+";
-            SelectedSortOrder = "Popularity";
-        }
-
-        [RelayCommand]
-        public void QuickFilterTrending()
-        {
-            SelectedSortOrder = "Popularity";
-            SelectedRating = "All Ratings";
-            SelectedGenre = "All Genres";
+            SelectedRating = "8.0+";
+            SelectedSortOrder = "User Rating (High to Low)";
         }
 
         [RelayCommand]

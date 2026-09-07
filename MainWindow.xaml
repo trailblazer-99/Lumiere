@@ -645,14 +645,13 @@
                                 helpers:SpringAnimationHelper.PressScale="0.92">
                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <AnimatedVisualPlayer
+                                        x:Name="MiniPlayerVisual"
                                         AutoPlay="False"
                                         Width="44"
                                         Height="44"
                                         Opacity="0.4"
                                         HorizontalAlignment="Center"
-                                        VerticalAlignment="Center">
-                                        <controls:LottieLogo1/>
-                                    </AnimatedVisualPlayer>
+                                        VerticalAlignment="Center" />
                                     <FontIcon
                                         x:Name="MiniPlayPauseIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
@@ -727,6 +726,104 @@
                     </Grid>
                 </Grid>
             </Grid>
+        </Grid>
+
+        <!-- Full-Window App Lock Overlay (Windows Hello Biometrics & PIN) -->
+        <Grid
+            x:Name="AppLockOverlay"
+            Grid.RowSpan="2"
+            Canvas.ZIndex="9999"
+            Visibility="Collapsed"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+
+            <!-- Deep Acrylic / Ambient Glow Backdrop -->
+            <Border
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" />
+
+            <!-- Lock Card Center Container -->
+            <Border
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MaxWidth="420"
+                Padding="32,36"
+                CornerRadius="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1">
+                <StackPanel Spacing="20" HorizontalAlignment="Center">
+                    <!-- App Logo and Lock Icon Composition -->
+                    <Grid Width="72" Height="72" HorizontalAlignment="Center">
+                        <Border
+                            Width="72"
+                            Height="72"
+                            CornerRadius="36"
+                            Background="{ThemeResource AccentFillColorTertiaryBrush}" />
+                        <FontIcon
+                            FontSize="32"
+                            Glyph="&#xE8D7;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Text Branding -->
+                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                        <TextBlock
+                            Text="Lumière is Locked"
+                            FontSize="22"
+                            FontWeight="SemiBold"
+                            TextAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock
+                            Text="Use Windows Hello face, fingerprint, or your Windows PIN to unlock."
+                            FontSize="13"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <!-- Status / Error Feedback Message -->
+                    <TextBlock
+                        x:Name="AppLockStatusMessage"
+                        Text="Awaiting authentication..."
+                        FontSize="12"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                        Visibility="Collapsed" />
+
+                    <!-- Action Buttons -->
+                    <StackPanel Spacing="10" HorizontalAlignment="Stretch" Margin="0,8,0,0">
+                        <Button
+                            x:Name="AppLockUnlockButton"
+                            Content="Unlock with Windows Hello"
+                            Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Stretch"
+                            Height="38"
+                            CornerRadius="8"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.03"
+                            Click="OnAppLockUnlockClicked" />
+
+                        <Button
+                            x:Name="AppLockExitButton"
+                            Content="Exit Lumière"
+                            HorizontalAlignment="Stretch"
+                            Height="34"
+                            CornerRadius="8"
+                            Background="Transparent"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.03"
+                            Click="OnAppLockExitClicked" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </Window>

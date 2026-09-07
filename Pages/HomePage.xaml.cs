@@ -21,6 +21,7 @@ public sealed partial class HomePage : Page
         UpdateOpenFileButtonVisibility();
         AppServices.Settings.SettingsChanged += OnSettingsChanged;
         this.Unloaded += OnUnloaded;
+        this.KeyDown += OnPageKeyDown;
         
         ViewModel.RecentlyPlayed.CollectionChanged += RecentlyPlayed_CollectionChanged;
     }
@@ -36,6 +37,7 @@ public sealed partial class HomePage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        this.KeyDown -= OnPageKeyDown;
         AppServices.Settings.SettingsChanged -= OnSettingsChanged;
         ViewModel.RecentlyPlayed.CollectionChanged -= RecentlyPlayed_CollectionChanged;
     }
@@ -232,6 +234,20 @@ public sealed partial class HomePage : Page
         {
             await AppServices.History.RemoveRangeFromHistoryAsync(selected);
             HomeSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Delete)
+        {
+            var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                e.Handled = true;
+                await AppServices.History.RemoveRangeFromHistoryAsync(selected);
+                HomeSelectionRibbon?.ClearSelection();
+            }
         }
     }
 }

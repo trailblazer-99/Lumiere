@@ -19,6 +19,7 @@ public sealed partial class MusicLibraryPage : Page
     {
         InitializeComponent();
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
+        this.KeyDown += OnPageKeyDown;
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -306,6 +307,21 @@ public sealed partial class MusicLibraryPage : Page
             var flyout = Helpers.MediaFlyoutHelper.CreateMediaFlyout(item, element);
             flyout.ShowAt(element, e.GetPosition(element));
             e.Handled = true;
+        }
+    }
+
+    private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Delete)
+        {
+            var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                e.Handled = true;
+                await SampleMediaLibrary.RemoveTracksAsync(selected);
+                MusicSelectionRibbon?.ClearSelection();
+                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            }
         }
     }
 }
