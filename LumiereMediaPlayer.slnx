@@ -11,4 +11,5 @@
     <Deploy />
   </Project>
   <Project Path="LumiereProxy\LumiereProxy.csproj" />
+  <Project Path="Tests\LumiereMediaPlayer.Tests\LumiereMediaPlayer.Tests.csproj" />
 </Solution>

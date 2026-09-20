@@ -14,7 +14,7 @@ namespace LumiereMediaPlayer.Services.Streaming
     {
         private static string ApiKey => "";
         private const string BaseUrl = "https://api.watchmode.com/v1";
-        
+
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         private static readonly Dictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
@@ -44,7 +44,7 @@ namespace LumiereMediaPlayer.Services.Streaming
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
-            
+
             var results = await FetchTitleListAsync(servicePath, url);
             return results ?? new List<WatchmodeTitle>();
         }
@@ -60,7 +60,7 @@ namespace LumiereMediaPlayer.Services.Streaming
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
-            
+
             var results = await FetchTitleListAsync(servicePath, url);
             return results ?? new List<WatchmodeTitle>();
         }
@@ -469,7 +469,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetSeasons Error: {ex.Message}");
-                
+
                 // Fallback directly to TMDB API for seasons when Watchmode is unavailable
                 if (IdMap.TryGetValue(watchmodeId, out var ids))
                 {
@@ -500,7 +500,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetEpisodes Error: {ex.Message}");
-                
+
                 // Fallback directly to TMDB API for episodes when Watchmode is unavailable
                 if (IdMap.TryGetValue(watchmodeId, out var ids))
                 {
@@ -568,10 +568,10 @@ namespace LumiereMediaPlayer.Services.Streaming
         {
             if (string.IsNullOrWhiteSpace(query)) return new List<WatchmodeTitle>();
             var encodedQuery = Uri.EscapeDataString(query);
-            
+
             var servicePath = $"watchmode/search/?search_field=name&search_value={encodedQuery}" + (!string.IsNullOrEmpty(type) ? $"&types={type}" : "");
             var url = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field=name&search_value={encodedQuery}" + (!string.IsNullOrEmpty(type) ? $"&types={type}" : "");
-            
+
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);

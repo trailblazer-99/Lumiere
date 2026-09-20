@@ -22,7 +22,8 @@ namespace LumiereMediaPlayer.ViewModels
 
         [ObservableProperty] public partial bool IsLoading { get; set; }
 
-        [ObservableProperty] public partial ObservableCollection<string> Genres { get; set; } = new()
+        [ObservableProperty]
+        public partial ObservableCollection<string> Genres { get; set; } = new()
         {
             "All Genres",
             "Pop",
@@ -36,7 +37,8 @@ namespace LumiereMediaPlayer.ViewModels
 
         [ObservableProperty] public partial string SelectedGenre { get; set; } = "All Genres";
 
-        [ObservableProperty] public partial ObservableCollection<string> SearchFilters { get; set; } = new()
+        [ObservableProperty]
+        public partial ObservableCollection<string> SearchFilters { get; set; } = new()
         {
             "Songs",
             "Albums",
@@ -97,7 +99,7 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     finalQuery = $"{query} {SelectedGenre}";
                 }
-                
+
                 SearchQuery = finalQuery;
                 await LoadTracksAsync();
             }

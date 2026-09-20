@@ -52,7 +52,7 @@ namespace LumiereMediaPlayer.Models.Streaming
     {
         [JsonPropertyName("default")]
         public YouTubeThumbnail? DefaultThumbnail { get; set; }
-        
+
         public YouTubeThumbnail? Medium { get; set; }
         public YouTubeThumbnail? High { get; set; }
         public YouTubeThumbnail? Standard { get; set; }

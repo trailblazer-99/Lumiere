@@ -232,7 +232,7 @@ public static class VideoMetadataHelper
                 return false;
             }
         }
-        
+
         // Default fallback to show file format
         if (string.IsNullOrEmpty(item.ReleaseYear) || item.ReleaseYear.Length != 4)
         {

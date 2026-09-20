@@ -50,7 +50,7 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         public string DisplayTitle => !string.IsNullOrEmpty(Title) ? Title : Name ?? string.Empty;
         public string DisplayDate => !string.IsNullOrEmpty(ReleaseDate) ? ReleaseDate : FirstAirDate ?? string.Empty;
-        
+
         public string DisplayYear
         {
             get
@@ -59,10 +59,10 @@ namespace LumiereMediaPlayer.Models.Streaming
                 return (!string.IsNullOrEmpty(date) && date.Length >= 4) ? date.Substring(0, 4) : string.Empty;
             }
         }
-        
+
         public string? PosterUrl => !string.IsNullOrEmpty(PosterPath) ? $"https://image.tmdb.org/t/p/w500{PosterPath}" : null;
         public string? BackdropUrl => !string.IsNullOrEmpty(BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{BackdropPath}" : null;
-        
+
         public string TmdbUrl => !string.IsNullOrEmpty(Name) ? $"https://www.themoviedb.org/tv/{Id}" : $"https://www.themoviedb.org/movie/{Id}";
 
         public WatchmodeTitle ToWatchmodeTitle(string? forcedType = null)

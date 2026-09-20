@@ -23,7 +23,7 @@ namespace LumiereMediaPlayer.Services.Streaming
         [ObservableProperty] public partial string Watchlist { get; set; } = "Watchlist";
     }
 
-    public class StreamingLibraryService
+    public class StreamingLibraryService : IStreamingLibraryService
     {
         private readonly string _filePath;
         public List<SavedStreamingItem> SavedItems { get; private set; }
@@ -34,7 +34,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             var appFolder = Path.Combine(appDataPath, "LumiereMediaPlayer");
             Directory.CreateDirectory(appFolder);
             _filePath = Path.Combine(appFolder, "streaming_library.json");
-            
+
             SavedItems = new List<SavedStreamingItem>();
             Load();
         }

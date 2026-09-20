@@ -437,6 +437,20 @@
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AcrylicTransportBar, Mode=TwoWay}"/>
                     </Grid>
                 </Border>
+
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="18" Glyph="&#xE93E;" Foreground="{ThemeResource SystemAccentColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock FontSize="14" Text="Auto-hide transport bar in Streaming"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically hide playback controls when navigating movies, TV shows, and streaming."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoHideTransportBarInStreaming, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
             </StackPanel>
 
             <!-- 5. CONTROLS & INTERFACE -->

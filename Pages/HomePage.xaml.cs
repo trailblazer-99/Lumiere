@@ -22,7 +22,7 @@ public sealed partial class HomePage : Page
         AppServices.Settings.SettingsChanged += OnSettingsChanged;
         this.Unloaded += OnUnloaded;
         this.KeyDown += OnPageKeyDown;
-        
+
         ViewModel.RecentlyPlayed.CollectionChanged += RecentlyPlayed_CollectionChanged;
     }
 
@@ -229,25 +229,39 @@ public sealed partial class HomePage : Page
 
     private async void OnRemoveSelectedRequested(object? sender, EventArgs e)
     {
-        var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
-        if (selected.Count > 0)
+        try
         {
-            await AppServices.History.RemoveRangeFromHistoryAsync(selected);
-            HomeSelectionRibbon?.ClearSelection();
+            var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                await AppServices.History.RemoveRangeFromHistoryAsync(selected);
+                HomeSelectionRibbon?.ClearSelection();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnRemoveSelectedRequested] error: {ex.Message}");
         }
     }
 
     private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Delete)
+        try
         {
-            var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
-            if (selected.Count > 0)
+            if (e.Key == Windows.System.VirtualKey.Delete)
             {
-                e.Handled = true;
-                await AppServices.History.RemoveRangeFromHistoryAsync(selected);
-                HomeSelectionRibbon?.ClearSelection();
+                var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+                if (selected.Count > 0)
+                {
+                    e.Handled = true;
+                    await AppServices.History.RemoveRangeFromHistoryAsync(selected);
+                    HomeSelectionRibbon?.ClearSelection();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnPageKeyDown] error: {ex.Message}");
         }
     }
 }

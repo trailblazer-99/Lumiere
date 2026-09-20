@@ -8,7 +8,7 @@ using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Services
 {
-    public class HistoryService
+    public class HistoryService : IHistoryService
     {
         private const int MaxHistoryItems = 50;
         private static readonly string HistoryFilePath = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "playback_history.json");

@@ -348,7 +348,7 @@ public static class AccessibilityHelper
 
     private static ElementSnapshot CreateSnapshot(FrameworkElement element) =>
         new(
-            element is TextBlock textBlock ? textBlock.FontSize : 
+            element is TextBlock textBlock ? textBlock.FontSize :
             element is FontIcon fontIcon ? fontIcon.FontSize :
             element is RichTextBlock richTextBlock ? richTextBlock.FontSize :
             element is Control controlText ? controlText.FontSize : 14,

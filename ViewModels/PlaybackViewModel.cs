@@ -7,7 +7,7 @@ namespace LumiereMediaPlayer.ViewModels;
 
 public partial class PlaybackViewModel : ObservableObject
 {
-    private readonly PlaybackSession _session;
+    private readonly IPlaybackSession _session;
 
     [ObservableProperty] public partial MediaItem? CurrentTrack { get; set; }
 
@@ -27,21 +27,21 @@ public partial class PlaybackViewModel : ObservableObject
 
     [ObservableProperty] public partial Microsoft.UI.Xaml.Media.Stretch VideoStretch { get; set; } = Microsoft.UI.Xaml.Media.Stretch.Uniform;
 
-    public PlaybackViewModel(PlaybackSession session)
+    public PlaybackViewModel(IPlaybackSession session)
     {
         _session = session;
         _session.StateChanged += (_, _) => SyncFromSession();
-        
+
         try
         {
             SelectedAspectRatio = AppServices.Settings.Current.DefaultAspectRatio;
         }
         catch { }
-        
+
         SyncFromSession();
     }
 
-    public PlaybackSession Session => _session;
+    public IPlaybackSession Session => _session;
 
     [RelayCommand]
     private void TogglePlayPause() => _session.TogglePlayPause();
@@ -120,7 +120,7 @@ public partial class PlaybackViewModel : ObservableObject
     {
         CurrentTrack = _session.CurrentTrack;
         OnPropertyChanged(nameof(CurrentTrack)); // Force update in case properties like Duration mutated in-place
-        
+
         IsPlaying = _session.IsPlaying;
         PositionSeconds = _session.PositionSeconds;
         Volume = _session.Volume;

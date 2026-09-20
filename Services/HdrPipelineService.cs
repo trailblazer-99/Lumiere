@@ -35,7 +35,7 @@ namespace LumiereMediaPlayer.Services;
 /// before <see cref="Initialize"/>.
 /// </para>
 /// </summary>
-public sealed class HdrPipelineService
+public sealed class HdrPipelineService : IHdrPipelineService
 {
     // ── Events ──────────────────────────────────────────────────────
 
@@ -100,18 +100,18 @@ public sealed class HdrPipelineService
 
     public string ContentFormatLabel => _contentFormat switch
     {
-        HdrContentFormat.Hdr10       => "HDR10",
-        HdrContentFormat.Hlg         => "HLG",
+        HdrContentFormat.Hdr10 => "HDR10",
+        HdrContentFormat.Hlg => "HLG",
         HdrContentFormat.DolbyVision => "Dolby Vision",
-        _                            => "SDR"
+        _ => "SDR"
     };
 
     public string DisplayCapabilityLabel => _displayCapability switch
     {
-        DisplayHdrCapability.Hdr10       => "HDR10 Display",
+        DisplayHdrCapability.Hdr10 => "HDR10 Display",
         DisplayHdrCapability.DolbyVision => "Dolby Vision Display",
-        DisplayHdrCapability.Wcg         => "WCG Display",
-        _                                => AppServices.DisplayManager.CanStreamHdr ? "HDR Streaming Capable Display" : "SDR Display"
+        DisplayHdrCapability.Wcg => "WCG Display",
+        _ => AppServices.DisplayManager.CanStreamHdr ? "HDR Streaming Capable Display" : "SDR Display"
     };
 
     // ── Initialise ───────────────────────────────────────────────────
@@ -249,8 +249,8 @@ public sealed class HdrPipelineService
     {
         if (item == null)
         {
-            _contentFormat     = HdrContentFormat.None;
-            _lastDetectedItem  = null;
+            _contentFormat = HdrContentFormat.None;
+            _lastDetectedItem = null;
             _detectionComplete = false;
             return _contentFormat;
         }
@@ -265,8 +265,8 @@ public sealed class HdrPipelineService
         }
 
         // Run the scan, then commit both cache fields in exactly one place.
-        _contentFormat     = ScanContentFormat(item);
-        _lastDetectedItem  = item;
+        _contentFormat = ScanContentFormat(item);
+        _lastDetectedItem = item;
         _detectionComplete = true;
         return _contentFormat;
     }
@@ -288,7 +288,7 @@ public sealed class HdrPipelineService
                 var containerTracks = MediaTrackFormatHelper.GetContainerTracks(sourcePath);
                 var vTrack = containerTracks.Find(t => t.TrackType == 1);
 
-                if (fName.Contains("DV", StringComparison.OrdinalIgnoreCase) || 
+                if (fName.Contains("DV", StringComparison.OrdinalIgnoreCase) ||
                     fName.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) ||
                     fName.Contains("DolbyVision", StringComparison.OrdinalIgnoreCase) ||
                     (vTrack != null && vTrack.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase)))
@@ -415,9 +415,9 @@ public sealed class HdrPipelineService
 
         bool shouldEnableHdr = settings.HdrMode switch
         {
-            HdrMode.ForceOn  => true,   // always boost — user's explicit choice
+            HdrMode.ForceOn => true,   // always boost — user's explicit choice
             HdrMode.ForceSdr => false,  // always SDR   — user's explicit choice
-            _                => isContentHdr && isDisplayHdrCapable
+            _ => isContentHdr && isDisplayHdrCapable
         };
 
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
@@ -431,12 +431,12 @@ public sealed class HdrPipelineService
 
         var args = new HdrStateChangedEventArgs
         {
-            IsHdrActive               = _hdrActive,
-            ContentFormat             = _contentFormat,
-            DisplayCapability         = _displayCapability,
-            ToneMappingMode           = settings.ToneMappingMode,
-            PeakBrightnessNits        = (int)AppServices.DisplayManager.MaxLuminanceInNits,
-            IsDualGpuEnvironment      = _isDualGpuPresent,
+            IsHdrActive = _hdrActive,
+            ContentFormat = _contentFormat,
+            DisplayCapability = _displayCapability,
+            ToneMappingMode = settings.ToneMappingMode,
+            PeakBrightnessNits = (int)AppServices.DisplayManager.MaxLuminanceInNits,
+            IsDualGpuEnvironment = _isDualGpuPresent,
             IsHdrStreamingCapableOnly = AppServices.DisplayManager.IsHdrStreamingCapableOnly
         };
 
@@ -497,15 +497,15 @@ public sealed class HdrPipelineService
                 ToneMappingMode.DisplayAdaptive => displayProfile switch
                 {
                     Display.DisplayProfileKind.TrueHdrOledOrMiniLed => 3u, // High-End HDR: Direct passthrough / Clip at screen peak
-                    Display.DisplayProfileKind.EntryHdr            => 2u, // Entry HDR: BT.2408 highlight compression
-                    Display.DisplayProfileKind.WideColorGamutSdr   => 2u, // WCG SDR: BT.2408 DCI-P3 reference
-                    _                                              => 2u  // Standard SDR: BT.2408 ITU standard
+                    Display.DisplayProfileKind.EntryHdr => 2u, // Entry HDR: BT.2408 highlight compression
+                    Display.DisplayProfileKind.WideColorGamutSdr => 2u, // WCG SDR: BT.2408 DCI-P3 reference
+                    _ => 2u  // Standard SDR: BT.2408 ITU standard
                 },
-                ToneMappingMode.Bt2408   => 2u, // BT.2408 (ITU standard reference)
-                ToneMappingMode.Aces     => 1u, // ACES (Cinematic highlights)
+                ToneMappingMode.Bt2408 => 2u, // BT.2408 (ITU standard reference)
+                ToneMappingMode.Aces => 1u, // ACES (Cinematic highlights)
                 ToneMappingMode.Reinhard => 0u, // Reinhard (Smooth roll-off)
-                ToneMappingMode.Clip     => 3u, // Clip
-                _                        => 2u
+                ToneMappingMode.Clip => 3u, // Clip
+                _ => 2u
             };
 
             var toneMapGuid = new Guid("DE9AC8C9-9602-4A85-AA27-BCE095709DFF"); // MF_VIDEO_TONEMAPPING_OPERATOR
@@ -599,9 +599,9 @@ public sealed class HdrPipelineService
     /// </summary>
     public void ResetContentState()
     {
-        _contentFormat     = HdrContentFormat.None;
-        _hdrActive         = false;
-        _lastDetectedItem  = null; // clear cache so next media gets a fresh detection
+        _contentFormat = HdrContentFormat.None;
+        _hdrActive = false;
+        _lastDetectedItem = null; // clear cache so next media gets a fresh detection
         _detectionComplete = false;
 
         try { _brightnessOverride?.Release(); }

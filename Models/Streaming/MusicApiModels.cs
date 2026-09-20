@@ -75,7 +75,7 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         public string HighResArtworkUrl => ArtworkUrl ?? string.Empty;
         public string DisplayArtist => Artist ?? string.Empty;
-        
+
         public string? TrackViewUrl => ExternalUrls?.Spotify ?? ExternalUrls?.AppleMusic ?? null;
         public bool HasSpotify => !string.IsNullOrEmpty(ExternalUrls?.Spotify);
         public bool HasAppleMusic => !string.IsNullOrEmpty(ExternalUrls?.AppleMusic);

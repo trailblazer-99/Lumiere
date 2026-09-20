@@ -41,7 +41,7 @@ public sealed partial class SelectionRibbon : UserControl
         if (count > 0)
         {
             CountTextBlock.Text = count == 1 ? "1 item selected" : $"{count} items selected";
-            
+
             _suppressMasterCheckEvents = true;
             if (count == allList.Count)
             {
@@ -178,50 +178,57 @@ public sealed partial class SelectionRibbon : UserControl
 
     private async void OnAddToPlaylistClick(object sender, RoutedEventArgs e)
     {
-        if (AddToPlaylistRequested != null)
+        try
         {
-            AddToPlaylistRequested.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
-        if (_selectedItems.Count == 0) return;
-
-        var flyout = new MenuFlyout();
-        var playlists = SampleMediaLibrary.Playlists;
-
-        if (playlists.Count > 0)
-        {
-            foreach (var playlist in playlists)
+            if (AddToPlaylistRequested != null)
             {
-                var plItem = new MenuFlyoutItem
-                {
-                    Text = playlist.Name,
-                    Icon = new FontIcon { Glyph = "\uE93C" }
-                };
-                var targetPl = playlist;
-                var itemsSnapshot = _selectedItems.ToList();
-                plItem.Click += async (s, args) =>
-                {
-                    await SampleMediaLibrary.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
-                };
-                flyout.Items.Add(plItem);
+                AddToPlaylistRequested.Invoke(this, EventArgs.Empty);
+                return;
             }
-            flyout.Items.Add(new MenuFlyoutSeparator());
+
+            if (_selectedItems.Count == 0) return;
+
+            var flyout = new MenuFlyout();
+            var playlists = SampleMediaLibrary.Playlists;
+
+            if (playlists.Count > 0)
+            {
+                foreach (var playlist in playlists)
+                {
+                    var plItem = new MenuFlyoutItem
+                    {
+                        Text = playlist.Name,
+                        Icon = new FontIcon { Glyph = "\uE93C" }
+                    };
+                    var targetPl = playlist;
+                    var itemsSnapshot = _selectedItems.ToList();
+                    plItem.Click += async (s, args) =>
+                    {
+                        await SampleMediaLibrary.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
+                    };
+                    flyout.Items.Add(plItem);
+                }
+                flyout.Items.Add(new MenuFlyoutSeparator());
+            }
+
+            var newPlItem = new MenuFlyoutItem
+            {
+                Text = "New playlist...",
+                Icon = new FontIcon { Glyph = "\uE710" }
+            };
+            var itemsForDialog = _selectedItems.ToList();
+            newPlItem.Click += async (s, args) =>
+            {
+                await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot);
+            };
+            flyout.Items.Add(newPlItem);
+
+            flyout.ShowAt(AddToPlaylistButton);
         }
-
-        var newPlItem = new MenuFlyoutItem
+        catch (Exception ex)
         {
-            Text = "New playlist...",
-            Icon = new FontIcon { Glyph = "\uE710" }
-        };
-        var itemsForDialog = _selectedItems.ToList();
-        newPlItem.Click += async (s, args) =>
-        {
-            await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot);
-        };
-        flyout.Items.Add(newPlItem);
-
-        flyout.ShowAt(AddToPlaylistButton);
+            System.Diagnostics.Debug.WriteLine($"[OnAddToPlaylistClick] error: {ex.Message}");
+        }
     }
 
     private void OnMasterCheckBoxChecked(object sender, RoutedEventArgs e)
@@ -239,15 +246,22 @@ public sealed partial class SelectionRibbon : UserControl
 
     private async void OnPropertiesClick(object sender, RoutedEventArgs e)
     {
-        if (PropertiesRequested != null)
+        try
         {
-            PropertiesRequested.Invoke(this, EventArgs.Empty);
-            return;
-        }
+            if (PropertiesRequested != null)
+            {
+                PropertiesRequested.Invoke(this, EventArgs.Empty);
+                return;
+            }
 
-        if (_selectedItems.Count > 0)
+            if (_selectedItems.Count > 0)
+            {
+                await MediaFlyoutHelper.ShowPropertiesDialogAsync(_selectedItems[0], this.XamlRoot);
+            }
+        }
+        catch (Exception ex)
         {
-            await MediaFlyoutHelper.ShowPropertiesDialogAsync(_selectedItems[0], this.XamlRoot);
+            System.Diagnostics.Debug.WriteLine($"[OnPropertiesClick] error: {ex.Message}");
         }
     }
 

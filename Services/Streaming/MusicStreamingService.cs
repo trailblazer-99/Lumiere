@@ -35,7 +35,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 return new List<ITunesTrack>();
             }
         }
-        
+
         public async Task<List<ITunesTrack>> SearchTracksAsync(string query, int limit = 150)
         {
             if (string.IsNullOrWhiteSpace(query)) return new List<ITunesTrack>();
@@ -118,12 +118,12 @@ namespace LumiereMediaPlayer.Services.Streaming
                     string[] platforms = { "spotify", "youtube", "appleMusic", "soundcloud", "youtubeMusic", "amazonMusic", "tidal" };
                     foreach (var platform in platforms)
                     {
-                        if (linksByPlatform.TryGetProperty(platform, out var platformElement) && 
+                        if (linksByPlatform.TryGetProperty(platform, out var platformElement) &&
                             platformElement.TryGetProperty("url", out var urlElement))
                         {
-                            providers.Add(new OdesliProvider 
-                            { 
-                                Name = platform, 
+                            providers.Add(new OdesliProvider
+                            {
+                                Name = platform,
                                 Url = urlElement.GetString() ?? string.Empty
                             });
                         }

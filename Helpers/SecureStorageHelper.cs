@@ -18,7 +18,7 @@ public static class SecureStorageHelper
         try
         {
             var vault = new PasswordVault();
-            
+
             // Remove existing entry if present
             try
             {

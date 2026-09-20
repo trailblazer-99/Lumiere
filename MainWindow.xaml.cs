@@ -51,6 +51,9 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? _edgeSeekFeedbackTimer;
     private bool _isCursorHidden = false;
     private bool _isFullscreenTransitioning = false;
+    private bool _isStreamingFullScreen = false;
+    public bool IsStreamingFullScreen => _isStreamingFullScreen;
+    public bool IsStreamingSection => Services.NavigationService.IsStreamingSection(ContentFrame?.CurrentSourcePageType, ContentFrame?.Content);
     private AppWindowPresenterKind _expectedPresenterKind = AppWindowPresenterKind.Overlapped;
     private Microsoft.UI.Xaml.Media.SolidColorBrush? _cachedBlackBrush;
     private Microsoft.UI.Xaml.Media.SolidColorBrush? _cachedTransparentBrush;
@@ -81,6 +84,10 @@ public sealed partial class MainWindow : Window
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
+            if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+            {
+                return;
+            }
             ShowVideoControls();
             _videoControlsTimer.Stop();
             _videoControlsTimer.Start();
@@ -119,7 +126,8 @@ public sealed partial class MainWindow : Window
     public Microsoft.UI.Xaml.Controls.Grid FloatingVideoContainer { get; }
 
     public MainWindow()
-    {        InitializeComponent();
+    {
+        InitializeComponent();
 
         GlobalVideoPlayer = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
         {
@@ -139,7 +147,7 @@ public sealed partial class MainWindow : Window
         Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FloatingVideoContainer, 2);
         FloatingVideoContainer.Children.Add(GlobalVideoPlayer);
         RootGrid.Children.Insert(RootGrid.Children.IndexOf(FullscreenVideoContainer), FloatingVideoContainer);
-        
+
         FullscreenVideoContainer.Children.Remove(FullscreenMetadataOverlay);
         RootGrid.Children.Add(FullscreenMetadataOverlay);
         Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
@@ -166,8 +174,10 @@ public sealed partial class MainWindow : Window
         NavigateToHome();
 
         // Settings change listener — lightweight, keep in constructor
-        AppServices.Settings.SettingsChanged += (s, e) => {
-            DispatcherQueue.TryEnqueue(() => {
+        AppServices.Settings.SettingsChanged += (s, e) =>
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
                 var currentTheme = AppServices.Settings.Current.Theme;
                 var currentBackdrop = AppServices.Settings.Current.BackdropType;
                 var currentAccent = AppServices.Settings.Current.AccentColor;
@@ -216,6 +226,9 @@ public sealed partial class MainWindow : Window
         SyncTransportBar();
         UpdateTransportBarVisibility();
         UpdateTransportBarTheme();
+
+        // Initialize Navigation Service
+        try { AppServices.Navigation.Initialize(RootNavigationView, ContentFrame); } catch { }
 
         // Display & HDR pipeline
         try { AppServices.DisplayManager.InitializeForWindow(this); } catch { }
@@ -298,9 +311,9 @@ public sealed partial class MainWindow : Window
         TransportControls.NextRequested += (_, _) => _playback.NextCommand.Execute(null);
         TransportControls.StopRequested += (_, _) => _playback.Stop();
         TransportControls.PositionChanged += (_, seconds) => _playback.Seek(seconds);
-        
+
         bool _wasPlayingBeforeScrub = false;
-        TransportControls.ScrubbingPositionChanged += (_, seconds) => 
+        TransportControls.ScrubbingPositionChanged += (_, seconds) =>
         {
             if (_playback.IsPlaying)
             {
@@ -309,7 +322,7 @@ public sealed partial class MainWindow : Window
             }
             _playback.Seek(seconds);
         };
-        TransportControls.ScrubbingEnded += (_, _) => 
+        TransportControls.ScrubbingEnded += (_, _) =>
         {
             if (_wasPlayingBeforeScrub)
             {
@@ -341,7 +354,7 @@ public sealed partial class MainWindow : Window
                 _playback.IsVideoPlayerActive = true;
                 if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
                 {
-                    RootNavigationView.SelectedItem = FindNavItem("videos");
+                    RootNavigationView.SelectedItem = FindNavItem(PageKeys.Videos);
                     NavigateTo(typeof(VideoPage));
                 }
             }
@@ -359,7 +372,7 @@ public sealed partial class MainWindow : Window
                     _playback.Session.MediaPlayer.Play();
                 }
                 catch (System.Runtime.InteropServices.COMException) { }
-                
+
                 NavigateForTrack(track);
             }
         };
@@ -476,9 +489,9 @@ public sealed partial class MainWindow : Window
             UpdateLayoutForPip(isPip);
 
             var isFullScreen = sender.Presenter.Kind == AppWindowPresenterKind.FullScreen;
-            
+
             AppServices.HdrPipeline.SetFullscreenState(isFullScreen);
-            
+
             if (!isFullScreen)
             {
                 SetCursorVisibility(true);
@@ -841,7 +854,7 @@ public sealed partial class MainWindow : Window
             _isNavigating = true;
             try
             {
-                SafeSetSelectedItem(FindNavItem("videos"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.Videos));
             }
             finally
             {
@@ -1334,9 +1347,27 @@ public sealed partial class MainWindow : Window
     {
         if (_isNavigating) return;
 
+        if (_isStreamingFullScreen)
+        {
+            SetFullScreenMode(false);
+            return;
+        }
+
         if (ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive)
         {
             ExitVideoPlayback();
+            return;
+        }
+
+        if (ContentFrame.Content is StreamingTwitchPage twitchPage && twitchPage.CanGoBack)
+        {
+            twitchPage.GoBack();
+            return;
+        }
+
+        if (ContentFrame.Content is StreamingYouTubePage ytPage && ytPage.CanGoBack)
+        {
+            ytPage.GoBack();
             return;
         }
 
@@ -1402,7 +1433,13 @@ public sealed partial class MainWindow : Window
     }
     private void OnContentFrameNavigating(object sender, Microsoft.UI.Xaml.Navigation.NavigatingCancelEventArgs e)
     {
-        // Safe navigation lifecycle pass
+        if (AppServices.Settings.Current.AutoHideTransportBarInStreaming && Services.NavigationService.IsStreamingSection(e.SourcePageType))
+        {
+            if (TransportControls != null)
+            {
+                TransportControls.Visibility = Visibility.Collapsed;
+            }
+        }
     }
 
     private void OnContentFrameNavigationFailed(object sender, Microsoft.UI.Xaml.Navigation.NavigationFailedEventArgs e)
@@ -1419,19 +1456,19 @@ public sealed partial class MainWindow : Window
         {
             if (ContentFrame.Content is HomePage)
             {
-                SafeSetSelectedItem(FindNavItem("home"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.Home));
             }
             else if (ContentFrame.Content is MusicLibraryPage)
             {
-                SafeSetSelectedItem(FindNavItem("music"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.Music));
             }
             else if (ContentFrame.Content is VideoPage)
             {
-                SafeSetSelectedItem(FindNavItem("videos"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.Videos));
             }
             else if (ContentFrame.Content is PlaylistsPage)
             {
-                SafeSetSelectedItem(FindNavItem("playlists"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.Playlists));
             }
             else if (ContentFrame.Content is NowPlayingPage)
             {
@@ -1443,19 +1480,23 @@ public sealed partial class MainWindow : Window
             }
             else if (ContentFrame.Content is StreamingMusicPage)
             {
-                SafeSetSelectedItem(FindNavItem("streamMusic"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.StreamMusic));
             }
             else if (ContentFrame.Content is StreamingMoviesPage)
             {
-                SafeSetSelectedItem(FindNavItem("streamMovies"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.StreamMovies));
             }
             else if (ContentFrame.Content is StreamingTvShowsPage)
             {
-                SafeSetSelectedItem(FindNavItem("streamTvShows"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.StreamTvShows));
             }
             else if (ContentFrame.Content is StreamingYouTubePage)
             {
-                SafeSetSelectedItem(FindNavItem("streamYouTube"));
+                SafeSetSelectedItem(FindNavItem(PageKeys.StreamYouTube));
+            }
+            else if (ContentFrame.Content is StreamingTwitchPage)
+            {
+                SafeSetSelectedItem(FindNavItem(PageKeys.StreamTwitch));
             }
             else if (ContentFrame.Content is StreamingDetailsPage detailsPage)
             {
@@ -1477,21 +1518,36 @@ public sealed partial class MainWindow : Window
             bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
             bool isStreamingSubPage = ContentFrame.Content is StreamingYouTubePage || ContentFrame.Content is StreamingTwitchPage || ContentFrame.Content is StreamingDetailsPage;
             bool canGoBack = isVideo || isStreamingSubPage || ContentFrame.CanGoBack;
-            RootNavigationView.IsBackEnabled = canGoBack;
-            RootNavigationView.IsBackButtonVisible = canGoBack 
-                ? NavigationViewBackButtonVisible.Visible 
-                : NavigationViewBackButtonVisible.Collapsed;
-            RootNavigationView.IsPaneToggleButtonVisible = true;
-            RootNavigationView.Margin = new Thickness(0, 0, 0, 0);
-            if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen && !isVideo)
+            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+
+            if (_isStreamingFullScreen || (isFullScreen && (ContentFrame.Content is StreamingYouTubePage || ContentFrame.Content is StreamingTwitchPage)))
             {
-                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-                RootNavigationView.IsPaneVisible = true;
+                RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
+                RootNavigationView.IsPaneToggleButtonVisible = false;
+                RootNavigationView.IsPaneVisible = false;
+                RootNavigationView.IsPaneOpen = false;
+                if (AppTitleBar != null) AppTitleBar.Visibility = Visibility.Collapsed;
+                if (TransportControls != null) TransportControls.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                RootNavigationView.IsBackEnabled = canGoBack;
+                RootNavigationView.IsBackButtonVisible = canGoBack
+                    ? NavigationViewBackButtonVisible.Visible
+                    : NavigationViewBackButtonVisible.Collapsed;
+                RootNavigationView.IsPaneToggleButtonVisible = true;
+                RootNavigationView.Margin = new Thickness(0, 0, 0, 0);
+                if (!isFullScreen && !isVideo)
+                {
+                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                    RootNavigationView.IsPaneVisible = true;
+                }
+
+                UpdateTitleBarLayout();
             }
 
-            UpdateTitleBarLayout();
-
             UpdateLayoutForVideoMode();
+            UpdateTransportBarVisibility();
 
             // Schedule non-blocking memory compaction after navigation to return freed page memory to Windows
             _ = Task.Run(() =>
@@ -1535,7 +1591,7 @@ public sealed partial class MainWindow : Window
                 string.Equals(type, "tv", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(type, "tv_show", StringComparison.OrdinalIgnoreCase))
             {
-                var item = FindNavItem("streamTvShows");
+                var item = FindNavItem(PageKeys.StreamTvShows);
                 if (item != null && !ReferenceEquals(RootNavigationView.SelectedItem, item))
                 {
                     RootNavigationView.SelectedItem = item;
@@ -1543,7 +1599,7 @@ public sealed partial class MainWindow : Window
             }
             else if (string.Equals(type, "movie", StringComparison.OrdinalIgnoreCase))
             {
-                var item = FindNavItem("streamMovies");
+                var item = FindNavItem(PageKeys.StreamMovies);
                 if (item != null && !ReferenceEquals(RootNavigationView.SelectedItem, item))
                 {
                     RootNavigationView.SelectedItem = item;
@@ -1763,7 +1819,7 @@ public sealed partial class MainWindow : Window
                     AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
                     AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
                 }
-                catch {}
+                catch { }
             });
         }
     }
@@ -1806,16 +1862,16 @@ public sealed partial class MainWindow : Window
             {
                 var presenter = AppWindow.Presenter as OverlappedPresenter;
                 bool isMaximized = presenter?.State == OverlappedPresenterState.Maximized;
-                
+
                 AppServices.Settings.Current.WindowIsMaximized = isMaximized;
-                
+
                 if (!isMaximized)
                 {
                     var size = AppWindow.Size;
                     AppServices.Settings.Current.WindowWidth = size.Width;
                     AppServices.Settings.Current.WindowHeight = size.Height;
                 }
-                
+
                 AppServices.Settings.Save();
             }
         }
@@ -1900,7 +1956,7 @@ public sealed partial class MainWindow : Window
                 AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
             }
         }
-        catch {}
+        catch { }
 
         if (isPip)
         {
@@ -1919,7 +1975,7 @@ public sealed partial class MainWindow : Window
 
             SaveAndClearRowDefinitions();
             if (MiniPlayerGrid != null) MiniPlayerGrid.Visibility = Visibility.Visible;
-            
+
             if (ContentFrame?.Content is VideoPage vp)
             {
                 vp.SyncMediaPlayer();
@@ -1953,8 +2009,8 @@ public sealed partial class MainWindow : Window
                 RootNavigationView.IsPaneOpen = _isNavPaneExpanded;
                 bool canGoBack = ContentFrame?.CanGoBack ?? false;
                 RootNavigationView.IsBackEnabled = canGoBack;
-                RootNavigationView.IsBackButtonVisible = canGoBack 
-                    ? NavigationViewBackButtonVisible.Visible 
+                RootNavigationView.IsBackButtonVisible = canGoBack
+                    ? NavigationViewBackButtonVisible.Visible
                     : NavigationViewBackButtonVisible.Collapsed;
                 RootNavigationView.IsPaneToggleButtonVisible = true;
                 RootNavigationView.ClearValue(Control.BackgroundProperty);
@@ -2011,7 +2067,7 @@ public sealed partial class MainWindow : Window
         bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
         if (isPip) return;
 
-        bool isFullScreen  = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
 
         if (isVideoActive)
@@ -2021,7 +2077,7 @@ public sealed partial class MainWindow : Window
             if (isFullScreen)
             {
                 SystemBackdrop = null;
-                
+
                 if (RootGrid != null)
                 {
                     RootGrid.Background = _cachedBlackBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0));
@@ -2033,7 +2089,7 @@ public sealed partial class MainWindow : Window
                     FullscreenVideoContainer.Background = _cachedTransparentBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
                 }
                 SaveAndClearRowDefinitions();
-                
+
                 if (FloatingVideoContainer != null)
                 {
                     FloatingVideoContainer.Margin = new Thickness(0);
@@ -2042,14 +2098,14 @@ public sealed partial class MainWindow : Window
                     FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Stretch;
                     FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Stretch;
                 }
-                
+
                 UpdateFullscreenPlayerLayout();
                 MoveTransportControlsToFullscreenOverlay();
-                
+
                 if (RootNavigationView != null) RootNavigationView.Visibility = Visibility.Collapsed;
                 if (AppTitleBar != null) AppTitleBar.Visibility = Visibility.Collapsed;
                 if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
-                
+
                 ShowVideoControls();
                 _videoControlsTimer.Stop();
                 _videoControlsTimer.Start();
@@ -2058,17 +2114,17 @@ public sealed partial class MainWindow : Window
             else
             {
                 _videoControlsTimer.Stop();
-                
+
                 if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
                 if (FullscreenControlsOverlay != null)
                 {
                     FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
                     FullscreenControlsOverlay.Opacity = 0;
                 }
-                
+
                 RestoreRowDefinitions();
                 MoveTransportControlsToNormalLayout();
-                
+
                 if (RootNavigationView != null)
                 {
                     RootNavigationView.Visibility = Visibility.Visible;
@@ -2082,13 +2138,13 @@ public sealed partial class MainWindow : Window
                     UpdateTransportBarVisibility();
                     bool canGoBack = ContentFrame?.CanGoBack ?? false;
                     RootNavigationView.IsBackEnabled = canGoBack;
-                    RootNavigationView.IsBackButtonVisible = canGoBack 
-                        ? NavigationViewBackButtonVisible.Visible 
+                    RootNavigationView.IsBackButtonVisible = canGoBack
+                        ? NavigationViewBackButtonVisible.Visible
                         : NavigationViewBackButtonVisible.Collapsed;
                     RootNavigationView.IsPaneToggleButtonVisible = true;
                     RootNavigationView.ClearValue(Control.BackgroundProperty);
                 }
-                
+
                 if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
                 if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
                 if (AppTitleBar != null)
@@ -2100,11 +2156,11 @@ public sealed partial class MainWindow : Window
                     visual.StopAnimation("Opacity");
                     AppTitleBar.Background = null;
                 }
-                
+
                 ApplyConfiguredTheme();
                 UpdateRootGridBackground();
                 ForceRefreshNavigationViewLayout();
-                
+
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                 {
                     SyncFloatingVideoPlayer();
@@ -2115,6 +2171,11 @@ public sealed partial class MainWindow : Window
         {
             if (isFullScreen)
             {
+                if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+                {
+                    return;
+                }
+
                 _videoControlsTimer.Stop();
                 if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
                 if (FullscreenControlsOverlay != null)
@@ -2129,10 +2190,20 @@ public sealed partial class MainWindow : Window
 
             if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Collapsed;
             if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
-            
+            if (FullscreenControlsOverlay != null)
+            {
+                FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                FullscreenControlsOverlay.Opacity = 0;
+            }
+
+            if (_isStreamingFullScreen)
+            {
+                return;
+            }
+
             RestoreRowDefinitions();
             MoveTransportControlsToNormalLayout();
-            
+
             if (RootNavigationView != null)
             {
                 RootNavigationView.Visibility = Visibility.Visible;
@@ -2147,8 +2218,8 @@ public sealed partial class MainWindow : Window
                 ForceRefreshNavigationViewLayout();
                 bool canGoBack = ContentFrame?.CanGoBack ?? false;
                 RootNavigationView.IsBackEnabled = canGoBack;
-                RootNavigationView.IsBackButtonVisible = canGoBack 
-                    ? NavigationViewBackButtonVisible.Visible 
+                RootNavigationView.IsBackButtonVisible = canGoBack
+                    ? NavigationViewBackButtonVisible.Visible
                     : NavigationViewBackButtonVisible.Collapsed;
                 RootNavigationView.IsPaneToggleButtonVisible = true;
                 RootNavigationView.ClearValue(Control.BackgroundProperty);
@@ -2169,7 +2240,7 @@ public sealed partial class MainWindow : Window
                 FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
                 FullscreenControlsOverlay.Opacity = 0;
             }
-            
+
             ApplyConfiguredTheme();
             UpdateRootGridBackground();
         }
@@ -2343,6 +2414,10 @@ public sealed partial class MainWindow : Window
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
+            if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+            {
+                return;
+            }
             ShowVideoControls();
             _videoControlsTimer.Stop();
             _videoControlsTimer.Start();
@@ -2353,7 +2428,7 @@ public sealed partial class MainWindow : Window
     {
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
-        if (!isFullScreen || !isVideoMode)
+        if (!isFullScreen || !isVideoMode || _isStreamingFullScreen)
         {
             return;
         }
@@ -2365,11 +2440,19 @@ public sealed partial class MainWindow : Window
 
     private void OnControlsPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+        {
+            return;
+        }
         _videoControlsTimer.Stop();
     }
 
     private void OnControlsPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+        {
+            return;
+        }
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
@@ -2388,6 +2471,10 @@ public sealed partial class MainWindow : Window
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
+            if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+            {
+                return;
+            }
             if (FullscreenControlsOverlay != null)
             {
                 FadeElement(FullscreenControlsOverlay, 1.0, 200);
@@ -2405,6 +2492,10 @@ public sealed partial class MainWindow : Window
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
+            if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+            {
+                return;
+            }
             if (FullscreenControlsOverlay != null)
             {
                 FadeElement(FullscreenControlsOverlay, 0.0, 200);
@@ -2445,14 +2536,14 @@ public sealed partial class MainWindow : Window
 
         var animation = compositor.CreateScalarKeyFrameAnimation();
         animation.Duration = TimeSpan.FromMilliseconds(durationMs);
-        
+
         var easing = targetOpacity > 0.01
             ? compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), 
+                new System.Numerics.Vector2(0.1f, 0.9f),
                 new System.Numerics.Vector2(0.2f, 1.0f)
             )
             : compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.25f, 0.1f), 
+                new System.Numerics.Vector2(0.25f, 0.1f),
                 new System.Numerics.Vector2(0.25f, 1.0f)
             );
 
@@ -2461,7 +2552,7 @@ public sealed partial class MainWindow : Window
 
         var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
         visual.StartAnimation("Opacity", animation);
-        
+
         batch.Completed += (s, e) =>
         {
             element.DispatcherQueue.TryEnqueue(() =>
@@ -2547,12 +2638,16 @@ public sealed partial class MainWindow : Window
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
+            if (_isStreamingFullScreen || IsStreamingSection)
+            {
+                TransportControls.Visibility = Visibility.Collapsed;
+                return;
+            }
             // In fullscreen mode, visibility is managed by FullscreenControlsOverlay
             return;
         }
 
-        bool isStreamingPage = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
-        if (isStreamingPage && _playback.CurrentTrack == null)
+        if (AppServices.Settings.Current.AutoHideTransportBarInStreaming && IsStreamingSection)
         {
             TransportControls.Visibility = Visibility.Collapsed;
             return;
@@ -2584,7 +2679,7 @@ public sealed partial class MainWindow : Window
             var hwnd = Helpers.WindowHelper.GetWindowHandle(this);
             if (hwnd == nint.Zero) return;
 
-            bool isDark = theme == ElementTheme.Dark || 
+            bool isDark = theme == ElementTheme.Dark ||
                 (theme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Dark);
 
             uint pvAttribute = isDark ? 1u : 0u;
@@ -2594,14 +2689,14 @@ public sealed partial class MainWindow : Window
             {
                 var fgColor = isDark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
                 var bgColor = Microsoft.UI.Colors.Transparent;
-                
+
                 // Completely solid light/dark on hover
                 var hoverBgColor = isDark ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
                 var hoverFgColor = isDark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
-                
+
                 var pressedBgColor = isDark ? Windows.UI.Color.FromArgb(255, 34, 34, 34) : Windows.UI.Color.FromArgb(255, 221, 221, 221);
                 var pressedFgColor = hoverFgColor;
-                
+
                 var inactiveFgColor = isDark ? Windows.UI.Color.FromArgb(255, 128, 128, 128) : Windows.UI.Color.FromArgb(255, 128, 128, 128);
 
                 AppWindow.TitleBar.ForegroundColor = fgColor;
@@ -2912,9 +3007,9 @@ public sealed partial class MainWindow : Window
         if (backdropType == AppThemeBackdrop.Solid)
         {
             var theme = AppServices.Settings.Current.Theme;
-            var isDark = theme == AppThemeOption.Dark || 
+            var isDark = theme == AppThemeOption.Dark ||
                 (theme == AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Dark);
-            
+
             if (isDark)
             {
                 if (RootGrid != null)
@@ -2996,50 +3091,219 @@ public sealed partial class MainWindow : Window
     #region Fullscreen Transition Engine (Smooth Breathing & Zero-Stutter)
     internal async void ToggleFullscreen()
     {
-        if (_isFullscreenTransitioning) return;
-
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        if (!isFullScreen)
+        try
         {
-            bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
-            bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
-            if (!isVideoActive && !isStreamingActive)
+            if (_isFullscreenTransitioning) return;
+
+            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+            if (!isFullScreen)
             {
-                // Guard: Do not enter fullscreen if nothing is playing
-                return;
+                bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+                bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
+                if (!isVideoActive && !isStreamingActive)
+                {
+                    // Guard: Do not enter fullscreen if nothing is playing
+                    return;
+                }
+            }
+
+            if (isFullScreen)
+            {
+                _isStreamingFullScreen = false;
+                await ExitFullscreenAnimatedAsync();
+            }
+            else
+            {
+                bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
+                if (isStreamingActive)
+                {
+                    _isStreamingFullScreen = true;
+                }
+                await EnterFullscreenAnimatedAsync();
             }
         }
-
-        if (isFullScreen)
+        catch (Exception ex)
         {
-            await ExitFullscreenAnimatedAsync();
-        }
-        else
-        {
-            await EnterFullscreenAnimatedAsync();
+            System.Diagnostics.Debug.WriteLine($"[ToggleFullscreen] error: {ex.Message}");
         }
     }
 
     public async void SetFullScreenMode(bool isFullScreen)
     {
-        if (_isFullscreenTransitioning) return;
-
-        bool current = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        if (current == isFullScreen) return;
-
-        if (isFullScreen)
+        try
         {
+            if (_isFullscreenTransitioning) return;
+
+            bool current = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
             bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
             bool isStreamingActive = ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage;
-            if (!isVideoActive && !isStreamingActive)
+
+            if (isFullScreen)
             {
-                return;
+                if (!isVideoActive && !isStreamingActive)
+                {
+                    return;
+                }
+
+                if (isStreamingActive)
+                {
+                    _isStreamingFullScreen = true;
+                }
+
+                if (current)
+                {
+                    // AppWindow is already fullscreen (e.g. F11 pressed previously).
+                    // Ensure streaming fullscreen chrome state is immediately applied!
+                    if (isStreamingActive)
+                    {
+                        ApplyStreamingFullscreenChrome(true);
+                    }
+                    return;
+                }
+
+                await EnterFullscreenAnimatedAsync();
             }
-            await EnterFullscreenAnimatedAsync();
+            else
+            {
+                _isStreamingFullScreen = false;
+                if (!current)
+                {
+                    // AppWindow is already Overlapped.
+                    // Ensure streaming chrome state is restored immediately.
+                    if (isStreamingActive)
+                    {
+                        ApplyStreamingFullscreenChrome(false);
+                    }
+                    return;
+                }
+
+                await ExitFullscreenAnimatedAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SetFullScreenMode] error: {ex.Message}");
+        }
+    }
+
+    private void ApplyStreamingFullscreenChrome(bool isFullScreen)
+    {
+        if (isFullScreen)
+        {
+            Title = string.Empty;
+            if (AppWindow != null)
+            {
+                AppWindow.Title = string.Empty;
+            }
+
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
+                RootNavigationView.IsPaneVisible = false;
+                RootNavigationView.IsPaneOpen = false;
+                RootNavigationView.IsPaneToggleButtonVisible = false;
+                RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
+            }
+
+            if (CenteredTitleBrandPanel != null)
+            {
+                _targetOpacities[CenteredTitleBrandPanel] = 0.0;
+                CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+                CenteredTitleBrandPanel.Opacity = 0.0;
+            }
+
+            if (PaneBrandPanel != null)
+            {
+                _targetOpacities[PaneBrandPanel] = 0.0;
+                PaneBrandPanel.Visibility = Visibility.Collapsed;
+                PaneBrandPanel.Opacity = 0.0;
+            }
+
+            if (AppTitleBar != null)
+            {
+                _targetOpacities[AppTitleBar] = 0.0;
+                AppTitleBar.Visibility = Visibility.Collapsed;
+                AppTitleBar.Opacity = 0.0;
+                AppTitleBar.Height = 0;
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                visual.Opacity = 0.0f;
+                visual.StopAnimation("Opacity");
+            }
+
+            if (VideoBackButton != null)
+            {
+                VideoBackButton.Visibility = Visibility.Collapsed;
+            }
+
+            if (TransportControls != null)
+            {
+                TransportControls.Visibility = Visibility.Collapsed;
+            }
+
+            if (FullscreenVideoContainer != null)
+            {
+                FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+            }
+
+            if (FullscreenControlsOverlay != null)
+            {
+                FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                FullscreenControlsOverlay.Opacity = 0;
+            }
+
+            if (FloatingVideoContainer != null)
+            {
+                FloatingVideoContainer.Visibility = Visibility.Collapsed;
+            }
+
+            SaveAndClearRowDefinitions();
+            // Do NOT call SetTitleBar(null) - that resets WinUI 3 to the default system title bar,
+            // which causes Windows to render the title bar text at the top of the window.
+            // Keeping SetTitleBar(DragRegion) ensures custom title bar mode stays active with suppressed system chrome.
+            SetTitleBar(DragRegion);
         }
         else
         {
-            await ExitFullscreenAnimatedAsync();
+            Title = "Lumière Media Player";
+            if (AppWindow != null)
+            {
+                AppWindow.Title = "Lumière Media Player";
+            }
+
+            RestoreRowDefinitions();
+            MoveTransportControlsToNormalLayout();
+
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                RootNavigationView.IsPaneVisible = true;
+                RootNavigationView.IsPaneOpen = true;
+                RootNavigationView.IsPaneToggleButtonVisible = true;
+                RootNavigationView.Visibility = Visibility.Visible;
+                RootNavigationView.Opacity = 1.0;
+                bool isVideo = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+                bool isStreamingSubPage = ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage || ContentFrame?.Content is StreamingDetailsPage;
+                bool canGoBack = isVideo || isStreamingSubPage || (ContentFrame?.CanGoBack ?? false);
+                RootNavigationView.IsBackEnabled = canGoBack;
+                RootNavigationView.IsBackButtonVisible = canGoBack
+                    ? NavigationViewBackButtonVisible.Visible
+                    : NavigationViewBackButtonVisible.Collapsed;
+            }
+
+            if (AppTitleBar != null)
+            {
+                _targetOpacities[AppTitleBar] = 1.0;
+                AppTitleBar.Visibility = Visibility.Visible;
+                AppTitleBar.Opacity = 1.0;
+                AppTitleBar.Height = 48;
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                visual.Opacity = 1.0f;
+                visual.StopAnimation("Opacity");
+            }
+
+            UpdateTitleBarLayout();
+            SetTitleBar(DragRegion);
+            UpdateTransportBarVisibility();
         }
     }
 
@@ -3121,27 +3385,8 @@ public sealed partial class MainWindow : Window
             else
             {
                 // Streaming WebView (YouTube / Twitch) or other non-local video fullscreen
-                if (RootNavigationView != null)
-                {
-                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
-                    RootNavigationView.IsPaneVisible = false;
-                    RootNavigationView.IsPaneOpen = false;
-                    RootNavigationView.IsPaneToggleButtonVisible = false;
-                    RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
-                }
-
-                if (AppTitleBar != null)
-                {
-                    AppTitleBar.Visibility = Visibility.Collapsed;
-                }
-
-                if (TransportControls != null)
-                {
-                    TransportControls.Visibility = Visibility.Collapsed;
-                }
-
-                SaveAndClearRowDefinitions();
-                SetTitleBar(null);
+                _isStreamingFullScreen = true;
+                ApplyStreamingFullscreenChrome(true);
 
                 if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen)
                 {
@@ -3219,34 +3464,8 @@ public sealed partial class MainWindow : Window
             else
             {
                 // Restore from Streaming (YouTube/Twitch) fullscreen
-                RestoreRowDefinitions();
-                MoveTransportControlsToNormalLayout();
-
-                if (RootNavigationView != null)
-                {
-                    RootNavigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-                    RootNavigationView.IsPaneVisible = true;
-                    RootNavigationView.IsPaneOpen = true;
-                    RootNavigationView.IsPaneToggleButtonVisible = true;
-                    RootNavigationView.Visibility = Visibility.Visible;
-                    RootNavigationView.Opacity = 1.0;
-                    bool isVideo = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
-                    bool isStreamingSubPage = ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage || ContentFrame?.Content is StreamingDetailsPage;
-                    bool canGoBack = isVideo || isStreamingSubPage || (ContentFrame?.CanGoBack ?? false);
-                    RootNavigationView.IsBackEnabled = canGoBack;
-                    RootNavigationView.IsBackButtonVisible = canGoBack 
-                        ? NavigationViewBackButtonVisible.Visible 
-                        : NavigationViewBackButtonVisible.Collapsed;
-                }
-
-                if (AppTitleBar != null)
-                {
-                    AppTitleBar.Visibility = Visibility.Visible;
-                    AppTitleBar.Opacity = 1.0;
-                }
-
-                SetTitleBar(DragRegion);
-                UpdateTransportBarVisibility();
+                _isStreamingFullScreen = false;
+                ApplyStreamingFullscreenChrome(false);
 
                 if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
                 {
@@ -3291,6 +3510,11 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigationPaneOpened(NavigationView sender, object args)
     {
+        if (_isStreamingFullScreen)
+        {
+            RootNavigationView.IsPaneOpen = false;
+            return;
+        }
         _isNavPaneExpanded = true;
         UpdateTitleBarLayout(isPaneOpen: true);
     }
@@ -3303,6 +3527,11 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigationPaneOpening(NavigationView sender, object args)
     {
+        if (_isStreamingFullScreen)
+        {
+            RootNavigationView.IsPaneOpen = false;
+            return;
+        }
         _isNavPaneExpanded = true;
         UpdateTitleBarLayout(isPaneOpen: true);
     }
@@ -3315,13 +3544,24 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigationDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
     {
+        if (_isStreamingFullScreen)
+        {
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.IsPaneToggleButtonVisible = false;
+                RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
+                RootNavigationView.IsPaneVisible = false;
+                RootNavigationView.IsPaneOpen = false;
+            }
+            return;
+        }
         UpdateTitleBarLayout();
     }
 
     private void ForceRefreshNavigationViewLayout()
     {
         if (RootNavigationView == null) return;
-        
+
         // Defer property changes to the next UI tick to avoid layout re-entry COMExceptions (Unspecified Error)
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
@@ -3330,6 +3570,15 @@ public sealed partial class MainWindow : Window
                 if (RootNavigationView != null)
                 {
                     RootNavigationView.IsTitleBarAutoPaddingEnabled = false;
+
+                    if (_isStreamingFullScreen)
+                    {
+                        RootNavigationView.IsPaneOpen = false;
+                        RootNavigationView.IsPaneVisible = false;
+                        RootNavigationView.IsPaneToggleButtonVisible = false;
+                        RootNavigationView.IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed;
+                        return;
+                    }
 
                     if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
                     {
@@ -3348,19 +3597,63 @@ public sealed partial class MainWindow : Window
     {
         if (RootNavigationView == null) return;
 
+        if (_isStreamingFullScreen || (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)))
+        {
+            if (AppTitleBar != null)
+            {
+                _targetOpacities[AppTitleBar] = 0.0;
+                AppTitleBar.Visibility = Visibility.Collapsed;
+                AppTitleBar.Opacity = 0.0;
+                AppTitleBar.Height = 0;
+            }
+            if (CenteredTitleBrandPanel != null)
+            {
+                _targetOpacities[CenteredTitleBrandPanel] = 0.0;
+                CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+                CenteredTitleBrandPanel.Opacity = 0.0;
+            }
+            if (PaneBrandPanel != null)
+            {
+                _targetOpacities[PaneBrandPanel] = 0.0;
+                PaneBrandPanel.Visibility = Visibility.Collapsed;
+                PaneBrandPanel.Opacity = 0.0;
+            }
+            return;
+        }
+
         bool open = isPaneOpen ?? (_isNavPaneExpanded && RootNavigationView.IsPaneOpen);
 
         if (!open)
         {
             // When menu is collapsed: Show centered title in header, hide pane brand
-            if (CenteredTitleBrandPanel != null) CenteredTitleBrandPanel.Visibility = Visibility.Visible;
-            if (PaneBrandPanel != null) PaneBrandPanel.Visibility = Visibility.Collapsed;
+            if (CenteredTitleBrandPanel != null)
+            {
+                _targetOpacities[CenteredTitleBrandPanel] = 1.0;
+                CenteredTitleBrandPanel.Visibility = Visibility.Visible;
+                CenteredTitleBrandPanel.Opacity = 1.0;
+            }
+            if (PaneBrandPanel != null)
+            {
+                _targetOpacities[PaneBrandPanel] = 0.0;
+                PaneBrandPanel.Visibility = Visibility.Collapsed;
+                PaneBrandPanel.Opacity = 0.0;
+            }
         }
         else
         {
             // When menu is open: Keep brand in PaneHeader along the hamburger button, hide centered header title
-            if (CenteredTitleBrandPanel != null) CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
-            if (PaneBrandPanel != null) PaneBrandPanel.Visibility = Visibility.Visible;
+            if (CenteredTitleBrandPanel != null)
+            {
+                _targetOpacities[CenteredTitleBrandPanel] = 0.0;
+                CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+                CenteredTitleBrandPanel.Opacity = 0.0;
+            }
+            if (PaneBrandPanel != null)
+            {
+                _targetOpacities[PaneBrandPanel] = 1.0;
+                PaneBrandPanel.Visibility = Visibility.Visible;
+                PaneBrandPanel.Opacity = 1.0;
+            }
         }
     }
 
@@ -3377,19 +3670,26 @@ public sealed partial class MainWindow : Window
 
     private async void OnFullscreenRequested()
     {
-        if (_playback.CurrentTrack is MediaItem track && track.IsVideo)
+        try
         {
-            _playback.IsVideoPlayerActive = true;
-            if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
+            if (_playback.CurrentTrack is MediaItem track && track.IsVideo)
             {
-                RootNavigationView.SelectedItem = FindNavItem("videos");
-                NavigateTo(typeof(VideoPage));
+                _playback.IsVideoPlayerActive = true;
+                if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
+                {
+                    RootNavigationView.SelectedItem = FindNavItem(PageKeys.Videos);
+                    NavigateTo(typeof(VideoPage));
 
-                // Give page navigation time to settle before entering fullscreen
-                await Task.Delay(100);
+                    // Give page navigation time to settle before entering fullscreen
+                    await Task.Delay(100);
+                }
             }
+            ToggleFullscreen();
         }
-        ToggleFullscreen();
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnFullscreenRequested] error: {ex.Message}");
+        }
     }
 
     public bool HideMetadataOverlayGlobal()
@@ -3443,6 +3743,16 @@ public sealed partial class MainWindow : Window
             focused is RichEditBox || focused is ComboBox || e.OriginalSource is TextBox ||
             e.OriginalSource is RichEditBox || e.OriginalSource is PasswordBox)
         {
+            return;
+        }
+
+        if (_isStreamingFullScreen || (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && (ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)))
+        {
+            if (e.Key == Windows.System.VirtualKey.Escape || e.Key == Windows.System.VirtualKey.F11)
+            {
+                SetFullScreenMode(false);
+                e.Handled = true;
+            }
             return;
         }
 
@@ -3590,12 +3900,12 @@ public sealed partial class MainWindow : Window
                     ToggleFullscreen();
                     e.Handled = true;
                 }
-                else if (ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive)
+                else if (ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive)
                 {
                     ExitVideoPlayback();
                     e.Handled = true;
                 }
-                else if (ContentFrame.CanGoBack)
+                else if (ContentFrame?.CanGoBack == true)
                 {
                     try { ContentFrame.GoBack(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Navigation] GoBack failed: {ex.Message}"); }
                     e.Handled = true;
@@ -3782,7 +4092,7 @@ public sealed partial class MainWindow : Window
             var animation = compositor.CreateScalarKeyFrameAnimation();
             animation.Duration = TimeSpan.FromMilliseconds(durationMs);
             var easing = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.25f, 0.1f), 
+                new System.Numerics.Vector2(0.25f, 0.1f),
                 new System.Numerics.Vector2(0.25f, 1.0f)
             );
             animation.InsertKeyFrame(1f, (float)targetOpacity, easing);
@@ -3799,7 +4109,7 @@ public sealed partial class MainWindow : Window
                 var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
                 scaleAnimation.Duration = TimeSpan.FromMilliseconds(durationMs);
                 var scaleEasing = compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f), 
+                    new System.Numerics.Vector2(0.1f, 0.9f),
                     new System.Numerics.Vector2(0.2f, 1.0f)
                 );
                 scaleAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f), scaleEasing);
@@ -3831,7 +4141,7 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             NotifyActivityInFullscreen();
             _videoTapClickCount++;
-            
+
             if (_videoTapClickCount == 1)
             {
                 var cts = new System.Threading.CancellationTokenSource();
@@ -3874,10 +4184,10 @@ public sealed partial class MainWindow : Window
         {
             float sdrWhite = AppServices.DisplayManager.SdrWhiteLevelInNits;
             double scale = 80.0 / Math.Max(80.0, sdrWhite);
-            
+
             if (TransportControls != null)
             {
-                TransportControls.Opacity = Math.Max(0.4, scale); 
+                TransportControls.Opacity = Math.Max(0.4, scale);
             }
             if (AppTitleBar != null)
             {
@@ -3917,6 +4227,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (!AppServices.Settings.Current.EnableSwipeNavigation) return;
+        if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage) return;
         if (pt.Properties.IsLeftButtonPressed)
         {
             _swipeStartX = pt.Position.X;
@@ -3933,10 +4244,10 @@ public sealed partial class MainWindow : Window
 
         if (e.Handled) return;
         if (!wasSwiping || !AppServices.Settings.Current.EnableSwipeNavigation) return;
-        
+
         var pt = e.GetCurrentPoint(RootGrid);
         double deltaX = pt.Position.X - _swipeStartX;
-        
+
         if (Math.Abs(deltaX) > 100)
         {
             if (deltaX > 0)
@@ -3986,13 +4297,13 @@ public sealed partial class MainWindow : Window
         try
         {
             e.Handled = true;
-            
+
             // Smartly dismiss metadata overlay if it's visible, and ignore the play/pause toggle for this tap.
             if (HideMetadataOverlayGlobal()) return;
 
             NotifyActivityInFullscreen();
             _videoTapClickCount++;
-            
+
             if (_videoTapClickCount == 1)
             {
                 var cts = new System.Threading.CancellationTokenSource();
@@ -4072,7 +4383,7 @@ public sealed partial class MainWindow : Window
 
         if (AppServices.Settings.Current.BackdropType != AppThemeBackdrop.Solid)
         {
-            var isDark = AppServices.Settings.Current.Theme == AppThemeOption.Dark || 
+            var isDark = AppServices.Settings.Current.Theme == AppThemeOption.Dark ||
                          (AppServices.Settings.Current.Theme == AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Dark);
             RootGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                 isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32) : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243));
@@ -4098,14 +4409,21 @@ public sealed partial class MainWindow : Window
     private void SyncFloatingVideoPlayer(bool force = false)
     {
         if (FloatingVideoContainer == null || GlobalVideoPlayer == null) return;
-        
+
         if (!force && _isFullscreenTransitioning) return;
-        
+
         bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        
+
         if (isFullScreen)
         {
+            bool isVideoActiveInFullscreen = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+            if (!isVideoActiveInFullscreen || _isStreamingFullScreen)
+            {
+                FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                return;
+            }
+
             FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(0);
             FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
             FloatingVideoContainer.Width = double.NaN;
@@ -4134,17 +4452,17 @@ public sealed partial class MainWindow : Window
                     FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                     return;
                 }
-                
+
                 var transform = host.TransformToVisual(RootGrid);
                 var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
-                
+
                 FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8);
                 FloatingVideoContainer.Width = host.ActualWidth;
                 FloatingVideoContainer.Height = host.ActualHeight;
                 FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(point.X, point.Y, 0, 0);
                 FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
                 FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
-                
+
                 GlobalVideoPlayer.Width = double.NaN;
                 GlobalVideoPlayer.Height = double.NaN;
                 GlobalVideoPlayer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;

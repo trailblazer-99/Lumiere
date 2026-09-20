@@ -41,7 +41,7 @@ public static class AudioPipelineHelper
         if (string.IsNullOrEmpty(sourcePath)) return null;
 
         // If it's a web URL, return as-is
-        if (Uri.TryCreate(sourcePath, UriKind.Absolute, out var uri) && 
+        if (Uri.TryCreate(sourcePath, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
             return sourcePath;
@@ -252,7 +252,7 @@ public static class AudioPipelineHelper
         // "fmt " sub-chunk
         writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
         writer.Write(pcmChunkSize);
-        
+
         ushort formatTag = useExtensible ? (ushort)0xFFFE : (ushort)1;
         writer.Write(formatTag);
         writer.Write(channels);

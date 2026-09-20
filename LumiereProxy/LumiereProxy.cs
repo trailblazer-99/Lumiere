@@ -29,7 +29,7 @@ namespace Lumiere.Proxy
             // 0. Version endpoint for troubleshooting deployment
             if (service.Equals("version", StringComparison.OrdinalIgnoreCase))
             {
-                return new OkObjectResult(new { Version = "2.0.2", Status = "Proxy Clean Redo Live" });
+                return new OkObjectResult(new { Version = "2.0.3", Status = "Gemini and MusicAPI Enhanced" });
             }
 
             // 1. Verify Secret App Token (prevents scrapers from abusing your proxy)

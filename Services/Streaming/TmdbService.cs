@@ -15,10 +15,10 @@ namespace LumiereMediaPlayer.Services.Streaming
         private const string BaseUrl = "https://api.tmdb.org/3";
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        public async Task<List<TmdbGenre>> GetMovieGenresAsync() 
+        public async Task<List<TmdbGenre>> GetMovieGenresAsync()
             => await FetchGenresAsync("tmdb/genre/movie/list", $"{BaseUrl}/genre/movie/list?api_key={ApiKey}");
 
-        public async Task<List<TmdbGenre>> GetTvGenresAsync() 
+        public async Task<List<TmdbGenre>> GetTvGenresAsync()
             => await FetchGenresAsync("tmdb/genre/tv/list", $"{BaseUrl}/genre/tv/list?api_key={ApiKey}");
 
         public async Task<List<TmdbMedia>> GetPopularMoviesAsync(int page = 1)
@@ -164,7 +164,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 var region = await AntiGravityLocationEngine.GetCountryCodeAsync();
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
                 var data = JsonSerializer.Deserialize<TmdbProviderResponse>(response, _jsonOptions);
-                
+
                 if (data?.Results != null)
                 {
                     // Try user's actual region first

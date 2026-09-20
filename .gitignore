@@ -28,6 +28,7 @@ _Package/
 ## Configuration / Secrets (DO NOT COMMIT to Git)
 Package.StoreAssociation.xml
 local.settings.json
+appsettings.json
 private.ec.key
 public.pem
 

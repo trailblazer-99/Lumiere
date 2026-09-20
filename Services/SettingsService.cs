@@ -4,7 +4,7 @@ using Windows.Storage;
 
 namespace LumiereMediaPlayer.Services;
 
-public sealed class SettingsService
+public sealed class SettingsService : ISettingsService
 {
     private const string ThemeKey = "Theme";
     private const string FoldersKey = "LibraryFolders";
@@ -31,6 +31,7 @@ public sealed class SettingsService
     private const string AccentColorKey = "AccentColor";
     private const string AlwaysShowTransportBarKey = "AlwaysShowTransportBar";
     private const string AcrylicTransportBarKey = "AcrylicTransportBar";
+    private const string AutoHideTransportBarInStreamingKey = "AutoHideTransportBarInStreaming";
 
     // Controls & Interface
     private const string ShowOpenFilesOnHomeKey = "ShowOpenFilesOnHome";
@@ -132,6 +133,7 @@ public sealed class SettingsService
             AccentColor = ParseEnum(settingsValues, AccentColorKey, AccentColorOption.SystemDefault),
             AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
             AcrylicTransportBar = ReadBool(settingsValues, AcrylicTransportBarKey, true),
+            AutoHideTransportBarInStreaming = ReadBool(settingsValues, AutoHideTransportBarInStreamingKey, true),
 
             // Controls & Interface
             ShowOpenFilesOnHome = ReadBool(settingsValues, ShowOpenFilesOnHomeKey, true),
@@ -234,6 +236,7 @@ public sealed class SettingsService
         s.Values[AccentColorKey] = Current.AccentColor.ToString();
         s.Values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
         s.Values[AcrylicTransportBarKey] = Current.AcrylicTransportBar;
+        s.Values[AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming;
 
         // Controls & Interface
         s.Values[ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome;
@@ -325,7 +328,7 @@ public sealed class SettingsService
             EqualizerPresetKey, DefaultVolumeKey,
             DefaultAspectRatioKey,
             BackdropTypeKey,
-            AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey,
+            AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey, AutoHideTransportBarInStreamingKey,
             ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
             AutomaticLibraryScanKey,
             RememberPlaybackPositionPerTrackKey,

@@ -144,12 +144,12 @@ namespace LumiereMediaPlayer.Helpers
             {
                 string encoded = Uri.EscapeDataString(cleanTitle);
                 string searchUrl = $"https://tv.apple.com/us/search?term={encoded}";
-                
+
                 var response = await _httpClient.GetStringAsync(searchUrl);
                 if (!string.IsNullOrWhiteSpace(response))
                 {
                     var matches = Regex.Matches(response, @"https://tv\.apple\.com/[a-z]{2}/((?:show|movie)/[a-zA-Z0-9_-]+/umc\.cmc\.[a-zA-Z0-9]+)");
-                    
+
                     string slug = Regex.Replace(cleanTitle.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
                     string? bestPath = null;
 
@@ -196,7 +196,7 @@ namespace LumiereMediaPlayer.Helpers
             {
                 string itunesMediaType = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "movie" : "tvShow";
                 string itunesUrl = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(cleanTitle)}&media={itunesMediaType}&country={targetRegion}&limit=5";
-                
+
                 var json = await _httpClient.GetStringAsync(itunesUrl);
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("results", out var results) && results.GetArrayLength() > 0)

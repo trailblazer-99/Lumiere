@@ -33,7 +33,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             {
                 var response = await HttpClient.GetStringAsync("https://ipinfo.io/json");
                 using var doc = JsonDocument.Parse(response);
-                
+
                 if (doc.RootElement.TryGetProperty("country", out var ccElement))
                 {
                     detected = ccElement.GetString()?.ToUpperInvariant() ?? "";

@@ -24,7 +24,7 @@ public sealed partial class NowPlayingPage : Page
     public NowPlayingPage()
     {
         InitializeComponent();
-        
+
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
 
@@ -185,10 +185,10 @@ public sealed partial class NowPlayingPage : Page
                 {
                     MetadataOverlay.Visibility = Visibility.Visible;
                     InternetMetadataPanel.Children.Clear();
-                
+
                     var title = ViewModel.Title ?? "";
                     var artist = ViewModel.Artist ?? "";
-                
+
                     if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(artist))
                     {
                         var results = await _musicService.SearchTracksAsync($"{title} {artist}");
@@ -216,10 +216,10 @@ public sealed partial class NowPlayingPage : Page
     {
         InternetMetadataPanel.Children.Clear();
 
-        var header = new TextBlock 
-        { 
-            Text = "Listen on", 
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, 
+        var header = new TextBlock
+        {
+            Text = "Listen on",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             FontSize = 18,
             Margin = new Thickness(0, 0, 0, 12)
         };
@@ -257,20 +257,20 @@ public sealed partial class NowPlayingPage : Page
             };
 
             var contentPanel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            
-            var img = new Image 
-            { 
+
+            var img = new Image
+            {
                 Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)) { DecodePixelWidth = 48 },
                 Width = 48,
                 Height = 48,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
             };
-            
-            var text = new TextBlock 
-            { 
-                Text = p.Name, 
-                FontSize = 12, 
-                HorizontalAlignment = HorizontalAlignment.Center 
+
+            var text = new TextBlock
+            {
+                Text = p.Name,
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
 
             contentPanel.Children.Add(img);
@@ -314,14 +314,14 @@ public sealed partial class NowPlayingPage : Page
                 case "pandora":
                     searchWebUrl = $"https://www.pandora.com/search/{q}/all";
                     break;
-                default: 
+                default:
                     string cleanName = p.Name.ToLower().Replace(" ", "");
-                    searchWebUrl = $"https://{cleanName}.com/search?q={q}"; 
+                    searchWebUrl = $"https://{cleanName}.com/search?q={q}";
                     break;
             }
-            
-            btn.Click += async (s, args) => 
-            { 
+
+            btn.Click += async (s, args) =>
+            {
                 try
                 {
                     Uri? nativeUri = !string.IsNullOrEmpty(deepLinkUrl) ? new Uri(deepLinkUrl) : null;
@@ -472,7 +472,7 @@ public sealed partial class NowPlayingPage : Page
     {
         _lyrics.Clear();
         _currentLyricIndex = -1;
-        
+
         if (LyricsListView != null)
         {
             LyricsListView.ItemsSource = null;
@@ -495,7 +495,7 @@ public sealed partial class NowPlayingPage : Page
 
             var lines = File.ReadAllLines(lrcPath);
             var tempLyrics = new List<LyricLine>();
-            
+
             // Matches [mm:ss.xx] or [mm:ss:xx] or [h:mm:ss.xx]
             var lrcRegex = new Regex(@"^\[(\d+):(\d+)(?:[.:](\d+))?\](.*)$");
 
@@ -597,7 +597,7 @@ public sealed partial class NowPlayingPage : Page
                     var rawLines = _lyrics.Select(l => l.Text).ToList();
                     var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
                     var currentTrackId = AppServices.PlaybackViewModel.CurrentTrack?.Id ?? "temp";
-                
+
                     var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
                     if (translations != null && translations.Count == _lyrics.Count)
                     {

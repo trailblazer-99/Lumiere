@@ -222,21 +222,21 @@ public sealed partial class MediaCard : UserControl
             var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
             var compositor = hostVisual?.Compositor;
             if (compositor == null || artVisual == null) return;
-            
+
             var shadowVisual = compositor.CreateSpriteVisual();
             _dropShadow = compositor.CreateDropShadow();
             _dropShadow.BlurRadius = 16f;
             _dropShadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
             _dropShadow.Opacity = 0.0f; // Hidden initially
             _dropShadow.Offset = new System.Numerics.Vector3(0, 4, 0);
-            
+
             shadowVisual.Shadow = _dropShadow;
-            
+
             // Keep size synchronized
             var bindSizeAnimation = compositor.CreateExpressionAnimation("artVisual.Size");
             bindSizeAnimation.SetReferenceParameter("artVisual", artVisual);
             shadowVisual.StartAnimation("Size", bindSizeAnimation);
-            
+
             ElementCompositionPreview.SetElementChildVisual(ShadowHost, shadowVisual);
         }
         catch { }
@@ -248,12 +248,12 @@ public sealed partial class MediaCard : UserControl
         try
         {
             var compositor = _dropShadow.Compositor;
-            
+
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
             opacityAnim.InsertKeyFrame(1.0f, (float)targetOpacity);
             opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
             _dropShadow.StartAnimation("Opacity", opacityAnim);
-            
+
             var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
             offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, targetOffsetZ / 2, targetOffsetZ));
             offsetAnim.Duration = TimeSpan.FromMilliseconds(200);

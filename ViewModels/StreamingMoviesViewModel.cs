@@ -140,9 +140,9 @@ namespace LumiereMediaPlayer.ViewModels
             { "Western", 19 }
         };
 
-        public ObservableCollection<string> GenreOptions { get; } = new() 
-        { 
-            "All Genres", "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western" 
+        public ObservableCollection<string> GenreOptions { get; } = new()
+        {
+            "All Genres", "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"
         };
         [ObservableProperty] public partial string SelectedGenre { get; set; } = "All Genres";
 
@@ -367,8 +367,8 @@ namespace LumiereMediaPlayer.ViewModels
 
                 // 1. Check if the query refers to a Director, Actor, or Person (e.g. "Christopher Nolan", "Quentin Tarantino")
                 var personResults = await _tmdbService.SearchPersonAsync(query);
-                var matchedPerson = personResults.FirstOrDefault(p => 
-                    string.Equals(p.Name, query, System.StringComparison.OrdinalIgnoreCase) || 
+                var matchedPerson = personResults.FirstOrDefault(p =>
+                    string.Equals(p.Name, query, System.StringComparison.OrdinalIgnoreCase) ||
                     (p.Name != null && p.Name.Contains(query, System.StringComparison.OrdinalIgnoreCase) && p.Popularity > 1.0));
 
                 if (matchedPerson != null)

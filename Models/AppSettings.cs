@@ -54,6 +54,7 @@ public sealed class AppSettings
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
     public bool AlwaysShowTransportBar { get; set; } = false;
     public bool AcrylicTransportBar { get; set; } = true;
+    public bool AutoHideTransportBarInStreaming { get; set; } = true;
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

@@ -22,7 +22,7 @@ public static class HardwareDetectionService
         return await Task.Run(() =>
         {
             var result = new HardwareAnalysisResult();
-            
+
             try
             {
                 // Check RAM
@@ -45,7 +45,7 @@ public static class HardwareDetectionService
                     {
                         string name = item["Name"]?.ToString() ?? "";
                         // Simple heuristic for dedicated GPUs
-                        if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) || 
+                        if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
                             name.Contains("AMD Radeon RX", StringComparison.OrdinalIgnoreCase) ||
                             name.Contains("Arc", StringComparison.OrdinalIgnoreCase))
                         {

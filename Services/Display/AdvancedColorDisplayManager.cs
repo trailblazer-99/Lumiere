@@ -3,6 +3,8 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.Graphics.Display;
 
+using LumiereMediaPlayer.Services;
+
 namespace LumiereMediaPlayer.Services.Display;
 
 public enum DisplayProfileKind
@@ -16,19 +18,19 @@ public enum DisplayProfileKind
 /// <summary>
 /// Single authoritative source for display advanced-color state and screen hardware characterization.
 /// </summary>
-public sealed class AdvancedColorDisplayManager
+public sealed class AdvancedColorDisplayManager : IDisplayManager
 {
     private DisplayInformation? _displayInfo;
 
     // ── Current state ────────────────────────────────────────────────
-    private volatile bool  _isHdrActive;
-    private volatile bool  _canStreamHdr;
-    private float          _sdrWhiteLevelInNits = 80f;
-    private float          _maxLuminanceInNits = 300f;
-    private float          _minLuminanceInNits = 0.1f;
-    private float          _maxFullFrameLuminanceInNits = 250f;
-    private volatile bool  _supportsHdr10;
-    private volatile bool  _supportsWcg;
+    private volatile bool _isHdrActive;
+    private volatile bool _canStreamHdr;
+    private float _sdrWhiteLevelInNits = 80f;
+    private float _maxLuminanceInNits = 300f;
+    private float _minLuminanceInNits = 0.1f;
+    private float _maxFullFrameLuminanceInNits = 250f;
+    private volatile bool _supportsHdr10;
+    private volatile bool _supportsWcg;
     private DisplayProfileKind _activeProfile = DisplayProfileKind.StandardSdr;
     private DisplayAdvancedColorKind _currentColorKind = DisplayAdvancedColorKind.StandardDynamicRange;
 
@@ -51,9 +53,9 @@ public sealed class AdvancedColorDisplayManager
     public string DisplayProfileSummary => _activeProfile switch
     {
         DisplayProfileKind.TrueHdrOledOrMiniLed => $"High-End HDR Display ({_maxLuminanceInNits:F0} nits peak)",
-        DisplayProfileKind.EntryHdr            => $"Entry HDR Display ({_maxLuminanceInNits:F0} nits peak)",
-        DisplayProfileKind.WideColorGamutSdr   => $"Wide Color Gamut Display (DCI-P3 SDR)",
-        _                                      => $"Standard sRGB Display ({_sdrWhiteLevelInNits:F0} nits white)"
+        DisplayProfileKind.EntryHdr => $"Entry HDR Display ({_maxLuminanceInNits:F0} nits peak)",
+        DisplayProfileKind.WideColorGamutSdr => $"Wide Color Gamut Display (DCI-P3 SDR)",
+        _ => $"Standard sRGB Display ({_sdrWhiteLevelInNits:F0} nits white)"
     };
 
     public AdvancedColorDisplayManager() { }
@@ -62,7 +64,7 @@ public sealed class AdvancedColorDisplayManager
     {
         try
         {
-            var hwnd     = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
 
             _displayInfo = DisplayInformation.CreateForWindowId(windowId);
@@ -88,12 +90,12 @@ public sealed class AdvancedColorDisplayManager
         {
             var aci = _displayInfo.GetAdvancedColorInfo();
 
-            _currentColorKind    = aci.CurrentAdvancedColorKind;
-            _isHdrActive         = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.HighDynamicRange;
-            _canStreamHdr        = aci.IsAdvancedColorKindAvailable(DisplayAdvancedColorKind.HighDynamicRange);
+            _currentColorKind = aci.CurrentAdvancedColorKind;
+            _isHdrActive = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.HighDynamicRange;
+            _canStreamHdr = aci.IsAdvancedColorKindAvailable(DisplayAdvancedColorKind.HighDynamicRange);
             _sdrWhiteLevelInNits = (float)Math.Max(80.0, aci.SdrWhiteLevelInNits);
-            _maxLuminanceInNits  = (float)Math.Max(_sdrWhiteLevelInNits, aci.MaxLuminanceInNits);
-            _minLuminanceInNits  = (float)Math.Max(0.0, aci.MinLuminanceInNits);
+            _maxLuminanceInNits = (float)Math.Max(_sdrWhiteLevelInNits, aci.MaxLuminanceInNits);
+            _minLuminanceInNits = (float)Math.Max(0.0, aci.MinLuminanceInNits);
             _maxFullFrameLuminanceInNits = _maxLuminanceInNits;
 
             _supportsHdr10 = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.HighDynamicRange

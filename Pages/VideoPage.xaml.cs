@@ -40,7 +40,7 @@ public sealed partial class VideoPage : Page
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged += _playbackPropertyChangedHandler;
         AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged;
-        
+
         // Ensure we catch the unload event to prevent memory leaks
         this.Unloaded += OnUnloaded;
 
@@ -48,7 +48,7 @@ public sealed partial class VideoPage : Page
         {
             CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
         }
-        
+
         if (App.MainWindowInstance?.CloseFullscreenMetadataButton != null)
         {
             App.MainWindowInstance.CloseFullscreenMetadataButton.Click += _closeFullscreenHandler;
@@ -217,7 +217,7 @@ public sealed partial class VideoPage : Page
     internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(Models.MediaItem video)
     {
         if (video == null || string.IsNullOrWhiteSpace(video.Title)) return;
-        
+
         var mainWin = App.MainWindowInstance;
 
         InternetMetadataProgress.Visibility = Visibility.Visible;
@@ -327,11 +327,11 @@ public sealed partial class VideoPage : Page
 
             if (bestMatch == null) return;
             string targetTmdbId = isTvShow ? $"tmdb_tv-{bestMatch.Id}" : $"tmdb_movie-{bestMatch.Id}";
-            
+
             // Unsubscribe any previous handler to prevent accumulation
             if (_streamingClickHandler != null)
                 StreamingDetailsButton.Click -= _streamingClickHandler;
-            
+
             _streamingClickHandler = (s, args) =>
             {
                 HideMetadataOverlay();
@@ -347,14 +347,14 @@ public sealed partial class VideoPage : Page
                 // Unsubscribe any previous handler to prevent accumulation
                 if (_fullscreenStreamingClickHandler != null)
                     mainWin.FullscreenStreamingDetailsButton.Click -= _fullscreenStreamingClickHandler;
-                
+
                 _fullscreenStreamingClickHandler = (s, args) =>
                 {
                     HideMetadataOverlay();
                     AppServices.Playback.Stop();
-                    
+
                     if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) mainWin.ToggleFullscreen();
-                    
+
                     mainWin.ContentFrame.Navigate(typeof(StreamingDetailsPage), targetTmdbId);
                 };
                 mainWin.FullscreenStreamingDetailsButton.Click += _fullscreenStreamingClickHandler;
@@ -416,7 +416,7 @@ public sealed partial class VideoPage : Page
                     HideMetadataOverlay();
                     e.Handled = true;
                     _videoTapClickCount++;
-                
+
                     if (_videoTapClickCount == 1)
                     {
                         var cts = new System.Threading.CancellationTokenSource();
@@ -482,10 +482,10 @@ public sealed partial class VideoPage : Page
         {
             float sdrWhite = AppServices.DisplayManager.SdrWhiteLevelInNits;
             double scale = 80.0 / Math.Max(80.0, sdrWhite);
-            
+
             if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
             {
-                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = Math.Max(0.4, scale); 
+                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = Math.Max(0.4, scale);
             }
         }
         else
@@ -540,25 +540,39 @@ public sealed partial class VideoPage : Page
 
     private async void OnVideoRemoveRequested(object? sender, EventArgs e)
     {
-        var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
-        if (selected.Count > 0)
+        try
         {
-            await SampleMediaLibrary.RemoveTracksAsync(selected);
-            VideoSelectionRibbon?.ClearSelection();
+            var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                await SampleMediaLibrary.RemoveTracksAsync(selected);
+                VideoSelectionRibbon?.ClearSelection();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnVideoRemoveRequested] error: {ex.Message}");
         }
     }
 
     private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Delete)
+        try
         {
-            var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
-            if (selected.Count > 0)
+            if (e.Key == Windows.System.VirtualKey.Delete)
             {
-                e.Handled = true;
-                await SampleMediaLibrary.RemoveTracksAsync(selected);
-                VideoSelectionRibbon?.ClearSelection();
+                var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+                if (selected.Count > 0)
+                {
+                    e.Handled = true;
+                    await SampleMediaLibrary.RemoveTracksAsync(selected);
+                    VideoSelectionRibbon?.ClearSelection();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnPageKeyDown] error: {ex.Message}");
         }
     }
 

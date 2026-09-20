@@ -282,12 +282,19 @@ public sealed partial class MusicLibraryPage : Page
 
     private async void OnMusicRemoveRequested(object? sender, EventArgs e)
     {
-        var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
-        if (selected.Count > 0)
+        try
         {
-            await SampleMediaLibrary.RemoveTracksAsync(selected);
-            MusicSelectionRibbon?.ClearSelection();
-            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
+            if (selected.Count > 0)
+            {
+                await SampleMediaLibrary.RemoveTracksAsync(selected);
+                MusicSelectionRibbon?.ClearSelection();
+                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnMusicRemoveRequested] error: {ex.Message}");
         }
     }
 
@@ -312,16 +319,23 @@ public sealed partial class MusicLibraryPage : Page
 
     private async void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Delete)
+        try
         {
-            var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
-            if (selected.Count > 0)
+            if (e.Key == Windows.System.VirtualKey.Delete)
             {
-                e.Handled = true;
-                await SampleMediaLibrary.RemoveTracksAsync(selected);
-                MusicSelectionRibbon?.ClearSelection();
-                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+                var selected = ViewModel.Tracks.Where(t => t.IsSelected).ToList();
+                if (selected.Count > 0)
+                {
+                    e.Handled = true;
+                    await SampleMediaLibrary.RemoveTracksAsync(selected);
+                    MusicSelectionRibbon?.ClearSelection();
+                    if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnPageKeyDown] error: {ex.Message}");
         }
     }
 }

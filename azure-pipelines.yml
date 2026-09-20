@@ -30,6 +30,8 @@ variables:
     value: 'LumiereProxy'
   - name: deployProxyToAzure
     value: 'false'
+  - name: packageBuildMode
+    value: 'SideLoadOnly'
 
 stages:
 # ==========================================
@@ -65,13 +67,23 @@ stages:
             Write-Host "Bypassed global.json SDK lock for CI agent compatibility."
           }
 
+    - script: dotnet format $(solution) --verify-no-changes
+      displayName: 'Code Format Check'
+
     - task: PowerShell@2
       displayName: 'Restore & Build WinUI 3 Package'
       inputs:
         targetType: 'inline'
         script: |
           dotnet restore $(solution) -p:Platform=$(buildPlatform)
-          dotnet build $(solution) -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideLoadOnly -p:AppxBundle=Never
+          dotnet build $(solution) -c $(buildConfiguration) -p:Platform=$(buildPlatform) -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=$(packageBuildMode) -p:AppxBundle=Never
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Execute Automated Unit Tests'
+      inputs:
+        command: 'test'
+        projects: 'Tests/LumiereMediaPlayer.Tests/LumiereMediaPlayer.Tests.csproj'
+        arguments: '-p:Platform=$(buildPlatform) -c $(buildConfiguration)'
 
     - task: CopyFiles@2
       displayName: 'Stage WinUI 3 App Artifacts'

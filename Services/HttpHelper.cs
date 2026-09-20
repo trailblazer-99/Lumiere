@@ -23,34 +23,49 @@ namespace LumiereMediaPlayer.Services
 
             // Build proxy URL (e.g. "https://lumiere-proxy.azurewebsites.net/api/tmdb/movie/popular")
             string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
-            
+
             int maxRetries = 3;
             int delayMs = 1000;
 
             for (int i = 0; i < maxRetries; i++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                    request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
 
-                using var response = await _httpClient.SendAsync(request, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadAsStringAsync(cancellationToken);
+                    using var response = await _httpClient.SendAsync(request, cancellationToken);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return await response.Content.ReadAsStringAsync(cancellationToken);
+                    }
+
+                    if (response.StatusCode == (System.Net.HttpStatusCode)429 && i < maxRetries - 1)
+                    {
+                        await Task.Delay(delayMs, cancellationToken);
+                        delayMs *= 2; // exponential backoff
+                        continue;
+                    }
+
+                    if (i == maxRetries - 1 || response.StatusCode != (System.Net.HttpStatusCode)429)
+                    {
+                        throw new HttpRequestException($"Proxy request failed with status code: {response.StatusCode} for {servicePath}");
+                    }
                 }
-                
-                if (response.StatusCode == (System.Net.HttpStatusCode)429 && i < maxRetries - 1)
+                catch (HttpRequestException ex) when (i < maxRetries - 1 && !cancellationToken.IsCancellationRequested)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[HttpHelper] Transient proxy error on attempt {i + 1} for {servicePath}: {ex.Message}. Retrying...");
                     await Task.Delay(delayMs, cancellationToken);
-                    delayMs *= 2; // exponential backoff
-                    continue;
+                    delayMs *= 2;
                 }
-
-                if (i == maxRetries - 1 || response.StatusCode != (System.Net.HttpStatusCode)429)
+                catch (TaskCanceledException ex) when (i < maxRetries - 1 && !cancellationToken.IsCancellationRequested)
                 {
-                    throw new HttpRequestException($"Proxy request failed with status code: {response.StatusCode} for {servicePath}");
+                    System.Diagnostics.Debug.WriteLine($"[HttpHelper] Proxy request timeout on attempt {i + 1} for {servicePath}: {ex.Message}. Retrying...");
+                    await Task.Delay(delayMs, cancellationToken);
+                    delayMs *= 2;
                 }
             }
-            
+
             return string.Empty;
         }
     }

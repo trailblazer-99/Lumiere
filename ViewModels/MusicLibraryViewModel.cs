@@ -52,7 +52,7 @@ public partial class MusicLibraryViewModel : ObservableObject
                 var results = await _musicService.SearchTracksAsync(query, limit: 5);
                 if (results != null && results.Count > 0)
                 {
-                    var bestMatch = results.FirstOrDefault(t => 
+                    var bestMatch = results.FirstOrDefault(t =>
                         (!string.IsNullOrEmpty(t.TrackName) && t.TrackName.Contains(track.Title, StringComparison.OrdinalIgnoreCase)) ||
                         (!string.IsNullOrEmpty(track.Title) && track.Title.Contains(t.TrackName, StringComparison.OrdinalIgnoreCase)));
 
@@ -179,7 +179,7 @@ public partial class MusicLibraryViewModel : ObservableObject
         picker.FileTypeFilter.Add(".wav");
         picker.FileTypeFilter.Add(".ogg");
         picker.FileTypeFilter.Add(".m4a");
-        
+
         var files = await picker.PickMultipleFilesAsync();
         if (files != null && files.Count > 0)
         {
@@ -205,7 +205,7 @@ public partial class MusicLibraryViewModel : ObservableObject
         FilePickerHelper.Initialize(picker);
         picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.MusicLibrary;
         picker.FileTypeFilter.Add("*");
-        
+
         var folder = await picker.PickSingleFolderAsync();
         if (folder != null)
         {
@@ -235,7 +235,7 @@ public partial class MusicLibraryViewModel : ObservableObject
             var title = !string.IsNullOrWhiteSpace(file.Tag.Title) ? file.Tag.Title : Path.GetFileNameWithoutExtension(path);
             var artist = !string.IsNullOrWhiteSpace(file.Tag.FirstPerformer) ? file.Tag.FirstPerformer : "Unknown Artist";
             var album = !string.IsNullOrWhiteSpace(file.Tag.Album) ? file.Tag.Album : "Unknown Album";
-            
+
             var item = new MediaItem
             {
                 Id = Guid.NewGuid().ToString(),
@@ -248,7 +248,7 @@ public partial class MusicLibraryViewModel : ObservableObject
                 Bitrate = (uint)file.Properties.AudioBitrate,
                 Codec = file.Properties.Description
             };
-            
+
             await SampleMediaLibrary.AddTrackAsync(item);
         }
         catch

@@ -13,7 +13,7 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <DefaultItemExcludes>$(DefaultItemExcludes);LumiereProxy\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);LumiereProxy\**;Tests\**</DefaultItemExcludes>
     <Version>1.0.1.0</Version>
     <ApplicationVersion>1.0.1.0</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.1.0</ApplicationDisplayVersion>
@@ -22,6 +22,8 @@
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
     <TieredPGO>true</TieredPGO>
+    <!-- Startup optimization -->
+    <TieredCompilation>true</TieredCompilation>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Platform)' == 'AnyCPU'">
@@ -60,6 +62,9 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
     <PackageReference Include="NVorbis" Version="0.10.5" />
@@ -80,11 +85,14 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun>False</PublishReadyToRun>
+    <PublishReadyToRun>True</PublishReadyToRun>
     <PublishTrimmed>False</PublishTrimmed>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">True</WindowsAppSDKSelfContained>
-    <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)' != 'Debug'">False</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>False</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkBootstrapInitialize>False</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkAutoInitializeNeeded>False</WindowsAppSdkAutoInitializeNeeded>
+    <WindowsAppSdkAutoInitialize>False</WindowsAppSdkAutoInitialize>
     <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>

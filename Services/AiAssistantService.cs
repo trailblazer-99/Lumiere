@@ -178,9 +178,9 @@ public static class AiAssistantService
                         break;
                     }
                 }
-                catch 
-                { 
-                    break; 
+                catch
+                {
+                    break;
                 }
             }
             return null;
@@ -354,7 +354,7 @@ public static class AiAssistantService
                 var discovered = await DiscoverGeminiModelsAsync(apiKey);
 
                 var testCandidates = new List<(string ApiVersion, string Model)>();
-                
+
                 // Prioritize discovered flash models first
                 foreach (var d in discovered.Where(m => m.Model.Contains("flash", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -598,7 +598,7 @@ public static class AiAssistantService
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:11434/api/generate") { Content = content };
-        
+
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
@@ -700,14 +700,14 @@ public static class AiAssistantService
 
         string url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={langCode}&dt=t";
         var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("q", combined) });
-        
+
         var response = await _httpClient.PostAsync(url, content);
         response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(responseJson);
         var outerArray = doc.RootElement;
-        
+
         var translatedParts = new StringBuilder();
         if (outerArray.ValueKind == JsonValueKind.Array && outerArray.GetArrayLength() > 0)
         {
@@ -912,7 +912,7 @@ public static class AiAssistantService
         // If no tracks scored positive, fallback to returning all tracks or best effort partial matches
         if (rankedList.Count == 0)
         {
-            return tracks.Where(t => 
+            return tracks.Where(t =>
                 queryWords.Any(w => (t.Title != null && t.Title.Contains(w, StringComparison.OrdinalIgnoreCase)) ||
                                     (t.Artist != null && t.Artist.Contains(w, StringComparison.OrdinalIgnoreCase)))).ToList();
         }

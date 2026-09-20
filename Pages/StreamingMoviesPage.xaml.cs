@@ -61,10 +61,10 @@ namespace LumiereMediaPlayer.Pages
             try
             {
                 base.OnNavigatedTo(e);
-            
+
                 // Refresh library items in case we are returning from Details Page where they changed
                 RefreshLibraryList();
-            
+
                 if (MainPivot?.SelectedIndex == 2)
                 {
                     _heroTimer?.Start();
@@ -339,7 +339,7 @@ namespace LumiereMediaPlayer.Pages
 
                 var heroItems = popularMovies.Take(5).ToList();
                 var gridItems = popularMovies.Skip(5).ToList();
-                
+
                 TrendingHeroCarousel.ItemsSource = heroItems;
                 TrendingGridView.ItemsSource = gridItems;
 
@@ -543,7 +543,7 @@ namespace LumiereMediaPlayer.Pages
                     if (visual == null) return;
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
-                    
+
                     if (border.Tag == null)
                     {
                         try
@@ -554,18 +554,18 @@ namespace LumiereMediaPlayer.Pages
                             shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
                             shadow.Opacity = 0.0f;
                             shadow.Offset = new System.Numerics.Vector3(0, 4, 0);
-                            
+
                             shadowVisual.Shadow = shadow;
-                            
+
                             var bindSizeAnimation = compositor.CreateExpressionAnimation("visual.Size");
                             bindSizeAnimation.SetReferenceParameter("visual", visual);
                             shadowVisual.StartAnimation("Size", bindSizeAnimation);
-                            
+
                             if (visual.Parent is Microsoft.UI.Composition.ContainerVisual container)
                             {
                                 container.Children.InsertBelow(shadowVisual, visual);
                             }
-                            
+
                             border.Tag = shadow;
                         }
                         catch { }
@@ -578,7 +578,7 @@ namespace LumiereMediaPlayer.Pages
                         opacityAnim.InsertKeyFrame(1.0f, 0.55f);
                         opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
-                        
+
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 16));
                         offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
@@ -589,7 +589,7 @@ namespace LumiereMediaPlayer.Pages
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.05f, 1.05f, 1.0f), compositor.CreateCubicBezierEasingFunction(
                         new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
                     scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
-                    
+
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
 
@@ -640,7 +640,7 @@ namespace LumiereMediaPlayer.Pages
                     if (visual == null) return;
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
-                    
+
                     var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
                     if (dropShadow != null)
                     {
@@ -648,7 +648,7 @@ namespace LumiereMediaPlayer.Pages
                         opacityAnim.InsertKeyFrame(1.0f, 0.0f);
                         opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
-                        
+
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 6, 12));
                         offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
@@ -658,7 +658,7 @@ namespace LumiereMediaPlayer.Pages
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
                     scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
-                    
+
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
 

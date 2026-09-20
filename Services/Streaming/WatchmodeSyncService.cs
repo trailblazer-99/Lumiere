@@ -5,7 +5,7 @@ using LumiereMediaPlayer.Models.Streaming;
 
 namespace LumiereMediaPlayer.Services.Streaming
 {
-    public class WatchmodeSyncService
+    public class WatchmodeSyncService : IWatchmodeSyncService
     {
         private readonly WatchmodeService _watchmodeService = new();
 
@@ -23,7 +23,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 string endDate = DateTime.Today.ToString("yyyyMMdd");
 
                 var changesResponse = await _watchmodeService.GetChangesAsync(startDate, endDate);
-                
+
                 bool syncSuccess = false;
                 if (changesResponse?.Changes != null && changesResponse.Changes.Count > 0)
                 {

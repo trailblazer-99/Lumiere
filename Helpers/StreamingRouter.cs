@@ -487,7 +487,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
             }
 
-                if (!launched && !string.IsNullOrEmpty(fallbackCleanUrl))
+            if (!launched && !string.IsNullOrEmpty(fallbackCleanUrl))
             {
                 try
                 {

@@ -16,16 +16,23 @@ namespace LumiereMediaPlayer.ViewModels;
 public partial class HomeViewModel : ObservableObject
 {
     private readonly PlaybackViewModel _playback;
+    private readonly IHistoryService _history;
     private readonly TmdbService _tmdbService = new();
     private readonly MusicStreamingService _musicService = new();
     private bool _isEnriching;
 
-    public HomeViewModel(PlaybackViewModel playback)
+    public HomeViewModel(PlaybackViewModel playback, IHistoryService history)
     {
         _playback = playback;
+        _history = history;
     }
 
-    public System.Collections.ObjectModel.ObservableCollection<MediaItem> RecentlyPlayed => AppServices.History.RecentlyPlayed;
+    public HomeViewModel(PlaybackViewModel playback)
+        : this(playback, AppServices.History)
+    {
+    }
+
+    public System.Collections.ObjectModel.ObservableCollection<MediaItem> RecentlyPlayed => _history.RecentlyPlayed;
 
     [RelayCommand]
     private void PlayTrack(MediaItem? track)
@@ -39,7 +46,7 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private async Task ClearHistoryAsync()
     {
-        await AppServices.History.ClearHistoryAsync();
+        await _history.ClearHistoryAsync();
     }
 
     public async Task EnrichRecentlyPlayedMetadataAsync()
@@ -57,7 +64,7 @@ public partial class HomeViewModel : ObservableObject
                 if (item.IsFolder) continue;
 
                 // 1. Sync from SampleMediaLibrary if the library item already has a poster or metadata
-                var match = SampleMediaLibrary.AllTracks.FirstOrDefault(t => 
+                var match = SampleMediaLibrary.AllTracks.FirstOrDefault(t =>
                     (!string.IsNullOrEmpty(t.SourcePath) && string.Equals(t.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Id) && string.Equals(t.Id, item.Id, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Title) && string.Equals(t.Title, item.Title, StringComparison.OrdinalIgnoreCase)));

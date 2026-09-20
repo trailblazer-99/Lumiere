@@ -8,9 +8,10 @@ namespace LumiereMediaPlayer.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
-    private readonly SettingsService _settingsService;
+    private readonly ISettingsService _settingsService;
+    private readonly IDisplayManager _displayManager;
     private bool _isSyncing;
-    private readonly Microsoft.UI.Xaml.DispatcherTimer _textScaleDebounceTimer;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer? _textScaleDebounceTimer;
 
     // ── Playback ───────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeOption SelectedTheme { get; set; }
@@ -43,6 +44,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
     [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
+    [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
 
     // ── Controls & Interface ───────────────────────────────────────
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
@@ -84,7 +86,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string AiConnectionStatus { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IsTestingAi { get; set; }
     [ObservableProperty] public partial bool? IsAiConnected { get; set; }
-    
+
     // ── Local AI Hardware Status ───────────────────────────────────
     [ObservableProperty] public partial bool IsLocalAiSupported { get; set; }
     [ObservableProperty] public partial string LocalAiHardwareSuggestion { get; set; } = string.Empty;
@@ -98,19 +100,27 @@ public partial class SettingsViewModel : ObservableObject
     // ── Folders ────────────────────────────────────────────────────
     [ObservableProperty] public partial IReadOnlyList<string> LibraryFolders { get; set; } = [];
 
-    public SettingsViewModel(SettingsService settingsService)
+    public SettingsViewModel(ISettingsService settingsService, IDisplayManager displayManager)
     {
         _settingsService = settingsService;
-        _textScaleDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
-        _textScaleDebounceTimer.Tick += (s, e) =>
+        _displayManager = displayManager;
+        try
         {
-            _textScaleDebounceTimer.Stop();
-            SaveAndApplyAccessibility();
-        };
+            _textScaleDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+            _textScaleDebounceTimer.Tick += (s, e) =>
+            {
+                _textScaleDebounceTimer.Stop();
+                SaveAndApplyAccessibility();
+            };
+        }
+        catch
+        {
+            // Running in non-UI / unit test execution environment
+        }
 
         SyncFromSettings();
         _settingsService.SettingsChanged += (_, _) => SyncFromSettings();
-        AppServices.DisplayManager.AdvancedColorInfoChanged += (_, _) =>
+        _displayManager.AdvancedColorInfoChanged += (_, _) =>
         {
             App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
             {
@@ -121,6 +131,16 @@ public partial class SettingsViewModel : ObservableObject
         // Analyze hardware async in background
         _ = AnalyzeHardwareBackgroundAsync();
         _ = CheckWindowsHelloStatusAsync();
+    }
+
+    public SettingsViewModel(ISettingsService settingsService)
+        : this(settingsService, AppServices.DisplayManager)
+    {
+    }
+
+    public SettingsViewModel()
+        : this(AppServices.Settings, AppServices.DisplayManager)
+    {
     }
 
     private async System.Threading.Tasks.Task CheckWindowsHelloStatusAsync()
@@ -155,9 +175,9 @@ public partial class SettingsViewModel : ObservableObject
         IsUpdateAvailable = false;
 
         var info = await UpdateService.CheckForUpdatesAsync();
-        
+
         IsCheckingForUpdates = false;
-        
+
         if (info.IsUpdateAvailable)
         {
             IsUpdateAvailable = true;
@@ -225,7 +245,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     public string PeakBrightnessText => $"{PeakBrightnessNits} nits";
-    public string ActiveDisplayProfileSummary => AppServices.DisplayManager.DisplayProfileSummary;
+    public string ActiveDisplayProfileSummary => _displayManager.DisplayProfileSummary;
 
     public int SelectedOpenFilePositionCornerIndex
     {
@@ -298,9 +318,16 @@ public partial class SettingsViewModel : ObservableObject
         if (_isSyncing) return;
         _settingsService.Current.Theme = value;
         _settingsService.Save();
-        ThemeHelper.ApplyTheme(App.MainWindowContent, value);
-        ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
-        AccessibilityHelper.Apply(_settingsService.Current);
+        if (App.MainWindowContent != null)
+        {
+            try
+            {
+                ThemeHelper.ApplyTheme(App.MainWindowContent, value);
+                ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
+                AccessibilityHelper.Apply(_settingsService.Current);
+            }
+            catch { }
+        }
         OnPropertyChanged(nameof(SelectedThemeIndex));
     }
 
@@ -454,6 +481,16 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    partial void OnAutoHideTransportBarInStreamingChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AutoHideTransportBarInStreaming = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.UpdateTransportBarVisibility();
+        }
+    }
+
     // Controls & Interface
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
 
@@ -525,14 +562,14 @@ public partial class SettingsViewModel : ObservableObject
 
     // Accessibility
     partial void OnHighContrastModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HighContrastMode = value; SaveAndApplyAccessibility(); } }
-    partial void OnTextScaleChanged(double value) 
-    { 
-        if (!_isSyncing) 
-        { 
-            _settingsService.Current.TextScale = value; 
-            _textScaleDebounceTimer.Stop();
-            _textScaleDebounceTimer.Start();
-        } 
+    partial void OnTextScaleChanged(double value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.TextScale = value;
+            _textScaleDebounceTimer?.Stop();
+            _textScaleDebounceTimer?.Start();
+        }
     }
     partial void OnReduceMotionChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ReduceMotion = value; SaveAndApplyAccessibility(); } }
     partial void OnScreenReaderOptimizationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ScreenReaderOptimization = value; SaveAndApplyAccessibility(); } }
@@ -614,8 +651,8 @@ public partial class SettingsViewModel : ObservableObject
             _settingsService.Current.GeminiApiKey = GeminiApiKey?.Trim() ?? "";
             var (success, message, latency) = await Services.AiAssistantService.TestAiConnectionAsync(GeminiApiKey);
             IsAiConnected = success;
-            AiConnectionStatus = success 
-                ? $"✅ {message}" 
+            AiConnectionStatus = success
+                ? $"✅ {message}"
                 : $"❌ {message}";
         }
         catch (Exception ex)
@@ -740,6 +777,7 @@ public partial class SettingsViewModel : ObservableObject
         SelectedAccentColor = c.AccentColor;
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
         AcrylicTransportBar = c.AcrylicTransportBar;
+        AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;
 
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
@@ -794,7 +832,14 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedToneMappingModeIndex));
         OnPropertyChanged(nameof(PeakBrightnessText));
         OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex));
-        AccessibilityHelper.Apply(c);
+        try
+        {
+            AccessibilityHelper.Apply(c);
+        }
+        catch
+        {
+            // Non-UI context or unit testing environment
+        }
     }
 }
 

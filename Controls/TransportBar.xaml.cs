@@ -84,7 +84,7 @@ public sealed partial class TransportBar : UserControl
                 HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
             }
         };
-        
+
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
         _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(100);
         _scrubThrottleTimer.Tick += (s, e) =>
@@ -92,7 +92,7 @@ public sealed partial class TransportBar : UserControl
             _scrubThrottleTimer.Stop();
             if (_isSeeking) ScrubbingPositionChanged?.Invoke(this, _pendingScrubValue);
         };
-        
+
         // WinUI 3 Slider consumes pointer events, so we must register with handledEventsToo = true
         ProgressSlider.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler(OnProgressSliderPointerEntered), true);
         ProgressSlider.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnProgressSliderPointerMoved), true);
@@ -161,7 +161,7 @@ public sealed partial class TransportBar : UserControl
 
     private static void OnVolumePropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is TransportBar bar && !bar._isSeeking) 
+        if (d is TransportBar bar && !bar._isSeeking)
         {
             bar.SyncVolumeUi();
         }
@@ -380,7 +380,7 @@ public sealed partial class TransportBar : UserControl
     private void UpdatePlayPauseIcon()
     {
         PlayPauseIcon.Glyph = IsPlaying ? "\uE769" : "\uE768";
-        PlayPauseIcon.Margin = IsPlaying ? new Thickness(0,0,0,0) : new Thickness(2,0,0,0);
+        PlayPauseIcon.Margin = IsPlaying ? new Thickness(0, 0, 0, 0) : new Thickness(2, 0, 0, 0);
         var actionName = IsPlaying ? "Pause" : "Play";
         AutomationProperties.SetName(PlayPauseButton, actionName);
         ToolTipService.SetToolTip(PlayPauseButton, actionName);
@@ -452,7 +452,7 @@ public sealed partial class TransportBar : UserControl
             if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
         }
     }
-    
+
     private void OnProgressPointerCapture(object sender, PointerRoutedEventArgs e)
     {
         if (CurrentTrack is null || !ProgressSlider.IsEnabled)
@@ -467,7 +467,7 @@ public sealed partial class TransportBar : UserControl
         }
         UpdateSeekPreview(ProgressSlider.Value, isDragging: true);
     }
-    
+
     private void OnProgressPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (!_isSeeking) return;
@@ -925,7 +925,7 @@ public sealed partial class TransportBar : UserControl
     private void OnTrackClick(object sender, RoutedEventArgs e) => OnTrackInfoClick(sender, e);
     private void OnInfoClick(object sender, RoutedEventArgs e) => OnInfoButtonClick(sender, e);
     private void OnReplayClick(object sender, RoutedEventArgs e) => PositionChanged?.Invoke(this, 0d);
-    
+
     private void OnVolumeClick(object sender, RoutedEventArgs e)
     {
         MuteToggled?.Invoke(this, EventArgs.Empty);
@@ -976,11 +976,11 @@ public sealed partial class TransportBar : UserControl
                 _ => "\uE995"      // Volume 3
             };
         }
-        
+
         if (VolumeIcon != null) VolumeIcon.Glyph = glyph;
         if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Glyph = glyph;
     }
-    
+
     private void OnSpeedClick(object sender, RoutedEventArgs e)
     {
         if (sender is MenuFlyoutItem item && item.Tag is string speedStr && double.TryParse(speedStr, out double speed))
@@ -999,11 +999,11 @@ public sealed partial class TransportBar : UserControl
         {
             try
             {
-            try
-            {
-                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(new Uri("microsoft-clipchamp://"), "https://clipchamp.com/");
-            }
-            catch { }
+                try
+                {
+                    await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(new Uri("microsoft-clipchamp://"), "https://clipchamp.com/");
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -1023,173 +1023,173 @@ public sealed partial class TransportBar : UserControl
             try
             {
                 var settings = AppServices.Settings.Current;
-        
-            var stack = new StackPanel { Spacing = 16, Width = 520 };
 
-            var presetRow = new Grid();
-            presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetRow.ColumnSpacing = 16;
+                var stack = new StackPanel { Spacing = 16, Width = 520 };
 
-            var presetPanel = new StackPanel { Spacing = 4 };
-            presetPanel.Children.Add(new TextBlock { Text = "Equaliser Preset", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
-            var presetCombo = new ComboBox
-            {
-                ItemsSource = Enum.GetValues(typeof(EqualizerPreset)),
-                SelectedItem = settings.Equalizer,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            presetPanel.Children.Add(presetCombo);
-            Grid.SetColumn(presetPanel, 0);
-            presetRow.Children.Add(presetPanel);
+                var presetRow = new Grid();
+                presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                presetRow.ColumnSpacing = 16;
 
-            var reverbPanel = new StackPanel { Spacing = 4 };
-            reverbPanel.Children.Add(new TextBlock { Text = "Reverb Environment", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
-            var reverbCombo = new ComboBox
-            {
-                ItemsSource = new string[] { "None", "Small Room", "Medium Room", "Large Room", "Concert Hall", "Cave", "Auditorium" },
-                SelectedItem = settings.SelectedReverbPreset,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            reverbPanel.Children.Add(reverbCombo);
-            Grid.SetColumn(reverbPanel, 1);
-            presetRow.Children.Add(reverbPanel);
+                var presetPanel = new StackPanel { Spacing = 4 };
+                presetPanel.Children.Add(new TextBlock { Text = "Equaliser Preset", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
+                var presetCombo = new ComboBox
+                {
+                    ItemsSource = Enum.GetValues(typeof(EqualizerPreset)),
+                    SelectedItem = settings.Equalizer,
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                presetPanel.Children.Add(presetCombo);
+                Grid.SetColumn(presetPanel, 0);
+                presetRow.Children.Add(presetPanel);
 
-            stack.Children.Add(presetRow);
+                var reverbPanel = new StackPanel { Spacing = 4 };
+                reverbPanel.Children.Add(new TextBlock { Text = "Reverb Environment", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12 });
+                var reverbCombo = new ComboBox
+                {
+                    ItemsSource = new string[] { "None", "Small Room", "Medium Room", "Large Room", "Concert Hall", "Cave", "Auditorium" },
+                    SelectedItem = settings.SelectedReverbPreset,
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                reverbPanel.Children.Add(reverbCombo);
+                Grid.SetColumn(reverbPanel, 1);
+                presetRow.Children.Add(reverbPanel);
 
-            var sliderGrid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
-            for (int i = 0; i < 10; i++)
-            {
-                sliderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            }
+                stack.Children.Add(presetRow);
 
-            string[] freqLabels = { "32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k" };
-            var sliders = new Slider[10];
-            var valueTexts = new TextBlock[10];
-
-            float[] gains = new float[10];
-            try
-            {
-                var parts = settings.CustomEqualizerGains.Split(',');
+                var sliderGrid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
                 for (int i = 0; i < 10; i++)
                 {
-                    if (i < parts.Length && float.TryParse(parts[i], out float g)) gains[i] = g;
+                    sliderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 }
-            }
-            catch { }
 
-            for (int i = 0; i < 10; i++)
-            {
-                int index = i;
-                var cell = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            
-                valueTexts[i] = new TextBlock 
-                { 
-                    Text = $"{(int)gains[i]}dB", 
-                    FontSize = 10, 
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-                };
-                cell.Children.Add(valueTexts[i]);
+                string[] freqLabels = { "32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k" };
+                var sliders = new Slider[10];
+                var valueTexts = new TextBlock[10];
 
-                sliders[i] = new Slider
+                float[] gains = new float[10];
+                try
                 {
-                    Orientation = Orientation.Vertical,
-                    Height = 150,
-                    Minimum = -12,
-                    Maximum = 12,
-                    Value = gains[i],
-                    StepFrequency = 1,
-                    TickFrequency = 3,
-                    TickPlacement = TickPlacement.Outside,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                };
-            
-                sliders[i].ValueChanged += (s, ev) =>
-                {
-                    valueTexts[index].Text = $"{(int)ev.NewValue}dB";
-                    if (presetCombo.SelectedItem?.ToString() != "Custom")
-                    {
-                        presetCombo.SelectedItem = EqualizerPreset.Custom;
-                    }
-                };
-                cell.Children.Add(sliders[i]);
-
-                cell.Children.Add(new TextBlock 
-                { 
-                    Text = freqLabels[i], 
-                    FontSize = 11, 
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    HorizontalAlignment = HorizontalAlignment.Center 
-                });
-
-                Grid.SetColumn(cell, i);
-                sliderGrid.Children.Add(cell);
-            }
-
-            stack.Children.Add(sliderGrid);
-
-            presetCombo.SelectionChanged += (s, ev) =>
-            {
-                if (presetCombo.SelectedItem is EqualizerPreset p && p != EqualizerPreset.Custom)
-                {
-                    float[] presetGains = p switch
-                    {
-                        EqualizerPreset.Pop => new float[] { -2, -1, 0, 2, 4, 4, 2, 0, -1, -2 },
-                        EqualizerPreset.Rock => new float[] { 4, 3, -1, -2, -1, 1, 3, 4, 4, 4 },
-                        EqualizerPreset.Classical => new float[] { 3, 2, 2, 2, -1, -1, -2, 0, 2, 3 },
-                        EqualizerPreset.BassBoost => new float[] { 6, 5, 4, 2, 0, 0, 0, 0, 0, 0 },
-                        EqualizerPreset.Jazz => new float[] { 3, 2, 1, 2, -1, -1, 0, 1, 2, 3 },
-                        EqualizerPreset.HipHop => new float[] { 5, 4, 2, 3, -1, -1, 1, 0, 2, 3 },
-                        EqualizerPreset.Electronic => new float[] { 4, 4, 2, 0, -2, 2, 1, 2, 4, 5 },
-                        EqualizerPreset.Vocal => new float[] { -2, -3, -3, 1, 4, 4, 4, 2, 1, -1 },
-                        _ => new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-                    };
-
+                    var parts = settings.CustomEqualizerGains.Split(',');
                     for (int i = 0; i < 10; i++)
                     {
-                        sliders[i].Value = presetGains[i];
-                        valueTexts[i].Text = $"{(int)presetGains[i]}dB";
+                        if (i < parts.Length && float.TryParse(parts[i], out float g)) gains[i] = g;
                     }
                 }
-            };
+                catch { }
 
-            var dialog = new ContentDialog
-            {
-                Title = "Equaliser & Reverb Environment",
-                Content = stack,
-                PrimaryButtonText = "Save",
-                CloseButtonText = "Cancel",
-                XamlRoot = this.XamlRoot,
-                RequestedTheme = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light ? ElementTheme.Light : ElementTheme.Dark,
-                CornerRadius = new CornerRadius(8)
-            };
-
-            dialog.PrimaryButtonClick += (s, args) =>
-            {
-                if (presetCombo.SelectedItem is EqualizerPreset preset)
+                for (int i = 0; i < 10; i++)
                 {
-                    settings.Equalizer = preset;
-                    settings.SelectedReverbPreset = reverbCombo.SelectedItem?.ToString() ?? "None";
-                
-                    var newGains = string.Join(",", sliders.Select(sl => ((int)sl.Value).ToString()));
-                    settings.CustomEqualizerGains = newGains;
-                
-                    AppServices.Settings.Save();
-                    if (AppServices.SettingsViewModel != null)
+                    int index = i;
+                    var cell = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+
+                    valueTexts[i] = new TextBlock
                     {
-                        AppServices.SettingsViewModel.SelectedEqualizer = preset;
-                    }
+                        Text = $"{(int)gains[i]}dB",
+                        FontSize = 10,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                    };
+                    cell.Children.Add(valueTexts[i]);
 
-                    AppServices.PlaybackViewModel.Session.ApplyAudioEffects();
+                    sliders[i] = new Slider
+                    {
+                        Orientation = Orientation.Vertical,
+                        Height = 150,
+                        Minimum = -12,
+                        Maximum = 12,
+                        Value = gains[i],
+                        StepFrequency = 1,
+                        TickFrequency = 3,
+                        TickPlacement = TickPlacement.Outside,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
+
+                    sliders[i].ValueChanged += (s, ev) =>
+                    {
+                        valueTexts[index].Text = $"{(int)ev.NewValue}dB";
+                        if (presetCombo.SelectedItem?.ToString() != "Custom")
+                        {
+                            presetCombo.SelectedItem = EqualizerPreset.Custom;
+                        }
+                    };
+                    cell.Children.Add(sliders[i]);
+
+                    cell.Children.Add(new TextBlock
+                    {
+                        Text = freqLabels[i],
+                        FontSize = 11,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    });
+
+                    Grid.SetColumn(cell, i);
+                    sliderGrid.Children.Add(cell);
                 }
-            };
 
-            try
-            {
-                await dialog.ShowAsync();
-            }
-            catch { }
+                stack.Children.Add(sliderGrid);
+
+                presetCombo.SelectionChanged += (s, ev) =>
+                {
+                    if (presetCombo.SelectedItem is EqualizerPreset p && p != EqualizerPreset.Custom)
+                    {
+                        float[] presetGains = p switch
+                        {
+                            EqualizerPreset.Pop => new float[] { -2, -1, 0, 2, 4, 4, 2, 0, -1, -2 },
+                            EqualizerPreset.Rock => new float[] { 4, 3, -1, -2, -1, 1, 3, 4, 4, 4 },
+                            EqualizerPreset.Classical => new float[] { 3, 2, 2, 2, -1, -1, -2, 0, 2, 3 },
+                            EqualizerPreset.BassBoost => new float[] { 6, 5, 4, 2, 0, 0, 0, 0, 0, 0 },
+                            EqualizerPreset.Jazz => new float[] { 3, 2, 1, 2, -1, -1, 0, 1, 2, 3 },
+                            EqualizerPreset.HipHop => new float[] { 5, 4, 2, 3, -1, -1, 1, 0, 2, 3 },
+                            EqualizerPreset.Electronic => new float[] { 4, 4, 2, 0, -2, 2, 1, 2, 4, 5 },
+                            EqualizerPreset.Vocal => new float[] { -2, -3, -3, 1, 4, 4, 4, 2, 1, -1 },
+                            _ => new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+                        };
+
+                        for (int i = 0; i < 10; i++)
+                        {
+                            sliders[i].Value = presetGains[i];
+                            valueTexts[i].Text = $"{(int)presetGains[i]}dB";
+                        }
+                    }
+                };
+
+                var dialog = new ContentDialog
+                {
+                    Title = "Equaliser & Reverb Environment",
+                    Content = stack,
+                    PrimaryButtonText = "Save",
+                    CloseButtonText = "Cancel",
+                    XamlRoot = this.XamlRoot,
+                    RequestedTheme = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light ? ElementTheme.Light : ElementTheme.Dark,
+                    CornerRadius = new CornerRadius(8)
+                };
+
+                dialog.PrimaryButtonClick += (s, args) =>
+                {
+                    if (presetCombo.SelectedItem is EqualizerPreset preset)
+                    {
+                        settings.Equalizer = preset;
+                        settings.SelectedReverbPreset = reverbCombo.SelectedItem?.ToString() ?? "None";
+
+                        var newGains = string.Join(",", sliders.Select(sl => ((int)sl.Value).ToString()));
+                        settings.CustomEqualizerGains = newGains;
+
+                        AppServices.Settings.Save();
+                        if (AppServices.SettingsViewModel != null)
+                        {
+                            AppServices.SettingsViewModel.SelectedEqualizer = preset;
+                        }
+
+                        AppServices.PlaybackViewModel.Session.ApplyAudioEffects();
+                    }
+                };
+
+                try
+                {
+                    await dialog.ShowAsync();
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -1267,48 +1267,48 @@ public sealed partial class TransportBar : UserControl
         {
             try
             {
-            AudioDevicesSubItem.Items.Clear();
-            try
-            {
-                var selector = MediaDevice.GetAudioRenderSelector();
-                var devices = await DeviceInformation.FindAllAsync(selector);
-            
-                var playback = AppServices.Playback;
-                var currentDevice = playback.MediaPlayer.AudioDevice;
-
-                if (devices.Count == 0)
+                AudioDevicesSubItem.Items.Clear();
+                try
                 {
-                    var noDevicesItem = new MenuFlyoutItem { Text = "No audio devices available", IsEnabled = false };
-                    AudioDevicesSubItem.Items.Add(noDevicesItem);
-                    return;
-                }
+                    var selector = MediaDevice.GetAudioRenderSelector();
+                    var devices = await DeviceInformation.FindAllAsync(selector);
 
-                foreach (var device in devices)
-                {
-                    var name = device.Name;
-                    var trackItem = new ToggleMenuFlyoutItem
+                    var playback = AppServices.Playback;
+                    var currentDevice = playback.MediaPlayer.AudioDevice;
+
+                    if (devices.Count == 0)
                     {
-                        Text = name,
-                        IsChecked = currentDevice != null && currentDevice.Id == device.Id
-                    };
-                
-                    trackItem.Click += (s, args) =>
+                        var noDevicesItem = new MenuFlyoutItem { Text = "No audio devices available", IsEnabled = false };
+                        AudioDevicesSubItem.Items.Add(noDevicesItem);
+                        return;
+                    }
+
+                    foreach (var device in devices)
                     {
-                        try
+                        var name = device.Name;
+                        var trackItem = new ToggleMenuFlyoutItem
                         {
-                            playback.MediaPlayer.AudioDevice = device;
-                        }
-                        catch { }
-                    };
-                
-                    AudioDevicesSubItem.Items.Add(trackItem);
+                            Text = name,
+                            IsChecked = currentDevice != null && currentDevice.Id == device.Id
+                        };
+
+                        trackItem.Click += (s, args) =>
+                        {
+                            try
+                            {
+                                playback.MediaPlayer.AudioDevice = device;
+                            }
+                            catch { }
+                        };
+
+                        AudioDevicesSubItem.Items.Add(trackItem);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
-                AudioDevicesSubItem.Items.Add(errorItem);
-            }
+                catch (Exception ex)
+                {
+                    var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
+                    AudioDevicesSubItem.Items.Add(errorItem);
+                }
             }
             catch (Exception ex)
             {
@@ -1325,7 +1325,7 @@ public sealed partial class TransportBar : UserControl
     {
         MenuAspectRatioItem.Items.Clear();
         var current = AppServices.PlaybackViewModel.SelectedAspectRatio;
-        
+
         foreach (AspectRatioOption option in Enum.GetValues(typeof(AspectRatioOption)))
         {
             string label = option switch
@@ -1343,12 +1343,12 @@ public sealed partial class TransportBar : UserControl
                 Text = label,
                 IsChecked = current == option
             };
-            
+
             item.Click += (s, args) =>
             {
                 AppServices.PlaybackViewModel.SelectedAspectRatio = option;
             };
-            
+
             MenuAspectRatioItem.Items.Add(item);
         }
     }
@@ -1357,7 +1357,7 @@ public sealed partial class TransportBar : UserControl
     {
         MenuZoomItem.Items.Clear();
         var current = AppServices.PlaybackViewModel.VideoStretch;
-        
+
         var options = new[]
         {
             (Stretch.Uniform, "Fit"),
@@ -1373,20 +1373,20 @@ public sealed partial class TransportBar : UserControl
                 Text = option.Item2,
                 IsChecked = current == option.Item1
             };
-            
+
             item.Click += (s, args) =>
             {
                 AppServices.PlaybackViewModel.VideoStretch = option.Item1;
             };
-            
+
             MenuZoomItem.Items.Add(item);
         }
     }
-    
+
     private void OnSubtitlesMenuOpening(object sender, object e)
     {
         SubtitlesMenuFlyout.Items.Clear();
-        
+
         var playback = AppServices.PlaybackViewModel.Session;
         int activeIndex = playback.GetActiveSubtitleTrackIndex();
 
@@ -1401,7 +1401,7 @@ public sealed partial class TransportBar : UserControl
             playback.SetSubtitleTrack(-1);
         };
         SubtitlesMenuFlyout.Items.Add(offItem);
-        
+
         if (playback.MediaPlayer.Source is MediaPlaybackItem playbackItem)
         {
             var tracks = playbackItem.TimedMetadataTracks;
@@ -1411,19 +1411,19 @@ public sealed partial class TransportBar : UserControl
                 int index = i;
                 var track = tracks[i];
                 var name = MediaTrackFormatHelper.FormatSubtitleTrack(track, i);
-                
+
                 var trackItem = new RadioMenuFlyoutItem
                 {
                     Text = name,
                     GroupName = "SubtitleLanguageGroup",
                     IsChecked = (i == activeIndex)
                 };
-                
+
                 trackItem.Click += (s, args) =>
                 {
                     playback.SetSubtitleTrack(index);
                 };
-                
+
                 SubtitlesMenuFlyout.Items.Add(trackItem);
             }
 
@@ -1571,7 +1571,7 @@ public sealed partial class TransportBar : UserControl
     private void OnAudioMenuOpening(object sender, object e)
     {
         AudioMenuFlyout.Items.Clear();
-        
+
         var playback = AppServices.PlaybackViewModel.Session;
         if (playback.MediaPlayer.Source is MediaPlaybackItem playbackItem)
         {
@@ -1590,18 +1590,18 @@ public sealed partial class TransportBar : UserControl
                 int index = i;
                 var track = tracks[i];
                 var name = MediaTrackFormatHelper.FormatAudioTrack(track, i);
-                
+
                 var trackItem = new ToggleMenuFlyoutItem
                 {
                     Text = name,
                     IsChecked = i == selectedIndex
                 };
-                
+
                 trackItem.Click += (s, args) =>
                 {
                     tracks.SelectedIndex = index;
                 };
-                
+
                 AudioMenuFlyout.Items.Add(trackItem);
             }
 
@@ -1631,7 +1631,7 @@ public sealed partial class TransportBar : UserControl
             AudioMenuFlyout.Items.Add(noMediaItem);
         }
     }
-    
+
     private void OnProgressValueChanged(object sender, RangeBaseValueChangedEventArgs e) => OnProgressSliderValueChanged(sender, e);
 
     public void TriggerEqualiser()

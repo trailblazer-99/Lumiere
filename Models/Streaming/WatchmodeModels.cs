@@ -61,12 +61,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         public string DisplayTitle => Title ?? string.Empty;
         public string DisplayYear => Year?.ToString() ?? string.Empty;
-        
+
         public string? PosterUrl => Details?.DisplayPoster
             ?? (string.IsNullOrEmpty(JsonPosterUrl) ? null : JsonPosterUrl)
             ?? (string.IsNullOrEmpty(JsonPoster) ? null : JsonPoster)
             ?? (TmdbId.HasValue ? $"https://image.tmdb.org/t/p/w342/{TmdbId}.jpg" : null);
-        
+
         public string WatchmodeUrl => $"https://v2.watchmode.com/title/{Id}";
     }
 
@@ -182,7 +182,7 @@ namespace LumiereMediaPlayer.Models.Streaming
         public int? TmdbId { get; set; }
 
         public string DisplayTitle => Name ?? string.Empty;
-        
+
         // Convert to WatchmodeTitle
         public WatchmodeTitle ToWatchmodeTitle()
         {
@@ -580,8 +580,8 @@ namespace LumiereMediaPlayer.Models.Streaming
                     string providerName = p.ProviderName ?? "Unknown";
                     if (providerName.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = !string.IsNullOrEmpty(title) 
-                            ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}" 
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}"
                             : "https://www.crunchyroll.com";
                     }
                     else if (providerName.Contains("apple", StringComparison.OrdinalIgnoreCase) || providerName.Contains("itunes", StringComparison.OrdinalIgnoreCase))

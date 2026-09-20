@@ -77,12 +77,13 @@
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="Home" Icon="Home" Tag="home" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem Content="Music" Icon="MusicInfo" Tag="music" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem Content="Videos" Icon="Video" Tag="videos" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem Content="Playlists" Icon="List" Tag="playlists" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
+                <NavigationViewItem x:Uid="NavHome" Content="Home" Icon="Home" Tag="home" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
+                <NavigationViewItem x:Uid="NavMusic" Content="Music" Icon="MusicInfo" Tag="music" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
+                <NavigationViewItem x:Uid="NavVideo" Content="Videos" Icon="Video" Tag="videos" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
+                <NavigationViewItem x:Uid="NavPlaylists" Content="Playlists" Icon="List" Tag="playlists" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
                 <NavigationViewItem
                     x:Name="NowPlayingNavItem"
+                    x:Uid="NavNowPlaying"
                     Content="Now playing"
                     Icon="Play"
                     Tag="nowPlaying"

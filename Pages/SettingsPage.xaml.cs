@@ -91,7 +91,7 @@ public sealed partial class SettingsPage : Page
             var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
             double currentOffset = PageScrollViewer.VerticalOffset;
             double targetOffset = Math.Max(0, currentOffset + point.Y - 90);
-            
+
             PageScrollViewer.ChangeView(null, targetOffset, null, false);
 
             if (target is Border borderCard)
@@ -100,7 +100,7 @@ public sealed partial class SettingsPage : Page
                 var originalThickness = borderCard.BorderThickness;
                 var originalBackground = borderCard.Background;
 
-                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush 
+                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush
                                   ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0));
 
                 var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 140, 0));
@@ -241,6 +241,7 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Accent color", Description = "Choose primary highlight color (Orange, Purple, Blue, Teal, Red, Pink)", Section = "Appearance & Visuals", Keywords = "accent, color, tint, orange, purple, blue, teal, red, pink, custom color, system default", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show transport bar", Description = "Toggle playback controls bar visibility across the app", Section = "Appearance & Visuals", Keywords = "transport bar, show transport bar, hide transport bar, player bar, bottom bar, playback bar, mini bar, toggle transport bar, transport", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Acrylic transport bar", Description = "Toggle frosted acrylic material for playback transport controls bar", Section = "Appearance & Visuals", Keywords = "acrylic, transport bar, frosted glass, blur, transparency, translucent, player bar, material", TargetElement = AppearanceSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Auto-hide transport bar in Streaming", Description = "Automatically hide playback controls when navigating movies, TV shows, and streaming", Section = "Appearance & Visuals", Keywords = "streaming, auto hide transport bar, hide transport bar in streaming, transport bar, bottom bar, streaming bar, movies, tv shows, youtube, twitch", TargetElement = AppearanceSection });
 
         // 5. Controls & Interface
         _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Controls & Interface", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = ControlsSection });
@@ -310,7 +311,7 @@ public sealed partial class SettingsPage : Page
                 int currentRevision = System.Threading.Interlocked.Increment(ref _searchRevision);
 
                 var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                
+
                 // Score-based search ranking
                 var scoredResults = _allSearchItems
                     .Select(item =>
@@ -427,11 +428,11 @@ public sealed partial class SettingsPage : Page
             // Calculate position of target element relative to PageScrollViewer
             var transform = target.TransformToVisual(PageScrollViewer);
             var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
-            
+
             // Center the specific card nicely in viewport (offset by ~90px from top)
             double currentOffset = PageScrollViewer.VerticalOffset;
             double targetOffset = Math.Max(0, currentOffset + point.Y - 90);
-            
+
             PageScrollViewer.ChangeView(null, targetOffset, null, false);
 
             // Highlight ONLY this specific setting card with accent border & background glow
@@ -441,7 +442,7 @@ public sealed partial class SettingsPage : Page
                 var originalThickness = borderCard.BorderThickness;
                 var originalBackground = borderCard.Background;
 
-                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush 
+                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush
                                   ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0));
 
                 var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 140, 0));
@@ -479,7 +480,7 @@ public sealed partial class SettingsPage : Page
             if (child is TextBlock tb)
             {
                 var text = tb.Text?.Trim();
-                if (!string.IsNullOrEmpty(text) && 
+                if (!string.IsNullOrEmpty(text) &&
                     (string.Equals(text, title, StringComparison.OrdinalIgnoreCase) ||
                      text.StartsWith(title, StringComparison.OrdinalIgnoreCase) ||
                      title.StartsWith(text, StringComparison.OrdinalIgnoreCase)))

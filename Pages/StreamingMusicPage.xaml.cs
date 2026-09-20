@@ -156,7 +156,7 @@ namespace LumiereMediaPlayer.Pages
                     if (visual == null) return;
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
-                    
+
                     if (border.Tag == null)
                     {
                         try
@@ -167,18 +167,18 @@ namespace LumiereMediaPlayer.Pages
                             shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
                             shadow.Opacity = 0.0f;
                             shadow.Offset = new System.Numerics.Vector3(0, 4, 0);
-                            
+
                             shadowVisual.Shadow = shadow;
-                            
+
                             var bindSizeAnimation = compositor.CreateExpressionAnimation("visual.Size");
                             bindSizeAnimation.SetReferenceParameter("visual", visual);
                             shadowVisual.StartAnimation("Size", bindSizeAnimation);
-                            
+
                             if (visual.Parent is Microsoft.UI.Composition.ContainerVisual container)
                             {
                                 container.Children.InsertBelow(shadowVisual, visual);
                             }
-                            
+
                             border.Tag = shadow;
                         }
                         catch { }
@@ -191,7 +191,7 @@ namespace LumiereMediaPlayer.Pages
                         opacityAnim.InsertKeyFrame(1.0f, 0.55f);
                         opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
-                        
+
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 16));
                         offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
@@ -202,7 +202,7 @@ namespace LumiereMediaPlayer.Pages
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.04f, 1.04f, 1.0f), compositor.CreateCubicBezierEasingFunction(
                         new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
                     scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
-                    
+
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
 
@@ -253,7 +253,7 @@ namespace LumiereMediaPlayer.Pages
                     if (visual == null) return;
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
-                    
+
                     var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
                     if (dropShadow != null)
                     {
@@ -261,7 +261,7 @@ namespace LumiereMediaPlayer.Pages
                         opacityAnim.InsertKeyFrame(1.0f, 0.0f);
                         opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
-                        
+
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
                         offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 4, 8));
                         offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
@@ -271,7 +271,7 @@ namespace LumiereMediaPlayer.Pages
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
                     scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
-                    
+
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
 
@@ -335,7 +335,7 @@ namespace LumiereMediaPlayer.Pages
             // Guard against double-open: WinUI only allows one ContentDialog at a time
             if (_currentDialog != null) return;
 
-            bool isLight = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light || 
+            bool isLight = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light ||
                            (AppServices.Settings.Current.Theme == Models.AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
             var dialog = new ContentDialog
             {
@@ -346,16 +346,17 @@ namespace LumiereMediaPlayer.Pages
                 XamlRoot = this.XamlRoot,
                 RequestedTheme = isLight ? ElementTheme.Light : ElementTheme.Dark,
                 CornerRadius = new CornerRadius(12),
-                Background = new Microsoft.UI.Xaml.Media.AcrylicBrush 
-                { 
-                    TintOpacity = 0.7, 
+                Background = new Microsoft.UI.Xaml.Media.AcrylicBrush
+                {
+                    TintOpacity = 0.7,
                     TintColor = isLight ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black,
                     FallbackColor = isLight ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black
                 }
             };
             _currentDialog = dialog;
 
-            dialog.PrimaryButtonClick += (s, args) => {
+            dialog.PrimaryButtonClick += (s, args) =>
+            {
                 if (isFromLibrary)
                 {
                     AppServices.StreamingLibrary.RemoveItem(track.Id, Services.Streaming.StreamingItemType.Music);
@@ -372,13 +373,13 @@ namespace LumiereMediaPlayer.Pages
 
                 else
                 {
-                    AppServices.StreamingLibrary.AddItem(new Services.Streaming.SavedStreamingItem 
-                    { 
-                        Id = track.Id, 
-                        Title = track.Name, 
-                        Subtitle = track.DisplayArtist, 
-                        PosterUrl = track.ArtworkUrl ?? string.Empty, 
-                        Type = Services.Streaming.StreamingItemType.Music 
+                    AppServices.StreamingLibrary.AddItem(new Services.Streaming.SavedStreamingItem
+                    {
+                        Id = track.Id,
+                        Title = track.Name,
+                        Subtitle = track.DisplayArtist,
+                        PosterUrl = track.ArtworkUrl ?? string.Empty,
+                        Type = Services.Streaming.StreamingItemType.Music
                     });
                 }
             };
@@ -386,21 +387,21 @@ namespace LumiereMediaPlayer.Pages
             var dialogTask = dialog.ShowAsync();
 
             var mainPanel = new StackPanel { Spacing = 16, Padding = new Thickness(0, 8, 0, 0) };
-            
+
             string subtitleText = track.Name == track.Artist ? "Artist" : $"By {track.DisplayArtist}";
-            var subtitle = new TextBlock 
-            { 
-                Text = subtitleText, 
+            var subtitle = new TextBlock
+            {
+                Text = subtitleText,
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             };
             mainPanel.Children.Add(subtitle);
 
-            var header = new TextBlock 
-            { 
-                Text = "Listen on", 
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, 
-                FontSize = 18 
+            var header = new TextBlock
+            {
+                Text = "Listen on",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontSize = 18
             };
             mainPanel.Children.Add(header);
 
@@ -415,7 +416,7 @@ namespace LumiereMediaPlayer.Pages
 
             var musicApiService = new LumiereMediaPlayer.Services.Streaming.MusicApiService();
             var streamingLinks = await musicApiService.GetStreamingLinksAsync(track);
-            
+
             if (streamingLinks != null && streamingLinks.Count > 0)
             {
                 // Ensure Spotify is present (add search fallback if missing)
@@ -446,24 +447,30 @@ namespace LumiereMediaPlayer.Pages
 
                     var contentPanel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
 
-                    var img = new Image 
-                    { 
+                    var img = new Image
+                    {
                         Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(link.IconUrl)) { DecodePixelWidth = 48 },
-                        Width = 48, Height = 48, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                        Width = 48,
+                        Height = 48,
+                        Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                     };
-                    
+
                     var text = new TextBlock { Text = link.ServiceName, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, TextWrapping = TextWrapping.Wrap, TextAlignment = Microsoft.UI.Xaml.TextAlignment.Center };
                     contentPanel.Children.Add(img);
                     contentPanel.Children.Add(text);
                     btn.Content = contentPanel;
 
                     var linkUrl = link.Url;
-                    btn.Click += async (s, args) => { 
-                        try {
+                    btn.Click += async (s, args) =>
+                    {
+                        try
+                        {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                             await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
-                        } catch {
+                        }
+                        catch
+                        {
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
                             await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                         }
@@ -502,19 +509,22 @@ namespace LumiereMediaPlayer.Pages
 
                     var contentPanel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
 
-                    var img = new Image 
-                    { 
+                    var img = new Image
+                    {
                         Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)) { DecodePixelWidth = 48 },
-                        Width = 48, Height = 48, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                        Width = 48,
+                        Height = 48,
+                        Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                     };
-                    
+
                     var text = new TextBlock { Text = p.Name, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, TextWrapping = TextWrapping.Wrap, TextAlignment = Microsoft.UI.Xaml.TextAlignment.Center };
                     contentPanel.Children.Add(img);
                     contentPanel.Children.Add(text);
                     btn.Content = contentPanel;
 
                     var provName = p.Name;
-                    btn.Click += async (s, args) => {
+                    btn.Click += async (s, args) =>
+                    {
                         string searchUrl = provName switch
                         {
                             "Spotify" => $"https://open.spotify.com/search/{Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
@@ -525,11 +535,14 @@ namespace LumiereMediaPlayer.Pages
 
                         if (!string.IsNullOrEmpty(searchUrl))
                         {
-                            try {
+                            try
+                            {
                                 string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
                                 var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                                 await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
-                            } catch {
+                            }
+                            catch
+                            {
                                 string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
                                 await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                             }
@@ -562,13 +575,13 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is MenuFlyoutItem item && item.DataContext is MusicApiTrack track)
             {
-                AppServices.StreamingLibrary.AddItem(new SavedStreamingItem 
-                { 
-                    Id = track.Id, 
-                    Title = track.Name, 
-                    Subtitle = track.DisplayArtist, 
-                    PosterUrl = track.HighResArtworkUrl ?? string.Empty, 
-                    Type = Services.Streaming.StreamingItemType.Music 
+                AppServices.StreamingLibrary.AddItem(new SavedStreamingItem
+                {
+                    Id = track.Id,
+                    Title = track.Name,
+                    Subtitle = track.DisplayArtist,
+                    PosterUrl = track.HighResArtworkUrl ?? string.Empty,
+                    Type = Services.Streaming.StreamingItemType.Music
                 });
             }
         }

@@ -19,6 +19,8 @@ namespace LumiereMediaPlayer.ViewModels;
 public partial class VideoViewModel : ObservableObject
 {
     private readonly PlaybackViewModel _playback;
+    private readonly IHdrPipelineService _hdrPipeline;
+    private readonly ISettingsService _settings;
     private readonly TmdbService _tmdbService = new();
     private static readonly System.Threading.SemaphoreSlim _tmdbSemaphore = new(3, 3);
     private List<MediaItem> _rawVideos = new();
@@ -55,9 +57,12 @@ public partial class VideoViewModel : ObservableObject
     public Visibility OverlayVisibility => VisibilityHelper.FromBoolean(ShowNoSourceOverlay);
     public Visibility PlayerVisibility => VisibilityHelper.FromBoolean(!ShowNoSourceOverlay);
 
-    public VideoViewModel(PlaybackViewModel playback)
+    public VideoViewModel(PlaybackViewModel playback, IHdrPipelineService hdrPipeline, ISettingsService settings)
     {
         _playback = playback;
+        _hdrPipeline = hdrPipeline;
+        _settings = settings;
+
         _playback.Session.StateChanged += (_, _) => SyncFromPlayback();
         _playback.PropertyChanged += (s, e) =>
         {
@@ -68,8 +73,8 @@ public partial class VideoViewModel : ObservableObject
         };
 
         // Subscribe to HDR pipeline state changes
-        AppServices.HdrPipeline.HdrStateChanged += OnHdrStateChanged;
-        ShowHdrBadge = AppServices.Settings.Current.ShowHdrBadge;
+        _hdrPipeline.HdrStateChanged += OnHdrStateChanged;
+        ShowHdrBadge = _settings.Current.ShowHdrBadge;
 
         SyncFromPlayback();
         SampleMediaLibrary.LibraryChanged += (s, e) =>
@@ -82,6 +87,11 @@ public partial class VideoViewModel : ObservableObject
         _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
         _ = PopulateAllTmdbDataAsync(_rawVideos);
         ApplySortAndFilter();
+    }
+
+    public VideoViewModel(PlaybackViewModel playback)
+        : this(playback, AppServices.HdrPipeline, AppServices.Settings)
+    {
     }
 
     private async Task PopulateAllTmdbDataAsync(List<MediaItem> items)
@@ -115,12 +125,12 @@ public partial class VideoViewModel : ObservableObject
     private void ApplySortAndFilter()
     {
         var filtered = _rawVideos.AsEnumerable();
-        
+
         if (SelectedFilterExtension != "All Formats")
         {
             filtered = filtered.Where(x => x.IsFolder || string.Equals(x.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase));
         }
-        
+
         filtered = SelectedSort switch
         {
             "Name (A-Z)" => filtered.OrderBy(x => !x.IsFolder).ThenBy(x => x.Title),
@@ -131,7 +141,7 @@ public partial class VideoViewModel : ObservableObject
             "Size (Smallest)" => filtered.OrderBy(x => !x.IsFolder).ThenBy(x => x.FileSize),
             _ => filtered
         };
-        
+
         var newItems = filtered.ToList();
         if (FilteredVideos.SequenceEqual(newItems))
         {
@@ -160,7 +170,7 @@ public partial class VideoViewModel : ObservableObject
         picker.FileTypeFilter.Add(".avi");
         picker.FileTypeFilter.Add(".mov");
         picker.FileTypeFilter.Add(".wmv");
-        
+
         var files = await picker.PickMultipleFilesAsync();
         if (files != null && files.Count > 0)
         {
@@ -201,7 +211,7 @@ public partial class VideoViewModel : ObservableObject
         FilePickerHelper.Initialize(picker);
         picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.VideosLibrary;
         picker.FileTypeFilter.Add("*");
-        
+
         var folder = await picker.PickSingleFolderAsync();
         if (folder != null)
         {
@@ -211,7 +221,7 @@ public partial class VideoViewModel : ObservableObject
             var options = new Windows.Storage.Search.QueryOptions(Windows.Storage.Search.CommonFileQuery.OrderByName, new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv" });
             var query = folder.CreateFileQueryWithOptions(options);
             var files = await query.GetFilesAsync();
-            
+
             bool added = false;
             foreach (var file in files)
             {
@@ -232,7 +242,7 @@ public partial class VideoViewModel : ObservableObject
                 _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
                 added = true;
             }
-            
+
             if (added)
             {
                 await SampleMediaLibrary.SaveLibraryAsync();

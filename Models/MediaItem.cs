@@ -82,7 +82,7 @@ public sealed class MediaItem : INotifyPropertyChanged
 
     public MediaKind Kind { get; init; } = MediaKind.Audio;
     public string? SourcePath { get; init; }
-    
+
     // New Advanced Properties
     private long _fileSize;
     public long FileSize

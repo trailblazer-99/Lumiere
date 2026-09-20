@@ -5,6 +5,16 @@ on:
     branches: [ main, master, dev ]
   pull_request:
     branches: [ main, master, dev ]
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Target package mode (SideLoadOnly or StoreUpload)'
+        required: true
+        default: 'SideLoadOnly'
+        type: choice
+        options:
+        - SideLoadOnly
+        - StoreUpload
 
 permissions:
   contents: read
@@ -33,6 +43,9 @@ jobs:
       run: copy appsettings.json.example appsettings.json
       shell: cmd
 
+    - name: Code Format Check
+      run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
+
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
 
@@ -48,6 +61,10 @@ jobs:
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false
       shell: powershell
+
+    - name: Run Unit Tests
+      run: dotnet test Tests\LumiereMediaPlayer.Tests\LumiereMediaPlayer.Tests.csproj -p:Platform=x64 -c Release
+
 
     # Output a structured package summary table to GITHUB_STEP_SUMMARY for tracking
     - name: Generate Build Package Tracking Summary
@@ -172,6 +189,7 @@ jobs:
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:TreatWarningsAsErrors=true `
           /p:AppxAutoIncrementPackageRevision=False
 
         msbuild LumiereMediaPlayer.csproj `
@@ -187,6 +205,7 @@ jobs:
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:TreatWarningsAsErrors=true `
           /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
@@ -200,6 +219,7 @@ jobs:
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:TreatWarningsAsErrors=true `
           /p:AppxAutoIncrementPackageRevision=False
 
         msbuild LumiereMediaPlayer.csproj `

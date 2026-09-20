@@ -130,8 +130,8 @@ public static class SampleMediaLibrary
         {
             foreach (var track in toRemove)
             {
-                _allTracks.RemoveAll(t => 
-                    (!string.IsNullOrEmpty(track.Id) && t.Id == track.Id) || 
+                _allTracks.RemoveAll(t =>
+                    (!string.IsNullOrEmpty(track.Id) && t.Id == track.Id) ||
                     (!string.IsNullOrEmpty(t.SourcePath) && !string.IsNullOrEmpty(track.SourcePath) && string.Equals(t.SourcePath, track.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Title) && !string.IsNullOrEmpty(track.Title) && string.Equals(t.Title, track.Title, StringComparison.OrdinalIgnoreCase)));
                 if (!string.IsNullOrEmpty(track.SourcePath)) _seenPaths.Remove(track.SourcePath);
@@ -404,7 +404,7 @@ public static class SampleMediaLibrary
         {
             var folder = Windows.Storage.ApplicationData.Current.LocalFolder;
             var tmpFile = await folder.CreateFileAsync("library_cache.tmp", Windows.Storage.CreationCollisionOption.ReplaceExisting);
-            
+
             List<MediaItem> tracksToSave;
             lock (_lock)
             {

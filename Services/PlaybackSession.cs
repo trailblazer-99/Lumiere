@@ -11,7 +11,7 @@ using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Services;
 
-public sealed class PlaybackSession
+public sealed class PlaybackSession : IPlaybackSession
 {
     private static void Log(string message)
     {
@@ -62,7 +62,7 @@ public sealed class PlaybackSession
         _currentIndex = -1;
         _displayRequest = new Windows.System.Display.DisplayRequest();
         _displayRequestActive = false;
-        
+
         _mediaPlayer = new MediaPlayer
         {
             AudioCategory = MediaPlayerAudioCategory.Media,
@@ -352,7 +352,7 @@ public sealed class PlaybackSession
         if (source is not null)
         {
             Log("LoadCurrentTrackSourceAsync: Source created successfully. Assigning to MediaPlayer.");
-            
+
             // Ensure video frame server mode is disabled before setting the source so the media engine
             // initializes using the native hardware MPO (Multi-Plane Overlay) pipeline for HDR.
             try
@@ -571,7 +571,7 @@ public sealed class PlaybackSession
         MediaSource? mediaSource = null;
 
         // If it's a web URL
-        if (Uri.TryCreate(track.SourcePath, UriKind.Absolute, out var uri) && 
+        if (Uri.TryCreate(track.SourcePath, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
             Log($"CreatePlaybackSourceAsync: Treating as web URI: {uri}");
@@ -638,7 +638,7 @@ public sealed class PlaybackSession
             {
                 Log($"CreatePlaybackSourceAsync: Failed to get StorageFile: {ex.Message}\n{ex.StackTrace}");
                 System.Diagnostics.Debug.WriteLine($"Failed to load media file: {ex.Message}");
-                
+
                 if (mediaSource != null)
                 {
                     try { mediaSource.Reset(); mediaSource.Dispose(); } catch { }
@@ -656,7 +656,7 @@ public sealed class PlaybackSession
                     else if (playablePath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)) contentType = "video/avi";
                     else if (playablePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)) contentType = "video/quicktime";
                     else if (playablePath.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-ms-wmv";
-                    
+
                     mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
                     Log("CreatePlaybackSourceAsync: Fallback stream source created.");
                 }
@@ -1286,7 +1286,7 @@ public sealed class PlaybackSession
                 {
                     matchedPreset = EqualizerPreset.Vocal;
                 }
-                
+
                 // 2. AI matching fallback (using Local Ollama, Gemini API, or Proxy)
                 var config = ConfigService.Config;
                 bool hasAiProvider = settings.UseLocalAi || !string.IsNullOrWhiteSpace(settings.GeminiApiKey) || (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl));
@@ -1382,7 +1382,7 @@ public sealed class PlaybackSession
                     AudioCategory = _mediaPlayer.AudioCategory,
                     AutoPlay = false
                 };
-                
+
                 _transitionPlayer.Source = _mediaPlayer.Source;
                 _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
                 _transitionPlayer.Volume = _mediaPlayer.Volume;
@@ -1653,7 +1653,7 @@ public sealed class PlaybackSession
             {
                 Log($"PrefetchVideoThumbnails: Starting for track '{track.Title}'");
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
-                
+
                 try
                 {
                     var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);

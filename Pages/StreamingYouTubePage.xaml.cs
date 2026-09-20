@@ -100,7 +100,7 @@ namespace LumiereMediaPlayer.Pages
                     var localAppData = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
                     var userDataFolder = System.IO.Path.Combine(localAppData, "WebView2Data");
                     var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, userDataFolder, null);
-                    
+
                     await _webView.EnsureCoreWebView2Async(env);
 
                     // Sync dark/light theme with YouTube profile
@@ -187,6 +187,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void DisposeWebView()
         {
+            PageContent.Margin = new Thickness(0, 48, 0, 0);
             if (_webView != null)
             {
                 try
