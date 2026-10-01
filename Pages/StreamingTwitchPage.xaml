@@ -6,7 +6,6 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Loaded="OnPageLoaded"
     Unloaded="OnPageUnloaded">
 
@@ -17,7 +16,7 @@
         <!-- Fluent Loading Placeholder Overlay -->
         <Grid
             x:Name="LoadingOverlay"
-            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch">
             <StackPanel
@@ -34,7 +33,7 @@
                     HorizontalAlignment="Center">
                     <FontIcon
                         Glyph="&#xE7FC;"
-                        FontSize="28"
+                        FontSize="32"
                         Foreground="#FF9146FF"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />
@@ -45,7 +44,7 @@
                     Width="32"
                     Height="32"
                     Margin="0,8,0,4"
-                    Foreground="{ThemeResource SystemAccentColor}"
+                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
                     HorizontalAlignment="Center" />
 
                 <TextBlock
@@ -65,7 +64,7 @@
         <!-- Fluent Network Error / Offline State -->
         <Grid
             x:Name="ErrorOverlay"
-            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             Visibility="Collapsed">

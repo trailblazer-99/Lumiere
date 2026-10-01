@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHistoryService>(sp => sp.GetRequiredService<HistoryService>());
 
         services.AddSingleton<PlaybackSession>(sp =>
-            new PlaybackSession(SampleMediaLibrary.AudioTracks));
+            new PlaybackSession(MediaLibraryService.AudioTracks));
         services.AddSingleton<IPlaybackSession>(sp => sp.GetRequiredService<PlaybackSession>());
 
         services.AddSingleton<HdrPipelineService>();
@@ -56,6 +56,9 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<FullscreenManager>();
         services.AddSingleton<IFullscreenManager>(sp => sp.GetRequiredService<FullscreenManager>());
+
+        services.AddSingleton<AppleTvLifecycleService>();
+        services.AddSingleton<IAppleTvLifecycleService>(sp => sp.GetRequiredService<AppleTvLifecycleService>());
 
         // ── ViewModels ──────────────────────────────────────────────
         services.AddSingleton<PlaybackViewModel>();

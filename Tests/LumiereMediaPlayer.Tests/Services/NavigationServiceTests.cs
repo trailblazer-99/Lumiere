@@ -77,4 +77,22 @@ public class NavigationServiceTests
 
         Assert.IsFalse(NavigationService.IsStreamingSection(null, null, null));
     }
+
+    [TestMethod]
+    public void PageKeys_StreamingSubOptionKeys_AreStreamingSections()
+    {
+        var streamingKeys = new[]
+        {
+            PageKeys.StreamMusic,
+            PageKeys.StreamMovies,
+            PageKeys.StreamTvShows,
+            PageKeys.StreamYouTube,
+            PageKeys.StreamTwitch
+        };
+
+        foreach (var key in streamingKeys)
+        {
+            Assert.IsTrue(NavigationService.IsStreamingSection(null, null, key), $"Key {key} should be recognized as a streaming section");
+        }
+    }
 }

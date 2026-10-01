@@ -6,6 +6,7 @@
     xmlns:models="using:LumiereMediaPlayer.Models.Streaming"
     xmlns:services="using:LumiereMediaPlayer.Services.Streaming"
     xmlns:helpers="using:LumiereMediaPlayer.Helpers"
+    xmlns:animatedvisuals="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals"
     Loaded="OnPageLoaded">
 
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Opacity="1">
@@ -17,7 +18,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,20">
             <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8D6;" FontSize="28" VerticalAlignment="Center"/>
+                <FontIcon Glyph="&#xE8D6;" FontSize="24" VerticalAlignment="Center"/>
                 <TextBlock Text="Music" Style="{StaticResource PageTitleTextStyle}" VerticalAlignment="Center"/>
             </StackPanel>
             <TextBlock Text="Search and discover popular music, then listen on your favorite platform."
@@ -40,9 +41,20 @@
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <AutoSuggestBox x:Name="SearchBox" QueryIcon="Find" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32"/>
+                                    <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32">
+                                        <AutoSuggestBox.QueryIcon>
+                                            <AnimatedIcon x:Name="SearchAnimatedIcon">
+                                                <AnimatedIcon.Source>
+                                                    <animatedvisuals:AnimatedFindVisualSource />
+                                                </AnimatedIcon.Source>
+                                                <AnimatedIcon.FallbackIconSource>
+                                                    <SymbolIconSource Symbol="Find" />
+                                                </AnimatedIcon.FallbackIconSource>
+                                            </AnimatedIcon>
+                                        </AutoSuggestBox.QueryIcon>
+                                    </AutoSuggestBox>
                                     <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
-                                        <FontIcon FontSize="13" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </ToggleButton>
                                 </StackPanel>
                             </StackPanel>
@@ -59,16 +71,16 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:MusicApiTrack">
-                                    <Border Width="200" Height="200" CornerRadius="12" Translation="0,0,8"
+                                    <Border Width="200" Height="200" CornerRadius="12"
                                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                                             BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                        <Border.Shadow>
-                                            <ThemeShadow />
-                                        </Border.Shadow>
                                         <Grid CornerRadius="12">
-                                            <FontIcon Glyph="&#xE8D6;" FontSize="44" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            <Image Source="{Binding HighResArtworkUrl}" Stretch="UniformToFill" />
+                                            <Image Stretch="UniformToFill">
+                                                <Image.Source>
+                                                    <BitmapImage UriSource="{Binding HighResArtworkUrl}" DecodePixelWidth="200" />
+                                                </Image.Source>
+                                            </Image>
                                             
                                             <!-- Hover Overlay -->
                                             <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
@@ -78,14 +90,6 @@
                                                         <GradientStop Color="#95000000" Offset="1.0"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <Grid>
-                                                    <Border x:Name="PlayButtonIcon" Width="48" Height="48" CornerRadius="24" Background="#80000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                        <Border.RenderTransform>
-                                                            <ScaleTransform ScaleX="0.6" ScaleY="0.6" />
-                                                        </Border.RenderTransform>
-                                                        <FontIcon FontSize="20" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Border>
-                                                </Grid>
                                             </Border>
 
                                             <!-- Metadata Scrim -->
@@ -114,7 +118,7 @@
                                                     <Image Width="20" Height="20" Stretch="Uniform" Source="https://www.google.com/s2/favicons?domain=spotify.com&amp;sz=128" />
                                                 </HyperlinkButton>
                                                 <HyperlinkButton NavigateUri="{Binding ExternalUrls.AppleMusic}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasAppleMusic), Mode=OneTime}" Width="28" Height="28" CornerRadius="14" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Apple Music">
-                                                    <FontIcon Glyph="&#xE93C;" FontSize="14" Foreground="#FA243C" />
+                                                    <FontIcon Glyph="&#xE93C;" FontSize="16" Foreground="#FA243C" />
                                                 </HyperlinkButton>
                                                 <HyperlinkButton NavigateUri="{Binding ExternalUrls.Tidal}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasTidal), Mode=OneTime}" Width="28" Height="28" CornerRadius="14" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Tidal">
                                                     <TextBlock Text="T" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -150,16 +154,16 @@
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="services:SavedStreamingItem">
-                                <Border Width="200" Height="200" CornerRadius="12" Translation="0,0,8"
+                                <Border Width="200" Height="200" CornerRadius="12"
                                         Background="{ThemeResource LayerFillColorDefaultBrush}"
                                         BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                    <Border.Shadow>
-                                        <ThemeShadow />
-                                    </Border.Shadow>
                                     <Grid CornerRadius="12">
-                                        <FontIcon Glyph="&#xE8D6;" FontSize="44" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        <Image Source="{Binding PosterUrl}" Stretch="UniformToFill" />
+                                        <Image Stretch="UniformToFill">
+                                            <Image.Source>
+                                                <BitmapImage UriSource="{Binding PosterUrl}" DecodePixelWidth="200" />
+                                            </Image.Source>
+                                        </Image>
                                         <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -167,11 +171,6 @@
                                                     <GradientStop Color="#95000000" Offset="1.0"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
-                                            <Grid>
-                                                <Border Width="48" Height="48" CornerRadius="24" Background="#80000000" BorderBrush="#AAFFFFFF" BorderThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <FontIcon FontSize="20" Foreground="White" Glyph="&#xE768;" Margin="3,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
-                                            </Grid>
                                         </Border>
                                         <Border VerticalAlignment="Bottom" Height="78" CornerRadius="0,0,12,12">
                                             <Border.Background>

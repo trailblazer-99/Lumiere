@@ -13,10 +13,15 @@
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
-    <Grid>
+    <Grid x:Name="RootLayoutGrid">
         <!-- Scrollable normal page content -->
-        <ScrollViewer Margin="0,48,0,0">
-            <StackPanel x:Name="PageContent" Margin="32,0,32,24" Padding="0,0,0,40" Spacing="36" Opacity="1">
+        <ScrollViewer x:Name="HomeScrollViewer" Margin="0,48,0,0">
+            <StackPanel x:Name="PageContent" Margin="32,0,32,24" Padding="0,0,0,80" Spacing="36" Opacity="1">
+                <StackPanel.ChildrenTransitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition />
+                    </TransitionCollection>
+                </StackPanel.ChildrenTransitions>
 
                 <!-- Header Grid containing Brand/Greeting and Open file(s) button -->
                 <Grid x:Name="HeaderGrid" Margin="0,0,0,12">
@@ -74,6 +79,8 @@
                         Grid.Row="0"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
+                        AutomationProperties.Name="Open file(s)"
+                        ToolTipService.ToolTip="Open file(s)"
                         helpers:SpringAnimationHelper.EnableHoverSpring="True"
                         helpers:SpringAnimationHelper.HoverScale="1.04"
                         Click="OnOpenFileClick">
@@ -82,7 +89,7 @@
                             <TextBlock Text="Open file(s)" />
                         </StackPanel>
                         <SplitButton.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuFlyout Placement="BottomEdgeAlignedRight" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                                 <MenuFlyoutItem Text="Open file..." Click="OnOpenFileMenuItemClick">
                                     <MenuFlyoutItem.Icon>
                                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE890;" />
@@ -103,15 +110,18 @@
                     <Grid>
                         <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Recently played" VerticalAlignment="Center" />
                         <Button
+                            x:Name="ClearHistoryButton"
                             Content="Clear All"
                             Click="OnClearHistoryClick"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
+                            AutomationProperties.Name="Clear recently played history"
+                            ToolTipService.ToolTip="Clear recently played history"
                             helpers:SpringAnimationHelper.EnableHoverSpring="True"
                             helpers:SpringAnimationHelper.HoverScale="1.04"
                             Style="{StaticResource DefaultButtonStyle}" />
                     </Grid>
-                    <ItemsRepeater ItemsSource="{Binding ViewModel.RecentlyPlayed, ElementName=PageRoot}">
+                    <ItemsRepeater x:Name="RecentItemsRepeater" ItemsSource="{Binding ViewModel.RecentlyPlayed, ElementName=PageRoot}" MaxHeight="4000">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout
                                 MinColumnSpacing="16"
@@ -124,15 +134,70 @@
                             <DataTemplate>
                                 <Button
                                     Style="{StaticResource CardButtonStyle}"
-                                    Command="{Binding ElementName=PageRoot, Path=ViewModel.PlayTrackCommand}"
-                                    CommandParameter="{Binding}">
-                                    <Button.Transitions>
-                                        <TransitionCollection>
-                                            <EntranceThemeTransition FromHorizontalOffset="0" FromVerticalOffset="28" IsStaggeringEnabled="True" />
-                                        </TransitionCollection>
-                                    </Button.Transitions>
+                                    Click="OnMediaCardButtonClick">
                                     <controls:MediaCard
                                         Item="{Binding}"
+                                        IsSelected="{Binding IsSelected, Mode=TwoWay}"
+                                        CardWidth="150"
+                                        CardHeight="225"
+                                        AccentColor="{Binding AccentColor}"
+                                        Artwork="{Binding Artwork}"
+                                        PosterUrl="{Binding PosterUrl}"
+                                        Subtitle="{Binding Artist}"
+                                        Title="{Binding Title}"
+                                        SelectionChanged="OnCardSelectionChanged" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <!-- Empty state when no recently played items -->
+                    <StackPanel x:Name="RecentEmptyState" Visibility="Collapsed" HorizontalAlignment="Center" Spacing="12" Padding="24,32">
+                        <FontIcon Glyph="&#xE823;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Opacity="0.6" />
+                        <TextBlock Text="Nothing played yet" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="Open a file or browse your library to get started." FontSize="14" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
+                            <Button Style="{StaticResource AccentButtonStyle}" Click="OnOpenFileMenuItemClick" AutomationProperties.Name="Open file" ToolTipService.ToolTip="Open file">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                                    <TextBlock Text="Open file"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource DefaultButtonStyle}" Click="OnOpenFolderMenuItemClick" AutomationProperties.Name="Open folder" ToolTipService.ToolTip="Open folder">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE838;" FontSize="14"/>
+                                    <TextBlock Text="Open folder"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Favorite Videos section -->
+                <StackPanel x:Name="FavoritesSection" Spacing="16" Visibility="{Binding ViewModel.FavoriteVideosVisibility, ElementName=PageRoot}">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xEB52;" FontSize="20" Foreground="{StaticResource FavoriteIconBrush}" VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Favorite Videos" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                    <ItemsRepeater ItemsSource="{Binding ViewModel.FavoriteVideos, ElementName=PageRoot}" MaxHeight="4000">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout
+                                MinColumnSpacing="16"
+                                MinItemHeight="290"
+                                MinItemWidth="150"
+                                MinRowSpacing="16"
+                                Orientation="Horizontal" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate>
+                                <Button
+                                    Style="{StaticResource CardButtonStyle}"
+                                    Click="OnMediaCardButtonClick">
+                                    <controls:MediaCard
+                                        Item="{Binding}"
+                                        IsSelected="{Binding IsSelected, Mode=TwoWay}"
                                         CardWidth="150"
                                         CardHeight="225"
                                         AccentColor="{Binding AccentColor}"
@@ -149,6 +214,37 @@
             </StackPanel>
         </ScrollViewer>
 
+        <!-- Floating Open file(s) action button for Bottom Left and Bottom Right positions -->
+        <SplitButton
+            x:Name="FloatingOpenFileButton"
+            VerticalAlignment="Bottom"
+            Visibility="Collapsed"
+            Canvas.ZIndex="50"
+            AutomationProperties.Name="Open file(s)"
+            ToolTipService.ToolTip="Open file(s)"
+            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+            helpers:SpringAnimationHelper.HoverScale="1.04"
+            Click="OnOpenFileClick">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE838;" />
+                <TextBlock Text="Open file(s)" />
+            </StackPanel>
+            <SplitButton.Flyout>
+                <MenuFlyout Placement="TopEdgeAlignedLeft" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                    <MenuFlyoutItem Text="Open file..." Click="OnOpenFileMenuItemClick">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE890;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Open folder..." Click="OnOpenFolderMenuItemClick">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8B7;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                </MenuFlyout>
+            </SplitButton.Flyout>
+        </SplitButton>
+
         <!-- Floating Selection Action Ribbon -->
         <controls:SelectionRibbon
             x:Name="HomeSelectionRibbon"
@@ -156,6 +252,9 @@
             VerticalAlignment="Bottom"
             Margin="24,0,24,16"
             Canvas.ZIndex="100"
+            PlayRequested="OnHomePlayRequested"
+            PlayNextRequested="OnHomePlayNextRequested"
+            AddToQueueRequested="OnHomeAddToQueueRequested"
             SelectAllRequested="OnSelectAllRequested"
             ClearRequested="OnClearSelectionRequested"
             RemoveRequested="OnRemoveSelectedRequested" />

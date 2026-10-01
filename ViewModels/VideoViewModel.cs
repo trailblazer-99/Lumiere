@@ -16,7 +16,7 @@ using LumiereMediaPlayer.Models.Streaming;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class VideoViewModel : ObservableObject
+public partial class VideoViewModel : ObservableObject, IDisposable
 {
     private readonly PlaybackViewModel _playback;
     private readonly IHdrPipelineService _hdrPipeline;
@@ -26,15 +26,35 @@ public partial class VideoViewModel : ObservableObject
     private List<MediaItem> _rawVideos = new();
     public IReadOnlyList<MediaItem> RawVideos => _rawVideos;
 
+    private readonly EventHandler _sessionStateChangedHandler;
+    private readonly System.ComponentModel.PropertyChangedEventHandler _playbackPropertyChangedHandler;
+    private readonly EventHandler _libraryChangedHandler;
+
     [ObservableProperty] public partial ObservableCollection<MediaItem> FilteredVideos { get; set; } = new();
 
-    public ObservableCollection<string> SortOptions { get; } = new() { "Name (A-Z)", "Name (Z-A)", "Date Added (Newest)", "Date Added (Oldest)", "Size (Largest)", "Size (Smallest)" };
+    public ObservableCollection<string> SortOptions { get; } = new()
+    {
+        "Name (A-Z)",
+        "Name (Z-A)",
+        "Date Added (Newest)",
+        "Date Added (Oldest)",
+        "Duration (Longest)",
+        "Duration (Shortest)",
+        "Size (Largest)",
+        "Size (Smallest)"
+    };
     [ObservableProperty] public partial string SelectedSort { get; set; } = "Name (A-Z)";
     partial void OnSelectedSortChanged(string value) => ApplySortAndFilter();
 
-    public ObservableCollection<string> FilterExtensionOptions { get; } = new() { "All Formats", ".mp4", ".mkv", ".avi", ".mov", ".wmv" };
+    [ObservableProperty] public partial string SearchQuery { get; set; } = string.Empty;
+    partial void OnSearchQueryChanged(string value) => ApplySortAndFilter();
+
+    public ObservableCollection<string> FilterExtensionOptions { get; } = new() { "All Formats", "Favorites", ".mp4", ".mkv", ".avi", ".mov", ".wmv" };
     [ObservableProperty] public partial string SelectedFilterExtension { get; set; } = "All Formats";
     partial void OnSelectedFilterExtensionChanged(string value) => ApplySortAndFilter();
+
+    [ObservableProperty] public partial bool ShowFavoritesOnly { get; set; }
+    partial void OnShowFavoritesOnlyChanged(bool value) => ApplySortAndFilter();
 
     [ObservableProperty] public partial MediaItem? CurrentVideo { get; set; }
 
@@ -63,30 +83,42 @@ public partial class VideoViewModel : ObservableObject
         _hdrPipeline = hdrPipeline;
         _settings = settings;
 
-        _playback.Session.StateChanged += (_, _) => SyncFromPlayback();
-        _playback.PropertyChanged += (s, e) =>
+        _sessionStateChangedHandler = (_, _) => SyncFromPlayback();
+        _playback.Session.StateChanged += _sessionStateChangedHandler;
+
+        _playbackPropertyChangedHandler = (s, e) =>
         {
             if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
             {
                 SyncFromPlayback();
             }
         };
+        _playback.PropertyChanged += _playbackPropertyChangedHandler;
 
         // Subscribe to HDR pipeline state changes
         _hdrPipeline.HdrStateChanged += OnHdrStateChanged;
         ShowHdrBadge = _settings.Current.ShowHdrBadge;
 
         SyncFromPlayback();
-        SampleMediaLibrary.LibraryChanged += (s, e) =>
+        _libraryChangedHandler = (s, e) =>
         {
-            _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
+            _rawVideos = MediaLibraryService.VideoTracks.ToList();
             _ = PopulateAllTmdbDataAsync(_rawVideos);
             ApplySortAndFilter();
         };
+        MediaLibraryService.LibraryChanged += _libraryChangedHandler;
 
-        _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
+        _rawVideos = MediaLibraryService.VideoTracks.ToList();
         _ = PopulateAllTmdbDataAsync(_rawVideos);
         ApplySortAndFilter();
+    }
+
+    public void Dispose()
+    {
+        _playback.Session.StateChanged -= _sessionStateChangedHandler;
+        _playback.PropertyChanged -= _playbackPropertyChangedHandler;
+        _hdrPipeline.HdrStateChanged -= OnHdrStateChanged;
+        MediaLibraryService.LibraryChanged -= _libraryChangedHandler;
     }
 
     public VideoViewModel(PlaybackViewModel playback)
@@ -113,22 +145,81 @@ public partial class VideoViewModel : ObservableObject
         await Task.WhenAll(tasks);
         if (anyModified)
         {
-            await SampleMediaLibrary.SaveLibraryAsync();
+            await MediaLibraryService.SaveLibraryAsync();
         }
     }
 
     private async Task<bool> PopulateTmdbDataAsync(MediaItem item)
     {
+        if (item.IsSeries)
+        {
+            try
+            {
+                var tvResults = await _tmdbService.SearchTvShowsAsync(item.Title);
+                var show = VideoMetadataHelper.SelectBestMatch(tvResults, item.Title);
+                if (show != null)
+                {
+                    bool modified = false;
+                    if (!string.IsNullOrEmpty(show.PosterPath))
+                    {
+                        item.PosterUrl = $"https://image.tmdb.org/t/p/w500{show.PosterPath}";
+                        modified = true;
+                    }
+                    if (!string.IsNullOrEmpty(show.Overview))
+                    {
+                        item.Description = show.Overview;
+                        modified = true;
+                    }
+
+                    if (item.Episodes != null)
+                    {
+                        foreach (var ep in item.Episodes)
+                        {
+                            var epLookup = VideoMetadataHelper.TryCreateEpisodeLookup(ep);
+                            int seasonNum = epLookup?.SeasonNumber ?? ep.SeasonNumber;
+                            int episodeNum = epLookup?.EpisodeNumber ?? ep.EpisodeNumber;
+                            var tmdbEp = await _tmdbService.GetTvEpisodeAsync(show.Id, seasonNum, episodeNum);
+                            if (tmdbEp != null)
+                            {
+                                if (!string.IsNullOrEmpty(tmdbEp.Name)) ep.EpisodeTitle = tmdbEp.Name;
+                                if (!string.IsNullOrEmpty(tmdbEp.StillPath)) ep.EpisodeStillUrl = $"https://image.tmdb.org/t/p/w300{tmdbEp.StillPath}";
+                                modified = true;
+                            }
+                        }
+                    }
+                    return modified;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         return await VideoMetadataHelper.PopulateTmdbDataAsync(item, _tmdbService);
     }
 
     private void ApplySortAndFilter()
     {
-        var filtered = _rawVideos.AsEnumerable();
+        var consolidated = TvShowHelper.ConsolidateVideoLibrary(_rawVideos);
+        var filtered = consolidated.AsEnumerable();
 
-        if (SelectedFilterExtension != "All Formats")
+        if (ShowFavoritesOnly || SelectedFilterExtension == "Favorites")
         {
-            filtered = filtered.Where(x => x.IsFolder || string.Equals(x.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase));
+            filtered = filtered.Where(x => x.IsFavorite);
+        }
+        else if (SelectedFilterExtension != "All Formats")
+        {
+            filtered = filtered.Where(x => x.IsFolder || 
+                string.Equals(x.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase) ||
+                (x.IsSeries && x.Episodes?.Any(e => string.Equals(e.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase)) == true));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            var q = SearchQuery.Trim();
+            filtered = filtered.Where(x =>
+                (x.Title != null && x.Title.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (x.Artist != null && x.Artist.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (x.IsSeries && x.Episodes != null && x.Episodes.Any(e => e.Title != null && e.Title.Contains(q, StringComparison.OrdinalIgnoreCase))));
         }
 
         filtered = SelectedSort switch
@@ -137,6 +228,8 @@ public partial class VideoViewModel : ObservableObject
             "Name (Z-A)" => filtered.OrderBy(x => !x.IsFolder).ThenByDescending(x => x.Title),
             "Date Added (Newest)" => filtered.OrderBy(x => !x.IsFolder).ThenByDescending(x => x.DateAdded),
             "Date Added (Oldest)" => filtered.OrderBy(x => !x.IsFolder).ThenBy(x => x.DateAdded),
+            "Duration (Longest)" => filtered.OrderBy(x => !x.IsFolder).ThenByDescending(x => x.Duration),
+            "Duration (Shortest)" => filtered.OrderBy(x => !x.IsFolder).ThenBy(x => x.Duration),
             "Size (Largest)" => filtered.OrderBy(x => !x.IsFolder).ThenByDescending(x => x.FileSize),
             "Size (Smallest)" => filtered.OrderBy(x => !x.IsFolder).ThenBy(x => x.FileSize),
             _ => filtered
@@ -150,11 +243,16 @@ public partial class VideoViewModel : ObservableObject
 
         if (App.MainDispatcher != null && !App.MainDispatcher.HasThreadAccess)
         {
-            App.MainDispatcher.TryEnqueue(() => FilteredVideos.UpdateInPlace(newItems));
+            App.MainDispatcher.TryEnqueue(() =>
+            {
+                FilteredVideos.UpdateInPlace(newItems);
+                OnPropertyChanged(nameof(FilteredVideos));
+            });
         }
         else
         {
             FilteredVideos.UpdateInPlace(newItems);
+            OnPropertyChanged(nameof(FilteredVideos));
         }
     }
 
@@ -189,18 +287,18 @@ public partial class VideoViewModel : ObservableObject
                     IsFolder = false,
                     FileExtension = file.FileType
                 };
-                await SampleMediaLibrary.AddTrackAsync(item);
+                await MediaLibraryService.AddTrackAsync(item);
                 _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
             }
-            await SampleMediaLibrary.SaveLibraryAsync();
+            await MediaLibraryService.SaveLibraryAsync();
         }
     }
 
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        await SampleMediaLibrary.SynchronizeLibraryMediaAsync();
-        _rawVideos = SampleMediaLibrary.VideoTracks.ToList();
+        await MediaLibraryService.SynchronizeLibraryMediaAsync();
+        _rawVideos = MediaLibraryService.VideoTracks.ToList();
         ApplySortAndFilter();
     }
 
@@ -216,48 +314,145 @@ public partial class VideoViewModel : ObservableObject
         if (folder != null)
         {
             AppServices.Settings.AddLibraryFolder(folder.Path);
-            SampleMediaLibrary.StartWatchingDirectory(folder.Path);
-
-            var options = new Windows.Storage.Search.QueryOptions(Windows.Storage.Search.CommonFileQuery.OrderByName, new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv" });
-            var query = folder.CreateFileQueryWithOptions(options);
-            var files = await query.GetFilesAsync();
-
-            bool added = false;
-            foreach (var file in files)
-            {
-                var props = await file.GetBasicPropertiesAsync();
-                var item = new MediaItem
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Title = file.DisplayName,
-                    SourcePath = file.Path,
-                    Kind = MediaKind.Video,
-                    FileSize = (long)props.Size,
-                    DateCreated = props.ItemDate.DateTime,
-                    DateAdded = DateTime.Now,
-                    IsFolder = false,
-                    FileExtension = file.FileType
-                };
-                await SampleMediaLibrary.AddTrackAsync(item);
-                _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
-                added = true;
-            }
-
-            if (added)
-            {
-                await SampleMediaLibrary.SaveLibraryAsync();
-            }
+            MediaLibraryService.StartWatchingDirectory(folder.Path);
+            await MediaLibraryService.ScanFolderAsync(folder);
         }
+    }
+
+    [RelayCommand]
+    public async Task ClearAllVideosAsync()
+    {
+        if (_playback.CurrentTrack is { IsVideo: true })
+        {
+            _playback.Stop();
+        }
+
+        await MediaLibraryService.ClearVideoTracksAsync();
+        _rawVideos.Clear();
+        FilteredVideos.Clear();
+        CurrentVideo = null;
+        IsPlaying = false;
+        ShowNoSourceOverlay = true;
+        OverlayTitle = "Select a video to play";
+        OverlaySubtitle = "Choose from your library below";
+        OnPropertyChanged(nameof(HasSource));
+        OnPropertyChanged(nameof(OverlayVisibility));
+        OnPropertyChanged(nameof(PlayerVisibility));
+        OnPropertyChanged(nameof(CurrentPosterUrl));
     }
 
     public bool HasSource => !string.IsNullOrWhiteSpace(CurrentVideo?.SourcePath);
 
     [RelayCommand]
-    private void PlayVideo(MediaItem? video)
+    public void PlayVideo(MediaItem? video)
     {
-        if (video is not null)
+        if (video is null) return;
+        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+
+        // Deselect any selected items so selection ribbons do not persist into player mode
+        foreach (var v in FilteredVideos)
         {
-            _playback.PlayTrack(video);
+            v.IsSelected = false;
+        }
+        foreach (var v in _rawVideos)
+        {
+            v.IsSelected = false;
+        }
+
+        // Instantly switch UI to player mode (0ms latency feedback)
+        _playback.IsVideoPlayerActive = true;
+        CurrentVideo = video;
+        IsPlaying = true;
+        ShowNoSourceOverlay = false;
+        OverlayTitle = video.Title;
+        OverlaySubtitle = video.Artist;
+        OnPropertyChanged(nameof(HasSource));
+        OnPropertyChanged(nameof(OverlayVisibility));
+        OnPropertyChanged(nameof(PlayerVisibility));
+        OnPropertyChanged(nameof(CurrentPosterUrl));
+
+        if (video.IsSeries && video.Episodes?.Count > 0)
+        {
+            _playback.SetQueue(video.Episodes, 0);
+        }
+        else
+        {
+            var parentSeries = FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e => 
+                e.Equals(video) || 
+                (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) || 
+                (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, video.SourcePath, StringComparison.OrdinalIgnoreCase))) == true);
+            if (parentSeries?.Episodes != null)
+            {
+                int epIdx = parentSeries.Episodes.FindIndex(e => 
+                    e.Equals(video) || 
+                    (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) || 
+                    (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, video.SourcePath, StringComparison.OrdinalIgnoreCase)));
+                _playback.SetQueue(parentSeries.Episodes, Math.Max(0, epIdx));
+            }
+            else
+            {
+                int index = FilteredVideos.IndexOf(video);
+                if (index >= 0)
+                {
+                    _playback.SetQueue(FilteredVideos, index);
+                }
+                else
+                {
+                    _playback.SetQueue(new[] { video }, 0);
+                }
+            }
+        }
+    }
+
+    public void PlayEpisodeFromSeries(MediaItem? series, MediaItem episode)
+    {
+        if (episode == null) return;
+
+        // Deselect any selected items so selection ribbons do not persist into player mode
+        foreach (var v in FilteredVideos)
+        {
+            v.IsSelected = false;
+        }
+        foreach (var v in _rawVideos)
+        {
+            v.IsSelected = false;
+        }
+
+        // Instantly switch UI to player mode (0ms latency feedback)
+        _playback.IsVideoPlayerActive = true;
+        CurrentVideo = episode;
+        IsPlaying = true;
+        ShowNoSourceOverlay = false;
+        OverlayTitle = !string.IsNullOrWhiteSpace(episode.EpisodeTitle)
+            ? $"{episode.EpisodeNumber}. {episode.EpisodeTitle}"
+            : (!string.IsNullOrWhiteSpace(episode.Title) ? episode.Title : "Episode");
+        OverlaySubtitle = !string.IsNullOrWhiteSpace(episode.Artist)
+            ? episode.Artist
+            : (series?.Title ?? "TV Show");
+        OnPropertyChanged(nameof(HasSource));
+        OnPropertyChanged(nameof(OverlayVisibility));
+        OnPropertyChanged(nameof(PlayerVisibility));
+        OnPropertyChanged(nameof(CurrentPosterUrl));
+
+        var parentSeries = series ?? FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e => 
+            e.Equals(episode) || 
+            (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, episode.Id, StringComparison.Ordinal)) || 
+            (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, episode.SourcePath, StringComparison.OrdinalIgnoreCase))) == true);
+        
+        var episodesList = parentSeries?.Episodes;
+
+        if (episodesList != null && episodesList.Count > 0)
+        {
+            int epIdx = episodesList.FindIndex(e =>
+                e.Equals(episode) ||
+                (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, episode.Id, StringComparison.Ordinal)) ||
+                (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, episode.SourcePath, StringComparison.OrdinalIgnoreCase)));
+
+            _playback.SetQueue(episodesList, Math.Max(0, epIdx));
+        }
+        else
+        {
+            _playback.SetQueue(new[] { episode }, 0);
         }
     }
 
@@ -277,17 +472,23 @@ public partial class VideoViewModel : ObservableObject
 
     private void SyncFromPlayback()
     {
-        if (_playback.CurrentTrack is { IsVideo: true } track && _playback.IsVideoPlayerActive)
+        if (_playback.IsVideoPlayerActive)
         {
-            CurrentVideo = track;
-            IsPlaying = _playback.IsPlaying;
-            OverlayTitle = track.Title;
-            OverlaySubtitle = track.Artist;
-            ShowNoSourceOverlay = string.IsNullOrWhiteSpace(track.SourcePath);
-            OnPropertyChanged(nameof(HasSource));
-            OnPropertyChanged(nameof(OverlayVisibility));
-            OnPropertyChanged(nameof(PlayerVisibility));
-            OnPropertyChanged(nameof(CurrentPosterUrl));
+            if (_playback.CurrentTrack is { IsVideo: true } track)
+            {
+                if (CurrentVideo != track)
+                {
+                    CurrentVideo = track;
+                }
+                IsPlaying = _playback.IsPlaying;
+                OverlayTitle = track.Title;
+                OverlaySubtitle = track.Artist;
+                ShowNoSourceOverlay = string.IsNullOrWhiteSpace(track.SourcePath);
+                OnPropertyChanged(nameof(HasSource));
+                OnPropertyChanged(nameof(OverlayVisibility));
+                OnPropertyChanged(nameof(PlayerVisibility));
+                OnPropertyChanged(nameof(CurrentPosterUrl));
+            }
             return;
         }
 

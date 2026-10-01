@@ -19,6 +19,9 @@ public interface IPlaybackSession : IDisposable
     double PositionSeconds { get; }
     double Volume { get; set; }
     bool IsMuted { get; set; }
+    bool IsShuffleEnabled { get; set; }
+    PlaybackRepeatMode RepeatMode { get; set; }
+    string? ExternalAudioTrackPath { get; }
 
     bool HasActiveComposition { get; }
     IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache { get; }
@@ -28,6 +31,7 @@ public interface IPlaybackSession : IDisposable
     void ToggleMute();
     int GetActiveSubtitleTrackIndex();
     void SetSubtitleTrack(int trackIndex);
+    Task SetExternalAudioTrackAsync(string? filePath);
     void TogglePlayPause();
     void Play();
     void Pause();
@@ -36,6 +40,10 @@ public interface IPlaybackSession : IDisposable
     void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0);
     void AddToQueue(MediaItem track);
     void RemoveFromQueueAt(int index);
+    void MoveQueueItem(int oldIndex, int newIndex);
+    void ReorderQueue(IEnumerable<MediaItem> items);
+    double SubtitleDelaySeconds { get; set; }
+    void AdjustSubtitleDelay(double deltaSeconds);
     void Enqueue(MediaItem track);
     void EnqueueRange(IEnumerable<MediaItem> tracks);
     void PlayNext(MediaItem track);
@@ -43,6 +51,8 @@ public interface IPlaybackSession : IDisposable
     void PlayQueueItemAt(int index);
     void Previous();
     void Next();
+    void ToggleShuffle();
+    void CycleRepeatMode();
     void Seek(double seconds);
     void SetVolume(double volume);
     void Stop();

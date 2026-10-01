@@ -19,6 +19,8 @@ public sealed class AppSettings
     public double WindowWidth { get; set; } = 1200.0;
     public double WindowHeight { get; set; } = 800.0;
     public bool WindowIsMaximized { get; set; } = false;
+    public int WindowPositionX { get; set; } = -1;
+    public int WindowPositionY { get; set; } = -1;
 
     // ── Playback Settings ──────────────────────────────────────────
     public bool AutoplayOnLaunch { get; set; } = true;
@@ -36,6 +38,8 @@ public sealed class AppSettings
 
     // ── Video Settings ─────────────────────────────────────────────
     public AspectRatioOption DefaultAspectRatio { get; set; } = AspectRatioOption.Auto;
+    /// <summary>Play an elevated animated preview of a scene when hovering over a video card.</summary>
+    public bool EnableHoverVideoPreview { get; set; } = true;
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     /// <summary>Controls when HDR output is engaged.</summary>
@@ -52,8 +56,9 @@ public sealed class AppSettings
     // ── Appearance & Visuals ───────────────────────────────────────
     public AppThemeBackdrop BackdropType { get; set; } = AppThemeBackdrop.Mica;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
+    public string? CustomAccentColorHex { get; set; }
     public bool AlwaysShowTransportBar { get; set; } = false;
-    public bool AcrylicTransportBar { get; set; } = true;
+    public bool AcrylicTransportBar { get; set; } = false;
     public bool AutoHideTransportBarInStreaming { get; set; } = true;
 
     // ── Controls & Interface ───────────────────────────────────────

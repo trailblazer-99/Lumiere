@@ -14,13 +14,8 @@ namespace LumiereMediaPlayer.Helpers;
 
 public static class AccessibilityHelper
 {
-    private static readonly string[] AccessibilityResourceKeys =
+    private static readonly string[] HighContrastKeys =
     [
-        "UseSystemFocusVisuals",
-        "FocusVisualPrimaryThickness",
-        "FocusVisualSecondaryThickness",
-        "SystemControlFocusVisualPrimaryBrush",
-        "SystemControlFocusVisualSecondaryBrush",
         "ApplicationPageBackgroundThemeBrush",
         "CardBackgroundFillColorDefaultBrush",
         "CardBackgroundFillColorSecondaryBrush",
@@ -35,19 +30,25 @@ public static class AccessibilityHelper
         "AccentFillColorSecondaryBrush",
         "AccentFillColorTertiaryBrush",
         "ToggleSwitchFillOn",
-        "SliderTrackValueFill",
-        "SliderThumbBackground"
+        "SliderTrackValueFill"
     ];
 
     private static readonly ConditionalWeakTable<FrameworkElement, ElementSnapshot> Snapshots = new();
     private static readonly ConditionalWeakTable<FrameworkElement, AutoReadHandlerMarker> AutoReadHandlers = new();
-    private static readonly List<ResourceSnapshot> ResourceSnapshots = [];
-    private static bool _resourceSnapshotsCaptured;
+    private static bool _wasHighContrast;
 
     public static void Apply(AppSettings settings)
     {
-        if (Application.Current is null)
+        try
         {
+            if (Application.Current is null)
+            {
+                return;
+            }
+        }
+        catch
+        {
+            // Headless / unit test runner where WinRT Application statics are uninitialized
             return;
         }
 
@@ -139,9 +140,6 @@ public static class AccessibilityHelper
 
     private static void ApplyResourceSettings(AppSettings settings)
     {
-        EnsureResourceSnapshotsCaptured();
-        RestoreAccessibilityResources();
-
         var focusThickness = settings.KeyboardNavigationHighlight
             ? Math.Clamp(settings.FocusIndicatorThickness, 1, 5)
             : 0;
@@ -149,15 +147,26 @@ public static class AccessibilityHelper
         UpdateResource("UseSystemFocusVisuals", settings.KeyboardNavigationHighlight);
         UpdateResource("FocusVisualPrimaryThickness", new Thickness(focusThickness));
         UpdateResource("FocusVisualSecondaryThickness", new Thickness(Math.Max(0, focusThickness - 1)));
-        UpdateBrushResource("SystemControlFocusVisualPrimaryBrush", settings.KeyboardNavigationHighlight ? ColorHelper.FromHex("#FF8C00") : Transparent);
-        UpdateBrushResource("SystemControlFocusVisualSecondaryBrush", settings.KeyboardNavigationHighlight ? ColorHelper.FromHex("#FFFFFF") : Transparent);
-
-        if (settings.HighContrastMode)
+        if (settings.KeyboardNavigationHighlight)
         {
-            ApplyHighContrastResources();
+            UpdateBrushResource("SystemControlFocusVisualPrimaryBrush", ColorHelper.FromHex("#FF8C00"));
+            UpdateBrushResource("SystemControlFocusVisualSecondaryBrush", ColorHelper.FromHex("#FFFFFF"));
         }
         else
         {
+            RemoveBrushResource("SystemControlFocusVisualPrimaryBrush");
+            RemoveBrushResource("SystemControlFocusVisualSecondaryBrush");
+        }
+
+        if (settings.HighContrastMode)
+        {
+            _wasHighContrast = true;
+            ApplyHighContrastResources();
+        }
+        else if (_wasHighContrast)
+        {
+            _wasHighContrast = false;
+            ClearHighContrastResources();
             if (App.MainWindowContent is not null)
             {
                 ThemeHelper.ApplyTheme(App.MainWindowContent, settings.Theme);
@@ -462,88 +471,45 @@ public static class AccessibilityHelper
         }
     }
 
-    private static void EnsureResourceSnapshotsCaptured()
+    private static void ClearHighContrastResources()
     {
-        if (_resourceSnapshotsCaptured || Application.Current is null)
+        if (Application.Current is null) return;
+        foreach (var key in HighContrastKeys)
         {
-            return;
+            RemoveBrushResource(key);
         }
-
-        CaptureResourceSnapshots(Application.Current.Resources);
-        _resourceSnapshotsCaptured = true;
     }
 
-    private static void CaptureResourceSnapshots(ResourceDictionary dictionary)
+    private static void RemoveBrushResource(string key)
+    {
+        try
+        {
+            if (Application.Current is not null)
+            {
+                RemoveBrushResource(Application.Current.Resources, key);
+            }
+        }
+        catch { }
+    }
+
+    private static void RemoveBrushResource(ResourceDictionary dictionary, string key)
     {
         if (dictionary.Source != null) return;
 
-        foreach (var key in AccessibilityResourceKeys)
+        try
         {
-            try
-            {
-                var exists = dictionary.TryGetValue(key, out var value);
-                ResourceSnapshots.Add(new ResourceSnapshot(
-                    dictionary,
-                    key,
-                    exists,
-                    value is SolidColorBrush brush ? brush.Color : null,
-                    value is SolidColorBrush ? null : value));
-            }
-            catch
-            {
-                // WinUI 3 throws ArgumentException when accessing a ResourceDictionary that has a Source set.
-                // We can safely ignore these as they shouldn't be mutated anyway.
-            }
+            dictionary.Remove(key);
         }
+        catch { }
 
         foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
         {
-            CaptureResourceSnapshots(themeDictionary);
+            RemoveBrushResource(themeDictionary, key);
         }
 
         foreach (var mergedDictionary in dictionary.MergedDictionaries)
         {
-            CaptureResourceSnapshots(mergedDictionary);
-        }
-    }
-
-    private static void RestoreAccessibilityResources()
-    {
-        if (!_resourceSnapshotsCaptured)
-        {
-            return;
-        }
-
-        foreach (var snapshot in ResourceSnapshots)
-        {
-            try
-            {
-                if (!snapshot.Existed)
-                {
-                    snapshot.Dictionary.Remove(snapshot.Key);
-                    continue;
-                }
-
-                if (snapshot.BrushColor is Color color)
-                {
-                    if (snapshot.Dictionary.TryGetValue(snapshot.Key, out var current))
-                    {
-                        snapshot.Dictionary[snapshot.Key] = new SolidColorBrush(color);
-                    }
-                    else
-                    {
-                        snapshot.Dictionary[snapshot.Key] = new SolidColorBrush(color);
-                    }
-                }
-                else
-                {
-                    snapshot.Dictionary[snapshot.Key] = snapshot.Value!;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to restore accessibility resource '{snapshot.Key}': {ex.Message}");
-            }
+            RemoveBrushResource(mergedDictionary, key);
         }
     }
 
@@ -570,13 +536,6 @@ public static class AccessibilityHelper
         object? LocalUseSystemFocusVisuals = null,
         object? LocalFocusVisualPrimaryThickness = null,
         object? LocalFocusVisualSecondaryThickness = null);
-
-    private sealed record ResourceSnapshot(
-        ResourceDictionary Dictionary,
-        string Key,
-        bool Existed,
-        Color? BrushColor,
-        object? Value);
 
     private sealed class AutoReadHandlerMarker;
 }

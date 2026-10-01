@@ -132,6 +132,23 @@ namespace LumiereMediaPlayer.ViewModels
                 }
                 else if (!string.IsNullOrEmpty(TitleIdFallback))
                 {
+                    int parsedTmdbId = -1;
+                    string knownMediaType = "movie";
+                    if (TitleIdFallback.StartsWith("tmdb_tv-", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int.TryParse(TitleIdFallback.Substring(8), out parsedTmdbId);
+                        knownMediaType = "tv";
+                    }
+                    else if (TitleIdFallback.StartsWith("tmdb_movie-", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int.TryParse(TitleIdFallback.Substring(11), out parsedTmdbId);
+                        knownMediaType = "movie";
+                    }
+                    else if (TitleIdFallback.StartsWith("tmdb_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int.TryParse(TitleIdFallback.Substring(5), out parsedTmdbId);
+                    }
+
                     var fetchedDetails = await _watchmodeService.GetDetailsAsync(TitleIdFallback);
                     if (fetchedDetails == null)
                     {
@@ -142,13 +159,15 @@ namespace LumiereMediaPlayer.ViewModels
                     Details = fetchedDetails;
                     detailsTask = Task.FromResult<WatchmodeDetails?>(Details);
 
-                    if (Details.Id > 0 && !TitleIdFallback.StartsWith("tmdb_"))
+                    int effectiveTmdbId = parsedTmdbId > 0 ? parsedTmdbId : (Details.TmdbId ?? Details.Id);
+
+                    if (Details.Id > 0)
                     {
                         WatchmodeId = Details.Id;
-                        castTask = _watchmodeService.GetCastCrewAsync(WatchmodeId);
+                        castTask = _watchmodeService.GetCastCrewAsync(WatchmodeId, effectiveTmdbId, Details.Type ?? knownMediaType);
                         seasonsTask = _watchmodeService.GetSeasonsAsync(WatchmodeId);
                         episodesTask = _watchmodeService.GetEpisodesAsync(WatchmodeId);
-                        sourcesTask = _watchmodeService.GetSourcesAsync(WatchmodeId, SelectedRegion, Details.Title ?? string.Empty);
+                        sourcesTask = _watchmodeService.GetSourcesAsync(TitleIdFallback, SelectedRegion, Details.Title ?? string.Empty);
                         similarTask = _watchmodeService.GetSimilarTitlesAsync(WatchmodeId);
                         scoresTask = _watchmodeService.GetScoresAsync(WatchmodeId);
                         releasesTask = _watchmodeService.GetReleasesAsync(WatchmodeId);
@@ -156,7 +175,7 @@ namespace LumiereMediaPlayer.ViewModels
                     else
                     {
                         sourcesTask = _watchmodeService.GetSourcesAsync(TitleIdFallback, SelectedRegion, Details.Title ?? string.Empty);
-                        castTask = Task.FromResult(new List<WatchmodeCastCrew>());
+                        castTask = _watchmodeService.GetCastCrewAsync(0, effectiveTmdbId, knownMediaType);
                         seasonsTask = Task.FromResult(new List<WatchmodeSeason>());
                         episodesTask = Task.FromResult(new List<WatchmodeEpisode>());
                         similarTask = Task.FromResult(new List<WatchmodeTitle>());
@@ -185,6 +204,16 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     ErrorMessage = "Failed to load details.";
                     return;
+                }
+
+                // If cast was fetched from Watchmode but lacks photos, or was empty, and we have a TmdbId, enrich with TMDB credits
+                if (Details.TmdbId.HasValue && Details.TmdbId.Value > 0 && (rawCast.Count == 0 || rawCast.All(c => string.IsNullOrEmpty(c.ProfileImageUrl))))
+                {
+                    var tmdbCredits = await _watchmodeService.GetCastCrewAsync(0, Details.TmdbId.Value, Details.Type);
+                    if (tmdbCredits.Count > 0)
+                    {
+                        rawCast = tmdbCredits;
+                    }
                 }
 
                 // Partition Cast & Crew
@@ -227,7 +256,7 @@ namespace LumiereMediaPlayer.ViewModels
                 UpdateLibraryStatus();
 
                 // Check Local Disk / Library Media
-                _ = CheckLocalMediaAsync(Details.Title);
+                await CheckLocalMediaAsync(Details.Title);
             }
             catch (Exception ex)
             {
@@ -318,6 +347,22 @@ namespace LumiereMediaPlayer.ViewModels
         {
             GroupedSources = StreamingProviderHelper.GroupAndFilterSources(Sources, SelectedRegion, Details);
             QualityBadges = StreamingProviderHelper.ComputeQualityBadges(Sources, Details);
+        }
+
+        public void Cleanup()
+        {
+            Cast?.Clear();
+            Crew?.Clear();
+            Seasons?.Clear();
+            Episodes?.Clear();
+            Sources?.Clear();
+            SimilarTitles?.Clear();
+            Releases?.Clear();
+            Details = null;
+            Scores = null;
+            LocalMatch = null;
+            GroupedSources = new();
+            QualityBadges?.Clear();
         }
 
         private static int GetCrewPriority(WatchmodeCastCrew c)

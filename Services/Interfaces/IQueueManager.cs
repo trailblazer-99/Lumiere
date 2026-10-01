@@ -14,6 +14,7 @@ public interface IQueueManager
     MediaItem? CurrentTrack { get; }
     bool HasNext { get; }
     bool HasPrevious { get; }
+    PlaybackRepeatMode RepeatMode { get; set; }
 
     event EventHandler? QueueChanged;
 
@@ -28,4 +29,6 @@ public interface IQueueManager
     bool MovePrevious();
     void Clear();
     void Shuffle();
+    void Move(int oldIndex, int newIndex);
+    void Reorder(IEnumerable<MediaItem> items);
 }

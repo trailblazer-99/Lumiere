@@ -49,17 +49,19 @@ namespace LumiereMediaPlayer.Services.Streaming
             return await FetchMediaListAsync(servicePath, url);
         }
 
-        public async Task<List<TmdbMedia>> SearchMoviesAsync(string query)
+        public async Task<List<TmdbMedia>> SearchMoviesAsync(string query, int? year = null)
         {
-            var servicePath = $"tmdb/search/movie?query={Uri.EscapeDataString(query)}";
-            var url = $"{BaseUrl}/search/movie?api_key={ApiKey}&query={Uri.EscapeDataString(query)}";
+            var yearParam = year.HasValue ? $"&year={year.Value}" : "";
+            var servicePath = $"tmdb/search/movie?query={Uri.EscapeDataString(query)}{yearParam}";
+            var url = $"{BaseUrl}/search/movie?api_key={ApiKey}&query={Uri.EscapeDataString(query)}{yearParam}";
             return await FetchMediaListAsync(servicePath, url);
         }
 
-        public async Task<List<TmdbMedia>> SearchTvShowsAsync(string query)
+        public async Task<List<TmdbMedia>> SearchTvShowsAsync(string query, int? year = null)
         {
-            var servicePath = $"tmdb/search/tv?query={Uri.EscapeDataString(query)}";
-            var url = $"{BaseUrl}/search/tv?api_key={ApiKey}&query={Uri.EscapeDataString(query)}";
+            var yearParam = year.HasValue ? $"&first_air_date_year={year.Value}" : "";
+            var servicePath = $"tmdb/search/tv?query={Uri.EscapeDataString(query)}{yearParam}";
+            var url = $"{BaseUrl}/search/tv?api_key={ApiKey}&query={Uri.EscapeDataString(query)}{yearParam}";
             return await FetchMediaListAsync(servicePath, url);
         }
 
@@ -195,6 +197,29 @@ namespace LumiereMediaPlayer.Services.Streaming
             {
                 return new List<TmdbGenre>();
             }
+        }
+
+        public async Task<TmdbCreditsResponse?> GetCreditsAsync(int tmdbId, string mediaType = "movie")
+        {
+            var type = (mediaType == "tv" || mediaType == "tv_series" || mediaType == "tv_miniseries") ? "tv" : "movie";
+            var servicePath = $"tmdb/{type}/{tmdbId}/credits";
+            var url = $"{BaseUrl}/{type}/{tmdbId}/credits?api_key={ApiKey}";
+            try
+            {
+                var response = await HttpHelper.GetStringAsync(servicePath, url);
+                return JsonSerializer.Deserialize<TmdbCreditsResponse>(response, _jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TMDB GetCredits Error: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<WatchmodeCastCrew>> GetCastCrewAsync(int tmdbId, string mediaType = "movie")
+        {
+            var credits = await GetCreditsAsync(tmdbId, mediaType);
+            return credits?.MapToWatchmodeCastCrew() ?? new List<WatchmodeCastCrew>();
         }
 
         private async Task<List<TmdbMedia>> FetchMediaListAsync(string servicePath, string url)

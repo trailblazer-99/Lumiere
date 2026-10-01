@@ -13,23 +13,43 @@ namespace LumiereMediaPlayer.Services;
 
 public sealed class PlaybackSession : IPlaybackSession
 {
+    private static readonly object _logLock = new();
+
     private static void Log(string message)
     {
-        // Capture the formatted line immediately on the calling thread; the actual
-        // I/O is offloaded so file latency never blocks Media Foundation callbacks.
         var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n";
         _ = Task.Run(() =>
         {
-            try
+            lock (_logLock)
             {
-                var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-                var logFolder = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
-                System.IO.Directory.CreateDirectory(logFolder);
-                var logPath = System.IO.Path.Combine(logFolder, "playback_log.txt");
-                System.IO.File.AppendAllText(logPath, line);
+                try
+                {
+                    var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
+                    var logFolder = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
+                    System.IO.Directory.CreateDirectory(logFolder);
+                    var logPath = System.IO.Path.Combine(logFolder, "playback_log.txt");
+                    var fileInfo = new System.IO.FileInfo(logPath);
+                    if (fileInfo.Exists && fileInfo.Length > 2 * 1024 * 1024)
+                    {
+                        System.IO.File.Move(logPath, System.IO.Path.Combine(logFolder, "playback_log.bak.txt"), true);
+                    }
+                    System.IO.File.AppendAllText(logPath, line);
+                }
+                catch { }
             }
-            catch { }
         });
+    }
+
+    private void RaiseStateChanged()
+    {
+        if (App.MainDispatcher?.HasThreadAccess == true)
+        {
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            App.MainDispatcher?.TryEnqueue(() => StateChanged?.Invoke(this, EventArgs.Empty));
+        }
     }
 
     private readonly List<MediaItem> _queue;
@@ -52,9 +72,12 @@ public sealed class PlaybackSession : IPlaybackSession
     private double _volume = 100;
     private double _savedVolumeBeforeMute = 100;
     private int _selectedSubtitleTrackIndex = -1;
+    private bool _isShuffleEnabled;
+    private PlaybackRepeatMode _repeatMode = PlaybackRepeatMode.Off;
+    private List<MediaItem>? _unshuffledQueue;
+    private MediaPlayer? _externalAudioPlayer;
+    private string? _externalAudioTrackPath;
 
-    [System.Runtime.InteropServices.DllImport("psapi.dll")]
-    private static extern bool EmptyWorkingSet(nint hProcess);
 
     public PlaybackSession(IEnumerable<MediaItem> initialQueue)
     {
@@ -89,7 +112,7 @@ public sealed class PlaybackSession : IPlaybackSession
         _mediaPlayer.MediaOpened += OnMediaPlayerMediaOpened;
         _mediaPlayer.MediaFailed += OnMediaPlayerMediaFailed;
 
-        RestoreLastPlayedTrack();
+        _ = RestoreLastPlayedTrackAsync();
         ApplyAudioEffects();
 
         _crossfadeCheckTimer = App.MainDispatcher?.CreateTimer();
@@ -136,7 +159,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 if (_mediaPlayer.IsMuted)
                 {
                     _mediaPlayer.IsMuted = false;
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    RaiseStateChanged();
                 }
             }
             else
@@ -144,7 +167,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 if (!_mediaPlayer.IsMuted)
                 {
                     _mediaPlayer.IsMuted = true;
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    RaiseStateChanged();
                 }
             }
         }
@@ -158,6 +181,10 @@ public sealed class PlaybackSession : IPlaybackSession
             if (_mediaPlayer.IsMuted != value)
             {
                 _mediaPlayer.IsMuted = value;
+                if (_externalAudioPlayer != null)
+                {
+                    try { _externalAudioPlayer.IsMuted = value; } catch { }
+                }
                 if (value)
                 {
                     if (_volume > 0)
@@ -172,7 +199,7 @@ public sealed class PlaybackSession : IPlaybackSession
                         Volume = _savedVolumeBeforeMute > 0 ? _savedVolumeBeforeMute : 100;
                     }
                 }
-                StateChanged?.Invoke(this, EventArgs.Empty);
+                RaiseStateChanged();
             }
         }
     }
@@ -194,6 +221,157 @@ public sealed class PlaybackSession : IPlaybackSession
                 _savedVolumeBeforeMute = _volume;
             }
             IsMuted = true;
+        }
+    }
+
+    public bool IsShuffleEnabled
+    {
+        get => _isShuffleEnabled;
+        set
+        {
+            if (_isShuffleEnabled != value)
+            {
+                _isShuffleEnabled = value;
+                ApplyShuffleState();
+                RaiseStateChanged();
+            }
+        }
+    }
+
+    public PlaybackRepeatMode RepeatMode
+    {
+        get => _repeatMode;
+        set
+        {
+            if (_repeatMode != value)
+            {
+                _repeatMode = value;
+                RaiseStateChanged();
+            }
+        }
+    }
+
+    public string? ExternalAudioTrackPath => _externalAudioTrackPath;
+
+    public void ToggleShuffle()
+    {
+        IsShuffleEnabled = !IsShuffleEnabled;
+    }
+
+    public void CycleRepeatMode()
+    {
+        RepeatMode = RepeatMode switch
+        {
+            PlaybackRepeatMode.Off => PlaybackRepeatMode.All,
+            PlaybackRepeatMode.All => PlaybackRepeatMode.One,
+            PlaybackRepeatMode.One => PlaybackRepeatMode.Off,
+            _ => PlaybackRepeatMode.Off
+        };
+    }
+
+    private void ApplyShuffleState()
+    {
+        if (_queue.Count <= 1) return;
+
+        var currentItem = CurrentTrack;
+        if (_isShuffleEnabled)
+        {
+            if (_unshuffledQueue == null)
+            {
+                _unshuffledQueue = new List<MediaItem>(_queue);
+            }
+
+            var itemsToShuffle = _queue.Where(item => item != currentItem).ToList();
+            var rng = new Random();
+            int n = itemsToShuffle.Count;
+            while (n > 1)
+            {
+                n--;
+                int k = rng.Next(n + 1);
+                (itemsToShuffle[k], itemsToShuffle[n]) = (itemsToShuffle[n], itemsToShuffle[k]);
+            }
+
+            _queue.Clear();
+            if (currentItem != null)
+            {
+                _queue.Add(currentItem);
+                _queue.AddRange(itemsToShuffle);
+                _currentIndex = 0;
+            }
+            else
+            {
+                _queue.AddRange(itemsToShuffle);
+                _currentIndex = _queue.Count > 0 ? 0 : -1;
+            }
+        }
+        else
+        {
+            if (_unshuffledQueue != null)
+            {
+                _queue.Clear();
+                _queue.AddRange(_unshuffledQueue);
+                _unshuffledQueue = null;
+                if (currentItem != null)
+                {
+                    int foundIndex = _queue.IndexOf(currentItem);
+                    _currentIndex = foundIndex >= 0 ? foundIndex : 0;
+                }
+            }
+        }
+    }
+
+    public async Task SetExternalAudioTrackAsync(string? filePath)
+    {
+        _externalAudioTrackPath = filePath;
+        if (_externalAudioPlayer != null)
+        {
+            try
+            {
+                _externalAudioPlayer.Pause();
+                _externalAudioPlayer.Source = null;
+                _externalAudioPlayer.Dispose();
+            }
+            catch { }
+            _externalAudioPlayer = null;
+        }
+
+        if (string.IsNullOrEmpty(filePath))
+        {
+            if (_mediaPlayer.Source is MediaPlaybackItem item && item.AudioTracks.Count > 0)
+            {
+                item.AudioTracks.SelectedIndex = 0;
+            }
+            _mediaPlayer.IsMuted = IsMuted;
+            return;
+        }
+
+        try
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(filePath);
+            var player = new MediaPlayer
+            {
+                AudioCategory = MediaPlayerAudioCategory.Media,
+                AutoPlay = false,
+                Volume = _mediaPlayer.Volume,
+                IsMuted = _mediaPlayer.IsMuted
+            };
+            player.Source = MediaSource.CreateFromStorageFile(file);
+            player.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+
+            if (_mediaPlayer.Source is MediaPlaybackItem item)
+            {
+                item.AudioTracks.SelectedIndex = -1;
+            }
+
+            _externalAudioPlayer = player;
+            if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
+            {
+                _externalAudioPlayer.Play();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"SetExternalAudioTrackAsync error: {ex.Message}");
         }
     }
 
@@ -312,7 +490,7 @@ public sealed class PlaybackSession : IPlaybackSession
         if (track is null)
         {
             _isChangingSource = false;
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            RaiseStateChanged();
             return;
         }
 
@@ -323,10 +501,33 @@ public sealed class PlaybackSession : IPlaybackSession
             SaveLastPlayedTrack(track);
         }
 
-        Log($"LoadCurrentTrackSourceAsync: Track ID {track.Id}, SourcePath: {track.SourcePath}");
+        if (!track.IsVideo)
+        {
+            try
+            {
+                _prefetchCts?.Cancel();
+                _prefetchCts = null;
+            }
+            catch { }
 
-        RunAiEqualizerMatcher(track);
-        ApplyAudioEffects();
+            lock (VideoThumbnailCacheLock)
+            {
+                _videoThumbnailCache.Clear();
+            }
+
+            lock (_compositionLock)
+            {
+                if (_activeComposition != null)
+                {
+                    try { _activeComposition.Clips.Clear(); } catch { }
+                    _activeComposition = null;
+                }
+            }
+
+            AppServices.HdrPipeline.ResetContentState();
+        }
+
+        Log($"LoadCurrentTrackSourceAsync: Track ID {track.Id}, SourcePath: {track.SourcePath}");
 
         IMediaPlaybackSource? source = null;
         if (_preloadedNextSource != null && _preloadedTrackId == track.Id)
@@ -384,6 +585,13 @@ public sealed class PlaybackSession : IPlaybackSession
                 _mediaPlayer.Play();
             }
 
+            // Run audio effects and equalizer matching asynchronously without delaying playback start
+            _ = Task.Run(() =>
+            {
+                try { _ = RunAiEqualizerMatcherAsync(track); } catch { }
+            });
+            ApplyAudioEffects();
+
             AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer);
 
             if (saveLastPlayed)
@@ -397,14 +605,14 @@ public sealed class PlaybackSession : IPlaybackSession
             _isChangingSource = false;
             if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath) && !File.Exists(track.SourcePath))
             {
-                _ = SampleMediaLibrary.RemoveTrackAsync(track);
+                _ = MediaLibraryService.RemoveTrackAsync(track);
                 _ = AppServices.History.RemoveFromHistoryAsync(track);
                 _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
             }
         }
 
         UpdateDisplayRequestState();
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseStateChanged();
     }
 
     private void OnMediaPlayerMediaOpened(MediaPlayer sender, object args)
@@ -437,11 +645,50 @@ public sealed class PlaybackSession : IPlaybackSession
                             trackChanged = true;
                         }
                     }
+
+                    if (sender.Source is MediaPlaybackItem mpi && mpi.VideoTracks.Count > 0)
+                    {
+                        try
+                        {
+                            var selectedIndex = mpi.VideoTracks.SelectedIndex >= 0 ? mpi.VideoTracks.SelectedIndex : 0;
+                            var vTrack = mpi.VideoTracks[selectedIndex];
+                            var encProps = vTrack.GetEncodingProperties();
+                            if (encProps != null)
+                            {
+                                if (CurrentTrack.Bitrate == 0 && encProps.Bitrate > 0)
+                                {
+                                    CurrentTrack.Bitrate = encProps.Bitrate;
+                                    trackChanged = true;
+                                }
+                                if (CurrentTrack.FrameRate == 0 && encProps.FrameRate != null && encProps.FrameRate.Denominator > 0)
+                                {
+                                    CurrentTrack.FrameRate = (double)encProps.FrameRate.Numerator / encProps.FrameRate.Denominator;
+                                    trackChanged = true;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (CurrentTrack.FileSize == 0 && !string.IsNullOrEmpty(CurrentTrack.SourcePath) && File.Exists(CurrentTrack.SourcePath))
+                    {
+                        try
+                        {
+                            CurrentTrack.FileSize = new FileInfo(CurrentTrack.SourcePath).Length;
+                        }
+                        catch { }
+                    }
+
+                    if (CurrentTrack.Bitrate == 0 && CurrentTrack.FileSize > 0 && CurrentTrack.Duration.TotalSeconds > 0)
+                    {
+                        CurrentTrack.Bitrate = (uint)((CurrentTrack.FileSize * 8) / CurrentTrack.Duration.TotalSeconds);
+                        trackChanged = true;
+                    }
                 }
 
                 if (trackChanged)
                 {
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    RaiseStateChanged();
                 }
 
                 // Ensure deep container and HDR metadata is scanned
@@ -491,17 +738,24 @@ public sealed class PlaybackSession : IPlaybackSession
         try
         {
             var session = sender.PlaybackSession;
-            if (session != null)
+            if (session == null)
             {
-                var dur = session.NaturalDuration;
-                var pos = session.Position;
-                // If duration is known and position hasn't reached near the end (within 3 seconds),
-                // this is an interrupted/aborted playback event, NOT a natural track end.
-                if (dur.TotalSeconds > 2.0 && pos.TotalSeconds < dur.TotalSeconds - 3.0)
-                {
-                    Log($"OnMediaPlayerMediaEnded: Ignored premature ended event (pos: {pos.TotalSeconds}s, dur: {dur.TotalSeconds}s).");
-                    return;
-                }
+                Log("OnMediaPlayerMediaEnded: Ignored because PlaybackSession is null.");
+                return;
+            }
+
+            var dur = session.NaturalDuration;
+            var pos = session.Position;
+
+            // A track has only naturally ended if its natural duration is valid (> 1.0s)
+            // and the playback position is within 3.5 seconds of the natural duration.
+            // Any event firing when position is at the start (pos < 1.0s) or duration is 0
+            // is a premature/interrupted transition event and must be ignored.
+            bool isNearEnd = dur.TotalSeconds > 1.0 && pos.TotalSeconds >= Math.Max(0.5, dur.TotalSeconds - 3.5);
+            if (!isNearEnd)
+            {
+                Log($"OnMediaPlayerMediaEnded: Ignored premature/interrupted ended event (pos: {pos.TotalSeconds:F2}s, dur: {dur.TotalSeconds:F2}s).");
+                return;
             }
         }
         catch { }
@@ -526,15 +780,30 @@ public sealed class PlaybackSession : IPlaybackSession
                 return;
             }
 
-            // For standalone video items or non-looping queues
-            if (endedTrack.IsVideo)
+            if (RepeatMode == PlaybackRepeatMode.One)
             {
-                if (_queue.Count <= 1 || _currentIndex == _queue.Count - 1)
+                Log("OnMediaPlayerMediaEnded: RepeatMode is One. Repeating track.");
+                Seek(0);
+                Play();
+                return;
+            }
+
+            // For standalone video items or non-looping queues
+            if (endedTrack.IsVideo && RepeatMode == PlaybackRepeatMode.Off)
+            {
+                if (_queue.Count <= 1 || _currentIndex >= _queue.Count - 1)
                 {
                     Log("OnMediaPlayerMediaEnded: Video finished at end of queue. Stopping.");
                     Stop();
                     return;
                 }
+            }
+
+            if (RepeatMode == PlaybackRepeatMode.Off && _currentIndex >= _queue.Count - 1)
+            {
+                Log("OnMediaPlayerMediaEnded: Reached end of queue with RepeatMode Off. Stopping.");
+                Stop();
+                return;
             }
 
             if (AppServices.Settings.Current.AutoAdvanceToNextTrack && CurrentTrack != null)
@@ -545,7 +814,7 @@ public sealed class PlaybackSession : IPlaybackSession
             else
             {
                 Log("OnMediaPlayerMediaEnded: AutoAdvanceToNextTrack is false or CurrentTrack is null. Raising StateChanged.");
-                StateChanged?.Invoke(this, EventArgs.Empty);
+                RaiseStateChanged();
             }
         });
     }
@@ -553,10 +822,25 @@ public sealed class PlaybackSession : IPlaybackSession
     private void OnMediaPlayerStateChanged(MediaPlaybackSession sender, object args)
     {
         Log($"OnMediaPlayerStateChanged triggered. State={sender.PlaybackState}");
+        if (_externalAudioPlayer != null)
+        {
+            try
+            {
+                if (sender.PlaybackState == MediaPlaybackState.Playing && _externalAudioPlayer.PlaybackSession.PlaybackState != MediaPlaybackState.Playing)
+                {
+                    _externalAudioPlayer.Play();
+                }
+                else if (sender.PlaybackState == MediaPlaybackState.Paused && _externalAudioPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
+                {
+                    _externalAudioPlayer.Pause();
+                }
+            }
+            catch { }
+        }
         App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
         {
             UpdateDisplayRequestState();
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            RaiseStateChanged();
         });
     }
 
@@ -588,77 +872,66 @@ public sealed class PlaybackSession : IPlaybackSession
             // If it's a local file path
             try
             {
-                var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
-                Log($"CreatePlaybackSourceAsync: Obtained StorageFile for: {playablePath}");
-                mediaSource = MediaSource.CreateFromStorageFile(storageFile);
+                if (System.IO.File.Exists(playablePath))
+                {
+                    try
+                    {
+                        var fileUri = new Uri(playablePath);
+                        mediaSource = MediaSource.CreateFromUri(fileUri);
+                        Log($"CreatePlaybackSourceAsync: Direct URI source created instantly for: {playablePath}");
+                    }
+                    catch (Exception exUri)
+                    {
+                        Log($"CreatePlaybackSourceAsync: CreateFromUri fallback: {exUri.Message}");
+                        // Instant direct Win32 file stream creation bypassing slow brokered WinRT StorageFile
+                        var fileStream = new System.IO.FileStream(playablePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+                        var randomAccessStream = System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
+                        var contentType = "video/mp4";
+                        if (playablePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-matroska";
+                        else if (playablePath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)) contentType = "video/avi";
+                        else if (playablePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)) contentType = "video/quicktime";
+                        else if (playablePath.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-ms-wmv";
+                        else if (playablePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)) contentType = "audio/mpeg";
+                        else if (playablePath.EndsWith(".flac", StringComparison.OrdinalIgnoreCase)) contentType = "audio/flac";
+                        else if (playablePath.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) contentType = "audio/wav";
+                        else if (playablePath.EndsWith(".aac", StringComparison.OrdinalIgnoreCase)) contentType = "audio/aac";
+                        else if (playablePath.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)) contentType = "audio/mp4";
 
-                if (track.IsVideo)
+                        mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
+                        var activeStreams = new List<IDisposable> { randomAccessStream, fileStream };
+                        mediaSource.CustomProperties["ActiveStreams"] = activeStreams;
+                        Log($"CreatePlaybackSourceAsync: Stream created instantly for: {playablePath}");
+                    }
+                }
+                else
+                {
+                    var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
+                    Log($"CreatePlaybackSourceAsync: Obtained StorageFile for: {playablePath}");
+                    mediaSource = MediaSource.CreateFromStorageFile(storageFile);
+                }
+
+                if (track.IsVideo && mediaSource != null)
                 {
                     // Scan metadata in background
                     _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(track);
 
-                    try
-                    {
-                        var directoryName = System.IO.Path.GetDirectoryName(playablePath);
-                        if (!string.IsNullOrEmpty(directoryName))
-                        {
-                            var videoFileName = System.IO.Path.GetFileNameWithoutExtension(playablePath);
-                            var srtFiles = System.IO.Directory.GetFiles(directoryName, $"{videoFileName}*.srt");
-
-                            foreach (var srtPath in srtFiles)
-                            {
-                                Log($"CreatePlaybackSourceAsync: Adding subtitle: {srtPath}");
-                                var fName = System.IO.Path.GetFileName(srtPath);
-                                var srtStorageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(srtPath);
-                                var srtRandomAccess = await srtStorageFile.OpenAsync(Windows.Storage.FileAccessMode.Read);
-                                var timedTextSource = TimedTextSource.CreateFromStream(srtRandomAccess, "en");
-                                timedTextSource.Resolved += (sender, args) =>
-                                {
-                                    if (args.Error != null)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine($"Error resolving subtitle {fName}: {args.Error.ErrorCode}");
-                                    }
-                                    else if (args.Tracks.Count > 0)
-                                    {
-                                        args.Tracks[0].Label = fName;
-                                    }
-                                };
-                                mediaSource.ExternalTimedTextSources.Add(timedTextSource);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"Failed to scan for subtitles: {ex.Message}");
-                        System.Diagnostics.Debug.WriteLine($"Failed to scan for subtitles: {ex.Message}");
-                    }
+                    // Scan and attach sidecar subtitles asynchronously to avoid blocking media playback start
+                    AttachExternalSubtitlesAsync(mediaSource, playablePath);
                 }
             }
             catch (Exception ex)
             {
-                Log($"CreatePlaybackSourceAsync: Failed to get StorageFile: {ex.Message}\n{ex.StackTrace}");
-                System.Diagnostics.Debug.WriteLine($"Failed to load media file: {ex.Message}");
-
+                Log($"CreatePlaybackSourceAsync direct load failed: {ex.Message}. Attempting fallback.");
                 if (mediaSource != null)
                 {
                     try { mediaSource.Reset(); mediaSource.Dispose(); } catch { }
                     mediaSource = null;
                 }
 
-                // Fallback to stream in case GetFileFromPathAsync fails
                 try
                 {
-                    Log("CreatePlaybackSourceAsync: Attempting fallback with file stream.");
-                    var fileStream = System.IO.File.OpenRead(playablePath);
-                    var randomAccessStream = System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
-                    var contentType = "video/mp4";
-                    if (playablePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-matroska";
-                    else if (playablePath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)) contentType = "video/avi";
-                    else if (playablePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)) contentType = "video/quicktime";
-                    else if (playablePath.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-ms-wmv";
-
-                    mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
-                    Log("CreatePlaybackSourceAsync: Fallback stream source created.");
+                    var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
+                    mediaSource = MediaSource.CreateFromStorageFile(storageFile);
                 }
                 catch (Exception fallbackEx)
                 {
@@ -690,6 +963,63 @@ public sealed class PlaybackSession : IPlaybackSession
         }
 
         return null;
+    }
+
+    private static void AttachExternalSubtitlesAsync(MediaSource mediaSource, string playablePath)
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                var directoryName = System.IO.Path.GetDirectoryName(playablePath);
+                if (string.IsNullOrEmpty(directoryName) || !System.IO.Directory.Exists(directoryName)) return;
+
+                var videoFileName = System.IO.Path.GetFileNameWithoutExtension(playablePath);
+                var srtFiles = System.IO.Directory.GetFiles(directoryName, $"{videoFileName}*.srt");
+
+                foreach (var srtPath in srtFiles)
+                {
+                    try
+                    {
+                        var fName = System.IO.Path.GetFileName(srtPath);
+                        var srtFileStream = System.IO.File.OpenRead(srtPath);
+                        var srtStream = srtFileStream.AsRandomAccessStream();
+                        if (!mediaSource.CustomProperties.TryGetValue("ActiveStreams", out var strObj) || strObj is not List<IDisposable> activeList)
+                        {
+                            activeList = new List<IDisposable>();
+                            mediaSource.CustomProperties["ActiveStreams"] = activeList;
+                        }
+                        lock (activeList)
+                        {
+                            activeList.Add(srtStream);
+                            activeList.Add(srtFileStream);
+                        }
+                        var timedTextSource = TimedTextSource.CreateFromStream(srtStream, "en");
+                        timedTextSource.Resolved += (sender, args) =>
+                        {
+                            if (args.Error == null && args.Tracks.Count > 0)
+                            {
+                                args.Tracks[0].Label = fName;
+                            }
+                        };
+
+                        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                mediaSource.ExternalTimedTextSources.Add(timedTextSource);
+                            }
+                            catch { }
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to scan for subtitles: {ex.Message}");
+            }
+        });
     }
 
     public int GetActiveSubtitleTrackIndex()
@@ -729,6 +1059,34 @@ public sealed class PlaybackSession : IPlaybackSession
         }
     }
 
+    public double SubtitleDelaySeconds { get; set; }
+
+    public void AdjustSubtitleDelay(double deltaSeconds)
+    {
+        SubtitleDelaySeconds += deltaSeconds;
+        try
+        {
+            if (_mediaPlayer.Source is MediaPlaybackItem playbackItem && _selectedSubtitleTrackIndex >= 0 && _selectedSubtitleTrackIndex < playbackItem.TimedMetadataTracks.Count)
+            {
+                var track = playbackItem.TimedMetadataTracks[_selectedSubtitleTrackIndex];
+                foreach (var cue in track.Cues)
+                {
+                    if (cue is TimedTextCue textCue)
+                    {
+                        var newStart = textCue.StartTime + TimeSpan.FromSeconds(deltaSeconds);
+                        if (newStart < TimeSpan.Zero) newStart = TimeSpan.Zero;
+                        textCue.StartTime = newStart;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PlaybackSession] AdjustSubtitleDelay failed: {ex.Message}");
+        }
+        RaiseStateChanged();
+    }
+
     public void TogglePlayPause()
     {
         if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
@@ -746,6 +1104,7 @@ public sealed class PlaybackSession : IPlaybackSession
         if (_mediaPlayer.Source != null)
         {
             _mediaPlayer.Play();
+            _externalAudioPlayer?.Play();
             UpdateDisplayRequestState();
         }
     }
@@ -755,11 +1114,17 @@ public sealed class PlaybackSession : IPlaybackSession
         if (_mediaPlayer.Source != null)
         {
             _mediaPlayer.Pause();
+            _externalAudioPlayer?.Pause();
             UpdateDisplayRequestState();
         }
     }
 
-    public async void PlayTrack(MediaItem track)
+    public void PlayTrack(MediaItem track)
+    {
+        _ = PlayTrackAsync(track);
+    }
+
+    public async Task PlayTrackAsync(MediaItem track)
     {
         try
         {
@@ -768,7 +1133,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath) && !File.Exists(track.SourcePath))
                 {
                     Log($"PlayTrack: Local file '{track.SourcePath}' no longer exists on disk. Pruning from library and queue.");
-                    _ = SampleMediaLibrary.RemoveTrackAsync(track);
+                    _ = MediaLibraryService.RemoveTrackAsync(track);
                     _ = AppServices.History.RemoveFromHistoryAsync(track);
                     _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
                     if (_queue.Count > 0)
@@ -780,13 +1145,13 @@ public sealed class PlaybackSession : IPlaybackSession
                     {
                         CurrentTrack = null;
                         _currentIndex = -1;
-                        StateChanged?.Invoke(this, EventArgs.Empty);
+                        RaiseStateChanged();
                     }
                     return;
                 }
 
                 var requestVersion = BeginPlaybackRequest();
-                var index = _queue.FindIndex(t => t.Id == track.Id);
+                var index = _queue.FindIndex(t => t.Equals(track) || t.Id == track.Id);
                 if (index >= 0)
                 {
                     _currentIndex = index;
@@ -795,10 +1160,20 @@ public sealed class PlaybackSession : IPlaybackSession
                 {
                     if (track.IsVideo)
                     {
-                        // Standalone video playback replaces any prior queue
-                        _queue.Clear();
-                        _queue.Add(track);
-                        _currentIndex = 0;
+                        var libVideos = MediaLibraryService.VideoTracks;
+                        var libIndex = libVideos.ToList().FindIndex(t => t.Equals(track) || t.Id == track.Id);
+                        if (libIndex >= 0)
+                        {
+                            _queue.Clear();
+                            _queue.AddRange(libVideos);
+                            _currentIndex = libIndex;
+                        }
+                        else
+                        {
+                            _queue.Clear();
+                            _queue.Add(track);
+                            _currentIndex = 0;
+                        }
                     }
                     else
                     {
@@ -840,17 +1215,28 @@ public sealed class PlaybackSession : IPlaybackSession
         AppServices.PlaybackViewModel.PlayTrack(mediaItem);
     }
 
-    public async void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
+    public void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
+    {
+        _ = SetQueueAsync(items, startIndex);
+    }
+
+    public async Task SetQueueAsync(IEnumerable<MediaItem> items, int startIndex = 0)
     {
         try
         {
             try
             {
                 var requestVersion = BeginPlaybackRequest();
+                _unshuffledQueue = null;
                 _queue.Clear();
                 _queue.AddRange(items);
                 _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
                 CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
+
+                if (_isShuffleEnabled && _queue.Count > 1)
+                {
+                    ApplyShuffleState();
+                }
 
                 if (CurrentTrack is not null)
                 {
@@ -867,7 +1253,7 @@ public sealed class PlaybackSession : IPlaybackSession
                     _mediaPlayer.Source = null;
                 }
 
-                StateChanged?.Invoke(this, EventArgs.Empty);
+                RaiseStateChanged();
             }
             catch (Exception ex)
             {
@@ -880,7 +1266,8 @@ public sealed class PlaybackSession : IPlaybackSession
     public void AddToQueue(MediaItem track)
     {
         _queue.Add(track);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        _unshuffledQueue?.Add(track);
+        RaiseStateChanged();
     }
 
     public void RemoveFromQueueAt(int index)
@@ -890,6 +1277,8 @@ public sealed class PlaybackSession : IPlaybackSession
             return;
         }
 
+        var removedItem = _queue[index];
+        _unshuffledQueue?.Remove(removedItem);
         _queue.RemoveAt(index);
 
         if (_queue.Count == 0)
@@ -914,14 +1303,59 @@ public sealed class PlaybackSession : IPlaybackSession
             return; // PlayQueueItemAt will fire StateChanged
         }
 
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseStateChanged();
+    }
+
+    public void MoveQueueItem(int oldIndex, int newIndex)
+    {
+        if (oldIndex < 0 || oldIndex >= _queue.Count || newIndex < 0 || newIndex >= _queue.Count || oldIndex == newIndex)
+        {
+            return;
+        }
+
+        var item = _queue[oldIndex];
+        _queue.RemoveAt(oldIndex);
+        _queue.Insert(newIndex, item);
+
+        if (_currentIndex == oldIndex)
+        {
+            _currentIndex = newIndex;
+        }
+        else if (oldIndex < _currentIndex && newIndex >= _currentIndex)
+        {
+            _currentIndex--;
+        }
+        else if (oldIndex > _currentIndex && newIndex <= _currentIndex)
+        {
+            _currentIndex++;
+        }
+
+        RaiseStateChanged();
+    }
+
+    public void ReorderQueue(IEnumerable<MediaItem> items)
+    {
+        if (items == null) return;
+        var currentTrack = CurrentTrack;
+        _queue.Clear();
+        _queue.AddRange(items);
+        if (currentTrack != null)
+        {
+            int newIndex = _queue.FindIndex(t => t.Id == currentTrack.Id || (!string.IsNullOrEmpty(t.SourcePath) && t.SourcePath == currentTrack.SourcePath));
+            if (newIndex >= 0)
+            {
+                _currentIndex = newIndex;
+            }
+        }
+        RaiseStateChanged();
     }
 
     public void Enqueue(MediaItem track)
     {
         if (track == null) return;
         _queue.Add(track);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        _unshuffledQueue?.Add(track);
+        RaiseStateChanged();
     }
 
     public void EnqueueRange(IEnumerable<MediaItem> tracks)
@@ -930,7 +1364,8 @@ public sealed class PlaybackSession : IPlaybackSession
         var list = tracks.ToList();
         if (list.Count == 0) return;
         _queue.AddRange(list);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        _unshuffledQueue?.AddRange(list);
+        RaiseStateChanged();
     }
 
     public void PlayNext(MediaItem track)
@@ -942,7 +1377,8 @@ public sealed class PlaybackSession : IPlaybackSession
             return;
         }
         _queue.Insert(_currentIndex + 1, track);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        _unshuffledQueue?.Add(track);
+        RaiseStateChanged();
     }
 
     public void PlayNextRange(IEnumerable<MediaItem> tracks)
@@ -956,10 +1392,16 @@ public sealed class PlaybackSession : IPlaybackSession
             return;
         }
         _queue.InsertRange(_currentIndex + 1, list);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        _unshuffledQueue?.AddRange(list);
+        RaiseStateChanged();
     }
 
-    public async void PlayQueueItemAt(int index)
+    public void PlayQueueItemAt(int index)
+    {
+        _ = PlayQueueItemAtAsync(index);
+    }
+
+    public async Task PlayQueueItemAtAsync(int index)
     {
         try
         {
@@ -991,8 +1433,26 @@ public sealed class PlaybackSession : IPlaybackSession
             return;
         }
 
-        var nextIndex = (_currentIndex - 1 + _queue.Count) % _queue.Count;
-        PlayQueueItemAt(nextIndex);
+        if (PositionSeconds > 3.0 || _queue.Count == 1)
+        {
+            Seek(0);
+            Play();
+            return;
+        }
+
+        if (_currentIndex > 0)
+        {
+            PlayQueueItemAt(_currentIndex - 1);
+        }
+        else if (RepeatMode == PlaybackRepeatMode.All)
+        {
+            PlayQueueItemAt(_queue.Count - 1);
+        }
+        else
+        {
+            Seek(0);
+            Play();
+        }
     }
 
     public void Next()
@@ -1002,8 +1462,25 @@ public sealed class PlaybackSession : IPlaybackSession
             return;
         }
 
-        var nextIndex = (_currentIndex + 1) % _queue.Count;
-        PlayQueueItemAt(nextIndex);
+        if (RepeatMode == PlaybackRepeatMode.One)
+        {
+            Seek(0);
+            Play();
+            return;
+        }
+
+        if (_currentIndex < _queue.Count - 1)
+        {
+            PlayQueueItemAt(_currentIndex + 1);
+        }
+        else if (RepeatMode == PlaybackRepeatMode.All)
+        {
+            PlayQueueItemAt(0);
+        }
+        else
+        {
+            Stop();
+        }
     }
 
     public void Seek(double seconds)
@@ -1014,7 +1491,16 @@ public sealed class PlaybackSession : IPlaybackSession
         if (maxDuration <= 0) maxDuration = CurrentTrack.Duration.TotalSeconds;
         if (maxDuration <= 0) maxDuration = 100; // fallback
 
-        _mediaPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, maxDuration));
+        var targetTime = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, maxDuration));
+        _mediaPlayer.PlaybackSession.Position = targetTime;
+        if (_externalAudioPlayer != null)
+        {
+            try
+            {
+                _externalAudioPlayer.PlaybackSession.Position = targetTime;
+            }
+            catch { }
+        }
         try
         {
             if (AppServices.Settings.Current.ResumePlaybackPosition)
@@ -1024,12 +1510,16 @@ public sealed class PlaybackSession : IPlaybackSession
             }
         }
         catch { }
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseStateChanged();
     }
 
     public void SetVolume(double volume)
     {
         Volume = volume;
+        if (_externalAudioPlayer != null)
+        {
+            try { _externalAudioPlayer.Volume = _volume / 100.0; } catch { }
+        }
         // Do not invoke StateChanged here. It forces a complete UI/Queue rebuild and Image reload on every slider tick.
     }
 
@@ -1039,6 +1529,7 @@ public sealed class PlaybackSession : IPlaybackSession
         try
         {
             _prefetchCts?.Cancel();
+            _prefetchCts?.Dispose();
             _prefetchCts = null;
         }
         catch { }
@@ -1050,11 +1541,28 @@ public sealed class PlaybackSession : IPlaybackSession
 
         lock (_compositionLock)
         {
-            _activeComposition = null;
+            if (_activeComposition != null)
+            {
+                try { _activeComposition.Clips.Clear(); } catch { }
+                _activeComposition = null;
+            }
         }
 
         try
         {
+            if (_externalAudioPlayer != null)
+            {
+                try
+                {
+                    _externalAudioPlayer.Pause();
+                    _externalAudioPlayer.Source = null;
+                    _externalAudioPlayer.Dispose();
+                }
+                catch { }
+                _externalAudioPlayer = null;
+                _externalAudioTrackPath = null;
+            }
+
             _mediaPlayer.Pause();
             if (_currentPlaybackSource != null)
             {
@@ -1087,24 +1595,22 @@ public sealed class PlaybackSession : IPlaybackSession
             _sleepCheckTimer = null;
         }
 
-        UpdateDisplayRequestState();
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        AppServices.HdrPipeline.ResetContentState();
 
-        _ = Task.Run(() =>
+        UpdateDisplayRequestState();
+        RaiseStateChanged();
+
+        // Release native Media Foundation / Direct3D COM pipelines immediately
+        try
         {
-            try
-            {
-                System.Threading.Thread.Sleep(80);
-                GC.Collect(2, GCCollectionMode.Forced, true, true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, true, true);
-                EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
-            }
-            catch { }
-        });
+            GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+        }
+        catch { }
     }
 
-    private async void RestoreLastPlayedTrack()
+    private async Task RestoreLastPlayedTrackAsync()
     {
         try
         {
@@ -1118,7 +1624,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
                 if (localSettings.Values["LastPlayedTrackId"] is string trackId)
                 {
-                    var track = SampleMediaLibrary.AllTracks.FirstOrDefault(t => t.Id == trackId);
+                    var track = MediaLibraryService.AllTracks.FirstOrDefault(t => t.Id == trackId);
                     if (track != null)
                     {
                         var index = _queue.FindIndex(t => t.Id == track.Id);
@@ -1208,6 +1714,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
         try
         {
+            if (_externalAudioPlayer != null)
+            {
+                _externalAudioPlayer.Pause();
+                _externalAudioPlayer.Source = null;
+                _externalAudioPlayer.Dispose();
+                _externalAudioPlayer = null;
+                _externalAudioTrackPath = null;
+            }
             _mediaPlayer.Dispose();
         }
         catch { }
@@ -1247,7 +1761,7 @@ public sealed class PlaybackSession : IPlaybackSession
     public void ApplyVoiceClarity(bool enabled) => ApplyAudioEffects();
     public void ApplyNightMode(bool enabled) => ApplyAudioEffects();
 
-    private async void RunAiEqualizerMatcher(MediaItem track)
+    private async Task RunAiEqualizerMatcherAsync(MediaItem track)
     {
         try
         {
@@ -1354,7 +1868,7 @@ public sealed class PlaybackSession : IPlaybackSession
         catch { }
     }
 
-    private async void InitiateCrossfade(int nextIndex)
+    private async Task InitiateCrossfadeAsync(int nextIndex)
     {
         try
         {
@@ -1409,7 +1923,7 @@ public sealed class PlaybackSession : IPlaybackSession
                     _mediaPlayer.Volume = 0.0;
                     _mediaPlayer.Play();
 
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    RaiseStateChanged();
                     SaveLastPlayedTrack(nextTrack);
 
                     int durationMs = AppServices.Settings.Current.CrossfadeDuration * 1000;
@@ -1449,12 +1963,14 @@ public sealed class PlaybackSession : IPlaybackSession
                 else
                 {
                     _isCrossfading = false;
+                    CancelActiveTransition();
                     Log("InitiateCrossfade failed: Next track source is null.");
                 }
             }
             catch (Exception ex)
             {
                 _isCrossfading = false;
+                CancelActiveTransition();
                 Log($"InitiateCrossfade exception: {ex.Message}");
             }
         }
@@ -1504,7 +2020,7 @@ public sealed class PlaybackSession : IPlaybackSession
             double fadeThreshold = dur - settings.CrossfadeDuration;
             if (pos >= fadeThreshold && fadeThreshold > 0)
             {
-                InitiateCrossfade(nextIndex);
+                _ = InitiateCrossfadeAsync(nextIndex);
             }
         }
     }
@@ -1560,11 +2076,11 @@ public sealed class PlaybackSession : IPlaybackSession
             Log("Sleep Timer expired. Stopping playback.");
             _sleepExpireTime = null;
             StartSleepTimer(0, false);
-            FadeOutAndStop();
+            _ = FadeOutAndStopAsync();
         }
     }
 
-    private async void FadeOutAndStop()
+    private async Task FadeOutAndStopAsync()
     {
         try
         {
@@ -1628,7 +2144,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public void PrefetchVideoThumbnails(MediaItem track)
     {
-        _prefetchCts?.Cancel();
+        if (_prefetchCts != null)
+        {
+            try { _prefetchCts.Cancel(); _prefetchCts.Dispose(); } catch { }
+        }
         _prefetchCts = new System.Threading.CancellationTokenSource();
         var token = _prefetchCts.Token;
 
@@ -1639,7 +2158,11 @@ public sealed class PlaybackSession : IPlaybackSession
 
         lock (_compositionLock)
         {
-            _activeComposition = null;
+            if (_activeComposition != null)
+            {
+                try { _activeComposition.Clips.Clear(); } catch { }
+                _activeComposition = null;
+            }
         }
 
         if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath))
@@ -1649,19 +2172,37 @@ public sealed class PlaybackSession : IPlaybackSession
 
         _ = Task.Run(async () =>
         {
+            Windows.Media.Editing.MediaComposition? composition = null;
             try
             {
+                // Defer thumbnail prefetching slightly so initial playback begins with zero disk I/O contention
+                await Task.Delay(1500, token);
+                if (token.IsCancellationRequested) return;
+
                 Log($"PrefetchVideoThumbnails: Starting for track '{track.Title}'");
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
+                if (token.IsCancellationRequested) return;
 
                 try
                 {
                     var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-                    var composition = new Windows.Media.Editing.MediaComposition();
+                    if (token.IsCancellationRequested)
+                    {
+                        clip = null;
+                        return;
+                    }
+
+                    composition = new Windows.Media.Editing.MediaComposition();
                     composition.Clips.Add(clip);
 
                     lock (_compositionLock)
                     {
+                        if (token.IsCancellationRequested)
+                        {
+                            try { composition.Clips.Clear(); } catch { }
+                            composition = null;
+                            return;
+                        }
                         _activeComposition = composition;
                     }
 
@@ -1806,12 +2347,42 @@ public sealed class PlaybackSession : IPlaybackSession
                     }
                     catch { }
                 }
+                finally
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        lock (_compositionLock)
+                        {
+                            if (_activeComposition == composition)
+                            {
+                                _activeComposition = null;
+                            }
+                        }
+                        try { composition?.Clips.Clear(); } catch { }
+                        composition = null;
+                    }
+                }
 
                 Log("PrefetchVideoThumbnails: Thread finished enqueuing tasks.");
             }
             catch (Exception ex)
             {
                 Log($"PrefetchVideoThumbnails error: {ex.Message}");
+            }
+            finally
+            {
+                if (token.IsCancellationRequested)
+                {
+                    lock (_compositionLock)
+                    {
+                        if (_activeComposition == composition)
+                        {
+                            _activeComposition = null;
+                        }
+                    }
+                    try { composition?.Clips.Clear(); } catch { }
+                    composition = null;
+                }
             }
         });
     }
@@ -1822,20 +2393,6 @@ public sealed class PlaybackSession : IPlaybackSession
         lock (_compositionLock)
         {
             comp = _activeComposition;
-        }
-
-        if (comp == null)
-        {
-            // If composition is still being initialized (video just loaded), wait up to 2 seconds
-            for (int i = 0; i < 20; i++)
-            {
-                await Task.Delay(100);
-                lock (_compositionLock)
-                {
-                    comp = _activeComposition;
-                }
-                if (comp != null) break;
-            }
         }
 
         if (comp == null) return null;
@@ -1902,30 +2459,39 @@ public sealed class PlaybackSession : IPlaybackSession
 
         try
         {
+            MediaSource? mediaSource = null;
             if (source is MediaPlaybackItem playbackItem)
             {
-                var mediaSource = playbackItem.Source;
-                try
-                {
-                    // Reset and dispose MediaSource first to release file locks (Rule 6)
-                    mediaSource?.Reset();
-                }
-                catch { }
-
-                try
-                {
-                    mediaSource?.Dispose();
-                }
-                catch { }
+                mediaSource = playbackItem.Source;
             }
             else if (source is MediaSource directSource)
             {
-                try { directSource.Reset(); } catch { }
-                try { directSource.Dispose(); } catch { }
+                mediaSource = directSource;
             }
-            else if (source is IDisposable disposableSource)
+
+            if (mediaSource != null)
             {
-                disposableSource.Dispose();
+                try
+                {
+                    if (mediaSource.CustomProperties.TryGetValue("ActiveStreams", out var streamsObj) &&
+                        streamsObj is List<IDisposable> streams)
+                    {
+                        foreach (var stream in streams)
+                        {
+                            try { stream.Dispose(); } catch { }
+                        }
+                        streams.Clear();
+                    }
+                }
+                catch { }
+
+                try { mediaSource.Reset(); } catch { }
+                try { mediaSource.Dispose(); } catch { }
+            }
+
+            if (source is IDisposable disposableSource)
+            {
+                try { disposableSource.Dispose(); } catch { }
             }
         }
         catch { }

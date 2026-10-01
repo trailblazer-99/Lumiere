@@ -131,22 +131,27 @@ namespace LumiereMediaPlayer.Helpers
             }
 
             string name = source.Name?.ToLowerInvariant() ?? "";
+            bool isPrime = name.Contains("prime") || name.Contains("amazon");
 
-            if (name.Contains("crunchyroll"))
+            if (isPrime)
             {
-                if (string.IsNullOrWhiteSpace(webUrl) ||
-                    webUrl.Equals("https://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
-                    webUrl.Equals("http://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
-                    webUrl.Equals("https://crunchyroll.com", StringComparison.OrdinalIgnoreCase))
+                string query = !string.IsNullOrWhiteSpace(details?.Title) ? details.Title.Trim() : "";
+                string encoded = Uri.EscapeDataString(query);
+
+                bool isAmazonUrl = webUrl.Contains("primevideo.com", StringComparison.OrdinalIgnoreCase) ||
+                                   webUrl.Contains("amazon.com", StringComparison.OrdinalIgnoreCase) ||
+                                   webUrl.Contains("amazon.", StringComparison.OrdinalIgnoreCase) ||
+                                   webUrl.Contains("a.co", StringComparison.OrdinalIgnoreCase);
+
+                // If webUrl was set to Apple TV or is invalid/generic, rewrite to Prime Video for this title
+                if (!isAmazonUrl || webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    string searchQuery = !string.IsNullOrWhiteSpace(details?.Title) ? details.Title : "";
-                    webUrl = !string.IsNullOrWhiteSpace(searchQuery)
-                        ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(searchQuery)}"
-                        : "https://www.crunchyroll.com";
+                    webUrl = !string.IsNullOrEmpty(query)
+                        ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={encoded}"
+                        : "https://www.primevideo.com";
                 }
             }
-
-            if (name.Contains("apple"))
+            else if (name.Contains("apple") && !name.Contains("roku"))
             {
                 string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
                 string cleanTitle = details?.Title?.Trim() ?? "";
@@ -159,6 +164,20 @@ namespace LumiereMediaPlayer.Helpers
                 else if (webUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || webUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                 {
                     webUrl = AppleTvDeepLinkHelper.RewriteUrlRegion(webUrl, targetRegion);
+                }
+            }
+
+            if (name.Contains("crunchyroll"))
+            {
+                if (string.IsNullOrWhiteSpace(webUrl) ||
+                    webUrl.Equals("https://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
+                    webUrl.Equals("http://www.crunchyroll.com", StringComparison.OrdinalIgnoreCase) ||
+                    webUrl.Equals("https://crunchyroll.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    string searchQuery = !string.IsNullOrWhiteSpace(details?.Title) ? details.Title : "";
+                    webUrl = !string.IsNullOrWhiteSpace(searchQuery)
+                        ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(searchQuery)}"
+                        : "https://www.crunchyroll.com";
                 }
             }
 
@@ -216,7 +235,7 @@ namespace LumiereMediaPlayer.Helpers
                 if (name.Contains("netflix"))
                     webUrl = !string.IsNullOrEmpty(query) ? $"https://www.netflix.com/search?q={encoded}" : "https://www.netflix.com";
                 else if (name.Contains("prime") || name.Contains("amazon"))
-                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.amazon.com/s?k={encoded}&i=instant-video" : "https://www.primevideo.com";
+                    webUrl = !string.IsNullOrEmpty(query) ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={encoded}" : "https://www.primevideo.com";
                 else if (name.Contains("disney") && !name.Contains("hotstar"))
                     webUrl = !string.IsNullOrEmpty(query) ? $"https://www.disneyplus.com/search?q={encoded}" : "https://www.disneyplus.com";
                 else if (name.Contains("hotstar"))
@@ -439,6 +458,7 @@ namespace LumiereMediaPlayer.Helpers
                      string.Equals(s.Name, "Apple TV", StringComparison.OrdinalIgnoreCase)) &&
                     string.Equals(s.Type, "sub", StringComparison.OrdinalIgnoreCase) &&
                     !s.Name.Contains("Amazon", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Name.Contains("Prime", StringComparison.OrdinalIgnoreCase) &&
                     !s.Name.Contains("Channel", StringComparison.OrdinalIgnoreCase) &&
                     !s.Name.Contains("Roku", StringComparison.OrdinalIgnoreCase));
 

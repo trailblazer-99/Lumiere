@@ -1,3 +1,4 @@
+using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
@@ -23,7 +24,7 @@ public sealed partial class VideoPage : Page
     private readonly PropertyChangedEventHandler _viewModelPropertyChangedHandler;
     private readonly PropertyChangedEventHandler _playbackPropertyChangedHandler;
     private readonly RoutedEventHandler _closeFullscreenHandler;
-    private bool _eventHandlersDetached;
+    private bool _eventHandlersDetached = true;
     private int _videoTapClickCount = 0;
     private System.Threading.CancellationTokenSource? _videoTapCts;
     private RoutedEventHandler? _streamingClickHandler;
@@ -32,16 +33,14 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
-        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
         _closeFullscreenHandler = (_, _) => HideMetadataOverlay();
 
-        ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
-        AppServices.PlaybackViewModel.PropertyChanged += _playbackPropertyChangedHandler;
-        AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged;
+        AttachEventHandlers();
 
-        // Ensure we catch the unload event to prevent memory leaks
+        this.Loaded += OnLoaded;
         this.Unloaded += OnUnloaded;
 
         if (CloseMetadataButton != null)
@@ -49,23 +48,57 @@ public sealed partial class VideoPage : Page
             CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
         }
 
+        SyncMediaPlayer(true);
+        UpdateUiLuminance();
+    }
+
+    private void AttachEventHandlers()
+    {
+        if (!_eventHandlersDetached) return;
+        _eventHandlersDetached = false;
+
+        this.KeyDown -= OnPageKeyDown;
+        this.KeyDown += OnPageKeyDown;
+
+        ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
+        ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+
+        AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
+        AppServices.PlaybackViewModel.PropertyChanged += _playbackPropertyChangedHandler;
+
+        AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged;
+        AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged;
+
         if (App.MainWindowInstance?.CloseFullscreenMetadataButton != null)
         {
+            App.MainWindowInstance.CloseFullscreenMetadataButton.Click -= _closeFullscreenHandler;
             App.MainWindowInstance.CloseFullscreenMetadataButton.Click += _closeFullscreenHandler;
         }
 
-        SyncMediaPlayer(true);
-        UpdateUiLuminance();
-        this.KeyDown += OnPageKeyDown;
+        if (LibraryScrollViewer != null)
+        {
+            LibraryScrollViewer.ViewChanging -= OnLibraryScrollViewerViewChanging;
+            LibraryScrollViewer.ViewChanging += OnLibraryScrollViewerViewChanging;
+            LibraryScrollViewer.ViewChanged -= OnLibraryScrollViewerViewChanged;
+            LibraryScrollViewer.ViewChanged += OnLibraryScrollViewerViewChanged;
+            LibraryScrollViewer.PointerWheelChanged -= OnLibraryScrollViewerPointerWheelChanged;
+            LibraryScrollViewer.PointerWheelChanged += OnLibraryScrollViewerPointerWheelChanged;
+        }
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
+    private void DetachEventHandlers()
     {
         if (_eventHandlersDetached) return;
         _eventHandlersDetached = true;
 
+        if (LibraryScrollViewer != null)
+        {
+            LibraryScrollViewer.ViewChanging -= OnLibraryScrollViewerViewChanging;
+            LibraryScrollViewer.ViewChanged -= OnLibraryScrollViewerViewChanged;
+            LibraryScrollViewer.PointerWheelChanged -= OnLibraryScrollViewerPointerWheelChanged;
+        }
+
         this.KeyDown -= OnPageKeyDown;
-        this.Unloaded -= OnUnloaded;
         ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
         AppServices.PlaybackViewModel.PropertyChanged -= _playbackPropertyChangedHandler;
         AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged;
@@ -75,7 +108,55 @@ public sealed partial class VideoPage : Page
             App.MainWindowInstance.CloseFullscreenMetadataButton.Click -= _closeFullscreenHandler;
         }
 
+        if (_streamingClickHandler != null && StreamingDetailsButton != null)
+        {
+            StreamingDetailsButton.Click -= _streamingClickHandler;
+            _streamingClickHandler = null;
+        }
+
+        if (App.MainWindowInstance?.FullscreenStreamingDetailsButton != null && _fullscreenStreamingClickHandler != null)
+        {
+            App.MainWindowInstance.FullscreenStreamingDetailsButton.Click -= _fullscreenStreamingClickHandler;
+            _fullscreenStreamingClickHandler = null;
+        }
+
         if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
+    }
+
+    private void OnLibraryScrollViewerViewChanging(object? sender, Microsoft.UI.Xaml.Controls.ScrollViewerViewChangingEventArgs e)
+    {
+        Controls.MediaCard.NotifyScrollActivity();
+    }
+
+    private void OnLibraryScrollViewerViewChanged(object? sender, Microsoft.UI.Xaml.Controls.ScrollViewerViewChangedEventArgs e)
+    {
+        Controls.MediaCard.NotifyScrollActivity();
+    }
+
+    private void OnLibraryScrollViewerPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        Controls.MediaCard.NotifyScrollActivity();
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        AttachEventHandlers();
+        SyncMediaPlayer(true);
+        UpdateUiLuminance();
+        UpdateEmptyState();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DetachEventHandlers();
+    }
+
+    private void UpdateEmptyState()
+    {
+        if (VideoEmptyState == null) return;
+        bool isOverlay = ViewModel.OverlayVisibility == Visibility.Visible;
+        bool hasNoVideos = ViewModel.FilteredVideos.Count == 0;
+        VideoEmptyState.Visibility = (isOverlay && hasNoVideos) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -83,8 +164,18 @@ public sealed partial class VideoPage : Page
         if (e.PropertyName is nameof(VideoViewModel.CurrentVideo)
             or nameof(VideoViewModel.HasSource))
         {
+            if (ViewModel.CurrentVideo != null)
+            {
+                VideoSelectionRibbon?.ClearSelection();
+            }
             bool force = e.PropertyName == nameof(VideoViewModel.CurrentVideo);
             DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
+        }
+        else if (e.PropertyName is nameof(VideoViewModel.FilteredVideos)
+                 or nameof(VideoViewModel.OverlayVisibility)
+                 or nameof(VideoViewModel.PlayerVisibility))
+        {
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
         }
     }
 
@@ -92,6 +183,11 @@ public sealed partial class VideoPage : Page
     {
         if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
         {
+            if (AppServices.PlaybackViewModel.IsVideoPlayerActive)
+            {
+                App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+                VideoSelectionRibbon?.ClearSelection();
+            }
             DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio)
@@ -120,7 +216,16 @@ public sealed partial class VideoPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        AttachEventHandlers();
+        UpdateUiLuminance();
         DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+    }
+
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+        DetachEventHandlers();
     }
 
     public event EventHandler? VideoPlayerHostLayoutChanged;
@@ -134,84 +239,47 @@ public sealed partial class VideoPage : Page
     {
         try
         {
-            foreach (var v in ViewModel.FilteredVideos)
+            if (ViewModel.FilteredVideos.Any(v => v.IsSelected))
             {
-                v.IsSelected = false;
-            }
-            VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                try
+                foreach (var v in ViewModel.FilteredVideos)
                 {
-                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
-                    v.Opacity = 1f;
+                    v.IsSelected = false;
                 }
-                catch { }
-                PageContent.Opacity = 1.0;
-                return;
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
             }
-
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(400);
-            visual.StartAnimation("Opacity", fadeAnimation);
-
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
-            slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(450);
-            visual.StartAnimation("Offset", slideAnimation);
+            UpdateEmptyState();
+            PageContent.Opacity = 1.0;
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to animate VideoPage entrance: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Failed to load VideoPage: {ex.Message}");
             PageContent.Opacity = 1.0;
         }
     }
 
-    private string CleanVideoTitle(string rawTitle, string? sourcePath)
+    private async void OnClearAllVideosClick(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(rawTitle)) return string.Empty;
-
-        string title = System.IO.Path.GetFileNameWithoutExtension(rawTitle);
-
-        // If it looks like a TV episode, try to extract the series title from the parent directory
-        if (!string.IsNullOrEmpty(sourcePath))
+        try
         {
-            var tvMatch = System.Text.RegularExpressions.Regex.Match(title, @"\bS(\d+)\s*E(\d+)\b|\bSeason\s*(\d+)\s*Episode\s*(\d+)\b|\bEpisode\s*(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (tvMatch.Success || title.StartsWith("Episode", StringComparison.OrdinalIgnoreCase))
+            var dialog = new ContentDialog
             {
-                var dir = System.IO.Path.GetDirectoryName(sourcePath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    string parentFolder = System.IO.Path.GetFileName(dir);
-                    if (!string.IsNullOrEmpty(parentFolder) && parentFolder.ToLowerInvariant() != "video" && parentFolder.ToLowerInvariant() != "videos")
-                    {
-                        title = parentFolder;
-                    }
-                }
+                Title = "Clear all videos?",
+                Content = "This will remove all videos from your library. Your media files on disk will not be affected.",
+                PrimaryButtonText = "Clear All",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = this.XamlRoot
+            };
+
+            if (await MediaFlyoutHelper.ShowDialogSafeAsync(dialog) == ContentDialogResult.Primary)
+            {
+                await ViewModel.ClearAllVideosCommand.ExecuteAsync(null);
             }
         }
-
-        // Replace dots, underscores, hyphens with spaces
-        title = title.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
-
-
-        // Clean up any year like 19xx or 20xx and strip everything after it
-        var yearMatch = System.Text.RegularExpressions.Regex.Match(title, @"\b(19|20)\d{2}\b");
-        if (yearMatch.Success)
+        catch (Exception ex)
         {
-            title = title.Substring(0, yearMatch.Index);
+            System.Diagnostics.Debug.WriteLine($"Exception in OnClearAllVideosClick: {ex.Message}");
         }
-
-        // Clean up double spaces and trim
-        title = System.Text.RegularExpressions.Regex.Replace(title, @"\s+", " ").Trim();
-
-        return title;
     }
 
     internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(Models.MediaItem video)
@@ -240,21 +308,8 @@ public sealed partial class VideoPage : Page
 
         try
         {
-            var cleanTitle = CleanVideoTitle(video.Title, video.SourcePath);
+            var (cleanTitle, year, isTvShow) = Helpers.VideoMetadataHelper.CleanTitleAndExtractYear(video.Title, video.SourcePath);
             if (string.IsNullOrWhiteSpace(cleanTitle)) return;
-
-            // Search TV show first if it looks like a TV show, else Movie
-            bool isTvShow = false;
-            var filename = System.IO.Path.GetFileNameWithoutExtension(video.Title);
-            var tvMatch = System.Text.RegularExpressions.Regex.Match(filename, @"\bS(\d+)\s*E(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (!tvMatch.Success)
-            {
-                tvMatch = System.Text.RegularExpressions.Regex.Match(filename, @"\bSeason\s*(\d+)\s*Episode\s*(\d+)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            }
-            if (tvMatch.Success)
-            {
-                isTvShow = true;
-            }
 
             List<TmdbMedia>? searchResults = null;
             if (isTvShow)
@@ -262,13 +317,22 @@ public sealed partial class VideoPage : Page
                 searchResults = await _tmdbService.SearchTvShowsAsync(cleanTitle);
                 if (searchResults == null || !searchResults.Any())
                 {
-                    searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle);
+                    searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle, year);
                     if (searchResults != null && searchResults.Any()) isTvShow = false;
                 }
             }
             else
             {
-                searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle);
+                if (year.HasValue)
+                {
+                    searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle, year);
+                }
+
+                if (searchResults == null || !searchResults.Any())
+                {
+                    searchResults = await _tmdbService.SearchMoviesAsync(cleanTitle, null);
+                }
+
                 if (searchResults == null || !searchResults.Any())
                 {
                     searchResults = await _tmdbService.SearchTvShowsAsync(cleanTitle);
@@ -276,7 +340,7 @@ public sealed partial class VideoPage : Page
                 }
             }
 
-            var bestMatch = searchResults?.FirstOrDefault();
+            var bestMatch = Helpers.VideoMetadataHelper.PickBestTmdbMatch(searchResults, cleanTitle, year);
 
             if (bestMatch != null)
             {
@@ -303,18 +367,22 @@ public sealed partial class VideoPage : Page
                     var posterUri = new Uri($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}");
                     InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
                     InternetMetadataPoster.Visibility = Visibility.Visible;
+                    if (InternetMetadataPosterBorder != null) InternetMetadataPosterBorder.Visibility = Visibility.Visible;
                     if (mainWin != null)
                     {
                         mainWin.FullscreenInternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
                         mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Visible;
+                        if (mainWin.FullscreenInternetMetadataPosterBorder != null) mainWin.FullscreenInternetMetadataPosterBorder.Visibility = Visibility.Visible;
                     }
                 }
                 else
                 {
                     InternetMetadataPoster.Visibility = Visibility.Collapsed;
+                    if (InternetMetadataPosterBorder != null) InternetMetadataPosterBorder.Visibility = Visibility.Collapsed;
                     if (mainWin != null)
                     {
                         mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Collapsed;
+                        if (mainWin.FullscreenInternetMetadataPosterBorder != null) mainWin.FullscreenInternetMetadataPosterBorder.Visibility = Visibility.Collapsed;
                     }
                 }
             }
@@ -336,7 +404,8 @@ public sealed partial class VideoPage : Page
             {
                 HideMetadataOverlay();
                 AppServices.Playback.Stop();
-                App.MainWindowInstance?.ContentFrame.Navigate(typeof(StreamingDetailsPage), targetTmdbId);
+                AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
+                App.MainWindowInstance?.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
             };
             StreamingDetailsButton.Click += _streamingClickHandler;
             StreamingDetailsButton.Visibility = Visibility.Visible;
@@ -348,14 +417,18 @@ public sealed partial class VideoPage : Page
                 if (_fullscreenStreamingClickHandler != null)
                     mainWin.FullscreenStreamingDetailsButton.Click -= _fullscreenStreamingClickHandler;
 
-                _fullscreenStreamingClickHandler = (s, args) =>
+                _fullscreenStreamingClickHandler = async (s, args) =>
                 {
                     HideMetadataOverlay();
                     AppServices.Playback.Stop();
+                    AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
 
-                    if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) mainWin.ToggleFullscreen();
+                    if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+                    {
+                        await mainWin.SetFullScreenModeAsync(false);
+                    }
 
-                    mainWin.ContentFrame.Navigate(typeof(StreamingDetailsPage), targetTmdbId);
+                    mainWin.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
                 };
                 mainWin.FullscreenStreamingDetailsButton.Click += _fullscreenStreamingClickHandler;
             }
@@ -378,6 +451,23 @@ public sealed partial class VideoPage : Page
     }
 
     public bool IsMetadataOverlayVisible => MetadataOverlay.Visibility == Visibility.Visible;
+
+    public void ToggleMetadataOverlay()
+    {
+        if (MetadataOverlay.Visibility == Visibility.Collapsed)
+        {
+            MetadataOverlay.Visibility = Visibility.Visible;
+            var current = ViewModel.CurrentVideo ?? AppServices.PlaybackViewModel.CurrentTrack;
+            if (current != null)
+            {
+                _ = FetchInternetMetadataAsync(current);
+            }
+        }
+        else
+        {
+            MetadataOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
 
     public void HideMetadataOverlay()
     {
@@ -478,22 +568,13 @@ public sealed partial class VideoPage : Page
 
     private void UpdateUiLuminance()
     {
-        if (AppServices.DisplayManager.IsHdrActive)
+        if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
         {
-            float sdrWhite = AppServices.DisplayManager.SdrWhiteLevelInNits;
-            double scale = 80.0 / Math.Max(80.0, sdrWhite);
-
-            if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
-            {
-                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = Math.Max(0.4, scale);
-            }
+            App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = 1.0;
         }
-        else
+        if (MetadataOverlay != null)
         {
-            if (App.MainWindowInstance?.FullscreenMetadataOverlay != null)
-            {
-                App.MainWindowInstance.FullscreenMetadataOverlay.Opacity = 1.0;
-            }
+            MetadataOverlay.Opacity = 1.0;
         }
     }
 
@@ -507,10 +588,29 @@ public sealed partial class VideoPage : Page
         VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnVideoTrackCheckBoxClicked(object sender, RoutedEventArgs e)
+    {
+        VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
     private void OnVideoItemTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
         if (sender is Grid grid && grid.DataContext is MediaItem video)
         {
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool hasSelection = VideoSelectionRibbon != null && VideoSelectionRibbon.SelectedItems.Count > 0;
+
+            if (isCtrl || isShift || hasSelection)
+            {
+                video.IsSelected = !video.IsSelected;
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                e.Handled = true;
+                return;
+            }
+
             ViewModel.PlayVideoCommand.Execute(video);
             e.Handled = true;
         }
@@ -518,7 +618,42 @@ public sealed partial class VideoPage : Page
 
     private void OnCardSelectionChanged(object? sender, EventArgs e)
     {
+        if (AppServices.PlaybackViewModel.IsVideoPlayerActive || !ViewModel.ShowNoSourceOverlay)
+        {
+            VideoSelectionRibbon?.ClearSelection();
+            return;
+        }
         VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
+    private void OnVideoPlayRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.SetQueue(selected, 0);
+            VideoSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private void OnVideoPlayNextRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.PlayNextRange(selected);
+            VideoSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private void OnVideoAddToQueueRequested(object? sender, EventArgs e)
+    {
+        var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.EnqueueRange(selected);
+            VideoSelectionRibbon?.ClearSelection();
+        }
     }
 
     private void OnVideoSelectAllRequested(object? sender, EventArgs e)
@@ -536,6 +671,7 @@ public sealed partial class VideoPage : Page
         {
             v.IsSelected = false;
         }
+        VideoSelectionRibbon?.ClearSelection();
     }
 
     private async void OnVideoRemoveRequested(object? sender, EventArgs e)
@@ -545,7 +681,7 @@ public sealed partial class VideoPage : Page
             var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
             if (selected.Count > 0)
             {
-                await SampleMediaLibrary.RemoveTracksAsync(selected);
+                await MediaLibraryService.RemoveTracksAsync(selected);
                 VideoSelectionRibbon?.ClearSelection();
             }
         }
@@ -559,13 +695,35 @@ public sealed partial class VideoPage : Page
     {
         try
         {
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            if (isCtrl && e.Key == Windows.System.VirtualKey.A)
+            {
+                e.Handled = true;
+                foreach (var v in ViewModel.FilteredVideos)
+                {
+                    v.IsSelected = true;
+                }
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                return;
+            }
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                e.Handled = true;
+                foreach (var v in ViewModel.FilteredVideos)
+                {
+                    v.IsSelected = false;
+                }
+                VideoSelectionRibbon?.ClearSelection();
+                return;
+            }
             if (e.Key == Windows.System.VirtualKey.Delete)
             {
                 var selected = ViewModel.FilteredVideos.Where(v => v.IsSelected).ToList();
                 if (selected.Count > 0)
                 {
                     e.Handled = true;
-                    await SampleMediaLibrary.RemoveTracksAsync(selected);
+                    await MediaLibraryService.RemoveTracksAsync(selected);
                     VideoSelectionRibbon?.ClearSelection();
                 }
             }
@@ -586,6 +744,32 @@ public sealed partial class VideoPage : Page
             });
             flyout.ShowAt(element, e.GetPosition(element));
             e.Handled = true;
+        }
+    }
+
+    public void NotifySelectionChanged()
+    {
+        VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
+    private void OnVideoCardButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is MediaItem video)
+        {
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool hasSelection = VideoSelectionRibbon != null && VideoSelectionRibbon.SelectedItems.Count > 0;
+
+            if (isCtrl || isShift || hasSelection)
+            {
+                video.IsSelected = !video.IsSelected;
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                return;
+            }
+
+            ViewModel.PlayVideoCommand.Execute(video);
         }
     }
 }

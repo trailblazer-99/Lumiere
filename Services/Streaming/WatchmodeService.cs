@@ -17,7 +17,17 @@ namespace LumiereMediaPlayer.Services.Streaming
 
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        private static readonly Dictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
+
+        private static void CacheId(int id, (string? ImdbId, string? TmdbId, string? Type) value)
+        {
+            if (IdMap.Count > 500)
+            {
+                var keysToPrune = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Take(IdMap.Keys, 100));
+                foreach (var k in keysToPrune) IdMap.TryRemove(k, out _);
+            }
+            IdMap[id] = value;
+        }
 
         private static int? GetCleanTmdbId(string? tmdbIdStr)
         {
@@ -284,26 +294,30 @@ namespace LumiereMediaPlayer.Services.Streaming
 
             if (parsedTmdbId > 0)
             {
-                // 1. Try Watchmode Search by tmdb_id
+                // 1. Try Watchmode Search using exact tmdb_movie_id or tmdb_tv_id field
                 try
                 {
-                    string searchTypeParam = mediaType == "tv" ? "&types=tv_series,tv" : (mediaType == "movie" ? "&types=movie" : "");
-                    var searchServicePath = $"watchmode/search/?search_field=tmdb_id&search_value={parsedTmdbId}{searchTypeParam}";
-                    var searchUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field=tmdb_id&search_value={parsedTmdbId}{searchTypeParam}";
-
-                    var response = await HttpHelper.GetStringAsync(searchServicePath, searchUrl);
-                    var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
-                    if (searchResponse?.TitleResults != null && searchResponse.TitleResults.Count > 0)
+                    string searchField = mediaType == "tv" ? "tmdb_tv_id" : (mediaType == "movie" ? "tmdb_movie_id" : "");
+                    if (!string.IsNullOrEmpty(searchField))
                     {
-                        var match = searchResponse.TitleResults.FirstOrDefault(r =>
-                            (mediaType == "tv" && (r.Type == "tv_series" || r.Type == "tv" || r.Type == "tv_miniseries")) ||
-                            (mediaType == "movie" && r.Type == "movie") ||
-                            string.IsNullOrEmpty(mediaType)) ?? searchResponse.TitleResults[0];
+                        string searchTypeParam = mediaType == "tv" ? "&types=tv_series,tv" : (mediaType == "movie" ? "&types=movie" : "");
+                        var searchServicePath = $"watchmode/search/?search_field={searchField}&search_value={parsedTmdbId}{searchTypeParam}";
+                        var searchUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field={searchField}&search_value={parsedTmdbId}{searchTypeParam}";
 
-                        if (match.Id > 0)
+                        var response = await HttpHelper.GetStringAsync(searchServicePath, searchUrl);
+                        var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
+                        if (searchResponse?.TitleResults != null && searchResponse.TitleResults.Count > 0)
                         {
-                            IdMap[match.Id] = (match.ImdbId, match.TmdbId?.ToString(), match.Type);
-                            return match.Id;
+                            var match = searchResponse.TitleResults.FirstOrDefault(r => r.TmdbId == parsedTmdbId)
+                                        ?? searchResponse.TitleResults.FirstOrDefault(r =>
+                                            (mediaType == "tv" && (r.Type == "tv_series" || r.Type == "tv" || r.Type == "tv_miniseries")) ||
+                                            (mediaType == "movie" && r.Type == "movie"));
+
+                            if (match != null && match.Id > 0 && (match.TmdbId == parsedTmdbId || !match.TmdbId.HasValue))
+                            {
+                                CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
+                                return match.Id;
+                            }
                         }
                     }
                 }
@@ -326,10 +340,13 @@ namespace LumiereMediaPlayer.Services.Streaming
                         var imdbSearchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(imdbResponse, _jsonOptions);
                         if (imdbSearchResponse?.TitleResults != null && imdbSearchResponse.TitleResults.Count > 0)
                         {
-                            var match = imdbSearchResponse.TitleResults[0];
-                            if (match.Id > 0)
+                            var match = imdbSearchResponse.TitleResults.FirstOrDefault(r =>
+                                string.Equals(r.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase))
+                                ?? imdbSearchResponse.TitleResults[0];
+
+                            if (match != null && match.Id > 0 && (string.Equals(match.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase) || match.TmdbId == parsedTmdbId))
                             {
-                                IdMap[match.Id] = (match.ImdbId, match.TmdbId?.ToString(), match.Type);
+                                CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
                                 return match.Id;
                             }
                         }
@@ -346,14 +363,16 @@ namespace LumiereMediaPlayer.Services.Streaming
             {
                 try
                 {
-                    string searchTypeParam = mediaType == "tv" ? "&types=tv_series,tv" : (mediaType == "movie" ? "&types=movie" : "");
                     var nameResults = await SearchAsync(titleHint, mediaType == "tv" ? "tv_series" : (mediaType == "movie" ? "movie" : ""));
                     if (nameResults != null && nameResults.Count > 0)
                     {
-                        var exact = nameResults.FirstOrDefault(n => string.Equals(n.Title, titleHint, StringComparison.OrdinalIgnoreCase)) ?? nameResults[0];
-                        if (exact.Id > 0)
+                        var exact = nameResults.FirstOrDefault(n =>
+                            (parsedTmdbId > 0 && n.TmdbId == parsedTmdbId) ||
+                            string.Equals(n.Title, titleHint, StringComparison.OrdinalIgnoreCase));
+
+                        if (exact != null && exact.Id > 0)
                         {
-                            IdMap[exact.Id] = (exact.ImdbId, exact.TmdbId?.ToString(), exact.Type);
+                            CacheId(exact.Id, (exact.ImdbId, exact.TmdbId?.ToString() ?? (parsedTmdbId > 0 ? parsedTmdbId.ToString() : null), exact.Type));
                             return exact.Id;
                         }
                     }
@@ -532,20 +551,69 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
         }
 
-        public async Task<List<WatchmodeCastCrew>> GetCastCrewAsync(int watchmodeId)
+        public async Task<List<WatchmodeCastCrew>> GetCastCrewAsync(int watchmodeId, int? tmdbId = null, string? mediaType = null)
         {
-            var servicePath = $"watchmode/title/{watchmodeId}/cast-crew/";
-            var url = $"{BaseUrl}/title/{watchmodeId}/cast-crew/?apiKey={ApiKey}";
-            try
+            int? resolvedTmdbId = tmdbId;
+            string? resolvedType = mediaType;
+
+            if (!resolvedTmdbId.HasValue && IdMap.TryGetValue(watchmodeId, out var ids))
             {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<List<WatchmodeCastCrew>>(response, _jsonOptions) ?? new List<WatchmodeCastCrew>();
+                resolvedTmdbId = GetCleanTmdbId(ids.TmdbId);
+                resolvedType ??= ids.Type;
             }
-            catch (Exception ex)
+
+            // 1. If we have a TMDB ID, TMDB credits are preferred for rich profile headshots
+            if (resolvedTmdbId.HasValue && resolvedTmdbId.Value > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetCastCrew Error: {ex.Message}");
-                return new List<WatchmodeCastCrew>();
+                bool isTv = resolvedType is "tv" or "tv_series" or "tv_miniseries";
+                var tmdbCredits = await QueryTmdbAsync<TmdbCreditsResponse>($"{(isTv ? "tv" : "movie")}/{resolvedTmdbId.Value}/credits");
+                if (tmdbCredits != null)
+                {
+                    var mapped = tmdbCredits.MapToWatchmodeCastCrew();
+                    if (mapped.Count > 0) return mapped;
+                }
             }
+
+            // 2. Fetch from Watchmode API
+            if (watchmodeId > 0)
+            {
+                var servicePath = $"watchmode/title/{watchmodeId}/cast-crew/";
+                var url = $"{BaseUrl}/title/{watchmodeId}/cast-crew/?apiKey={ApiKey}";
+                try
+                {
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    var list = JsonSerializer.Deserialize<List<WatchmodeCastCrew>>(response, _jsonOptions);
+                    if (list != null && list.Count > 0)
+                    {
+                        return list;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetCastCrew Error: {ex.Message}");
+                }
+            }
+
+            // 3. Fallback: If watchmodeId itself might be a TMDB ID (e.g. from fallback navigation)
+            if (watchmodeId > 0 && !resolvedTmdbId.HasValue)
+            {
+                bool isTv = resolvedType is "tv" or "tv_series" or "tv_miniseries";
+                var tmdbCredits = await QueryTmdbAsync<TmdbCreditsResponse>($"{(isTv ? "tv" : "movie")}/{watchmodeId}/credits");
+                if (tmdbCredits != null)
+                {
+                    var mapped = tmdbCredits.MapToWatchmodeCastCrew();
+                    if (mapped.Count > 0) return mapped;
+                }
+                var altType = isTv ? "movie" : "tv";
+                var altCredits = await QueryTmdbAsync<TmdbCreditsResponse>($"{altType}/{watchmodeId}/credits");
+                if (altCredits != null)
+                {
+                    var mapped = altCredits.MapToWatchmodeCastCrew();
+                    if (mapped.Count > 0) return mapped;
+                }
+            }
+
+            return new List<WatchmodeCastCrew>();
         }
 
         public async Task<WatchmodeChangesResponse> GetChangesAsync(string startDate, string endDate)
@@ -588,7 +656,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 {
                     foreach (var title in results)
                     {
-                        IdMap[title.Id] = (title.ImdbId, title.TmdbId?.ToString(), title.Type);
+                        CacheId(title.Id, (title.ImdbId, title.TmdbId?.ToString(), title.Type));
                     }
                     return results;
                 }
@@ -608,7 +676,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             var list = data?.Titles ?? new List<WatchmodeTitle>();
             foreach (var title in list)
             {
-                IdMap[title.Id] = (title.ImdbId, title.TmdbId?.ToString(), title.Type);
+                CacheId(title.Id, (title.ImdbId, title.TmdbId?.ToString(), title.Type));
             }
             return list;
         }
@@ -743,6 +811,20 @@ namespace LumiereMediaPlayer.Services.Streaming
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetPersonDetails Error: {ex.Message}");
+            }
+
+            // Fallback directly to TMDB person credits when Watchmode doesn't have the person
+            try
+            {
+                var tmdbCredits = await QueryTmdbAsync<TmdbCombinedCreditsResponse>($"person/{personId}/combined_credits");
+                if (tmdbCredits != null)
+                {
+                    return tmdbCredits.MapToWatchmodePersonDetails(fullName ?? "Unknown");
+                }
+            }
+            catch (Exception tmdbEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"TMDB GetPersonDetails Fallback Error: {tmdbEx.Message}");
             }
 
             return null;

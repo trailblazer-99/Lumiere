@@ -5,9 +5,10 @@ using LumiereMediaPlayer.Services;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class PlaybackViewModel : ObservableObject
+public partial class PlaybackViewModel : ObservableObject, IDisposable
 {
     private readonly IPlaybackSession _session;
+    private readonly EventHandler _stateChangedHandler;
 
     [ObservableProperty] public partial MediaItem? CurrentTrack { get; set; }
 
@@ -21,6 +22,10 @@ public partial class PlaybackViewModel : ObservableObject
 
     [ObservableProperty] public partial bool IsMuted { get; set; }
 
+    [ObservableProperty] public partial bool IsShuffleEnabled { get; set; }
+
+    [ObservableProperty] public partial PlaybackRepeatMode RepeatMode { get; set; } = PlaybackRepeatMode.Off;
+
     [ObservableProperty] public partial IReadOnlyList<MediaItem> Queue { get; set; } = [];
 
     [ObservableProperty] public partial AspectRatioOption SelectedAspectRatio { get; set; } = AspectRatioOption.Auto;
@@ -30,7 +35,8 @@ public partial class PlaybackViewModel : ObservableObject
     public PlaybackViewModel(IPlaybackSession session)
     {
         _session = session;
-        _session.StateChanged += (_, _) => SyncFromSession();
+        _stateChangedHandler = (_, _) => SyncFromSession();
+        _session.StateChanged += _stateChangedHandler;
 
         try
         {
@@ -39,6 +45,11 @@ public partial class PlaybackViewModel : ObservableObject
         catch { }
 
         SyncFromSession();
+    }
+
+    public void Dispose()
+    {
+        _session.StateChanged -= _stateChangedHandler;
     }
 
     public IPlaybackSession Session => _session;
@@ -60,6 +71,12 @@ public partial class PlaybackViewModel : ObservableObject
 
     [RelayCommand]
     private void Next() => _session.Next();
+
+    [RelayCommand]
+    public void ToggleShuffle() => _session.ToggleShuffle();
+
+    [RelayCommand]
+    public void CycleRepeatMode() => _session.CycleRepeatMode();
 
     [RelayCommand]
     public void Stop() => _session.Stop();
@@ -85,12 +102,14 @@ public partial class PlaybackViewModel : ObservableObject
 
     public void PlayTrack(MediaItem track)
     {
+        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
         IsVideoPlayerActive = track.IsVideo;
         _session.PlayTrack(track);
     }
 
     public void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
     {
+        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
         var list = items.ToList();
         if (startIndex >= 0 && startIndex < list.Count)
         {
@@ -106,6 +125,8 @@ public partial class PlaybackViewModel : ObservableObject
     public void PlayNextRange(IEnumerable<MediaItem> tracks) => _session.PlayNextRange(tracks);
 
     public void RemoveFromQueueAt(int index) => _session.RemoveFromQueueAt(index);
+    public void MoveQueueItem(int oldIndex, int newIndex) => _session.MoveQueueItem(oldIndex, newIndex);
+    public void ReorderQueue(IEnumerable<MediaItem> items) => _session.ReorderQueue(items);
 
     public void PlayQueueItemAt(int index)
     {
@@ -118,22 +139,27 @@ public partial class PlaybackViewModel : ObservableObject
 
     private void SyncFromSession()
     {
-        CurrentTrack = _session.CurrentTrack;
-        OnPropertyChanged(nameof(CurrentTrack)); // Force update in case properties like Duration mutated in-place
+        if (CurrentTrack != _session.CurrentTrack)
+        {
+            CurrentTrack = _session.CurrentTrack;
+        }
+        else
+        {
+            OnPropertyChanged(nameof(CurrentTrack)); // Force update in case properties like Duration mutated in-place
+        }
 
         IsPlaying = _session.IsPlaying;
         PositionSeconds = _session.PositionSeconds;
         Volume = _session.Volume;
         IsMuted = _session.IsMuted;
+        IsShuffleEnabled = _session.IsShuffleEnabled;
+        RepeatMode = _session.RepeatMode;
         Queue = _session.Queue.ToList();
 
-        if (CurrentTrack == null || !CurrentTrack.IsVideo)
+        bool isVideo = CurrentTrack != null && CurrentTrack.IsVideo;
+        if (IsVideoPlayerActive != isVideo)
         {
-            IsVideoPlayerActive = false;
-        }
-        else
-        {
-            IsVideoPlayerActive = true;
+            IsVideoPlayerActive = isVideo;
         }
     }
 }

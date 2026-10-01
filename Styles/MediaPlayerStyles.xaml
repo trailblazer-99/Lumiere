@@ -1,10 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers">
 
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C5FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#4C202020" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#202020" />
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#20FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ButtonBorderBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#22FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="#1FFFFFFF" />
+            <LinearGradientBrush x:Key="TextControlElevationBorderFocusedBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,2">
+                <LinearGradientBrush.RelativeTransform>
+                    <ScaleTransform ScaleY="-1" CenterY="0.5" />
+                </LinearGradientBrush.RelativeTransform>
+                <LinearGradientBrush.GradientStops>
+                    <GradientStop Offset="1.0" Color="{ThemeResource SystemAccentColorLight2}" />
+                    <GradientStop Offset="1.0" Color="#1FFFFFFF" />
+                </LinearGradientBrush.GradientStops>
+            </LinearGradientBrush>
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="TextControlElevationBorderFocusedBrush" />
+            <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemAccentColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemAccentColorLight1}" />
             <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemAccentColorLight2}" />
@@ -22,6 +59,79 @@
             <StaticResource x:Key="SliderThumbBackground" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="AccentFillColorDefaultBrush" />
+            <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+            <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+            <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Default) -->
+            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
+
+            <!-- Selection Ribbon Elevated Background (Default/Dark) -->
+            <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
+
+            <!-- Volume Flyout Dynamic Theming Brushes (Default/Dark) -->
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
+
+            <!-- Expander Fluent 2 Theme Brushes (Default) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#1AFFFFFF" />
+
+            <!-- Explicit Slider Transparent Container Brushes -->
+            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+
+            <!-- ScrollBar Fluent 2 Neutral Brushes (Default) -->
+            <Color x:Key="ScrollBarThumbBackgroundColor">#8BFFFFFF</Color>
+            <Color x:Key="ScrollBarPanningThumbBackgroundColor">#8BFFFFFF</Color>
+            <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#A5FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#C0FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackgroundDisabled" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbBorderBrush" Color="Transparent" />
+
+            <!-- Legacy UWP ScrollBar Brushes (Default) -->
+            <SolidColorBrush x:Key="ScrollBarThumbBackgroundThemeBrush" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbPointerOverBackgroundThemeBrush" Color="#A5FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbPressedBackgroundThemeBrush" Color="#C0FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningBackgroundThemeBrush" Color="#8BFFFFFF" />
+
+            <!-- ScrollBar Track Brushes (Default) -->
+            <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokeDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBackgroundThemeBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBorderThemeBrush" Color="Transparent" />
+
+            <!-- ScrollBar Container Brushes (Default) -->
+            <SolidColorBrush x:Key="ScrollBarBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushDisabled" Color="Transparent" />
             
             <!-- Override MediaPlayer backgrounds to pure black -->
             <SolidColorBrush x:Key="MediaPlayerPresenterBackgroundBrush" Color="Black" />
@@ -74,6 +184,42 @@
             </Style>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#E4000000" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#9E000000" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#28FFFFFF" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#18000000" />
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#48FFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#30FFFFFF" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#18000000" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#10000000" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#F3F3F3" />
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="#48FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#30FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#18000000" />
+            <SolidColorBrush x:Key="ButtonBackground" Color="#48FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#30FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBorderBrush" Color="#18000000" />
+            <SolidColorBrush x:Key="TextControlBackground" Color="#48FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#70FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="#18000000" />
+            <LinearGradientBrush x:Key="TextControlElevationBorderFocusedBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,2">
+                <LinearGradientBrush.RelativeTransform>
+                    <ScaleTransform ScaleY="-1" CenterY="0.5" />
+                </LinearGradientBrush.RelativeTransform>
+                <LinearGradientBrush.GradientStops>
+                    <GradientStop Offset="1.0" Color="{ThemeResource SystemAccentColorDark1}" />
+                    <GradientStop Offset="1.0" Color="#18000000" />
+                </LinearGradientBrush.GradientStops>
+            </LinearGradientBrush>
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="TextControlElevationBorderFocusedBrush" />
+            <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemAccentColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemAccentColorLight1}" />
             <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemAccentColorLight2}" />
@@ -91,6 +237,79 @@
             <StaticResource x:Key="SliderThumbBackground" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="AccentFillColorDefaultBrush" />
+            <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+            <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+            <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Light) -->
+            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FAFCFCFE" />
+            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FAFCFCFE" />
+            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FAFCFCFE" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FAFCFCFE" />
+            <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FAFCFCFE" />
+
+            <!-- Selection Ribbon Elevated Background (Light) -->
+            <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6F5F5FA" />
+
+            <!-- Volume Flyout Dynamic Theming Brushes (Light) -->
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FAFCFCFE" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#18000000" />
+
+            <!-- Expander Fluent 2 Theme Brushes (Light) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#30FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#18000000" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#18000000" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#18000000" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#18000000" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="#28FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#18000000" />
+
+            <!-- Explicit Slider Transparent Container Brushes -->
+            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+
+            <!-- ScrollBar Fluent 2 Neutral Brushes (Light) -->
+            <Color x:Key="ScrollBarThumbBackgroundColor">#72000000</Color>
+            <Color x:Key="ScrollBarPanningThumbBackgroundColor">#72000000</Color>
+            <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#72000000" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#72000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#72000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#8A000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#9E000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="#40000000" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackgroundDisabled" Color="#40000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbBorderBrush" Color="Transparent" />
+
+            <!-- Legacy UWP ScrollBar Brushes (Light) -->
+            <SolidColorBrush x:Key="ScrollBarThumbBackgroundThemeBrush" Color="#72000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbPointerOverBackgroundThemeBrush" Color="#8A000000" />
+            <SolidColorBrush x:Key="ScrollBarThumbPressedBackgroundThemeBrush" Color="#9E000000" />
+            <SolidColorBrush x:Key="ScrollBarPanningBackgroundThemeBrush" Color="#72000000" />
+
+            <!-- ScrollBar Track Brushes (Light) -->
+            <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokeDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBackgroundThemeBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBorderThemeBrush" Color="Transparent" />
+
+            <!-- ScrollBar Container Brushes (Light) -->
+            <SolidColorBrush x:Key="ScrollBarBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushDisabled" Color="Transparent" />
             
             <!-- Override MediaPlayer backgrounds to pure black -->
             <SolidColorBrush x:Key="MediaPlayerPresenterBackgroundBrush" Color="Black" />
@@ -143,6 +362,42 @@
             </Style>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C5FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#4C202020" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#202020" />
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#20FFFFFF" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0CFFFFFF" />
+            <SolidColorBrush x:Key="ButtonBorderBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#22FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="#1FFFFFFF" />
+            <LinearGradientBrush x:Key="TextControlElevationBorderFocusedBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,2">
+                <LinearGradientBrush.RelativeTransform>
+                    <ScaleTransform ScaleY="-1" CenterY="0.5" />
+                </LinearGradientBrush.RelativeTransform>
+                <LinearGradientBrush.GradientStops>
+                    <GradientStop Offset="1.0" Color="{ThemeResource SystemAccentColorLight2}" />
+                    <GradientStop Offset="1.0" Color="#1FFFFFFF" />
+                </LinearGradientBrush.GradientStops>
+            </LinearGradientBrush>
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="TextControlElevationBorderFocusedBrush" />
+            <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemAccentColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemAccentColorLight1}" />
             <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemAccentColorLight2}" />
@@ -160,6 +415,79 @@
             <StaticResource x:Key="SliderThumbBackground" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
             <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="AccentFillColorDefaultBrush" />
+            <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+            <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+            <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Dark) -->
+            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
+
+            <!-- Selection Ribbon Elevated Background (Dark) -->
+            <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
+
+            <!-- Volume Flyout Dynamic Theming Brushes (Dark) -->
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
+
+            <!-- Expander Fluent 2 Theme Brushes (Dark) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#1CFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#0EFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#1AFFFFFF" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="#08FFFFFF" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#1AFFFFFF" />
+
+            <!-- Explicit Slider Transparent Container Brushes -->
+            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+
+            <!-- ScrollBar Fluent 2 Neutral Brushes (Dark) -->
+            <Color x:Key="ScrollBarThumbBackgroundColor">#8BFFFFFF</Color>
+            <Color x:Key="ScrollBarPanningThumbBackgroundColor">#8BFFFFFF</Color>
+            <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#A5FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#C0FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackgroundDisabled" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbBorderBrush" Color="Transparent" />
+
+            <!-- Legacy UWP ScrollBar Brushes (Dark) -->
+            <SolidColorBrush x:Key="ScrollBarThumbBackgroundThemeBrush" Color="#8BFFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbPointerOverBackgroundThemeBrush" Color="#A5FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarThumbPressedBackgroundThemeBrush" Color="#C0FFFFFF" />
+            <SolidColorBrush x:Key="ScrollBarPanningBackgroundThemeBrush" Color="#8BFFFFFF" />
+
+            <!-- ScrollBar Track Brushes (Dark) -->
+            <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokeDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBackgroundThemeBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBorderThemeBrush" Color="Transparent" />
+
+            <!-- ScrollBar Container Brushes (Dark) -->
+            <SolidColorBrush x:Key="ScrollBarBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushDisabled" Color="Transparent" />
             
             <!-- Override MediaPlayer backgrounds to pure black -->
             <SolidColorBrush x:Key="MediaPlayerPresenterBackgroundBrush" Color="Black" />
@@ -211,7 +539,226 @@
                 </Setter>
             </Style>
         </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ButtonBackground" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ButtonBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TextControlBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="TextControlElevationBorderFocusedBrush" />
+            <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="AccentFillColorTertiaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="AccentFillColorTertiaryBrush" />
+
+            <StaticResource x:Key="SliderTrackValueFill" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="SliderTrackValueFillPointerOver" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="SliderTrackValueFillPressed" ResourceKey="AccentFillColorTertiaryBrush" />
+            <StaticResource x:Key="SliderThumbBackground" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="AccentFillColorDefaultBrush" />
+            <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+            <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+            <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+            <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="{ThemeResource SystemColorWindowColor}" />
+
+            <!-- Selection Ribbon Elevated Background (HighContrast) -->
+            <SolidColorBrush x:Key="SelectionRibbonBackground" Color="{ThemeResource SystemColorWindowColor}" />
+
+            <!-- Volume Flyout Dynamic Theming Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+            <!-- Expander Fluent 2 Theme Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="ExpanderContentBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+            <!-- Explicit Slider Transparent Container Brushes -->
+            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+
+            <!-- ScrollBar Fluent 2 Brushes (HighContrast) -->
+            <Color x:Key="ScrollBarThumbBackgroundColor">{ThemeResource SystemColorButtonTextColor}</Color>
+            <Color x:Key="ScrollBarPanningThumbBackgroundColor">{ThemeResource SystemColorButtonTextColor}</Color>
+            <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarPanningThumbBackgroundDisabled" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbBorderBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+
+            <!-- Legacy UWP ScrollBar Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="ScrollBarThumbBackgroundThemeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbPointerOverBackgroundThemeBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ScrollBarThumbPressedBackgroundThemeBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="ScrollBarPanningBackgroundThemeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+
+            <!-- ScrollBar Track Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackFillDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarTrackStrokeDisabled" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="ScrollBarTrackBackgroundThemeBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarTrackBorderThemeBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+            <!-- ScrollBar Container Brushes (HighContrast) -->
+            <SolidColorBrush x:Key="ScrollBarBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ScrollBarBorderBrushDisabled" Color="Transparent" />
+
+            <!-- MediaPlayer backgrounds in High Contrast -->
+            <SolidColorBrush x:Key="MediaPlayerPresenterBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="MediaPlayerBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+        </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         FALLBACK ROOT BRUSHES (SLIDERS & SCROLLBARS)
+         Ensures transparent slider containers and neutral scrollbars regardless of theme dictionary resolution
+    ═══════════════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+    <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+    <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+    <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+    <SolidColorBrush x:Key="ControlFillColorTransparentBrush" Color="Transparent" />
+    <SolidColorBrush x:Key="SystemControlTransparentBrush" Color="Transparent" />
+
+    <!-- Fallback Slider Circular Thumb Dimensions -->
+    <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+    <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+    <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+    <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+    <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+    <!-- Default Slider Style: provides 10px horizontal padding and enforces circular thumbs everywhere -->
+    <Style TargetType="Slider">
+        <Setter Property="Padding" Value="8,0,8,0" />
+        <Setter Property="helpers:SliderHelper.MakeThumbCircular" Value="True" />
+    </Style>
+
+
+    <!-- Fallback Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes -->
+    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
+    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
+    <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
+
+    <!-- Fallback Volume Flyout Surface & Border Brushes -->
+    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+    <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
+
+    <!-- Fallback Selection Ribbon Elevated Background -->
+    <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
+
+    <!-- Semantic & Brand Icon Brushes (Fluent Design System 2) -->
+    <SolidColorBrush x:Key="FavoriteIconBrush" Color="#FFFF3B5C" />
+    <SolidColorBrush x:Key="YouTubeBrandBrush" Color="#FFFF0000" />
+    <SolidColorBrush x:Key="TwitchBrandBrush" Color="#FF9146FF" />
+    <SolidColorBrush x:Key="HdrStatusGoldBrush" Color="#FFE6C800" />
+
+    <!-- Fallback Focused TextControl / AutoSuggestBox Bottom Accent Line -->
+    <LinearGradientBrush x:Key="TextControlElevationBorderFocusedBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,2">
+        <LinearGradientBrush.RelativeTransform>
+            <ScaleTransform ScaleY="-1" CenterY="0.5" />
+        </LinearGradientBrush.RelativeTransform>
+        <LinearGradientBrush.GradientStops>
+            <GradientStop Offset="1.0" Color="{ThemeResource SystemAccentColorLight2}" />
+            <GradientStop Offset="1.0" Color="#1FFFFFFF" />
+        </LinearGradientBrush.GradientStops>
+    </LinearGradientBrush>
+    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="TextControlElevationBorderFocusedBrush" />
+    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemAccentColor}" />
+    <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemAccentColor}" />
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         GLOBAL TRANSIENT FLYOUT & POPUP STYLES (FLUENT 2)
+         Ensures all standard Flyouts and MenuFlyouts render with elevated surface material
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource FlyoutPresenterBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CINEMATIC FLYOUT & POPUP STYLES (MATCHES GLOBAL FLYOUT ELEVATION)
+         Ensures transport bar flyouts always render cohesively
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style x:Key="CinematicFlyoutPresenterStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource FlyoutPresenterBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style x:Key="CinematicMenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
          GLOBAL TRANSITIONS
@@ -263,11 +810,11 @@
     <!-- ═══════════════════════════════════════════════════════════════
          CORNER RADIUS SCALE
     ═══════════════════════════════════════════════════════════════ -->
-    <x:Double x:Key="CardCornerRadius">12</x:Double>
-    <CornerRadius x:Key="CardCornerRadiusFull">12</CornerRadius>
+    <x:Double x:Key="CardCornerRadius">8</x:Double>
+    <CornerRadius x:Key="CardCornerRadiusFull">8</CornerRadius>
     <CornerRadius x:Key="SmallCornerRadius">4</CornerRadius>
-    <x:Double x:Key="AlbumArtCornerRadius">12</x:Double>
-    <CornerRadius x:Key="AlbumArtCornerRadiusFull">12</CornerRadius>
+    <x:Double x:Key="AlbumArtCornerRadius">8</x:Double>
+    <CornerRadius x:Key="AlbumArtCornerRadiusFull">8</CornerRadius>
     <CornerRadius x:Key="LargeCornerRadius">12</CornerRadius>
     <CornerRadius x:Key="RoundCornerRadius">9999</CornerRadius>
 
@@ -275,22 +822,32 @@
          TYPOGRAPHY SCALE
          Follows WinUI 3 type ramp with added display sizes
     ═══════════════════════════════════════════════════════════════ -->
-    <Style x:Key="DisplayTextStyle" TargetType="TextBlock">
+    <Style x:Key="DisplayTextStyle" TargetType="TextBlock" BasedOn="{StaticResource TitleLargeTextBlockStyle}">
         <Setter Property="FontSize" Value="40" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="LineHeight" Value="48" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
     </Style>
 
-    <Style x:Key="PageTitleTextStyle" TargetType="TextBlock">
+    <Style x:Key="PageTitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource TitleTextBlockStyle}">
         <Setter Property="FontSize" Value="28" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="LineHeight" Value="36" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
     </Style>
 
-    <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock">
+    <Style x:Key="SubtitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource SubtitleTextBlockStyle}">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LineHeight" Value="28" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+        <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
+    </Style>
+
+    <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="LineHeight" Value="20" />
@@ -299,28 +856,51 @@
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
     </Style>
 
-    <Style x:Key="BodyStrongTextStyle" TargetType="TextBlock">
+    <Style x:Key="BodyStrongTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
     </Style>
 
-    <Style x:Key="BodyTextStyle" TargetType="TextBlock">
+    <Style x:Key="BodyTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="Normal" />
         <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
     </Style>
 
-    <Style x:Key="SubtleCaptionTextStyle" TargetType="TextBlock">
+    <Style x:Key="CaptionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style x:Key="SubtleCaptionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
     </Style>
 
-    <Style x:Key="PageSubtitleTextStyle" TargetType="TextBlock">
+    <Style x:Key="PageSubtitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
         <Setter Property="LineHeight" Value="20" />
     </Style>
+
+    <!-- Dedicated Settings Card Title style conforming to WinUI 3 Fluent 2 type ramp -->
+    <Style x:Key="SettingsCardTitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Default Page style ensuring transparent background for window system backdrops (Acrylic & Mica) -->
+    <Style TargetType="Page">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
 
     <!-- ═══════════════════════════════════════════════════════════════
          CARD STYLES
@@ -350,6 +930,29 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="16,12" />
         <Setter Property="MinHeight" Value="64" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="SettingsCardTopStyle" TargetType="Border" BasedOn="{StaticResource SettingsCardStyle}">
+        <Setter Property="CornerRadius" Value="8,8,0,0" />
+        <Setter Property="BorderThickness" Value="1,1,1,0" />
+    </Style>
+
+    <Style x:Key="SettingsCardMiddleStyle" TargetType="Border" BasedOn="{StaticResource SettingsCardStyle}">
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="BorderThickness" Value="1,1,1,0" />
+    </Style>
+
+    <Style x:Key="SettingsCardBottomStyle" TargetType="Border" BasedOn="{StaticResource SettingsCardStyle}">
+        <Setter Property="CornerRadius" Value="0,0,8,8" />
+        <Setter Property="BorderThickness" Value="1,1,1,1" />
+    </Style>
+
+    <Style x:Key="SettingsExpanderStyle" TargetType="Expander">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="MinHeight" Value="64" />
     </Style>
 
     <Style x:Key="SettingsActionButtonStyle" TargetType="Button">
@@ -368,11 +971,13 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Implicit style for ToggleSwitches to keep them aligned uniformly on the right with MinWidth="0" -->
-    <Style TargetType="ToggleSwitch">
+    <!-- Implicit style for ToggleSwitches to keep them aligned uniformly on the right with MinWidth="0" and compact Windows default size without redundant On/Off labels -->
+    <Style TargetType="ToggleSwitch" BasedOn="{StaticResource DefaultToggleSwitchStyle}">
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="OnContent" Value="{x:Null}" />
+        <Setter Property="OffContent" Value="{x:Null}" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
@@ -509,24 +1114,18 @@
                             <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
                         </Grid.RenderTransform>
                         
-                        <!-- Outer Gradient Ring -->
+                        <!-- Outer Ring with Dynamic Accent -->
                         <Border x:Name="OuterRing"
                                 Width="44"
                                 Height="44"
                                 CornerRadius="22"
-                                BorderThickness="2">
-                            <Border.BorderBrush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#FFF76B1C" Offset="0.0" />
-                                    <GradientStop Color="#FFE2338A" Offset="0.5" />
-                                    <GradientStop Color="#FF8433E2" Offset="1.0" />
-                                </LinearGradientBrush>
-                            </Border.BorderBrush>
+                                BorderThickness="2"
+                                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}">
                             
                             <!-- Inner Circle -->
                             <Grid x:Name="InnerCircle"
                                   CornerRadius="20"
-                                  Background="#FF2A2A2D">
+                                  Background="{ThemeResource ControlFillColorDefaultBrush}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
@@ -573,6 +1172,12 @@
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource SystemControlFocusVisualSecondaryBrush}" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="2" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="1" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -604,7 +1209,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadiusFull}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="GridViewItem">
@@ -621,7 +1226,7 @@
                         SelectedForeground="{TemplateBinding Foreground}"
                         FocusBorderBrush="Transparent"
                         SelectedBorderThickness="0"
-                        CornerRadius="12" />
+                        CornerRadius="{StaticResource CardCornerRadiusFull}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -733,6 +1338,15 @@
         <Setter Property="Padding" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         PROGRESS RING GLOBAL ACCENT STYLE
+         Matches the app accent color and defaults to active
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style TargetType="ProgressRing">
+        <Setter Property="Foreground" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+        <Setter Property="IsActive" Value="True" />
     </Style>
 
 </ResourceDictionary>

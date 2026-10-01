@@ -67,22 +67,32 @@ public sealed partial class TransportBar : UserControl
     public event EventHandler? FullscreenRequested;
     public event EventHandler? TrackClicked;
     public event EventHandler? InfoButtonClicked;
+    public event EventHandler? ShuffleRequested;
+    public event EventHandler? RepeatRequested;
 
     public TransportBar()
     {
         InitializeComponent();
         try { if (Player != null) Player.Source = new LottieLogo1(); } catch { }
-        ActualThemeChanged += (_, _) => UpdateAcrylicBackground();
+        ActualThemeChanged += (_, _) =>
+        {
+            UpdateAcrylicBackground();
+            ApplyVolumeFlyoutTheming();
+        };
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
+        ApplyVolumeFlyoutTheming();
         SyncVolumeUi();
         Loaded += (_, _) =>
         {
             SyncVolumeUi();
+            ApplyVolumeFlyoutTheming();
             if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
             {
                 HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
             }
+            EnsureSliderHaloUnclipped(ProgressSlider);
+            EnsureSliderHaloUnclipped(VolumeSlider);
         };
 
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
@@ -278,7 +288,7 @@ public sealed partial class TransportBar : UserControl
         if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
         if (ArtImage != null)
         {
-            var imgSource = Helpers.ImageBindHelper.SafeImageFromUrl(CurrentTrack.PosterUrl);
+            var imgSource = Helpers.ImageBindHelper.SafeImageFromUrl(CurrentTrack.PosterUrl, 64);
             ArtImage.Source = imgSource;
             ArtImage.Visibility = imgSource != null ? Visibility.Visible : Visibility.Collapsed;
             if (FallbackIcon != null)
@@ -404,6 +414,79 @@ public sealed partial class TransportBar : UserControl
     private void OnStopClick(object sender, RoutedEventArgs e) => StopRequested?.Invoke(this, EventArgs.Empty);
     private void OnPreviousClick(object sender, RoutedEventArgs e) => PreviousRequested?.Invoke(this, EventArgs.Empty);
     private void OnNextClick(object sender, RoutedEventArgs e) => NextRequested?.Invoke(this, EventArgs.Empty);
+    private void OnShuffleClick(object sender, RoutedEventArgs e) => ShuffleRequested?.Invoke(this, EventArgs.Empty);
+    private void OnRepeatClick(object sender, RoutedEventArgs e) => RepeatRequested?.Invoke(this, EventArgs.Empty);
+
+    private bool _isShuffleEnabled;
+    public bool IsShuffleEnabled
+    {
+        get => _isShuffleEnabled;
+        set
+        {
+            if (_isShuffleEnabled != value)
+            {
+                _isShuffleEnabled = value;
+                UpdateShuffleVisual();
+            }
+        }
+    }
+
+    private PlaybackRepeatMode _repeatMode = PlaybackRepeatMode.Off;
+    public PlaybackRepeatMode RepeatMode
+    {
+        get => _repeatMode;
+        set
+        {
+            if (_repeatMode != value)
+            {
+                _repeatMode = value;
+                UpdateRepeatVisual();
+            }
+        }
+    }
+
+    private void UpdateShuffleVisual()
+    {
+        if (ShuffleIcon == null) return;
+        if (_isShuffleEnabled)
+        {
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+            ToolTipService.SetToolTip(ShuffleButton, "Shuffle: On");
+        }
+        else
+        {
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") 
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+            ToolTipService.SetToolTip(ShuffleButton, "Shuffle: Off");
+        }
+    }
+
+    private void UpdateRepeatVisual()
+    {
+        if (RepeatIcon == null) return;
+        switch (_repeatMode)
+        {
+            case PlaybackRepeatMode.Off:
+                RepeatIcon.Glyph = "\uE8EE";
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                ToolTipService.SetToolTip(RepeatButton, "Repeat: Off");
+                break;
+            case PlaybackRepeatMode.All:
+                RepeatIcon.Glyph = "\uE8EE";
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+                ToolTipService.SetToolTip(RepeatButton, "Repeat: All");
+                break;
+            case PlaybackRepeatMode.One:
+                RepeatIcon.Glyph = "\uE8ED";
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+                ToolTipService.SetToolTip(RepeatButton, "Repeat: One");
+                break;
+        }
+    }
     private void OnQueueClick(object sender, RoutedEventArgs e) => QueueRequested?.Invoke(this, EventArgs.Empty);
     private void OnPipClick(object sender, RoutedEventArgs e) => PipRequested?.Invoke(this, EventArgs.Empty);
     private void OnFullscreenClick(object sender, RoutedEventArgs e)
@@ -638,18 +721,24 @@ public sealed partial class TransportBar : UserControl
 
     public void RefreshTheme()
     {
-        UpdateAcrylicBackground();
         UpdateFullscreenFontColors(_isFullscreenPresentation);
+        UpdateAcrylicBackground();
+        ApplyVolumeFlyoutTheming();
+        if (HoverPreviewPopup != null)
+        {
+            HoverPreviewPopup.RequestedTheme = RequestedTheme;
+            if (HoverPreviewPopup.Child is FrameworkElement popupContent)
+            {
+                popupContent.RequestedTheme = RequestedTheme;
+            }
+        }
     }
 
     private void UpdateFullscreenFontColors(bool isFullscreen)
     {
-        var elementTheme = isFullscreen ? ElementTheme.Dark : (AppServices.Settings.Current.Theme switch
-        {
-            AppThemeOption.Light => ElementTheme.Light,
-            AppThemeOption.Dark => ElementTheme.Dark,
-            _ => Application.Current.RequestedTheme == ApplicationTheme.Light ? ElementTheme.Light : ElementTheme.Dark
-        });
+        ElementTheme elementTheme = isFullscreen
+            ? ElementTheme.Dark
+            : ThemeHelper.GetEffectiveElementTheme();
 
         RequestedTheme = elementTheme;
         if (BarGrid != null)
@@ -699,6 +788,12 @@ public sealed partial class TransportBar : UserControl
             if (FullscreenButton != null) FullscreenButton.Foreground = whiteBrush;
             if (PipButton != null) PipButton.Foreground = whiteBrush;
             if (MoreButton != null) MoreButton.Foreground = whiteBrush;
+            if (PlayPauseButton != null) PlayPauseButton.Foreground = whiteBrush;
+            if (PlayPauseIcon != null) PlayPauseIcon.Foreground = whiteBrush;
+            if (ReplayButton != null) ReplayButton.Foreground = whiteBrush;
+            if (ReplayIcon != null) ReplayIcon.Foreground = whiteBrush;
+            if (StopButton != null) StopButton.Foreground = whiteBrush;
+            if (StopIcon != null) StopIcon.Foreground = whiteBrush;
 
             // Traverse entire visual tree to catch any other controls/presenters
             if (BarGrid != null)
@@ -730,6 +825,9 @@ public sealed partial class TransportBar : UserControl
             PipIcon?.ClearValue(FontIcon.ForegroundProperty);
             MoreIcon?.ClearValue(FontIcon.ForegroundProperty);
             FallbackIcon?.ClearValue(FontIcon.ForegroundProperty);
+            PlayPauseIcon?.ClearValue(FontIcon.ForegroundProperty);
+            ReplayIcon?.ClearValue(FontIcon.ForegroundProperty);
+            StopIcon?.ClearValue(FontIcon.ForegroundProperty);
 
             // Clear buttons
             ShuffleButton?.ClearValue(Button.ForegroundProperty);
@@ -745,20 +843,14 @@ public sealed partial class TransportBar : UserControl
             FullscreenButton?.ClearValue(Button.ForegroundProperty);
             PipButton?.ClearValue(Button.ForegroundProperty);
             MoreButton?.ClearValue(Button.ForegroundProperty);
+            PlayPauseButton?.ClearValue(Button.ForegroundProperty);
+            ReplayButton?.ClearValue(Button.ForegroundProperty);
+            StopButton?.ClearValue(Button.ForegroundProperty);
 
             if (BarGrid != null)
             {
                 ApplyForegroundRecursively(BarGrid, false);
             }
-
-            // Play/Pause, Stop, and Replay buttons must ALWAYS retain white typography/icons whatsoever
-            var solidWhite = new SolidColorBrush(Microsoft.UI.Colors.White);
-            if (PlayPauseButton != null) PlayPauseButton.Foreground = solidWhite;
-            if (PlayPauseIcon != null) PlayPauseIcon.Foreground = solidWhite;
-            if (ReplayButton != null) ReplayButton.Foreground = solidWhite;
-            if (ReplayIcon != null) ReplayIcon.Foreground = solidWhite;
-            if (StopButton != null) StopButton.Foreground = solidWhite;
-            if (StopIcon != null) StopIcon.Foreground = solidWhite;
         }
     }
 
@@ -787,11 +879,7 @@ public sealed partial class TransportBar : UserControl
             }
             else if (child is FontIcon fi)
             {
-                if (fi.Name is "PlayPauseIcon" or "ReplayIcon" or "StopIcon")
-                {
-                    fi.Foreground = whiteBrush;
-                }
-                else if (isFullscreen)
+                if (isFullscreen)
                 {
                     fi.Foreground = whiteBrush;
                 }
@@ -802,11 +890,7 @@ public sealed partial class TransportBar : UserControl
             }
             else if (child is Button btn)
             {
-                if (btn.Name is "PlayPauseButton" or "ReplayButton" or "StopButton")
-                {
-                    btn.Foreground = whiteBrush;
-                }
-                else if (isFullscreen)
+                if (isFullscreen)
                 {
                     btn.Foreground = whiteBrush;
                 }
@@ -858,54 +942,54 @@ public sealed partial class TransportBar : UserControl
         }
         else if (AppServices.Settings.Current.AcrylicTransportBar)
         {
-            // Normal Windowed mode: Frosted Acrylic Glass material
+            // Normal Windowed mode: Frosted Acrylic Glass material allowing window backdrop to show through
             bool isLight = ActualTheme == ElementTheme.Light;
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            BarGrid.Translation = System.Numerics.Vector3.Zero;
+            try { BarGrid.Shadow = null; } catch { }
+
             BarGrid.Background = new AcrylicBrush
             {
                 TintColor = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 248)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 26),
-                TintOpacity = isLight ? 0.78 : 0.65,
-                TintLuminosityOpacity = isLight ? 0.85 : 0.72,
+                    ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
+                    : Microsoft.UI.ColorHelper.FromArgb(255, 18, 20, 26),
+                TintOpacity = isLight ? 0.15 : 0.18,
+                TintLuminosityOpacity = isLight ? 0.85 : 0.80,
                 FallbackColor = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 242)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 26)
+                    ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+                    : Microsoft.UI.ColorHelper.FromArgb(240, 24, 24, 30)
             };
 
-            if (Application.Current.Resources.TryGetValue("DividerStrokeColorDefaultBrush", out var dividerBrush) && dividerBrush is Brush borderB)
-            {
-                BarGrid.BorderBrush = borderB;
-            }
-            else
-            {
-                BarGrid.BorderBrush = new SolidColorBrush(isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
-                    : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255));
-            }
-            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            BarGrid.BorderBrush = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
+                : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
         }
         else
         {
-            // Normal Windowed mode: render the exact same theme and material as the application
-            if (Application.Current.Resources.TryGetValue("LayerFillColorDefaultBrush", out var layerBrush) && layerBrush is Brush bg)
+            // Normal Windowed mode: Follow active window backdrop theme
+            var backdrop = AppServices.Settings.Current.BackdropType;
+            bool isLight = ActualTheme == ElementTheme.Light;
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            BarGrid.Translation = System.Numerics.Vector3.Zero;
+            try { BarGrid.Shadow = null; } catch { }
+
+            if (backdrop == AppThemeBackdrop.Solid)
             {
-                BarGrid.Background = bg;
-            }
-            else if (Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out var cardBrush) && cardBrush is Brush bgCard)
-            {
-                BarGrid.Background = bgCard;
+                BarGrid.Background = ThemeResourceHelper.GetThemeBrush("SolidBackgroundFillColorBaseBrush");
             }
             else
             {
-                bool isLight = ActualTheme == ElementTheme.Light;
-                BarGrid.Background = new SolidColorBrush(isLight ? Microsoft.UI.Colors.White : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32));
+                // When backdrop is Mica, MicaAlt, or Acrylic: transparent allows the window backdrop material to flow through seamlessly
+                BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             }
 
-            if (Application.Current.Resources.TryGetValue("DividerStrokeColorDefaultBrush", out var dividerBrush) && dividerBrush is Brush borderB)
-            {
-                BarGrid.BorderBrush = borderB;
-            }
-            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            BarGrid.BorderBrush = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
+                : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
         }
     }
 
@@ -933,7 +1017,146 @@ public sealed partial class TransportBar : UserControl
 
     private void OnVolumeFlyoutOpening(object? sender, object? e)
     {
+        if (sender is Flyout f && f.Content is FrameworkElement fe)
+        {
+            fe.RequestedTheme = ThemeHelper.GetEffectiveElementTheme();
+        }
+        ApplyVolumeFlyoutTheming();
         SyncVolumeUi();
+    }
+
+    private void OnVolumeFlyoutOpened(object? sender, object? e)
+    {
+        ApplyVolumeFlyoutPresenterInstanceTheming();
+        EnsureSliderHaloUnclipped(VolumeSlider);
+    }
+
+    private static void EnsureSliderHaloUnclipped(Slider? slider)
+    {
+        if (slider == null) return;
+        SliderHelper.ApplyCircularThumb(slider);
+    }
+
+    private static T? FindVisualChildByName<T>(DependencyObject? parent, string name) where T : FrameworkElement
+    {
+        if (parent == null) return null;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T fe && fe.Name == name) return fe;
+            var result = FindVisualChildByName<T>(child, name);
+            if (result != null) return result;
+        }
+        return null;
+    }
+
+    public void ApplyVolumeFlyoutTheming()
+    {
+        if (VolumeFlyout == null) return;
+
+        // Re-apply the system backdrop to the volume flyout on every theme/backdrop change
+        // (FlyoutHelper.FollowBackdrop sets it initially and on Opening, but theme changes need a refresh)
+        ThemeHelper.ApplySystemBackdropToFlyout(VolumeFlyout);
+
+        ApplyVolumeFlyoutPresenterInstanceTheming();
+    }
+
+    private void ApplyVolumeFlyoutPresenterInstanceTheming()
+    {
+        if (VolumeFlyout == null) return;
+
+        var backdrop = AppServices.Settings.Current.BackdropType;
+        var effectiveTheme = ThemeHelper.GetEffectiveElementTheme();
+
+        // Use the centralized helper — tailored AcrylicBrush recipes for Mica (Mica sub visuals),
+        // MicaAlt, and Acrylic, and solid fill for Solid, consistent across all flyouts in the app.
+        Brush bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+        Brush borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
+
+        try
+        {
+            this.Resources["VolumeFlyoutPresenterBackground"] = bgBrush;
+            this.Resources["VolumeFlyoutPresenterBorderBrush"] = borderBrush;
+        }
+        catch { }
+
+        try
+        {
+            if (Application.Current != null)
+            {
+                Application.Current.Resources["VolumeFlyoutPresenterBackground"] = bgBrush;
+                Application.Current.Resources["VolumeFlyoutPresenterBorderBrush"] = borderBrush;
+            }
+        }
+        catch { }
+
+        try
+        {
+            var style = new Style(typeof(FlyoutPresenter));
+            if (Application.Current?.Resources.TryGetValue("DefaultFlyoutPresenterStyle", out var defStyle) == true && defStyle is Style baseStyle)
+            {
+                style.BasedOn = baseStyle;
+            }
+            style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(12, 8, 12, 8)));
+            style.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, bgBrush));
+            style.Setters.Add(new Setter(FlyoutPresenter.BorderBrushProperty, borderBrush));
+            style.Setters.Add(new Setter(FlyoutPresenter.BorderThicknessProperty, new Thickness(1)));
+            style.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
+            style.Setters.Add(new Setter(FlyoutPresenter.MinHeightProperty, 48.0));
+            style.Setters.Add(new Setter(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
+            style.Setters.Add(new Setter(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
+            VolumeFlyout.FlyoutPresenterStyle = style;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyVolumeFlyoutTheming] Style update failed: {ex.Message}");
+        }
+
+        try
+        {
+            FlyoutPresenter? presenter = null;
+            if (VolumeFlyout.Content is FrameworkElement fe)
+            {
+                if (fe.Parent is FlyoutPresenter fp)
+                {
+                    presenter = fp;
+                }
+                else
+                {
+                    DependencyObject? current = fe;
+                    while (current != null)
+                    {
+                        current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+                        if (current is FlyoutPresenter p)
+                        {
+                            presenter = p;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (presenter != null)
+            {
+                presenter.Background = bgBrush;
+                presenter.BorderBrush = borderBrush;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyVolumeFlyoutTheming] Presenter direct update failed: {ex.Message}");
+        }
+    }
+
+    private static void ApplyDarkThemeToMenuFlyout(MenuFlyout? mf)
+    {
+        ThemeHelper.ApplyDarkThemeToMenuFlyout(mf);
+    }
+
+    private static void ApplyDarkThemeToMenuItem(MenuFlyoutItemBase? item)
+    {
+        ThemeHelper.ApplyDarkThemeToMenuItem(item);
     }
 
     private void OnVolumeValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -977,17 +1200,41 @@ public sealed partial class TransportBar : UserControl
             };
         }
 
-        if (VolumeIcon != null) VolumeIcon.Glyph = glyph;
-        if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Glyph = glyph;
+        if (VolumeIcon != null)
+        {
+            VolumeIcon.Glyph = glyph;
+            if (!_isFullscreenPresentation)
+            {
+                VolumeIcon.Foreground = isSilenced
+                    ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
+                    : (ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White));
+            }
+        }
+        if (FlyoutVolumeIcon != null)
+        {
+            FlyoutVolumeIcon.Glyph = glyph;
+            FlyoutVolumeIcon.Foreground = isSilenced
+                ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
+                : (ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White));
+        }
     }
 
     private void OnSpeedClick(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuFlyoutItem item && item.Tag is string speedStr && double.TryParse(speedStr, out double speed))
+        if (sender is RadioMenuFlyoutItem radioItem && radioItem.Tag is string speedStr && double.TryParse(speedStr, out double speed))
         {
             try
             {
                 AppServices.Playback.MediaPlayer.PlaybackRate = speed;
+                radioItem.IsChecked = true;
+            }
+            catch { }
+        }
+        else if (sender is MenuFlyoutItem item && item.Tag is string speedStr2 && double.TryParse(speedStr2, out double speed2))
+        {
+            try
+            {
+                AppServices.Playback.MediaPlayer.PlaybackRate = speed2;
             }
             catch { }
         }
@@ -1088,7 +1335,7 @@ public sealed partial class TransportBar : UserControl
                         Text = $"{(int)gains[i]}dB",
                         FontSize = 10,
                         HorizontalAlignment = HorizontalAlignment.Center,
-                        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                        Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
                     };
                     cell.Children.Add(valueTexts[i]);
 
@@ -1114,6 +1361,7 @@ public sealed partial class TransportBar : UserControl
                         }
                     };
                     cell.Children.Add(sliders[i]);
+                    SliderHelper.ApplyCircularThumb(sliders[i]);
 
                     cell.Children.Add(new TextBlock
                     {
@@ -1161,7 +1409,7 @@ public sealed partial class TransportBar : UserControl
                     PrimaryButtonText = "Save",
                     CloseButtonText = "Cancel",
                     XamlRoot = this.XamlRoot,
-                    RequestedTheme = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light ? ElementTheme.Light : ElementTheme.Dark,
+                    RequestedTheme = ThemeHelper.GetEffectiveElementTheme(),
                     CornerRadius = new CornerRadius(8)
                 };
 
@@ -1187,7 +1435,7 @@ public sealed partial class TransportBar : UserControl
 
                 try
                 {
-                    await dialog.ShowAsync();
+                    await MediaFlyoutHelper.ShowDialogSafeAsync(dialog);
                 }
                 catch { }
             }
@@ -1208,7 +1456,7 @@ public sealed partial class TransportBar : UserControl
         {
             var picker = new CastingDevicePicker();
             var button = sender as FrameworkElement;
-            if (button != null)
+            if (button != null && button.IsLoaded && button.XamlRoot != null)
             {
                 var transform = button.TransformToVisual(null);
                 var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
@@ -1230,7 +1478,22 @@ public sealed partial class TransportBar : UserControl
 
         if (MenuPropertiesItem != null) MenuPropertiesItem.IsEnabled = hasMedia;
         if (MenuEqualiserItem != null) MenuEqualiserItem.IsEnabled = hasMedia;
-        if (MenuSpeedSubItem != null) MenuSpeedSubItem.IsEnabled = hasMedia;
+        if (MenuSpeedSubItem != null)
+        {
+            MenuSpeedSubItem.IsEnabled = hasMedia;
+            try
+            {
+                double currentRate = AppServices.Playback.MediaPlayer.PlaybackRate;
+                foreach (var subItem in MenuSpeedSubItem.Items)
+                {
+                    if (subItem is RadioMenuFlyoutItem radio && radio.Tag is string s && double.TryParse(s, out double rate))
+                    {
+                        radio.IsChecked = Math.Abs(rate - currentRate) < 0.05;
+                    }
+                }
+            }
+            catch { }
+        }
         if (MenuSleepTimerSubItem != null) MenuSleepTimerSubItem.IsEnabled = hasMedia;
         if (MenuCastItem != null) MenuCastItem.IsEnabled = hasMedia;
 
@@ -1259,6 +1522,15 @@ public sealed partial class TransportBar : UserControl
 
         OnAudioDevicesMenuOpening(sender, e);
         UpdateSleepTimerMenuChecks();
+
+        if (sender is MenuFlyout mf)
+        {
+            ApplyDarkThemeToMenuFlyout(mf);
+        }
+        else if (MoreButton?.Flyout is MenuFlyout bm)
+        {
+            ApplyDarkThemeToMenuFlyout(bm);
+        }
     }
 
     private async void OnAudioDevicesMenuOpening(object sender, object e)
@@ -1280,6 +1552,7 @@ public sealed partial class TransportBar : UserControl
                     {
                         var noDevicesItem = new MenuFlyoutItem { Text = "No audio devices available", IsEnabled = false };
                         AudioDevicesSubItem.Items.Add(noDevicesItem);
+                        ApplyDarkThemeToMenuItem(AudioDevicesSubItem);
                         return;
                     }
 
@@ -1309,6 +1582,7 @@ public sealed partial class TransportBar : UserControl
                     var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
                     AudioDevicesSubItem.Items.Add(errorItem);
                 }
+                ApplyDarkThemeToMenuItem(AudioDevicesSubItem);
             }
             catch (Exception ex)
             {
@@ -1351,6 +1625,7 @@ public sealed partial class TransportBar : UserControl
 
             MenuAspectRatioItem.Items.Add(item);
         }
+        ApplyDarkThemeToMenuItem(MenuAspectRatioItem);
     }
 
     private void OnZoomMenuOpening(object sender, object e)
@@ -1381,6 +1656,7 @@ public sealed partial class TransportBar : UserControl
 
             MenuZoomItem.Items.Add(item);
         }
+        ApplyDarkThemeToMenuItem(MenuZoomItem);
     }
 
     private void OnSubtitlesMenuOpening(object sender, object e)
@@ -1475,6 +1751,33 @@ public sealed partial class TransportBar : UserControl
         };
         SubtitlesMenuFlyout.Items.Add(chooseFileItem);
 
+        // Subtitle Delay adjustment submenu
+        var delaySubItem = new MenuFlyoutSubItem
+        {
+            Text = $"Subtitle delay: {(int)(playback.SubtitleDelaySeconds * 1000)} ms"
+        };
+        var minus500 = new MenuFlyoutItem { Text = "-500 ms" };
+        minus500.Click += (_, _) => playback.AdjustSubtitleDelay(-0.5);
+        delaySubItem.Items.Add(minus500);
+
+        var minus250 = new MenuFlyoutItem { Text = "-250 ms" };
+        minus250.Click += (_, _) => playback.AdjustSubtitleDelay(-0.25);
+        delaySubItem.Items.Add(minus250);
+
+        var resetDelay = new MenuFlyoutItem { Text = "Reset (0 ms)" };
+        resetDelay.Click += (_, _) => playback.AdjustSubtitleDelay(-playback.SubtitleDelaySeconds);
+        delaySubItem.Items.Add(resetDelay);
+
+        var plus250 = new MenuFlyoutItem { Text = "+250 ms" };
+        plus250.Click += (_, _) => playback.AdjustSubtitleDelay(0.25);
+        delaySubItem.Items.Add(plus250);
+
+        var plus500 = new MenuFlyoutItem { Text = "+500 ms" };
+        plus500.Click += (_, _) => playback.AdjustSubtitleDelay(0.5);
+        delaySubItem.Items.Add(plus500);
+
+        SubtitlesMenuFlyout.Items.Add(delaySubItem);
+
         var stylesSubItem = new MenuFlyoutSubItem
         {
             Text = "Subtitles styles"
@@ -1510,6 +1813,7 @@ public sealed partial class TransportBar : UserControl
         stylesSubItem.Items.Add(settingsItem);
 
         SubtitlesMenuFlyout.Items.Add(stylesSubItem);
+        ApplyDarkThemeToMenuFlyout(SubtitlesMenuFlyout);
     }
 
     private async Task PickAndLoadSubtitleFileAsync()
@@ -1573,12 +1877,15 @@ public sealed partial class TransportBar : UserControl
         AudioMenuFlyout.Items.Clear();
 
         var playback = AppServices.PlaybackViewModel.Session;
+        string? activeExtPath = playback.ExternalAudioTrackPath;
+        bool hasExtTrackActive = !string.IsNullOrEmpty(activeExtPath);
+
         if (playback.MediaPlayer.Source is MediaPlaybackItem playbackItem)
         {
             var tracks = playbackItem.AudioTracks;
             var selectedIndex = tracks.SelectedIndex;
 
-            if (tracks.Count == 0)
+            if (tracks.Count == 0 && !hasExtTrackActive)
             {
                 var noTracksItem = new MenuFlyoutItem { Text = "No audio tracks available", IsEnabled = false };
                 AudioMenuFlyout.Items.Add(noTracksItem);
@@ -1591,14 +1898,16 @@ public sealed partial class TransportBar : UserControl
                 var track = tracks[i];
                 var name = MediaTrackFormatHelper.FormatAudioTrack(track, i);
 
-                var trackItem = new ToggleMenuFlyoutItem
+                var trackItem = new RadioMenuFlyoutItem
                 {
                     Text = name,
-                    IsChecked = i == selectedIndex
+                    GroupName = "AudioTrackGroup",
+                    IsChecked = !hasExtTrackActive && (i == selectedIndex)
                 };
 
-                trackItem.Click += (s, args) =>
+                trackItem.Click += async (s, args) =>
                 {
+                    await playback.SetExternalAudioTrackAsync(null);
                     tracks.SelectedIndex = index;
                 };
 
@@ -1616,10 +1925,16 @@ public sealed partial class TransportBar : UserControl
 
                 foreach (var extTrack in externalAudio)
                 {
-                    var extItem = new ToggleMenuFlyoutItem
+                    var capturedTrack = extTrack;
+                    var extItem = new RadioMenuFlyoutItem
                     {
                         Text = extTrack.DisplayName,
-                        IsChecked = false
+                        GroupName = "AudioTrackGroup",
+                        IsChecked = hasExtTrackActive && string.Equals(activeExtPath, extTrack.FilePath, StringComparison.OrdinalIgnoreCase)
+                    };
+                    extItem.Click += async (s, args) =>
+                    {
+                        await playback.SetExternalAudioTrackAsync(capturedTrack.FilePath);
                     };
                     AudioMenuFlyout.Items.Add(extItem);
                 }
@@ -1630,6 +1945,7 @@ public sealed partial class TransportBar : UserControl
             var noMediaItem = new MenuFlyoutItem { Text = "No media loaded", IsEnabled = false };
             AudioMenuFlyout.Items.Add(noMediaItem);
         }
+        ApplyDarkThemeToMenuFlyout(AudioMenuFlyout);
     }
 
     private void OnProgressValueChanged(object sender, RangeBaseValueChangedEventArgs e) => OnProgressSliderValueChanged(sender, e);

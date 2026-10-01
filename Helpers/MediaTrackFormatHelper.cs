@@ -19,6 +19,7 @@ public class ContainerTrackInfo
     public int Channels = 0;
     public double SampleRate = 0;
     public int BitDepth = 0;
+    public double FrameRate = 0;
     public bool IsCommentary;
     public bool IsHearingImpaired;
     public bool IsVisualImpaired;
@@ -92,6 +93,19 @@ public static class MediaTrackFormatHelper
 
         lock (CacheLock)
         {
+            if (ContainerCache.Count >= 200)
+            {
+                var now = DateTime.UtcNow;
+                var expired = ContainerCache.Where(kvp => (now - kvp.Value.Loaded).TotalMinutes >= 30).Select(kvp => kvp.Key).ToList();
+                foreach (var k in expired) ContainerCache.Remove(k);
+
+                while (ContainerCache.Count >= 200)
+                {
+                    var oldestKey = ContainerCache.OrderBy(kvp => kvp.Value.Loaded).Select(kvp => kvp.Key).FirstOrDefault();
+                    if (oldestKey != null) ContainerCache.Remove(oldestKey);
+                    else break;
+                }
+            }
             ContainerCache[path] = (DateTime.UtcNow, tracks);
         }
 
@@ -426,24 +440,32 @@ public static class MediaTrackFormatHelper
         try
         {
             using var fs = File.OpenRead(path);
-            byte[] buf = new byte[Math.Min(fs.Length, 8 * 1024 * 1024)];
-            int read = fs.Read(buf, 0, buf.Length);
-
-            int pos = 0;
-            while (pos < read - 8)
+            int bufLen = (int)Math.Min(fs.Length, 8 * 1024 * 1024);
+            byte[] buf = System.Buffers.ArrayPool<byte>.Shared.Rent(bufLen);
+            try
             {
-                if (buf[pos] == 0x16 && buf[pos + 1] == 0x54 && buf[pos + 2] == 0xAE && buf[pos + 3] == 0x6B)
+                int read = fs.Read(buf, 0, bufLen);
+
+                int pos = 0;
+                while (pos < read - 8)
                 {
-                    int testPos = pos + 4;
-                    long tracksLen = ReadVInt(buf, ref testPos);
-                    if (tracksLen > 0 && testPos < read && buf[testPos] == 0xAE)
+                    if (buf[pos] == 0x16 && buf[pos + 1] == 0x54 && buf[pos + 2] == 0xAE && buf[pos + 3] == 0x6B)
                     {
-                        int tracksEnd = (int)Math.Min(read, testPos + tracksLen);
-                        ParseTracksInternal(buf, testPos, tracksEnd, list);
-                        if (list.Count > 0) break;
+                        int testPos = pos + 4;
+                        long tracksLen = ReadVInt(buf, ref testPos);
+                        if (tracksLen > 0 && testPos < read && buf[testPos] == 0xAE)
+                        {
+                            int tracksEnd = (int)Math.Min(read, testPos + tracksLen);
+                            ParseTracksInternal(buf, testPos, tracksEnd, list);
+                            if (list.Count > 0) break;
+                        }
                     }
+                    pos++;
                 }
-                pos++;
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buf);
             }
         }
         catch { }
@@ -518,8 +540,43 @@ public static class MediaTrackFormatHelper
                 case 0x88: // FlagDefault
                     t.IsDefault = ReadUint(buf, pos, (int)len) == 1;
                     break;
+                case 0x23E383: // DefaultDuration (nanoseconds per frame in MKV)
+                    long defDur = (long)ReadUint(buf, pos, (int)len);
+                    if (defDur > 0)
+                    {
+                        t.FrameRate = 1_000_000_000.0 / defDur;
+                    }
+                    break;
+                case 0xE0: // Video
+                    ParseVideoInternal(buf, pos, elemEnd, t);
+                    break;
                 case 0xE1: // Audio
                     ParseAudioInternal(buf, pos, elemEnd, t);
+                    break;
+            }
+            pos = elemEnd;
+        }
+    }
+
+    private static void ParseVideoInternal(byte[] buf, int start, int end, ContainerTrackInfo t)
+    {
+        int pos = start;
+        while (pos < end)
+        {
+            int elemId = ReadId(buf, ref pos);
+            if (elemId == 0) break;
+            long len = ReadVInt(buf, ref pos);
+            if (len < 0) break;
+            int elemEnd = (int)Math.Min(end, pos + len);
+
+            switch (elemId)
+            {
+                case 0x23E383: // DefaultDuration inside Video element
+                    long defDur = (long)ReadUint(buf, pos, (int)len);
+                    if (defDur > 0)
+                    {
+                        t.FrameRate = 1_000_000_000.0 / defDur;
+                    }
                     break;
             }
             pos = elemEnd;

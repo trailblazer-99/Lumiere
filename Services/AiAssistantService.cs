@@ -163,7 +163,7 @@ public static class AiAssistantService
                     if (!string.IsNullOrWhiteSpace(proxyToken))
                         request.Headers.Add("X-Lumiere-App-Token", proxyToken);
 
-                    var response = await _httpClient.SendAsync(request);
+                    using var response = await _httpClient.SendAsync(request);
                     if (response.IsSuccessStatusCode)
                     {
                         var responseJson = await response.Content.ReadAsStringAsync();
@@ -212,7 +212,7 @@ public static class AiAssistantService
                     using (var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content })
                     {
                         request.Headers.Add("x-goog-api-key", apiKey);
-                        var response = await _httpClient.SendAsync(request);
+                        using var response = await _httpClient.SendAsync(request);
                         if (response.IsSuccessStatusCode)
                         {
                             var responseJson = await response.Content.ReadAsStringAsync();
@@ -229,7 +229,7 @@ public static class AiAssistantService
                     string urlWithKey = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
                     using (var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json") })
                     {
-                        var responseKey = await _httpClient.SendAsync(requestKey);
+                        using var responseKey = await _httpClient.SendAsync(requestKey);
                         if (responseKey.IsSuccessStatusCode)
                         {
                             var responseJson = await responseKey.Content.ReadAsStringAsync();
@@ -284,42 +284,53 @@ public static class AiAssistantService
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
                 req.Headers.Add("x-goog-api-key", apiKey);
 
-                var resp = await _httpClient.SendAsync(req);
-                if (!resp.IsSuccessStatusCode)
+                using var resp1 = await _httpClient.SendAsync(req);
+                var respToUse = resp1;
+                HttpResponseMessage? resp2 = null;
+
+                if (!resp1.IsSuccessStatusCode)
                 {
                     using var reqKey = new HttpRequestMessage(HttpMethod.Get, $"{url}?key={Uri.EscapeDataString(apiKey)}");
-                    resp = await _httpClient.SendAsync(reqKey);
+                    resp2 = await _httpClient.SendAsync(reqKey);
+                    respToUse = resp2;
                 }
 
-                if (resp.IsSuccessStatusCode)
+                try
                 {
-                    var json = await resp.Content.ReadAsStringAsync();
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("models", out var modelsArr) && modelsArr.ValueKind == JsonValueKind.Array)
+                    if (respToUse.IsSuccessStatusCode)
                     {
-                        foreach (var m in modelsArr.EnumerateArray())
+                        var json = await respToUse.Content.ReadAsStringAsync();
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("models", out var modelsArr) && modelsArr.ValueKind == JsonValueKind.Array)
                         {
-                            if (m.TryGetProperty("name", out var nameProp))
+                            foreach (var m in modelsArr.EnumerateArray())
                             {
-                                string name = nameProp.GetString() ?? "";
-                                if (name.StartsWith("models/")) name = name.Substring("models/".Length);
-
-                                bool canGenerate = false;
-                                if (m.TryGetProperty("supportedGenerationMethods", out var methods) && methods.ValueKind == JsonValueKind.Array)
+                                if (m.TryGetProperty("name", out var nameProp))
                                 {
-                                    foreach (var method in methods.EnumerateArray())
+                                    string name = nameProp.GetString() ?? "";
+                                    if (name.StartsWith("models/")) name = name.Substring("models/".Length);
+
+                                    bool canGenerate = false;
+                                    if (m.TryGetProperty("supportedGenerationMethods", out var methods) && methods.ValueKind == JsonValueKind.Array)
                                     {
-                                        if (method.GetString() == "generateContent") { canGenerate = true; break; }
+                                        foreach (var method in methods.EnumerateArray())
+                                        {
+                                            if (method.GetString() == "generateContent") { canGenerate = true; break; }
+                                        }
                                     }
-                                }
 
-                                if (canGenerate && !string.IsNullOrWhiteSpace(name))
-                                {
-                                    result.Add((version, name));
+                                    if (canGenerate && !string.IsNullOrWhiteSpace(name))
+                                    {
+                                        result.Add((version, name));
+                                    }
                                 }
                             }
                         }
                     }
+                }
+                finally
+                {
+                    resp2?.Dispose();
                 }
             }
             catch { }
@@ -382,7 +393,7 @@ public static class AiAssistantService
                         using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
                         request.Headers.Add("x-goog-api-key", apiKey);
 
-                        var response = await _httpClient.SendAsync(request);
+                        using var response = await _httpClient.SendAsync(request);
                         geminiLatency = stopwatch.ElapsedMilliseconds;
 
                         if (response.IsSuccessStatusCode)
@@ -398,7 +409,7 @@ public static class AiAssistantService
                             // Try URL query param fallback
                             string urlWithKey = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
                             using var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json") };
-                            var responseKey = await _httpClient.SendAsync(requestKey);
+                            using var responseKey = await _httpClient.SendAsync(requestKey);
                             geminiLatency = stopwatch.ElapsedMilliseconds;
 
                             if (responseKey.IsSuccessStatusCode)
@@ -439,7 +450,7 @@ public static class AiAssistantService
                         using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
                         request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
 
-                        var response = await _httpClient.SendAsync(request);
+                        using var response = await _httpClient.SendAsync(request);
                         geminiLatency = stopwatch.ElapsedMilliseconds;
                         if (response.IsSuccessStatusCode)
                         {
@@ -460,7 +471,7 @@ public static class AiAssistantService
             {
                 using var pingReq = new HttpRequestMessage(HttpMethod.Get, "http://localhost:11434/api/tags");
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
-                var pingResp = await _httpClient.SendAsync(pingReq, cts.Token);
+                using var pingResp = await _httpClient.SendAsync(pingReq, cts.Token);
                 ollamaOk = pingResp.IsSuccessStatusCode;
             }
             catch { }
@@ -599,7 +610,7 @@ public static class AiAssistantService
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:11434/api/generate") { Content = content };
 
-        var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync();
@@ -701,7 +712,7 @@ public static class AiAssistantService
         string url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={langCode}&dt=t";
         var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("q", combined) });
 
-        var response = await _httpClient.PostAsync(url, content);
+        using var response = await _httpClient.PostAsync(url, content);
         response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync();

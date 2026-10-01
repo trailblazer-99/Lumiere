@@ -11,6 +11,8 @@ namespace LumiereMediaPlayer.Services;
 public interface IHistoryService
 {
     ObservableCollection<MediaItem> RecentlyPlayed { get; }
+    bool IsLoaded { get; }
+    event System.EventHandler? HistoryLoaded;
 
     Task LoadHistoryAsync();
     Task RemoveMissingItemsAsync();

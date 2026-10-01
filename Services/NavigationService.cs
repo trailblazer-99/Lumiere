@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
 using LumiereMediaPlayer.Models;
@@ -32,12 +33,6 @@ public class NavigationService : INavigationService
     {
         _navigationView = navigationView;
         _frame = frame;
-
-        if (_navigationView != null)
-        {
-            _navigationView.SelectionChanged -= OnSelectionChanged;
-            _navigationView.SelectionChanged += OnSelectionChanged;
-        }
     }
 
     private void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -82,23 +77,27 @@ public class NavigationService : INavigationService
                 _isNavigating = true;
                 NavigationTransitionInfo transitionInfo;
 
-                if (pageType == typeof(VideoPage) || pageType == typeof(NowPlayingPage))
-                {
-                    transitionInfo = new DrillInNavigationTransitionInfo();
-                }
-                else if (AppServices.Settings.Current.ReduceMotion)
+                if (AppServices.Settings.Current.ReduceMotion)
                 {
                     transitionInfo = new SuppressNavigationTransitionInfo();
                 }
                 else
                 {
-                    transitionInfo = new SlideNavigationTransitionInfo
-                    {
-                        Effect = SlideNavigationTransitionEffect.FromRight
-                    };
+                    transitionInfo = new EntranceNavigationTransitionInfo();
                 }
 
+                _frame.BackStack.Clear();
                 _frame.Navigate(pageType, parameter, transitionInfo);
+
+                if (IsStreamingSection(pageType) && _navigationView != null)
+                {
+                    _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
+                    _navigationView.IsPaneOpen = false;
+                    if (_navigationView.AutoSuggestBox != null)
+                    {
+                        _navigationView.AutoSuggestBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    }
+                }
             }
             catch (Exception ex)
             {

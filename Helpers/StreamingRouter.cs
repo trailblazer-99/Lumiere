@@ -89,7 +89,7 @@ namespace LumiereMediaPlayer.Helpers
                         {
                             return new Uri($"amazonvideo://watch?asin={asin}");
                         }
-                        var q = query["q"] ?? query["k"] ?? query["phrase"];
+                        var q = query["q"] ?? query["k"] ?? query["phrase"] ?? query["search_query"] ?? query["keywords"] ?? query["term"] ?? query["query"];
                         if (!string.IsNullOrEmpty(q))
                         {
                             return new Uri($"primevideo://search?q={Uri.EscapeDataString(q)}");
@@ -425,6 +425,11 @@ namespace LumiereMediaPlayer.Helpers
                     }
                 }
 
+                else if (host.Contains("spotify.com") && !uri.AbsolutePath.Contains("/search", StringComparison.OrdinalIgnoreCase))
+                {
+                    return SpotifyDeepLinkHelper.CleanSpotifyUrl(webLink);
+                }
+
                 return webLink;
             }
             catch
@@ -435,6 +440,21 @@ namespace LumiereMediaPlayer.Helpers
 
         public static async System.Threading.Tasks.Task LaunchStreamUriAsync(Uri? nativeUri, string fallbackCleanUrl)
         {
+            bool isAppleTv = (nativeUri != null && nativeUri.Scheme.Equals("videos", StringComparison.OrdinalIgnoreCase)) ||
+                             (!string.IsNullOrEmpty(fallbackCleanUrl) && (fallbackCleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || fallbackCleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase)));
+
+            if (isAppleTv)
+            {
+                try
+                {
+                    LumiereMediaPlayer.Services.AppleTvLifecycleService.Instance.NotifyAppleTvLaunched();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StreamingRouter] Failed to notify Apple TV lifecycle: {ex.Message}");
+                }
+            }
+
             if (nativeUri != null && nativeUri.Scheme == "videos" && nativeUri.Query.Contains("term=", StringComparison.OrdinalIgnoreCase))
             {
                 var qMatch = Regex.Match(nativeUri.Query, @"[?&]term=([^&]+)", RegexOptions.IgnoreCase);
@@ -454,6 +474,47 @@ namespace LumiereMediaPlayer.Helpers
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"[StreamingRouter] Apple TV API resolve failed: {ex.Message}");
+                    }
+                }
+            }
+
+            if ((nativeUri != null && nativeUri.Scheme.Equals("spotify", StringComparison.OrdinalIgnoreCase) && nativeUri.ToString().Contains(":search:")) ||
+                (!string.IsNullOrEmpty(fallbackCleanUrl) && fallbackCleanUrl.Contains("open.spotify.com/search", StringComparison.OrdinalIgnoreCase)))
+            {
+                string rawSearch = "";
+                if (nativeUri != null && nativeUri.ToString().Contains(":search:"))
+                {
+                    rawSearch = nativeUri.ToString().Substring(nativeUri.ToString().IndexOf(":search:", StringComparison.OrdinalIgnoreCase) + 8);
+                }
+                else if (!string.IsNullOrEmpty(fallbackCleanUrl))
+                {
+                    var match = Regex.Match(fallbackCleanUrl, @"open\.spotify\.com/search/([^/?#]+)", RegexOptions.IgnoreCase);
+                    if (match.Success)
+                    {
+                        rawSearch = match.Groups[1].Value;
+                    }
+                    else
+                    {
+                        var qm = Regex.Match(fallbackCleanUrl, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                        if (qm.Success) rawSearch = qm.Groups[1].Value;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(rawSearch))
+                {
+                    try
+                    {
+                        string unescaped = Uri.UnescapeDataString(rawSearch);
+                        var (spotifyNative, spotifyWeb) = await SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(unescaped, "track");
+                        if (spotifyNative != null && !spotifyNative.ToString().Contains(":search:"))
+                        {
+                            nativeUri = spotifyNative;
+                            fallbackCleanUrl = spotifyWeb;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[StreamingRouter] Spotify API resolve failed: {ex.Message}");
                     }
                 }
             }

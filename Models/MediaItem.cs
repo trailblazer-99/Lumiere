@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace LumiereMediaPlayer.Models;
 
-public sealed class MediaItem : INotifyPropertyChanged
+public sealed class MediaItem : INotifyPropertyChanged, IEquatable<MediaItem>
 {
     private TimeSpan _duration;
 
@@ -81,7 +81,19 @@ public sealed class MediaItem : INotifyPropertyChanged
     }
 
     public MediaKind Kind { get; init; } = MediaKind.Audio;
-    public string? SourcePath { get; init; }
+
+    private string? _sourcePath;
+    public string? SourcePath
+    {
+        get => _sourcePath;
+        init => _sourcePath = value;
+    }
+
+    public string? FilePath
+    {
+        get => _sourcePath;
+        init => _sourcePath = value;
+    }
 
     // New Advanced Properties
     private long _fileSize;
@@ -259,22 +271,102 @@ public sealed class MediaItem : INotifyPropertyChanged
         set { if (_isFavorite != value) { _isFavorite = value; OnPropertyChanged(); } }
     }
 
-    public string DurationText => Helpers.TimeFormatting.Format(Duration);
+    // ── TV Series & Episode Properties ────────────────────────────────
+    private bool _isSeries;
+    public bool IsSeries
+    {
+        get => _isSeries || (Episodes != null && Episodes.Count > 0);
+        set { if (_isSeries != value) { _isSeries = value; OnPropertyChanged(); } }
+    }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<MediaItem>? Episodes { get; set; }
+
+    public int SeasonNumber { get; set; } = 1;
+    public int EpisodeNumber { get; set; } = 1;
+    public string? SeriesTitle { get; set; }
+    public string? EpisodeTitle { get; set; }
+    public string? EpisodeStillUrl { get; set; }
+
+    public string DurationText => (IsSeries && Episodes?.Count > 0) 
+        ? (Episodes.Count == 1 ? "1 Episode" : $"{Episodes.Count} Episodes") 
+        : Helpers.TimeFormatting.Format(Duration);
     public bool IsVideo => Kind == MediaKind.Video;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        if (App.MainDispatcher?.HasThreadAccess == true)
+        if (App.MainDispatcher == null || App.MainDispatcher.HasThreadAccess)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
         else
         {
-            App.MainDispatcher?.TryEnqueue(() =>
+            App.MainDispatcher.TryEnqueue(() =>
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             });
         }
     }
+
+    // ── Equality Members ───────────────────────────────────────────────
+
+    private static string NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        try
+        {
+            return System.IO.Path.GetFullPath(path).TrimEnd('\\', '/').ToLowerInvariant();
+        }
+        catch
+        {
+            return path.Trim().Replace('/', '\\').TrimEnd('\\').ToLowerInvariant();
+        }
+    }
+
+    private string IdentityKey
+    {
+        get
+        {
+            var normPath = NormalizePath(SourcePath ?? FilePath);
+            if (!string.IsNullOrEmpty(normPath))
+                return "path:" + normPath;
+            if (!string.IsNullOrEmpty(Id))
+                return "id:" + Id;
+            return string.Empty;
+        }
+    }
+
+    public bool Equals(MediaItem? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        var keyThis = IdentityKey;
+        var keyOther = other.IdentityKey;
+
+        if (!string.IsNullOrEmpty(keyThis) && !string.IsNullOrEmpty(keyOther))
+            return string.Equals(keyThis, keyOther, StringComparison.OrdinalIgnoreCase);
+
+        return false;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as MediaItem);
+
+    public override int GetHashCode()
+    {
+        var key = IdentityKey;
+        if (!string.IsNullOrEmpty(key))
+            return StringComparer.OrdinalIgnoreCase.GetHashCode(key);
+
+        return base.GetHashCode();
+    }
+
+    public static bool operator ==(MediaItem? left, MediaItem? right)
+    {
+        if (left is null) return right is null;
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(MediaItem? left, MediaItem? right) => !(left == right);
 }

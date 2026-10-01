@@ -12,7 +12,7 @@ public static class ImageBindHelper
     private static readonly Dictionary<string, WeakReference<BitmapImage>> _weakCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly LinkedList<string> _lruKeys = new();
     private static readonly Dictionary<string, BitmapImage> _strongCache = new(StringComparer.OrdinalIgnoreCase);
-    private const int MaxStrongCacheCount = 50;
+    private const int MaxStrongCacheCount = 20;
 
     public static ImageSource? SafeImageFromUrl(string? url) => SafeImageFromUrl(url, 360);
 
@@ -24,6 +24,16 @@ public static class ImageBindHelper
 
         lock (_cacheLock)
         {
+            if (_weakCache.Count > 150)
+            {
+                var deadKeys = new List<string>();
+                foreach (var (k, wr) in _weakCache)
+                {
+                    if (!wr.TryGetTarget(out _)) deadKeys.Add(k);
+                }
+                foreach (var k in deadKeys) _weakCache.Remove(k);
+            }
+
             // 1. Check strong cache
             if (_strongCache.TryGetValue(cacheKey, out var strongBmp))
             {
@@ -117,6 +127,28 @@ public static class ImageBindHelper
             _strongCache.Clear();
             _lruKeys.Clear();
             _weakCache.Clear();
+        }
+    }
+
+    public static void TrimCaches()
+    {
+        lock (_cacheLock)
+        {
+            _strongCache.Clear();
+            _lruKeys.Clear();
+
+            if (_weakCache.Count > 100)
+            {
+                var deadKeys = new List<string>();
+                foreach (var (k, wr) in _weakCache)
+                {
+                    if (!wr.TryGetTarget(out _)) deadKeys.Add(k);
+                }
+                foreach (var k in deadKeys)
+                {
+                    _weakCache.Remove(k);
+                }
+            }
         }
     }
 }

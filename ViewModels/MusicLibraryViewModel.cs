@@ -11,29 +11,59 @@ using System.Linq;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class MusicLibraryViewModel : ObservableObject
+public partial class MusicLibraryViewModel : ObservableObject, IDisposable
 {
     private readonly PlaybackViewModel _playback;
     private readonly LumiereMediaPlayer.Services.Streaming.MusicStreamingService _musicService = new();
+    private readonly EventHandler _libraryChangedHandler;
 
     [ObservableProperty]
     public partial ObservableCollection<MediaItem> Tracks { get; set; } = new();
+
+    public ObservableCollection<string> SortOptions { get; } = new()
+    {
+        "Title (A-Z)",
+        "Title (Z-A)",
+        "Artist (A-Z)",
+        "Artist (Z-A)",
+        "Album (A-Z)",
+        "Duration (Longest)",
+        "Duration (Shortest)"
+    };
+    [ObservableProperty] public partial string SelectedSort { get; set; } = "Title (A-Z)";
+    partial void OnSelectedSortChanged(string value) => ApplySortAndFilter();
+
+    [ObservableProperty] public partial string SelectedGenre { get; set; } = "All";
+    partial void OnSelectedGenreChanged(string value) => ApplySortAndFilter();
+
+    public ObservableCollection<string> AvailableGenres { get; } = new() { "All" };
+
+    private string _currentSearchQuery = string.Empty;
 
     public MusicLibraryViewModel(PlaybackViewModel playback)
     {
         _playback = playback;
         SyncTracks();
-        SampleMediaLibrary.LibraryChanged += (s, e) =>
+        _libraryChangedHandler = (s, e) =>
         {
             SyncTracks();
             _ = PopulateMusicMetadataAsync();
         };
+        MediaLibraryService.LibraryChanged += _libraryChangedHandler;
         _ = PopulateMusicMetadataAsync();
+    }
+
+    public void Dispose()
+    {
+        MediaLibraryService.LibraryChanged -= _libraryChangedHandler;
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = null;
     }
 
     private async Task PopulateMusicMetadataAsync()
     {
-        var audioTracks = SampleMediaLibrary.AudioTracks;
+        var audioTracks = MediaLibraryService.AudioTracks;
         bool changed = false;
 
         foreach (var track in audioTracks)
@@ -91,7 +121,7 @@ public partial class MusicLibraryViewModel : ObservableObject
         {
             // Give enqueued dispatcher property changes a tiny bit of time to settle, then save library cache
             await Task.Delay(500);
-            await SampleMediaLibrary.SaveLibraryAsync();
+            await MediaLibraryService.SaveLibraryAsync();
             SyncTracks();
         }
     }
@@ -100,10 +130,55 @@ public partial class MusicLibraryViewModel : ObservableObject
     {
         App.MainDispatcher?.TryEnqueue(() =>
         {
-            var newItems = SampleMediaLibrary.AudioTracks;
-            // Rule 5: In-place slot updating to avoid destroying visual containers
-            Tracks.UpdateInPlace(newItems);
+            var allAudio = MediaLibraryService.AudioTracks;
+            var genres = allAudio
+                .Where(t => !string.IsNullOrWhiteSpace(t.Genre))
+                .Select(t => t.Genre!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g)
+                .ToList();
+
+            var genreList = new List<string> { "All" };
+            genreList.AddRange(genres);
+            AvailableGenres.UpdateInPlace(genreList);
+
+            ApplySortAndFilter();
         });
+    }
+
+    public void ApplySortAndFilter()
+    {
+        var sourceTracks = MediaLibraryService.AudioTracks.AsEnumerable();
+
+        if (!string.Equals(SelectedGenre, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            sourceTracks = sourceTracks.Where(t => string.Equals(t.Genre, SelectedGenre, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_currentSearchQuery))
+        {
+            var q = _currentSearchQuery.Trim();
+            sourceTracks = sourceTracks.Where(t =>
+                (t.Title != null && t.Title.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (t.Artist != null && t.Artist.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (t.Album != null && t.Album.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (t.Genre != null && t.Genre.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        sourceTracks = SelectedSort switch
+        {
+            "Title (A-Z)" => sourceTracks.OrderBy(t => t.Title),
+            "Title (Z-A)" => sourceTracks.OrderByDescending(t => t.Title),
+            "Artist (A-Z)" => sourceTracks.OrderBy(t => t.Artist),
+            "Artist (Z-A)" => sourceTracks.OrderByDescending(t => t.Artist),
+            "Album (A-Z)" => sourceTracks.OrderBy(t => t.Album),
+            "Duration (Longest)" => sourceTracks.OrderByDescending(t => t.Duration),
+            "Duration (Shortest)" => sourceTracks.OrderBy(t => t.Duration),
+            _ => sourceTracks
+        };
+
+        Tracks.UpdateInPlace(sourceTracks.ToList());
+        OnPropertyChanged(nameof(Tracks));
     }
 
     private System.Threading.CancellationTokenSource? _searchCts;
@@ -114,9 +189,11 @@ public partial class MusicLibraryViewModel : ObservableObject
         var cts = new System.Threading.CancellationTokenSource();
         _searchCts = cts;
 
+        _currentSearchQuery = query ?? string.Empty;
+
         if (string.IsNullOrWhiteSpace(query))
         {
-            SyncTracks();
+            ApplySortAndFilter();
             return;
         }
 
@@ -132,11 +209,10 @@ public partial class MusicLibraryViewModel : ObservableObject
             }
         }
 
-        var sourceTracks = SampleMediaLibrary.AudioTracks.ToList();
-        List<MediaItem> filtered;
-
         if (useAi)
         {
+            var sourceTracks = MediaLibraryService.AudioTracks.ToList();
+            List<MediaItem> filtered;
             try
             {
                 filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
@@ -147,22 +223,20 @@ public partial class MusicLibraryViewModel : ObservableObject
                 System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] SemanticSearchAsync threw unhandled exception: {ex.Message}");
                 filtered = new List<MediaItem>();
             }
+
+            if (!cts.IsCancellationRequested)
+            {
+                App.MainDispatcher?.TryEnqueue(() =>
+                {
+                    Tracks.UpdateInPlace(filtered);
+                });
+            }
         }
         else
         {
-            filtered = sourceTracks
-                .Where(t => (t.Title != null && t.Title.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
-                            (t.Artist != null && t.Artist.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
-                            (t.Genre != null && t.Genre.Contains(query, System.StringComparison.OrdinalIgnoreCase)) ||
-                            (t.Album != null && t.Album.Contains(query, System.StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-        }
-
-        if (!cts.IsCancellationRequested)
-        {
             App.MainDispatcher?.TryEnqueue(() =>
             {
-                Tracks.UpdateInPlace(filtered);
+                ApplySortAndFilter();
             });
         }
     }
@@ -187,14 +261,14 @@ public partial class MusicLibraryViewModel : ObservableObject
             {
                 await AddLocalAudioFileAsync(file.Path);
             }
-            await SampleMediaLibrary.SaveLibraryAsync();
+            await MediaLibraryService.SaveLibraryAsync();
         }
     }
 
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        await SampleMediaLibrary.SynchronizeLibraryMediaAsync();
+        await MediaLibraryService.SynchronizeLibraryMediaAsync();
         SyncTracks();
     }
 
@@ -210,7 +284,7 @@ public partial class MusicLibraryViewModel : ObservableObject
         if (folder != null)
         {
             AppServices.Settings.AddLibraryFolder(folder.Path);
-            SampleMediaLibrary.StartWatchingDirectory(folder.Path);
+            MediaLibraryService.StartWatchingDirectory(folder.Path);
 
             var files = Directory.GetFiles(folder.Path, "*.*", SearchOption.AllDirectories)
                 .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
@@ -223,7 +297,7 @@ public partial class MusicLibraryViewModel : ObservableObject
             {
                 await AddLocalAudioFileAsync(file);
             }
-            await SampleMediaLibrary.SaveLibraryAsync();
+            await MediaLibraryService.SaveLibraryAsync();
         }
     }
 
@@ -249,7 +323,7 @@ public partial class MusicLibraryViewModel : ObservableObject
                 Codec = file.Properties.Description
             };
 
-            await SampleMediaLibrary.AddTrackAsync(item);
+            await MediaLibraryService.AddTrackAsync(item);
         }
         catch
         {

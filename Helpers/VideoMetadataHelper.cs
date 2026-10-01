@@ -15,22 +15,48 @@ public static class VideoMetadataHelper
 {
     private static readonly TmdbService _sharedTmdbService = new();
 
-    public static string CleanVideoTitle(string rawTitle)
+    private static readonly HashSet<string> KnownVideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".flv", ".ts", ".m2ts", ".vob", ".iso", ".mpg", ".mpeg"
+    };
+
+    public static string CleanVideoTitle(string rawTitle, bool stripYear = true)
     {
         if (string.IsNullOrWhiteSpace(rawTitle)) return string.Empty;
 
-        string title = Path.GetFileNameWithoutExtension(rawTitle);
+        string title = rawTitle;
+        try
+        {
+            string ext = Path.GetExtension(rawTitle);
+            if (!string.IsNullOrEmpty(ext) && KnownVideoExtensions.Contains(ext))
+            {
+                title = Path.GetFileNameWithoutExtension(rawTitle);
+            }
+            else
+            {
+                title = Path.GetFileName(rawTitle);
+            }
+        }
+        catch
+        {
+            title = rawTitle;
+        }
+
+        // Strip square brackets containing release groups or tags (e.g. [1080p], [YTS.MX], [BluRay])
+        title = Regex.Replace(title, @"\[[^\]]*\]", " ");
 
         // Replace dots, underscores, hyphens with spaces
         title = title.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
 
         // Regex patterns for common torrent release group/quality tags
         string[] tags = new string[] {
-            "1080p", "720p", "480p", "2160p", "4k", "bluray", "bdrip", "brrip", "webrip", "web-rip",
-            "webdl", "web-dl", "dvdrip", "hdrip", "hdtv", "x264", "x265", "h264", "hevc", "aac",
-            "dts", "dd5", "ddp5", "ddp", "ac3", "yts", "yify", "axxo", "subbed", "dubbed",
-            "multi", "dual-audio", "dual audio", "dual", "criterion", "remastered", "extended",
-            "directors cut", "director's cut", "unrated", "proper", "repack"
+            "1080p", "720p", "480p", "2160p", "4k", "8k", "bluray", "bdrip", "brrip", "webrip", "web-rip",
+            "webdl", "web-dl", "web", "dvdrip", "hdrip", "hdtv", "uhd", "hdr", "hdr10", "hdr10plus", "hdr10+",
+            "dv", "dovi", "dolby", "vision", "atmos", "imax", "remux", "x264", "x265", "h264", "h265", "hevc", "av1",
+            "xvid", "divx", "aac", "dts", "dd5", "ddp5", "ddp", "ac3", "eac3", "flac", "truehd", "yts", "yify",
+            "axxo", "rarbg", "tgx", "subbed", "dubbed", "multi", "dual-audio", "dual audio", "dual", "criterion",
+            "remastered", "extended", "directors cut", "director's cut", "unrated", "proper", "repack", "10bit", "8bit",
+            "60fps", "esub", "esubs", "subs"
         };
 
         foreach (var tag in tags)
@@ -38,11 +64,17 @@ public static class VideoMetadataHelper
             title = Regex.Replace(title, @"\b" + Regex.Escape(tag) + @"\b", " ", RegexOptions.IgnoreCase);
         }
 
-        // Clean up any year like 19xx or 20xx and strip everything after it
-        var yearMatch = Regex.Match(title, @"\b(19|20)\d{2}\b");
-        if (yearMatch.Success)
+        if (stripYear)
         {
-            title = title.Substring(0, yearMatch.Index);
+            // Clean up any realistic release year like 19xx or 20xx and strip everything after it,
+            // provided the year isn't the entire title (e.g. "1917") or the start of the title ("2001 A Space Odyssey")
+            // or a futuristic year that is part of the title (e.g. "2049" in Blade Runner 2049)
+            int maxReleaseYear = DateTime.UtcNow.Year + 2;
+            var yearMatch = Regex.Match(title, @"\b(19\d{2}|20\d{2})\b");
+            if (yearMatch.Success && yearMatch.Index > 0 && int.TryParse(yearMatch.Value, out int yr) && yr <= maxReleaseYear)
+            {
+                title = title.Substring(0, yearMatch.Index);
+            }
         }
 
         // Clean up double spaces and trim
@@ -96,24 +128,176 @@ public static class VideoMetadataHelper
         try
         {
             var directory = Path.GetDirectoryName(sourcePath);
-            if (string.IsNullOrWhiteSpace(directory)) return string.Empty;
-
-            var folderName = Path.GetFileName(directory);
-            if (Regex.IsMatch(folderName, @"\b(?:season|series)\s*\d{1,2}\b|\bS\d{1,2}\b", RegexOptions.IgnoreCase))
+            while (!string.IsNullOrWhiteSpace(directory))
             {
-                var parent = Path.GetDirectoryName(directory);
-                if (!string.IsNullOrWhiteSpace(parent))
+                var folderName = Path.GetFileName(directory);
+                if (Regex.IsMatch(folderName, @"\b(?:season|series|specials?|extras?|disc|cd|part)\s*\d{0,2}\b|\bS\d{1,2}\b", RegexOptions.IgnoreCase))
                 {
-                    folderName = Path.GetFileName(parent);
+                    directory = Path.GetDirectoryName(directory);
+                    continue;
                 }
+                return NormalizeLookupText(folderName);
             }
-
-            return NormalizeLookupText(folderName);
+            return string.Empty;
         }
         catch
         {
             return string.Empty;
         }
+    }
+
+    public static (string CleanTitle, int? Year, bool IsTvShow) CleanTitleAndExtractYear(string rawTitle, string? sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(rawTitle)) return (string.Empty, null, false);
+
+        string filename = Path.GetFileNameWithoutExtension(rawTitle);
+
+        // 1. Detect TV show patterns
+        bool isTvShow = false;
+        string? seriesTitle = null;
+
+        var tvMatch = Regex.Match(
+            filename,
+            @"^(?<series>.*?)\b(?:S(?<season>\d{1,2})\s*E(?<episode>\d{1,3})|(?<season>\d{1,2})x(?<episode>\d{1,3})|(?:Season|Series)\s*(?<season>\d{1,2})\s*(?:Episode|Ep)\s*(?<episode>\d{1,3}))\b",
+            RegexOptions.IgnoreCase);
+
+        if (tvMatch.Success)
+        {
+            isTvShow = true;
+            var captured = tvMatch.Groups["series"].Value;
+            if (!string.IsNullOrWhiteSpace(captured))
+            {
+                seriesTitle = CleanVideoTitle(captured);
+            }
+        }
+        else if (Regex.IsMatch(filename, @"\b(?:S\d{1,2}E\d{1,2}|\d{1,2}x\d{1,2}|Episode\s*\d+)\b", RegexOptions.IgnoreCase))
+        {
+            isTvShow = true;
+        }
+        else if (TryInferSeasonFromPath(sourcePath) != null)
+        {
+            isTvShow = true;
+        }
+
+        if (isTvShow)
+        {
+            if (string.IsNullOrWhiteSpace(seriesTitle))
+            {
+                seriesTitle = InferSeriesTitleFromPath(sourcePath);
+            }
+            if (string.IsNullOrWhiteSpace(seriesTitle))
+            {
+                seriesTitle = CleanVideoTitle(filename);
+            }
+            return (seriesTitle, null, true);
+        }
+
+        // 2. Movie: Extract potential release year and clean title
+        int? year = null;
+        string candidate = filename.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
+
+        // Check for year delimited by parens/brackets, e.g. (2024), [1999]
+        var bracketYearMatch = Regex.Match(candidate, @"[\(\[]\s*(19\d{2}|20\d{2})\s*[\)\]]");
+        if (bracketYearMatch.Success && int.TryParse(bracketYearMatch.Groups[1].Value, out int byr))
+        {
+            year = byr;
+            candidate = candidate.Substring(0, bracketYearMatch.Index);
+        }
+        else
+        {
+            // Check for year followed by scene tags or at end of title
+            int maxReleaseYear = DateTime.UtcNow.Year + 2;
+            var tagYearMatch = Regex.Match(candidate, @"\b(19\d{2}|20\d{2})\b(?:\s+(?:1080p|720p|4k|2160p|8k|uhd|hdr|hdr10|hdr10plus|dv|dovi|dolby|vision|bluray|web|brrip|dvd|remux|x264|x265|hevc|proper|imax|atmos)|\s*$)", RegexOptions.IgnoreCase);
+            if (tagYearMatch.Success && int.TryParse(tagYearMatch.Groups[1].Value, out int tyr) && tyr <= maxReleaseYear)
+            {
+                // Ensure the year isn't the entire title (e.g. "1917") or the start of the title ("2001 A Space Odyssey")
+                if (tagYearMatch.Index > 0)
+                {
+                    year = tyr;
+                    candidate = candidate.Substring(0, tagYearMatch.Index);
+                }
+            }
+        }
+
+        string cleanMovieTitle = CleanVideoTitle(candidate, stripYear: false);
+        if (string.IsNullOrWhiteSpace(cleanMovieTitle))
+        {
+            cleanMovieTitle = CleanVideoTitle(filename, stripYear: false);
+            if (string.IsNullOrWhiteSpace(cleanMovieTitle)) cleanMovieTitle = filename;
+        }
+
+        return (cleanMovieTitle, year, false);
+    }
+
+    public static TmdbMedia? PickBestTmdbMatch(IEnumerable<TmdbMedia>? results, string cleanTitle, int? targetYear = null)
+    {
+        if (results == null) return null;
+        var list = results.ToList();
+        if (list.Count == 0) return null;
+        if (list.Count == 1) return list[0];
+
+        string normTarget = LocalMediaMatcher.CleanTitleForComparison(cleanTitle);
+
+        TmdbMedia? bestItem = null;
+        double bestScore = -1;
+
+        foreach (var item in list)
+        {
+            string itemTitle = item.DisplayTitle;
+            string normItem = LocalMediaMatcher.CleanTitleForComparison(itemTitle);
+
+            double score = 0;
+
+            // 1. Title matching
+            if (string.Equals(normTarget, normItem, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 100;
+            }
+            else if (normItem.StartsWith(normTarget, StringComparison.OrdinalIgnoreCase) ||
+                     normTarget.StartsWith(normItem, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 60;
+            }
+            else if (normItem.Contains(normTarget, StringComparison.OrdinalIgnoreCase) ||
+                     normTarget.Contains(normItem, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 40;
+            }
+            else
+            {
+                var wordsTarget = normTarget.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var wordsItem = normItem.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                int common = wordsTarget.Intersect(wordsItem, StringComparer.OrdinalIgnoreCase).Count();
+                int total = wordsTarget.Union(wordsItem, StringComparer.OrdinalIgnoreCase).Count();
+                if (total > 0)
+                {
+                    score += (double)common / total * 50;
+                }
+            }
+
+            // 2. Year matching bonus
+            if (targetYear.HasValue && !string.IsNullOrEmpty(item.DisplayDate))
+            {
+                if (item.DisplayDate.Length >= 4 && int.TryParse(item.DisplayDate.Substring(0, 4), out int itemYear))
+                {
+                    int diff = Math.Abs(itemYear - targetYear.Value);
+                    if (diff == 0) score += 50;
+                    else if (diff == 1) score += 25;
+                    else score -= Math.Min(30, diff * 5);
+                }
+            }
+
+            // 3. Small vote average tie-breaker
+            score += Math.Clamp(item.VoteAverage, 0, 10);
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestItem = item;
+            }
+        }
+
+        return bestItem ?? list.FirstOrDefault();
     }
 
     public static EpisodeLookup? TryCreateEpisodeLookup(MediaItem item)

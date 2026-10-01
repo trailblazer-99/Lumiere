@@ -102,5 +102,67 @@ namespace LumiereMediaPlayer.Tests.Helpers
             Assert.IsTrue(badges.Exists(b => b.Text == "Dolby Vision"));
             Assert.IsTrue(badges.Exists(b => b.Text == "Dolby Atmos"));
         }
+
+        [TestMethod]
+        public void ResolveProviderUrl_WhenAppleContentOnPrimeVideo_ResolvesToPrimeVideoNotAppleTv()
+        {
+            var details = new WatchmodeDetails { Title = "Ted Lasso" };
+            var primeChannelSource = new WatchmodeSource
+            {
+                Name = "Apple TV+ on Prime Video",
+                Type = "sub",
+                Region = "US",
+                WebUrl = "https://tv.apple.com/us/show/ted-lasso" // Upstream mistakenly had apple tv url
+            };
+
+            string resolvedUrl = StreamingProviderHelper.ResolveProviderUrl(primeChannelSource, details);
+
+            Assert.IsFalse(resolvedUrl.Contains("tv.apple.com"), "Prime Video link for Apple TV content must not resolve to tv.apple.com");
+            Assert.IsTrue(resolvedUrl.Contains("primevideo.com"), "Prime Video link for Apple TV content must resolve to primevideo.com");
+            Assert.IsTrue(resolvedUrl.Contains("Ted"), "Prime Video link must contain title search term");
+        }
+
+        [TestMethod]
+        public void ResolveProviderUrl_WhenDirectAppleTvSource_ResolvesToAppleTv()
+        {
+            var details = new WatchmodeDetails { Title = "Severance" };
+            var appleSource = new WatchmodeSource
+            {
+                Name = "Apple TV+",
+                Type = "sub",
+                Region = "US"
+            };
+
+            string resolvedUrl = StreamingProviderHelper.ResolveProviderUrl(appleSource, details);
+
+            Assert.IsTrue(resolvedUrl.Contains("tv.apple.com"), "Direct Apple TV source must resolve to tv.apple.com");
+        }
+
+        [TestMethod]
+        public void ResolveProviderUrl_WhenPrimeVideoSourceHasDirectUrl_PreservesPrimeVideoUrl()
+        {
+            var details = new WatchmodeDetails { Title = "Severance" };
+            var primeSource = new WatchmodeSource
+            {
+                Name = "Apple TV Plus Amazon Channel",
+                Type = "sub",
+                Region = "US",
+                WebUrl = "https://www.amazon.com/gp/video/detail/B09ABC1234"
+            };
+
+            string resolvedUrl = StreamingProviderHelper.ResolveProviderUrl(primeSource, details);
+
+            Assert.AreEqual("https://www.amazon.com/gp/video/detail/B09ABC1234", resolvedUrl);
+        }
+
+        [TestMethod]
+        public void GetNativeUri_WhenPrimeVideoSearchUrl_RoutesToPrimeVideoScheme()
+        {
+            var nativeUri = StreamingRouter.GetNativeUri("https://www.primevideo.com/search/ref=atv_sr_sug_?phrase=Ted+Lasso");
+
+            Assert.IsNotNull(nativeUri);
+            Assert.AreEqual("primevideo", nativeUri.Scheme);
+            Assert.IsTrue(nativeUri.ToString().Contains("q=Ted Lasso") || nativeUri.ToString().Contains("q=Ted%20Lasso"));
+        }
     }
 }

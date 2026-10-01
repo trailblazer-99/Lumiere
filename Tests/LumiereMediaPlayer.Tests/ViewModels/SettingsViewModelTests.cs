@@ -46,4 +46,44 @@ public class SettingsViewModelTests
         vm.SelectedTheme = AppThemeOption.Light;
         Assert.AreEqual(AppThemeOption.Light, vm.SelectedTheme);
     }
+
+    [TestMethod]
+    public void SettingsViewModel_EnableHoverVideoPreview_InitializesAndToggles()
+    {
+        var appSettings = new AppSettings { EnableHoverVideoPreview = true };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        Assert.IsTrue(vm.EnableHoverVideoPreview);
+        vm.EnableHoverVideoPreview = false;
+        Assert.IsFalse(vm.EnableHoverVideoPreview);
+        Assert.IsFalse(appSettings.EnableHoverVideoPreview);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_BackdropSolid_UpdatesPropertyAndIndex()
+    {
+        var appSettings = new AppSettings { BackdropType = AppThemeBackdrop.Mica };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        Assert.AreEqual(AppThemeBackdrop.Mica, vm.SelectedBackdrop);
+        Assert.AreEqual((int)AppThemeBackdrop.Mica, vm.SelectedBackdropIndex);
+
+        vm.SelectedBackdrop = AppThemeBackdrop.Solid;
+        Assert.AreEqual(AppThemeBackdrop.Solid, vm.SelectedBackdrop);
+        Assert.AreEqual((int)AppThemeBackdrop.Solid, vm.SelectedBackdropIndex);
+        Assert.AreEqual(AppThemeBackdrop.Solid, appSettings.BackdropType);
+
+        vm.SelectedBackdropIndex = (int)AppThemeBackdrop.Acrylic;
+        Assert.AreEqual(AppThemeBackdrop.Acrylic, vm.SelectedBackdrop);
+        Assert.AreEqual(AppThemeBackdrop.Acrylic, appSettings.BackdropType);
+    }
 }
+

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 using Windows.Media.Playback;
 
@@ -219,7 +220,7 @@ namespace LumiereMediaPlayer.Helpers
             catch { }
         }
 
-        public static async void OpenWindowsCaptionSettings()
+        public static async Task OpenWindowsCaptionSettings()
         {
             try
             {

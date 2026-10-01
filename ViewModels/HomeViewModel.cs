@@ -13,18 +13,31 @@ using LumiereMediaPlayer.Services.Streaming;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class HomeViewModel : ObservableObject
+public partial class HomeViewModel : ObservableObject, IDisposable
 {
     private readonly PlaybackViewModel _playback;
     private readonly IHistoryService _history;
     private readonly TmdbService _tmdbService = new();
     private readonly MusicStreamingService _musicService = new();
+    private readonly EventHandler _libraryChangedHandler;
     private bool _isEnriching;
 
     public HomeViewModel(PlaybackViewModel playback, IHistoryService history)
     {
         _playback = playback;
         _history = history;
+
+        _libraryChangedHandler = (s, e) =>
+        {
+            UpdateFavoriteVideos();
+        };
+        MediaLibraryService.LibraryChanged += _libraryChangedHandler;
+        UpdateFavoriteVideos();
+    }
+
+    public void Dispose()
+    {
+        MediaLibraryService.LibraryChanged -= _libraryChangedHandler;
     }
 
     public HomeViewModel(PlaybackViewModel playback)
@@ -33,11 +46,38 @@ public partial class HomeViewModel : ObservableObject
     }
 
     public System.Collections.ObjectModel.ObservableCollection<MediaItem> RecentlyPlayed => _history.RecentlyPlayed;
+    public System.Collections.ObjectModel.ObservableCollection<MediaItem> FavoriteVideos { get; } = new();
+    public Microsoft.UI.Xaml.Visibility FavoriteVideosVisibility => VisibilityHelper.FromBoolean(FavoriteVideos.Count > 0);
+
+    private void UpdateFavoriteVideos()
+    {
+        var favs = MediaLibraryService.FavoriteVideos.ToList();
+        if (App.MainDispatcher != null && !App.MainDispatcher.HasThreadAccess)
+        {
+            App.MainDispatcher.TryEnqueue(() =>
+            {
+                FavoriteVideos.UpdateInPlace(favs);
+                OnPropertyChanged(nameof(FavoriteVideosVisibility));
+            });
+        }
+        else
+        {
+            FavoriteVideos.UpdateInPlace(favs);
+            OnPropertyChanged(nameof(FavoriteVideosVisibility));
+        }
+    }
 
     [RelayCommand]
     private void PlayTrack(MediaItem? track)
     {
-        if (track is not null)
+        if (track is null) return;
+        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+        if (track.IsVideo)
+        {
+            AppServices.VideoViewModel.PlayVideo(track);
+            AppServices.Navigation.NavigateTo(PageKeys.Videos);
+        }
+        else
         {
             _playback.PlayTrack(track);
         }
@@ -63,8 +103,8 @@ public partial class HomeViewModel : ObservableObject
             {
                 if (item.IsFolder) continue;
 
-                // 1. Sync from SampleMediaLibrary if the library item already has a poster or metadata
-                var match = SampleMediaLibrary.AllTracks.FirstOrDefault(t =>
+                // 1. Sync from MediaLibraryService if the library item already has a poster or metadata
+                var match = MediaLibraryService.AllTracks.FirstOrDefault(t =>
                     (!string.IsNullOrEmpty(t.SourcePath) && string.Equals(t.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Id) && string.Equals(t.Id, item.Id, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Title) && string.Equals(t.Title, item.Title, StringComparison.OrdinalIgnoreCase)));

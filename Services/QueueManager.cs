@@ -59,13 +59,35 @@ public class QueueManager : IQueueManager
         }
     }
 
+    private PlaybackRepeatMode _repeatMode = PlaybackRepeatMode.Off;
+    public PlaybackRepeatMode RepeatMode
+    {
+        get
+        {
+            lock (_syncRoot) return _repeatMode;
+        }
+        set
+        {
+            lock (_syncRoot)
+            {
+                if (_repeatMode != value)
+                {
+                    _repeatMode = value;
+                }
+            }
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     public bool HasNext
     {
         get
         {
             lock (_syncRoot)
             {
-                return _currentIndex >= 0 && _currentIndex < _items.Count - 1;
+                if (_items.Count == 0 || _currentIndex < 0) return false;
+                if (_repeatMode != PlaybackRepeatMode.Off) return true;
+                return _currentIndex < _items.Count - 1;
             }
         }
     }
@@ -76,6 +98,8 @@ public class QueueManager : IQueueManager
         {
             lock (_syncRoot)
             {
+                if (_items.Count == 0 || _currentIndex < 0) return false;
+                if (_repeatMode == PlaybackRepeatMode.All) return true;
                 return _currentIndex > 0;
             }
         }
@@ -197,9 +221,20 @@ public class QueueManager : IQueueManager
         bool changed = false;
         lock (_syncRoot)
         {
-            if (_currentIndex + 1 < _items.Count)
+            if (_items.Count == 0) return false;
+
+            if (_repeatMode == PlaybackRepeatMode.One)
+            {
+                changed = true;
+            }
+            else if (_currentIndex + 1 < _items.Count)
             {
                 _currentIndex++;
+                changed = true;
+            }
+            else if (_repeatMode == PlaybackRepeatMode.All)
+            {
+                _currentIndex = 0;
                 changed = true;
             }
         }
@@ -215,9 +250,16 @@ public class QueueManager : IQueueManager
         bool changed = false;
         lock (_syncRoot)
         {
+            if (_items.Count == 0) return false;
+
             if (_currentIndex > 0)
             {
                 _currentIndex--;
+                changed = true;
+            }
+            else if (_repeatMode == PlaybackRepeatMode.All)
+            {
+                _currentIndex = _items.Count - 1;
                 changed = true;
             }
         }
@@ -254,6 +296,53 @@ public class QueueManager : IQueueManager
                 (_items[k], _items[n]) = (_items[n], _items[k]);
             }
 
+            if (current != null)
+            {
+                int newIndex = _items.IndexOf(current);
+                if (newIndex >= 0)
+                {
+                    _currentIndex = newIndex;
+                }
+            }
+        }
+        QueueChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Move(int oldIndex, int newIndex)
+    {
+        lock (_syncRoot)
+        {
+            if (oldIndex < 0 || oldIndex >= _items.Count || newIndex < 0 || newIndex >= _items.Count || oldIndex == newIndex)
+                return;
+
+            var item = _items[oldIndex];
+            _items.RemoveAt(oldIndex);
+            _items.Insert(newIndex, item);
+
+            if (_currentIndex == oldIndex)
+            {
+                _currentIndex = newIndex;
+            }
+            else if (oldIndex < _currentIndex && newIndex >= _currentIndex)
+            {
+                _currentIndex--;
+            }
+            else if (oldIndex > _currentIndex && newIndex <= _currentIndex)
+            {
+                _currentIndex++;
+            }
+        }
+        QueueChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Reorder(IEnumerable<MediaItem> items)
+    {
+        if (items == null) return;
+        lock (_syncRoot)
+        {
+            var current = CurrentTrack;
+            _items.Clear();
+            _items.AddRange(items);
             if (current != null)
             {
                 int newIndex = _items.IndexOf(current);

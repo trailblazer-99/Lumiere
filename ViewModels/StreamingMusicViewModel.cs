@@ -59,9 +59,20 @@ namespace LumiereMediaPlayer.ViewModels
             }
         }
 
-        public System.Collections.ObjectModel.ObservableCollection<SavedStreamingItem> LibraryTracks => new(AppServices.StreamingLibrary.SavedItems.Where(i => i.Type == StreamingItemType.Music));
+        private ObservableCollection<SavedStreamingItem>? _libraryTracks;
+        public ObservableCollection<SavedStreamingItem> LibraryTracks
+        {
+            get => _libraryTracks ??= new ObservableCollection<SavedStreamingItem>(
+                AppServices.StreamingLibrary.SavedItems.Where(i => i.Type == StreamingItemType.Music));
+        }
 
         public StreamingMusicViewModel() { }
+
+        public void RefreshLibraryTracks()
+        {
+            _libraryTracks = null;
+            OnPropertyChanged(nameof(LibraryTracks));
+        }
 
         [RelayCommand]
         private async Task LoadTracksAsync()

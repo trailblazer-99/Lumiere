@@ -29,11 +29,28 @@ namespace LumiereMediaPlayer.Pages
             this.InitializeComponent();
             this.NavigationCacheMode = NavigationCacheMode.Disabled;
             this.Unloaded += OnUnloaded;
+            ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ViewModel.LocalMatch))
+            {
+                DispatcherQueue?.TryEnqueue(() => BuildProvidersSection());
+            }
+        }
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            base.OnNavigatedFrom(e);
+            CleanupResources();
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             this.Unloaded -= OnUnloaded;
+            ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            CleanupResources();
         }
 
         private void OnBackButtonClick(object sender, RoutedEventArgs e)
@@ -62,6 +79,9 @@ namespace LumiereMediaPlayer.Pages
             try
             {
                 base.OnNavigatedTo(e);
+
+                // Sweep for any orphaned Apple TV background remnants if previously closed
+                AppleTvLifecycleService.Instance.CleanupIfOrphaned();
 
                 var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("PosterAnimation");
                 if (animation != null)
@@ -149,8 +169,6 @@ namespace LumiereMediaPlayer.Pages
                 "tv_miniseries" => "MINISERIES",
                 _ => details.Type?.ToUpperInvariant() ?? "UNKNOWN"
             };
-
-            App.MainWindowInstance?.SelectStreamingTabForTitleType(details.Type);
 
             if (details.GenreNames != null)
             {
@@ -297,11 +315,11 @@ namespace LumiereMediaPlayer.Pages
         {
             var border = new Border
             {
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(6, 1, 6, 2),
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"],
+                Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorSecondaryBrush"),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -310,7 +328,7 @@ namespace LumiereMediaPlayer.Pages
                 Text = text,
                 FontSize = 10,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush"),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -345,7 +363,7 @@ namespace LumiereMediaPlayer.Pages
                     Text = "Streaming Not Available",
                     FontStyle = Windows.UI.Text.FontStyle.Italic,
                     FontSize = 15,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                    Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
                 });
                 return;
             }
@@ -373,11 +391,13 @@ namespace LumiereMediaPlayer.Pages
         {
             var card = new Button
             {
-                Style = (Style)Application.Current.Resources["DefaultButtonStyle"],
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                Style = ThemeResourceHelper.TryGetResource<Style>("DefaultButtonStyle", out var defaultBtnStyle)
+                    ? defaultBtnStyle
+                    : (Application.Current.Resources.TryGetValue("DefaultButtonStyle", out var ds) && ds is Style s ? s : null),
+                Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
                 Padding = new Thickness(16, 12, 16, 12),
                 CornerRadius = new CornerRadius(6),
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left
@@ -390,7 +410,7 @@ namespace LumiereMediaPlayer.Pages
                 FontSize = 24,
                 Margin = new Thickness(0, 0, 14, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                Foreground = ThemeResourceHelper.GetThemeBrush("AccentTextFillColorPrimaryBrush")
             });
 
             var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -406,7 +426,7 @@ namespace LumiereMediaPlayer.Pages
             {
                 Text = subText,
                 FontSize = 12,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
             });
 
             rowPanel.Children.Add(textCol);
@@ -439,8 +459,8 @@ namespace LumiereMediaPlayer.Pages
                 {
                     Padding = new Thickness(8),
                     CornerRadius = new CornerRadius(12),
-                    Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                    BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                     BorderThickness = new Thickness(1),
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     VerticalAlignment = VerticalAlignment.Stretch
@@ -517,7 +537,23 @@ namespace LumiereMediaPlayer.Pages
                         {
                             string cleanUrl = StreamingRouter.CleanFallbackUrl(url);
 
-                            if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
+                            bool isPrimeProvider = source.Name != null &&
+                                (source.Name.Contains("prime", StringComparison.OrdinalIgnoreCase) ||
+                                 source.Name.Contains("amazon", StringComparison.OrdinalIgnoreCase));
+
+                            if (isPrimeProvider)
+                            {
+                                if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) ||
+                                    cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase) ||
+                                    string.IsNullOrWhiteSpace(cleanUrl))
+                                {
+                                    string title = ViewModel.Details?.Title?.Trim() ?? "";
+                                    cleanUrl = !string.IsNullOrEmpty(title)
+                                        ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
+                                        : "https://www.primevideo.com";
+                                }
+                            }
+                            else if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                             {
                                 string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
                                 string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
@@ -536,6 +572,26 @@ namespace LumiereMediaPlayer.Pages
                             try
                             {
                                 string cleanUrl = StreamingRouter.CleanFallbackUrl(url);
+                                bool isPrimeProvider = source.Name != null &&
+                                    (source.Name.Contains("prime", StringComparison.OrdinalIgnoreCase) ||
+                                     source.Name.Contains("amazon", StringComparison.OrdinalIgnoreCase));
+
+                                if (isPrimeProvider)
+                                {
+                                    if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) ||
+                                        cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase) ||
+                                        string.IsNullOrWhiteSpace(cleanUrl))
+                                    {
+                                        string title = ViewModel.Details?.Title?.Trim() ?? "";
+                                        cleanUrl = !string.IsNullOrEmpty(title)
+                                            ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
+                                            : "https://www.primevideo.com";
+                                    }
+                                }
+                                else if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    AppleTvLifecycleService.Instance.NotifyAppleTvLaunched();
+                                }
                                 await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
                             }
                             catch (Exception fallbackEx)
@@ -631,6 +687,7 @@ namespace LumiereMediaPlayer.Pages
                     }
                 }
             }
+            Helpers.ThemeHelper.ApplyDarkThemeToMenuFlyout(LibraryMenuFlyout);
         }
 
         private void OnSaveWatchlistClick(object sender, RoutedEventArgs e)
@@ -672,43 +729,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                if (AppServices.Settings.Current.ReduceMotion)
-                {
-                    try
-                    {
-                        var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                        v.Opacity = 1f;
-                    }
-                    catch { }
-                    PageContent.Opacity = 1.0;
-                    return;
-                }
-
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                var compositor = visual.Compositor;
-
-                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-                fadeAnim.InsertKeyFrame(0f, 0f);
-                fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-                fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
-
-                var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-                slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
-                slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-                slideAnim.Duration = TimeSpan.FromMilliseconds(450);
-
-                visual.StartAnimation("Opacity", fadeAnim);
-                visual.StartAnimation("Offset", slideAnim);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to animate StreamingDetailsPage entrance: {ex.Message}");
-                PageContent.Opacity = 1.0;
-            }
+            PageContent.Opacity = 1.0;
         }
 
         private async void RegionDetailComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -821,7 +842,7 @@ namespace LumiereMediaPlayer.Pages
                                     {
                                         Text = "No filmography information available.",
                                         FontStyle = Windows.UI.Text.FontStyle.Italic,
-                                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                                        Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush"),
                                         Margin = new Thickness(0, 12, 0, 12)
                                     });
                                 }
@@ -835,7 +856,7 @@ namespace LumiereMediaPlayer.Pages
                     }
                 });
 
-                await dialog.ShowAsync();
+                await MediaFlyoutHelper.ShowDialogSafeAsync(dialog);
             }
             catch (Exception ex)
             {
@@ -864,6 +885,11 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageUnloaded(object sender, RoutedEventArgs e)
         {
+            CleanupResources();
+        }
+
+        private void CleanupResources()
+        {
             try
             {
                 if (PosterImage != null) PosterImage.Source = null;
@@ -873,10 +899,19 @@ namespace LumiereMediaPlayer.Pages
                 if (ReleasesListView != null) ReleasesListView.ItemsSource = null;
                 if (ProvidersContainer != null) ProvidersContainer.Children.Clear();
                 if (EpisodesTreeView != null) EpisodesTreeView.RootNodes.Clear();
+                ViewModel.Cleanup();
+
+                try
+                {
+                    GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                }
+                catch { }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnPageUnloaded error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] CleanupResources error: {ex.Message}");
             }
         }
     }

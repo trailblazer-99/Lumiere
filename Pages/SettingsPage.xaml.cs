@@ -19,12 +19,17 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
+        if (Services.UpdateService.LastCheckResult != null)
+        {
+            ViewModel.ApplyUpdateInfo(Services.UpdateService.LastCheckResult);
+        }
 
         PopulateSubtitlesStyles();
 
@@ -43,18 +48,30 @@ public sealed partial class SettingsPage : Page
                     }
                 });
             }
+            else if (target.Equals("Library", StringComparison.OrdinalIgnoreCase) ||
+                     target.Equals("Folders", StringComparison.OrdinalIgnoreCase))
+            {
+                DispatcherQueue?.TryEnqueue(async () =>
+                {
+                    await Task.Delay(200);
+                    if (LibrarySection != null)
+                    {
+                        ScrollAndHighlightCard(LibrarySection);
+                    }
+                });
+            }
         }
     }
 
     private bool _isPopulatingSubtitlesStyles;
 
-    private void PopulateSubtitlesStyles()
+    private async void PopulateSubtitlesStyles()
     {
         try
         {
             if (SubtitlesStyleComboBox == null) return;
             _isPopulatingSubtitlesStyles = true;
-            var themes = WindowsCaptionHelper.GetWindowsCaptionThemes();
+            var themes = await Task.Run(() => WindowsCaptionHelper.GetWindowsCaptionThemes());
             SubtitlesStyleComboBox.DisplayMemberPath = "Name";
             SubtitlesStyleComboBox.ItemsSource = themes;
             var selected = themes.FirstOrDefault(t => t.IsSelected) ?? themes.FirstOrDefault();
@@ -76,16 +93,25 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void OnOpenWindowsCaptionsSettingsClick(object sender, RoutedEventArgs e)
+    private async void OnOpenWindowsCaptionsSettingsClick(object sender, RoutedEventArgs e)
     {
-        WindowsCaptionHelper.OpenWindowsCaptionSettings();
+        await WindowsCaptionHelper.OpenWindowsCaptionSettings();
+    }
+
+    private async void OnOpenWindowsSignInSettingsClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:signinoptions"));
+        }
+        catch { }
     }
 
     public async void ScrollAndHighlightCard(FrameworkElement target)
     {
         try
         {
-            if (PageScrollViewer == null || target == null) return;
+            if (PageScrollViewer == null || target == null || !target.IsLoaded || target.XamlRoot == null || PageScrollViewer.XamlRoot == null) return;
 
             var transform = target.TransformToVisual(PageScrollViewer);
             var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
@@ -100,10 +126,13 @@ public sealed partial class SettingsPage : Page
                 var originalThickness = borderCard.BorderThickness;
                 var originalBackground = borderCard.Background;
 
-                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush
-                                  ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0));
+                var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+                var accentColor = accentBrush is Microsoft.UI.Xaml.Media.SolidColorBrush scb
+                    ? scb.Color
+                    : Windows.UI.Color.FromArgb(255, 255, 140, 0);
 
-                var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 140, 0));
+                var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    Windows.UI.Color.FromArgb(40, accentColor.R, accentColor.G, accentColor.B));
 
                 borderCard.BorderBrush = accentBrush;
                 borderCard.BorderThickness = new Thickness(2);
@@ -181,30 +210,11 @@ public sealed partial class SettingsPage : Page
                 InitializeSettingsSearchCatalog();
             }
 
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                PageContent.Opacity = 1.0;
-                return;
-            }
-
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(300);
-            visual.StartAnimation("Opacity", fadeAnimation);
-
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 16, 0));
-            slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(350);
-            visual.StartAnimation("Offset", slideAnimation);
+            PageContent.Opacity = 1.0;
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to animate SettingsPage entrance: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Failed to load SettingsPage: {ex.Message}");
             PageContent.Opacity = 1.0;
         }
     }
@@ -234,24 +244,24 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Auto brightness boost in HDR", Description = "Automatically boost display brightness to 100% during HDR playback", Section = "Video", Keywords = "brightness, auto, hdr, boost, luminance, monitor, screen, 100%, peak brightness, nits, laptop", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Tone mapping", Description = "Choose ACES, Reinhard, or Hable tone-mapping operator", Section = "Video", Keywords = "tonemap, tone mapping, aces, reinhard, hable, luminance, roll-off, clipping, contrast, sdr conversion", TargetElement = VideoSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show HDR badge on player", Description = "Display an HDR10/HLG badge on the video player when active", Section = "Video", Keywords = "badge, overlay, indicator, status, hdr10, hlg, dolby vision, tag, label, stamp", TargetElement = VideoSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Hover video preview", Description = "Play an elevated animated preview of a scene when hovering over a video card", Section = "Video", Keywords = "hover, preview, video preview, mini video, netflix, popout, elevated preview, trailer, scene, hover preview", TargetElement = VideoSection });
 
         // 4. Appearance & Visuals
         _allSearchItems.Add(new SettingSearchItem { Title = "App theme", Description = "Switch between Dark, Light, or System default theme", Section = "Appearance & Visuals", Keywords = "theme, dark, light, system, mode, color, appearance, style, dark mode, light mode", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Backdrop type", Description = "Change window material (Mica, Mica Alt, Acrylic, Solid)", Section = "Appearance & Visuals", Keywords = "backdrop, mica, mica alt, acrylic, solid, blur, transparency, glass, material, aero, window background", TargetElement = AppearanceSection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Accent color", Description = "Choose primary highlight color (Orange, Purple, Blue, Teal, Red, Pink)", Section = "Appearance & Visuals", Keywords = "accent, color, tint, orange, purple, blue, teal, red, pink, custom color, system default", TargetElement = AppearanceSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Backdrop type", Description = "Change window material (Mica, Mica Alt, Acrylic, Solid)", Section = "Appearance & Visuals", Keywords = "backdrop, mica, mica alt, acrylic, solid, glassy, liquid glass, blur, transparency, glass, material, window background", TargetElement = AppearanceSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Accent color", Description = "Sync with System Theme (Windows accent color) or choose a color (Orange, Purple, Blue, Teal, Red, Pink, Custom)", Section = "Appearance & Visuals", Keywords = "accent, color, tint, orange, purple, blue, teal, red, pink, custom color, system default, system theme, windows accent color", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Show transport bar", Description = "Toggle playback controls bar visibility across the app", Section = "Appearance & Visuals", Keywords = "transport bar, show transport bar, hide transport bar, player bar, bottom bar, playback bar, mini bar, toggle transport bar, transport", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Acrylic transport bar", Description = "Toggle frosted acrylic material for playback transport controls bar", Section = "Appearance & Visuals", Keywords = "acrylic, transport bar, frosted glass, blur, transparency, translucent, player bar, material", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Auto-hide transport bar in Streaming", Description = "Automatically hide playback controls when navigating movies, TV shows, and streaming", Section = "Appearance & Visuals", Keywords = "streaming, auto hide transport bar, hide transport bar in streaming, transport bar, bottom bar, streaming bar, movies, tv shows, youtube, twitch", TargetElement = AppearanceSection });
 
-        // 5. Controls & Interface
-        _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Controls & Interface", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = ControlsSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Appearance & Visuals", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = AppearanceSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Open files button position", Description = "Choose corner position for the open files button on Home", Section = "Appearance & Visuals", Keywords = "open files corner, position, top right, top left, button position, home button, bottom right, bottom left", TargetElement = AppearanceSection });
 
-        // 6. Media Library & Files
+        // 5. Media Library & Files
         _allSearchItems.Add(new SettingSearchItem { Title = "Library folders", Description = "Add or remove local folders to include in your media library", Section = "Media Library & Files", Keywords = "library, folders, scan, folder, add, music, videos, directory, path, watch folder, media folders, remove folder", TargetElement = LibrarySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Automatic library scan on launch", Description = "Automatically check for new media files on startup", Section = "Media Library & Files", Keywords = "scan, refresh, update, library, startup scan, background scan, auto scan", TargetElement = LibrarySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Supported formats", Description = "View and configure file extensions recognized by Lumière", Section = "Media Library & Files", Keywords = "formats, extensions, mp4, mkv, mp3, flac, wav, aac, m4a, avi, webm, hevc, av1", TargetElement = LibrarySection });
 
-        // 7. AI Features
+        // 6. AI Features
         _allSearchItems.Add(new SettingSearchItem { Title = "Google Gemini API Key", Description = "Configure direct cloud API key for Google Gemini generative AI", Section = "AI Features", Keywords = "gemini, api key, google gemini, cloud ai, llm key, token, gemini 2.0 flash, generative ai, api, cloud", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Test AI Pipeline Connection", Description = "Ping configured local Ollama or cloud Gemini AI provider to verify latency", Section = "AI Features", Keywords = "test ai, test connection, ping ollama, check gemini, ai latency, model test, verify ai, diagnostics, status, health", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Enable lyrics translation", Description = "Automatically translate synced lyrics using AI", Section = "AI Features", Keywords = "ai lyrics, translation, translate, song lyrics, multilingual, synced lyrics, realtime lyrics", TargetElement = AiSection });
@@ -263,14 +273,12 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Voice Clarity Enhancer", Description = "Hardware-accelerated dialogue boost for clearer vocals", Section = "AI Features", Keywords = "voice clarity, dialogue boost, spoken voice, dialogue clarity, speech enhancement, vocal booster, vocals", TargetElement = AiSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Dynamic Volume Leveler (Night Mode)", Description = "Level loud explosions and boost quiet dialogue for night viewing", Section = "AI Features", Keywords = "night mode, volume leveler, dynamic range, quiet dialogue, loud explosions, late night, compression, drc", TargetElement = AiSection });
 
-        // 8. Privacy & History
+        // 7. Privacy & History
         _allSearchItems.Add(new SettingSearchItem { Title = "App lock (Windows Hello / PIN)", Description = "Require Windows Hello biometric recognition or Windows PIN to unlock Lumière", Section = "Privacy & History", Keywords = "app lock, lock, windows hello, pin, biometric, face recognition, fingerprint, password, security, lock app, privacy, authentication, protect, secure", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Lock when minimized", Description = "Automatically lock Lumière and pause playback when minimized to protect your media", Section = "Privacy & History", Keywords = "minimize lock, lock on minimize, background lock, auto lock, pause on lock, privacy", TargetElement = PrivacySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "API Data Attribution", Description = "Metadata and streaming availability provided by TMDB & Watchmode", Section = "Privacy & History", Keywords = "tmdb, watchmode, api, attribution, license, credits, terms", TargetElement = PrivacySection });
-        _allSearchItems.Add(new SettingSearchItem { Title = "Remember playback position per track", Description = "Store and resume last position for each individual track", Section = "Privacy & History", Keywords = "position, per track, remember time, bookmark, track history, resume time", TargetElement = PrivacySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Clear data", Description = "Clear search history or recent files", Section = "Privacy & History", Keywords = "clear, delete, reset history, wipe cache, clear recent, remove history, purge data", TargetElement = PrivacySection });
 
-        // 9. Accessibility
+        // 8. Accessibility
         _allSearchItems.Add(new SettingSearchItem { Title = "High contrast mode", Description = "Increase contrast between UI elements for better legibility", Section = "Accessibility", Keywords = "high contrast, contrast, accessibility, black, white, yellow, visibility, legible, vision", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Text scale", Description = "Increase text size proportionally throughout the application", Section = "Accessibility", Keywords = "text scale, font size, zoom, text size, large text, magnification, 100%, 150%, 200%, scale", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Color blind mode", Description = "Color filters for Protanopia, Deuteranopia, and Tritanopia", Section = "Accessibility", Keywords = "color blind, protanopia, deuteranopia, tritanopia, daltonism, color vision deficiency, palette", TargetElement = AccessibilitySection });
@@ -284,12 +292,14 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Reduce motion", Description = "Disable animations and smooth visual transitions throughout app", Section = "Accessibility", Keywords = "reduce motion, disable animations, smooth transitions, vestibular, motion sickness, instant", TargetElement = AccessibilitySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Auto-read controls", Description = "Announce UI control labels when focused by keyboard or mouse", Section = "Accessibility", Keywords = "auto read, announce, speak, voice over, control labels, focused item, narrator helper", TargetElement = AccessibilitySection });
 
-        // 10. Keyboard Shortcuts
+        // 9. Keyboard Shortcuts
         _allSearchItems.Add(new SettingSearchItem { Title = "Available keyboard shortcuts", Description = "View keyboard controls for playback, seeking, volume, and fullscreen", Section = "Keyboard Shortcuts", Keywords = "keyboard, shortcuts, hotkeys, space, arrows, media keys, f, m, j, l, hotkey table, available keyboard shortcuts", TargetElement = ShortcutsSection });
 
-        // 11. Reset & About
-        _allSearchItems.Add(new SettingSearchItem { Title = "Reset settings", Description = "Restore all Lumière player preferences to factory defaults", Section = "Reset & About", Keywords = "reset, restore, clear, default, factory reset, wipe preferences, reset settings", TargetElement = AboutSection });
+        // 10. Reset & About
         _allSearchItems.Add(new SettingSearchItem { Title = "Check for updates", Description = "Check online for new Lumière Media Player versions", Section = "Reset & About", Keywords = "update, version, release, new version, check for updates, upgrade, github, download", TargetElement = AboutSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Reset settings", Description = "Restore all Lumière player preferences to factory defaults", Section = "Reset & About", Keywords = "reset, restore, clear, default, factory reset, wipe preferences, reset settings", TargetElement = AboutSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "Supported formats", Description = "View audio and video file extensions recognized by Lumière", Section = "Reset & About", Keywords = "formats, extensions, mp4, mkv, mp3, flac, wav, aac, m4a, avi, webm, hevc, av1", TargetElement = AboutSection });
+        _allSearchItems.Add(new SettingSearchItem { Title = "API Data Attribution", Description = "Metadata and streaming availability provided by TMDB & Watchmode", Section = "Reset & About", Keywords = "tmdb, watchmode, api, attribution, license, credits, terms", TargetElement = AboutSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "About Lumière Media Player", Description = "Version info, license, and system hardware specifications", Section = "Reset & About", Keywords = "about, version, update, license, author, developer, credits, build number", TargetElement = AboutSection });
     }
 
@@ -421,9 +431,8 @@ public sealed partial class SettingsPage : Page
         {
             if (PageScrollViewer == null) return;
 
-            // Find the exact setting card for this item, or fall back to section
             FrameworkElement? target = FindCardByTitle(item.Title) ?? item.TargetElement as FrameworkElement;
-            if (target == null) return;
+            if (target == null || !target.IsLoaded || target.XamlRoot == null || PageScrollViewer.XamlRoot == null) return;
 
             // Calculate position of target element relative to PageScrollViewer
             var transform = target.TransformToVisual(PageScrollViewer);
@@ -442,10 +451,13 @@ public sealed partial class SettingsPage : Page
                 var originalThickness = borderCard.BorderThickness;
                 var originalBackground = borderCard.Background;
 
-                var accentBrush = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush
-                                  ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0));
+                var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+                var accentColor = accentBrush is Microsoft.UI.Xaml.Media.SolidColorBrush scb
+                    ? scb.Color
+                    : Windows.UI.Color.FromArgb(255, 255, 140, 0);
 
-                var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 140, 0));
+                var glowBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    Windows.UI.Color.FromArgb(40, accentColor.R, accentColor.G, accentColor.B));
 
                 borderCard.BorderBrush = accentBrush;
                 borderCard.BorderThickness = new Thickness(2);
@@ -485,13 +497,13 @@ public sealed partial class SettingsPage : Page
                      text.StartsWith(title, StringComparison.OrdinalIgnoreCase) ||
                      title.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
                 {
-                    // Traverse upwards to find the enclosing SettingsCard Border
+                    // Traverse upwards to find the enclosing SettingsCard Border or Expander
                     var current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(tb);
                     while (current != null && current != PageContent)
                     {
-                        if (current is Border b && b != PageContent)
+                        if ((current is Border b && b != PageContent) || current is Expander)
                         {
-                            return b;
+                            return (FrameworkElement)current;
                         }
                         current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
                     }
@@ -503,6 +515,22 @@ public sealed partial class SettingsPage : Page
             if (found != null) return found;
         }
         return null;
+    }
+
+    private void OnSettingsHeaderPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (SettingsHeaderAnimatedIcon != null)
+        {
+            Microsoft.UI.Xaml.Controls.AnimatedIcon.SetState(SettingsHeaderAnimatedIcon, "PointerOver");
+        }
+    }
+
+    private void OnSettingsHeaderPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (SettingsHeaderAnimatedIcon != null)
+        {
+            Microsoft.UI.Xaml.Controls.AnimatedIcon.SetState(SettingsHeaderAnimatedIcon, "Normal");
+        }
     }
 }
 

@@ -36,6 +36,8 @@ public static class ColorHelper
         return Color.FromArgb(255, 0, 120, 212);
     }
 
+    public static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
     public static Brush BrushFromHex(string? hex) => BrushFromHex(hex, "#0078D4");
 
     public static Brush BrushFromHex(string? hex, string defaultHex)

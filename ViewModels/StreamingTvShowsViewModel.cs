@@ -86,8 +86,8 @@ namespace LumiereMediaPlayer.ViewModels
         [RelayCommand]
         public void QuickFilterTopRated()
         {
-            SelectedRating = "8.0+";
-            SelectedSortOrder = "User Rating (High to Low)";
+            SelectedRating = RatingOptions.Count > 1 ? RatingOptions[1] : "⭐ 8.0+";
+            SelectedSortOrder = "Popularity";
         }
 
         [RelayCommand]
@@ -344,6 +344,8 @@ namespace LumiereMediaPlayer.ViewModels
                     var showList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
                     if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
                     TvShows.UpdateInPlace(showList);
+                    CanGoNext = showList.Count >= 20;
+                    CanGoPrevious = CurrentPage > 1;
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }
@@ -501,6 +503,8 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     if (TvShows == null) TvShows = new ObservableCollection<WatchmodeTitle>();
                     TvShows.UpdateInPlace(showList);
+                    CanGoNext = false;
+                    CanGoPrevious = false;
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }

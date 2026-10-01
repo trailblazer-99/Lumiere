@@ -13,7 +13,17 @@
     Title="Lumière Media Player">
 
 
-    <Grid x:Name="RootGrid" Loaded="OnWindowLoaded" KeyDown="OnRootGridKeyDown" PointerWheelChanged="OnRootGridPointerWheelChanged" PointerMoved="OnRootGridPointerMoved" PointerPressed="OnRootGridPointerPressed" PointerReleased="OnRootGridPointerReleased" PointerCanceled="OnRootGridPointerCanceled" PointerCaptureLost="OnRootGridPointerCanceled">
+    <Grid x:Name="RootGrid"
+          AllowDrop="True"
+          DragOver="OnRootGridDragOver"
+          Drop="OnRootGridDrop"
+          Loaded="OnWindowLoaded"
+          PointerWheelChanged="OnRootGridPointerWheelChanged"
+          PointerMoved="OnRootGridPointerMoved"
+          PointerPressed="OnRootGridPointerPressed"
+          PointerReleased="OnRootGridPointerReleased"
+          PointerCanceled="OnRootGridPointerCanceled"
+          PointerCaptureLost="OnRootGridPointerCanceled">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -25,10 +35,13 @@
             Grid.Row="0"
             IsTabStop="False"
             IsBackButtonVisible="Collapsed"
-            IsSettingsVisible="True"
+            IsSettingsVisible="False"
             IsPaneToggleButtonVisible="True"
             IsTitleBarAutoPaddingEnabled="False"
             PaneDisplayMode="Left"
+            OpenPaneLength="256"
+            CompactPaneLength="48"
+            ItemInvoked="OnNavigationItemInvoked"
             SelectionChanged="OnNavigationSelectionChanged"
             BackRequested="OnBackRequested"
             PaneOpened="OnNavigationPaneOpened"
@@ -45,6 +58,7 @@
                             FontSize="12"
                             FontWeight="SemiBold"
                             Text="Lumière Media Player"
+                            TextTrimming="CharacterEllipsis"
                             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                             VerticalAlignment="Center" />
                     </StackPanel>
@@ -55,10 +69,20 @@
                 <AutoSuggestBox
                     x:Name="AppSearchBox"
                     PlaceholderText="Search music, videos, streaming..."
-                    QueryIcon="Find"
                     TextChanged="OnSearchTextChanged"
                     QuerySubmitted="OnSearchQuerySubmitted"
-                    SuggestionChosen="OnSearchSuggestionChosen" />
+                    SuggestionChosen="OnSearchSuggestionChosen">
+                    <AutoSuggestBox.QueryIcon>
+                        <AnimatedIcon x:Name="SearchAnimatedIcon">
+                            <AnimatedIcon.Source>
+                                <animatedvisuals:AnimatedFindVisualSource />
+                            </AnimatedIcon.Source>
+                            <AnimatedIcon.FallbackIconSource>
+                                <SymbolIconSource Symbol="Find" />
+                            </AnimatedIcon.FallbackIconSource>
+                        </AnimatedIcon>
+                    </AutoSuggestBox.QueryIcon>
+                </AutoSuggestBox>
             </NavigationView.AutoSuggestBox>
 
             <NavigationView.Resources>
@@ -68,26 +92,311 @@
                 <x:Double x:Key="NavigationViewHeaderMinHeight">0</x:Double>
                 <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent" />
                 <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
-                <SolidColorBrush x:Key="NavigationViewItemFocusVisualPrimaryBrush" Color="Transparent" />
-                <SolidColorBrush x:Key="NavigationViewItemFocusVisualSecondaryBrush" Color="Transparent" />
-                <SolidColorBrush x:Key="NavigationViewButtonFocusVisualPrimaryBrush" Color="Transparent" />
-                <SolidColorBrush x:Key="NavigationViewButtonFocusVisualSecondaryBrush" Color="Transparent" />
-                <SolidColorBrush x:Key="FocusStrokeColorOuter" Color="Transparent" />
-                <SolidColorBrush x:Key="FocusStrokeColorInner" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+
+                <Style x:Key="StreamingFlyoutItemButtonStyle" TargetType="Button">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="CornerRadius" Value="6" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border
+                                    x:Name="ItemRootBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="PointerOver">
+                                                <VisualState.Setters>
+                                                    <Setter Target="ItemRootBorder.Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                            <VisualState x:Name="Pressed">
+                                                <VisualState.Setters>
+                                                    <Setter Target="ItemRootBorder.Background" Value="{ThemeResource ControlFillColorTertiaryBrush}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                            <VisualState x:Name="Disabled">
+                                                <VisualState.Setters>
+                                                    <Setter Target="ItemRootBorder.Opacity" Value="0.4" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+                                    <ContentPresenter
+                                        Content="{TemplateBinding Content}"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Center" />
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <!-- Streaming Flyout for Collapsed / Compact Sidebar Mode (Fluent 2 Acrylic) -->
+                <Flyout
+                    x:Name="StreamingCompactFlyout"
+                    x:Key="StreamingCompactFlyout"
+                    Placement="RightEdgeAlignedTop"
+                    Opening="OnStreamingCompactFlyoutOpening"
+                    helpers:FlyoutHelper.FollowBackdrop="True">
+                    <Flyout.FlyoutPresenterStyle>
+                        <Style TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+                            <Setter Property="MinWidth" Value="196" />
+                            <Setter Property="MaxWidth" Value="240" />
+                            <Setter Property="Padding" Value="4,6,4,6" />
+                            <Setter Property="CornerRadius" Value="8" />
+                            <Setter Property="Background" Value="{ThemeResource FlyoutPresenterBackground}" />
+                            <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
+                            <Setter Property="BorderThickness" Value="1" />
+                            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+                        </Style>
+                    </Flyout.FlyoutPresenterStyle>
+
+                    <StackPanel x:Name="StreamingFlyoutContainer" Spacing="2" Orientation="Vertical">
+                        <!-- Music -->
+                        <Button
+                            x:Name="FlyoutStreamMusicBtn"
+                            Style="{StaticResource StreamingFlyoutItemButtonStyle}"
+                            Tag="streamMusic"
+                            Click="OnStreamMusicFlyoutClick">
+                            <Grid Height="36" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle
+                                    x:Name="FlyoutMusicIndicator"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    Height="16"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left"
+                                    Margin="1,0,0,0"
+                                    Visibility="Collapsed" />
+
+                                <FontIcon
+                                    Grid.Column="1"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE8D6;"
+                                    FontSize="16"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="Music"
+                                    FontSize="13"
+                                    Margin="8,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
+                        </Button>
+
+                        <!-- Movies -->
+                        <Button
+                            x:Name="FlyoutStreamMoviesBtn"
+                            Style="{StaticResource StreamingFlyoutItemButtonStyle}"
+                            Tag="streamMovies"
+                            Click="OnStreamMoviesFlyoutClick">
+                            <Grid Height="36" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle
+                                    x:Name="FlyoutMoviesIndicator"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    Height="16"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left"
+                                    Margin="1,0,0,0"
+                                    Visibility="Collapsed" />
+
+                                <FontIcon
+                                    Grid.Column="1"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE8B2;"
+                                    FontSize="16"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="Movies"
+                                    FontSize="13"
+                                    Margin="8,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
+                        </Button>
+
+                        <!-- TV Shows -->
+                        <Button
+                            x:Name="FlyoutStreamTvShowsBtn"
+                            Style="{StaticResource StreamingFlyoutItemButtonStyle}"
+                            Tag="streamTvShows"
+                            Click="OnStreamTvShowsFlyoutClick">
+                            <Grid Height="36" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle
+                                    x:Name="FlyoutTvShowsIndicator"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    Height="16"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left"
+                                    Margin="1,0,0,0"
+                                    Visibility="Collapsed" />
+
+                                <FontIcon
+                                    Grid.Column="1"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE7F4;"
+                                    FontSize="16"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="TV Shows"
+                                    FontSize="13"
+                                    Margin="8,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
+                        </Button>
+
+                        <!-- YouTube -->
+                        <Button
+                            x:Name="FlyoutStreamYouTubeBtn"
+                            Style="{StaticResource StreamingFlyoutItemButtonStyle}"
+                            Tag="streamYouTube"
+                            Click="OnStreamYouTubeFlyoutClick">
+                            <Grid Height="36" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle
+                                    x:Name="FlyoutYouTubeIndicator"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    Height="16"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left"
+                                    Margin="1,0,0,0"
+                                    Visibility="Collapsed" />
+
+                                <FontIcon
+                                    Grid.Column="1"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE714;"
+                                    FontSize="16"
+                                    Foreground="{StaticResource YouTubeBrandBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="YouTube"
+                                    FontSize="13"
+                                    Margin="8,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
+                        </Button>
+
+                        <!-- Twitch -->
+                        <Button
+                            x:Name="FlyoutStreamTwitchBtn"
+                            Style="{StaticResource StreamingFlyoutItemButtonStyle}"
+                            Tag="streamTwitch"
+                            Click="OnStreamTwitchFlyoutClick">
+                            <Grid Height="36" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle
+                                    x:Name="FlyoutTwitchIndicator"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    Height="16"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left"
+                                    Margin="1,0,0,0"
+                                    Visibility="Collapsed" />
+
+                                <FontIcon
+                                    Grid.Column="1"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE7FC;"
+                                    FontSize="16"
+                                    Foreground="{StaticResource TwitchBrandBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="Twitch"
+                                    FontSize="13"
+                                    Margin="8,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Flyout>
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Uid="NavHome" Content="Home" Icon="Home" Tag="home" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem x:Uid="NavMusic" Content="Music" Icon="MusicInfo" Tag="music" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem x:Uid="NavVideo" Content="Videos" Icon="Video" Tag="videos" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
-                <NavigationViewItem x:Uid="NavPlaylists" Content="Playlists" Icon="List" Tag="playlists" helpers:SpringAnimationHelper.EnableItemIconSpring="True" />
+                <NavigationViewItem x:Uid="NavHome" Content="Home" Icon="Home" Tag="home" />
+                <NavigationViewItem x:Uid="NavMusic" Content="Music" Icon="MusicInfo" Tag="music" />
+                <NavigationViewItem x:Uid="NavVideo" Content="Videos" Icon="Video" Tag="videos" />
+                <NavigationViewItem x:Uid="NavPlaylists" Content="Playlists" Icon="List" Tag="playlists" />
                 <NavigationViewItem
                     x:Name="NowPlayingNavItem"
                     x:Uid="NavNowPlaying"
                     Content="Now playing"
                     Icon="Play"
-                    Tag="nowPlaying"
-                    helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                    Tag="nowPlaying">
                     <NavigationViewItem.InfoBadge>
                         <InfoBadge x:Name="PlaybackInfoBadge" Visibility="Collapsed">
                             <InfoBadge.IconSource>
@@ -97,47 +406,73 @@
                     </NavigationViewItem.InfoBadge>
                 </NavigationViewItem>
                 <NavigationViewItemSeparator />
-                <NavigationViewItem Content="Streaming" Tag="streaming" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                <NavigationViewItem x:Name="StreamingNavItem" Content="Streaming" Tag="streaming" SelectsOnInvoked="False">
                     <NavigationViewItem.Icon>
                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE93E;" />
                     </NavigationViewItem.Icon>
                     <NavigationViewItem.MenuItems>
-                        <NavigationViewItem Content="Music" Tag="streamMusic" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                        <NavigationViewItem Content="Music" Tag="streamMusic">
                             <NavigationViewItem.Icon>
                                 <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8D6;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="Movies" Tag="streamMovies" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                        <NavigationViewItem Content="Movies" Tag="streamMovies">
                             <NavigationViewItem.Icon>
                                 <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8B2;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="TV Shows" Tag="streamTvShows" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                        <NavigationViewItem Content="TV Shows" Tag="streamTvShows">
                             <NavigationViewItem.Icon>
                                 <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE7F4;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="YouTube" Tag="streamYouTube" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                        <NavigationViewItem Content="YouTube" Tag="streamYouTube">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE714;" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE714;" Foreground="{StaticResource YouTubeBrandBrush}" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="Twitch" Tag="streamTwitch" helpers:SpringAnimationHelper.EnableItemIconSpring="True">
+                        <NavigationViewItem Content="Twitch" Tag="streamTwitch">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE7FC;" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE7FC;" Foreground="{StaticResource TwitchBrandBrush}" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
                     </NavigationViewItem.MenuItems>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
-            <Frame x:Name="ContentFrame" x:FieldModifier="public" Margin="0" CacheSize="2" Navigated="OnContentFrameNavigated" Navigating="OnContentFrameNavigating" NavigationFailed="OnContentFrameNavigationFailed">
-                <Frame.ContentTransitions>
-                    <TransitionCollection>
-                        <NavigationThemeTransition />
-                    </TransitionCollection>
-                </Frame.ContentTransitions>
-            </Frame>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem
+                    x:Name="SettingsNavItem"
+                    Content="Settings"
+                    Tag="settings"
+                    AutomationProperties.Name="Settings"
+                    PointerEntered="OnSettingsNavItemPointerEntered"
+                    PointerExited="OnSettingsNavItemPointerExited">
+                    <NavigationViewItem.Icon>
+                        <AnimatedIcon x:Name="SettingsNavAnimatedIcon">
+                            <AnimatedIcon.Source>
+                                <animatedvisuals:AnimatedSettingsVisualSource />
+                            </AnimatedIcon.Source>
+                            <AnimatedIcon.FallbackIconSource>
+                                <SymbolIconSource Symbol="Setting" />
+                            </AnimatedIcon.FallbackIconSource>
+                        </AnimatedIcon>
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="UpdateInfoBadge" Value="1" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
+            <Grid>
+                <Frame x:Name="ContentFrame" x:FieldModifier="public" Margin="0" CacheSize="2" Navigated="OnContentFrameNavigated" Navigating="OnContentFrameNavigating" NavigationFailed="OnContentFrameNavigationFailed">
+                    <Frame.ContentTransitions>
+                        <TransitionCollection>
+                            <NavigationThemeTransition />
+                        </TransitionCollection>
+                    </Frame.ContentTransitions>
+                </Frame>
+            </Grid>
         </NavigationView>
 
         <!-- Seamless AppTitleBar overlay at top of Row 0 -->
@@ -195,23 +530,25 @@
                 Height="32"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Background="#801F1F1F"
-                BorderBrush="#20FFFFFF"
+                Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="16"
-                Foreground="White"
+                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                 Click="OnVideoBackButtonClick"
+                PointerEntered="OnVideoBackButtonPointerEntered"
+                PointerExited="OnVideoBackButtonPointerExited"
                 Visibility="Collapsed"
+                AutomationProperties.Name="Back"
                 ToolTipService.ToolTip="Back">
-                <Button.Resources>
-                    <SolidColorBrush x:Key="ButtonBackground" Color="#801F1F1F" />
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B31F1F1F" />
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#CC1F1F1F" />
-                    <SolidColorBrush x:Key="ButtonForeground" Color="White" />
-                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
-                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
-                </Button.Resources>
-                <FontIcon FontSize="13" Glyph="&#xE72B;" Foreground="White" />
+                <AnimatedIcon x:Name="VideoBackAnimatedIcon" Width="16" Height="16">
+                    <AnimatedIcon.Source>
+                        <animatedvisuals:AnimatedBackVisualSource />
+                    </AnimatedIcon.Source>
+                    <AnimatedIcon.FallbackIconSource>
+                        <SymbolIconSource Symbol="Back" />
+                    </AnimatedIcon.FallbackIconSource>
+                </AnimatedIcon>
             </Button>
         </Grid>
 
@@ -240,6 +577,7 @@
                     </Grid.Background>
                     <Button
                         x:Name="FullscreenBackButton"
+                        AutomationProperties.Name="Back"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
                         Margin="16,12,0,0"
@@ -253,8 +591,8 @@
                         helpers:SpringAnimationHelper.EnableHoverSpring="True"
                         helpers:SpringAnimationHelper.HoverScale="1.08"
                         helpers:SpringAnimationHelper.PressScale="0.92"
-                        PointerEntered="OnControlsPointerEntered"
-                        PointerExited="OnControlsPointerExited"
+                        PointerEntered="OnFullscreenBackButtonPointerEntered"
+                        PointerExited="OnFullscreenBackButtonPointerExited"
                         Click="OnVideoBackButtonClick"
                         ToolTipService.ToolTip="Back">
                         <Button.Resources>
@@ -266,13 +604,14 @@
                             <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
                             <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="White" />
                         </Button.Resources>
-                        <FontIcon
-                            FontSize="16"
-                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                            Glyph="&#xE72B;"
-                            Foreground="White"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
+                        <AnimatedIcon x:Name="FullscreenBackAnimatedIcon" Width="16" Height="16">
+                            <AnimatedIcon.Source>
+                                <animatedvisuals:AnimatedBackVisualSource />
+                            </AnimatedIcon.Source>
+                            <AnimatedIcon.FallbackIconSource>
+                                <SymbolIconSource Symbol="Back" />
+                            </AnimatedIcon.FallbackIconSource>
+                        </AnimatedIcon>
                     </Button>
                 </Grid>
 
@@ -292,16 +631,24 @@
                 x:FieldModifier="public"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
-                Margin="24"
+                Margin="24,64,24,24"
                 Padding="20"
                 CornerRadius="8"
                 Visibility="Collapsed"
-                Background="#CC1F1F1F">
+                RequestedTheme="Dark"
+                Background="#E6141418"
+                BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                BorderThickness="1"
+                Translation="0,0,32">
+                <Border.Shadow>
+                    <ThemeShadow />
+                </Border.Shadow>
                 <Border.BackgroundTransition>
                     <BrushTransition />
                 </Border.BackgroundTransition>
                 <Grid>
                     <Button x:Name="CloseFullscreenMetadataButton" x:FieldModifier="public" 
+                            AutomationProperties.Name="Close metadata"
                             Margin="0,-12,-12,0"
                             Padding="4"
                             HorizontalAlignment="Right" 
@@ -333,69 +680,69 @@
                             <RowDefinition />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="11" FontWeight="SemiBold" Foreground="#38BDF8" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
                         <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
                         <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
-                            <TextBlock Text="•" FontSize="11" Foreground="#66FFFFFF" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="#A0A0A0" FontSize="11" />
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
                         <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
-                            <TextBlock Text="•" FontSize="11" Foreground="#66FFFFFF" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="#A0A0A0" FontSize="11" />
-                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, TargetNullValue='Unknown'}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
+                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
                     </Grid>
 
                     <!-- Divider between File Information and Internet Match -->
-                    <MenuFlyoutSeparator Margin="0,8,0,4" Background="#33FFFFFF" x:Name="FullscreenMetadataDivider" x:FieldModifier="public" Visibility="Collapsed" />
+                    <MenuFlyoutSeparator Margin="0,8,0,4" Background="{ThemeResource DividerStrokeColorDefaultBrush}" x:Name="FullscreenMetadataDivider" x:FieldModifier="public" Visibility="Collapsed" />
 
                     <!-- Internet Metadata Match (syncs with normal mode's metadata side panel) -->
                     <StackPanel x:Name="FullscreenInternetMetadataPanel" x:FieldModifier="public" Spacing="12" Visibility="Collapsed" Width="300">
                         <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
-                        <ProgressRing x:Name="FullscreenInternetMetadataProgress" x:FieldModifier="public" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="White" />
+                        <ProgressRing x:Name="FullscreenInternetMetadataProgress" x:FieldModifier="public" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         
                         <Grid x:Name="FullscreenInternetMetadataContent" x:FieldModifier="public" ColumnSpacing="12" Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" CornerRadius="6" VerticalAlignment="Top">
-                                <Image x:Name="FullscreenInternetMetadataPoster" x:FieldModifier="public" Stretch="UniformToFill" MaxHeight="130" />
+                            <Border x:Name="FullscreenInternetMetadataPosterBorder" x:FieldModifier="public" Grid.Column="0" CornerRadius="6" VerticalAlignment="Top" Visibility="Collapsed">
+                                <Image x:Name="FullscreenInternetMetadataPoster" x:FieldModifier="public" Width="90" Stretch="UniformToFill" MaxHeight="130" />
                             </Border>
                             <StackPanel Grid.Column="1" Spacing="8">
                                 <TextBlock x:Name="FullscreenInternetMetadataTitle" x:FieldModifier="public" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" FontSize="14" />
-                                <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#A0A0A0" LineHeight="15" />
+                                <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" LineHeight="15" />
                             </StackPanel>
                         </Grid>
 
                         <StackPanel x:Name="FullscreenInternetMetadataProvidersPanel" x:FieldModifier="public" Spacing="8" Visibility="Collapsed">
-                            <Button x:Name="FullscreenStreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="{ThemeResource SystemAccentColor}" Foreground="White" BorderBrush="Transparent" />
+                            <Button x:Name="FullscreenStreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="{ThemeResource AccentFillColorDefaultBrush}" Foreground="White" BorderBrush="Transparent" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -420,7 +767,7 @@
                     Opacity="0">
                     <StackPanel Spacing="6" HorizontalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xED3C;" FontSize="28" Foreground="White" VerticalAlignment="Center" />
+                            <FontIcon Glyph="&#xED3C;" FontSize="32" Foreground="White" VerticalAlignment="Center" />
                             <TextBlock x:Name="FullscreenSeekBackText" Text="-10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
                         </StackPanel>
                         <TextBlock x:Name="FullscreenSeekBackSubtext" Text="Seek Backward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
@@ -442,7 +789,7 @@
                     <StackPanel Spacing="6" HorizontalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
                             <TextBlock x:Name="FullscreenSeekForwardText" Text="+10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
-                            <FontIcon Glyph="&#xED3D;" FontSize="28" Foreground="White" VerticalAlignment="Center" />
+                            <FontIcon Glyph="&#xED3D;" FontSize="32" Foreground="White" VerticalAlignment="Center" />
                         </StackPanel>
                         <TextBlock x:Name="FullscreenSeekForwardSubtext" Text="Seek Forward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -580,9 +927,9 @@
                             <FontIcon
                                 x:Name="MiniVolumeIcon"
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="13"
+                                FontSize="16"
                                 Glyph="&#xE767;"
-                                Foreground="White" />
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </Button>
 
                         <!-- Expand / Exit PiP Button -->
@@ -598,7 +945,7 @@
                             helpers:SpringAnimationHelper.HoverScale="1.08">
                             <FontIcon
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="13"
+                                FontSize="16"
                                 Glyph="&#xE93A;"
                                 Foreground="White" />
                         </Button>
@@ -612,7 +959,8 @@
                         Background="#80121216"
                         BorderBrush="#35FFFFFF"
                         BorderThickness="1"
-                        Padding="10,6">
+                        Padding="10,6"
+                        Translation="0,0,16">
                         <Border.Shadow>
                             <ThemeShadow />
                         </Border.Shadow>
@@ -632,7 +980,7 @@
                                 ToolTipService.ToolTip="Previous"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="15" Glyph="&#xE892;" Foreground="White" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" Foreground="White" />
                             </Button>
 
                             <!-- Play/Pause Button (Exact button used in Media Player) -->
@@ -656,7 +1004,7 @@
                                     <FontIcon
                                         x:Name="MiniPlayPauseIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        FontSize="14"
+                                        FontSize="16"
                                         Foreground="White"
                                         Glyph="&#xE768;"
                                         HorizontalAlignment="Center"
@@ -676,7 +1024,7 @@
                                 ToolTipService.ToolTip="Next"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="15" Glyph="&#xE893;" Foreground="White" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" Foreground="White" />
                             </Button>
                         </StackPanel>
                     </Border>
@@ -703,10 +1051,18 @@
                         Maximum="100"
                         Value="0"
                         Height="20"
+                        Padding="10,0,10,0"
                         Margin="0,-4,0,-4"
                         IsThumbToolTipEnabled="False"
                         ValueChanged="OnMiniSliderValueChanged"
-                        PointerCaptureLost="OnMiniSliderPointerCaptureLost" />
+                        PointerCaptureLost="OnMiniSliderPointerCaptureLost">
+                        <Slider.Resources>
+                            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+                            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+                            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+                        </Slider.Resources>
+                    </Slider>
 
                     <!-- Timestamp row -->
                     <Grid Grid.Row="1" Margin="0,2,0,0">
@@ -826,5 +1182,12 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- Elevated Netflix-Style Video Hover Preview Host -->
+        <controls:VideoHoverPreviewHost
+            x:Name="VideoHoverPreview"
+            Grid.RowSpan="2"
+            Canvas.ZIndex="600"
+            Visibility="Collapsed" />
     </Grid>
 </Window>

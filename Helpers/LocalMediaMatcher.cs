@@ -17,26 +17,35 @@ namespace LumiereMediaPlayer.Helpers
 
         private static readonly HashSet<string> TokensToStrip = new(StringComparer.OrdinalIgnoreCase)
         {
-            "1080p", "720p", "2160p", "480p", "4k", "8k", "uhd", "hdr", "hdr10", "dolby", "vision", "atmos",
-            "web", "webdl", "webrip", "bluray", "brrip", "xvid", "divx", "x264", "h264", "x265", "h265", "hevc",
-            "aac", "dts", "flac", "mp3", "ac3", "eac3", "ddp5", "remux", "dual", "audio", "sub", "subs", "multi",
-            "season", "episode", "pilot"
+            "1080p", "720p", "2160p", "480p", "4k", "8k", "uhd", "hdr", "hdr10", "hdr10plus", "dolby", "vision", "atmos",
+            "web", "webdl", "web-dl", "webrip", "web-rip", "bluray", "brrip", "bdrip", "dvdrip", "xvid", "divx",
+            "x264", "h264", "x265", "h265", "hevc", "av1", "aac", "dts", "flac", "mp3", "ac3", "eac3", "ddp5",
+            "remux", "dual", "audio", "sub", "subs", "multi", "proper", "repack", "extended", "unrated",
+            "season", "episode", "pilot", "series",
+            "mp4", "mkv", "avi", "mov", "wmv", "webm", "flv", "m4v", "ts", "m2ts"
         };
 
         public static string CleanTitleForComparison(string? text)
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
+
             string cleaned = text.Replace("'", "").Replace("’", "").Replace("&", " and ");
             cleaned = cleaned.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ').Replace(':', ' ').Replace(';', ' ')
                              .Replace('(', ' ').Replace(')', ' ').Replace('[', ' ').Replace(']', ' ')
                              .Replace('{', ' ').Replace('}', ' ').Replace(',', ' ');
+
+            // Strip season/episode tokens such as S01E02, 1x05, Season 1, Episode 4
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\b[sS]\d{1,2}\s*[eE]\d{1,3}\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\b\d{1,2}x\d{1,3}\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\b(?:season|series|episode|ep)\s*\d+\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
             var chars = cleaned.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray();
             cleaned = new string(chars).Trim().ToLowerInvariant();
 
+            int maxReleaseYear = DateTime.UtcNow.Year + 2;
             var words = cleaned.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                                .Where(w => !TokensToStrip.Contains(w))
-                               .Where(w => !(w.Length == 4 && int.TryParse(w, out int yr) && yr >= 1900 && yr <= 2100))
-                               .Where(w => !(w.Length >= 4 && (w.StartsWith("s0") || w.StartsWith("s1") || w.StartsWith("s2") || w.StartsWith("s3")) && w.Contains("e0")))
+                               .Where(w => !(w.Length == 4 && int.TryParse(w, out int yr) && yr >= 1900 && yr <= maxReleaseYear))
                                .ToArray();
 
             return string.Join(" ", words);
@@ -53,14 +62,57 @@ namespace LumiereMediaPlayer.Helpers
             if (string.Equals(cleanTarget, cleanCandidate, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (cleanTarget.Length >= 3 && cleanCandidate.StartsWith(cleanTarget + " ", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (cleanCandidate.Length >= 3 && cleanTarget.StartsWith(cleanCandidate + " ", StringComparison.OrdinalIgnoreCase))
+            static string StripArticle(string s)
+            {
+                if (s.StartsWith("the ", StringComparison.OrdinalIgnoreCase)) return s.Substring(4);
+                if (s.StartsWith("a ", StringComparison.OrdinalIgnoreCase)) return s.Substring(2);
+                if (s.StartsWith("an ", StringComparison.OrdinalIgnoreCase)) return s.Substring(3);
+                return s;
+            }
+
+            string noArtTarget = StripArticle(cleanTarget);
+            string noArtCandidate = StripArticle(cleanCandidate);
+
+            if (string.Equals(noArtTarget, noArtCandidate, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (cleanTarget.Length >= 4 && (cleanCandidate.StartsWith(cleanTarget, StringComparison.OrdinalIgnoreCase) ||
-                                            cleanTarget.StartsWith(cleanCandidate, StringComparison.OrdinalIgnoreCase)))
+            if (noArtTarget.Length >= 3 && noArtCandidate.StartsWith(noArtTarget + " ", StringComparison.OrdinalIgnoreCase))
                 return true;
+            if (noArtCandidate.Length >= 3 && noArtTarget.StartsWith(noArtCandidate + " ", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (noArtTarget.Length >= 4 && (noArtCandidate.StartsWith(noArtTarget, StringComparison.OrdinalIgnoreCase) ||
+                                           noArtTarget.StartsWith(noArtCandidate, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
+        }
+
+        public static bool MatchesFileOrAncestors(string? targetTitle, string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(targetTitle) || string.IsNullOrWhiteSpace(filePath))
+                return false;
+
+            string fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
+            if (IsTitleMatch(targetTitle, fileNameNoExt))
+                return true;
+
+            try
+            {
+                var dir = Path.GetDirectoryName(filePath);
+                while (!string.IsNullOrWhiteSpace(dir))
+                {
+                    var seg = Path.GetFileName(dir);
+                    if (IsTitleMatch(targetTitle, seg))
+                        return true;
+
+                    var parent = Path.GetDirectoryName(dir);
+                    if (string.Equals(parent, dir, StringComparison.OrdinalIgnoreCase))
+                        break;
+                    dir = parent;
+                }
+            }
+            catch { }
 
             return false;
         }
@@ -89,7 +141,7 @@ namespace LumiereMediaPlayer.Helpers
             catch { return ""; }
         }
 
-        public static IEnumerable<string> SafeEnumerateVideoFiles(string rootPath, int maxDepth = 3)
+        public static IEnumerable<string> SafeEnumerateVideoFiles(string rootPath, int maxDepth = 6)
         {
             var list = new List<string>();
             SafeEnumerateRecursive(rootPath, 0, maxDepth, ValidExtensions, list);
@@ -101,17 +153,28 @@ namespace LumiereMediaPlayer.Helpers
             if (string.IsNullOrEmpty(currentDir) || currentDepth > maxDepth) return;
             try
             {
-                foreach (var file in Directory.EnumerateFiles(currentDir))
+                IEnumerable<string>? files = null;
+                try { files = Directory.EnumerateFiles(currentDir); } catch { }
+                if (files != null)
                 {
-                    string ext = Path.GetExtension(file);
-                    if (!string.IsNullOrEmpty(ext) && validExtensions.Contains(ext))
+                    foreach (var file in files)
                     {
-                        results.Add(file);
+                        string ext = Path.GetExtension(file);
+                        if (!string.IsNullOrEmpty(ext) && validExtensions.Contains(ext))
+                        {
+                            results.Add(file);
+                        }
                     }
                 }
-                foreach (var subDir in Directory.EnumerateDirectories(currentDir))
+
+                IEnumerable<string>? subDirs = null;
+                try { subDirs = Directory.EnumerateDirectories(currentDir); } catch { }
+                if (subDirs != null)
                 {
-                    SafeEnumerateRecursive(subDir, currentDepth + 1, maxDepth, validExtensions, results);
+                    foreach (var subDir in subDirs)
+                    {
+                        SafeEnumerateRecursive(subDir, currentDepth + 1, maxDepth, validExtensions, results);
+                    }
                 }
             }
             catch { }
@@ -146,12 +209,12 @@ namespace LumiereMediaPlayer.Helpers
 
                     try
                     {
-                        if (SampleMediaLibrary.AllTracks != null)
-                            items.AddRange(SampleMediaLibrary.AllTracks);
-                        if (SampleMediaLibrary.VideoTracks != null)
-                            items.AddRange(SampleMediaLibrary.VideoTracks);
-                        if (SampleMediaLibrary.AudioTracks != null)
-                            items.AddRange(SampleMediaLibrary.AudioTracks);
+                        if (MediaLibraryService.AllTracks != null)
+                            items.AddRange(MediaLibraryService.AllTracks);
+                        if (MediaLibraryService.VideoTracks != null)
+                            items.AddRange(MediaLibraryService.VideoTracks);
+                        if (MediaLibraryService.AudioTracks != null)
+                            items.AddRange(MediaLibraryService.AudioTracks);
                     }
                     catch { }
 
@@ -163,10 +226,7 @@ namespace LumiereMediaPlayer.Helpers
                     if (item == null) continue;
                     string sourcePath = item.SourcePath ?? "";
 
-                    if (IsTitleMatch(targetTitle, item.Title) ||
-                        IsTitleMatch(targetTitle, Path.GetFileNameWithoutExtension(sourcePath)) ||
-                        IsTitleMatch(targetTitle, GetParentDirectoryName(sourcePath)) ||
-                        IsTitleMatch(targetTitle, GetGrandparentDirectoryName(sourcePath)))
+                    if (IsTitleMatch(targetTitle, item.Title) || MatchesFileOrAncestors(targetTitle, sourcePath))
                     {
                         return item;
                     }
@@ -207,15 +267,13 @@ namespace LumiereMediaPlayer.Helpers
                     foreach (var folder in foldersToCheck)
                     {
                         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) continue;
-                        var files = SafeEnumerateVideoFiles(folder, maxDepth: 3);
+                        var files = SafeEnumerateVideoFiles(folder, maxDepth: 6);
                         foreach (var filePath in files)
                         {
-                            string fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
-                            if (IsTitleMatch(targetTitle, fileNameNoExt) ||
-                                IsTitleMatch(targetTitle, GetParentDirectoryName(filePath)) ||
-                                IsTitleMatch(targetTitle, GetGrandparentDirectoryName(filePath)))
+                            if (MatchesFileOrAncestors(targetTitle, filePath))
                             {
                                 var fileInfo = new FileInfo(filePath);
+                                string fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
                                 string ext = Path.GetExtension(filePath);
                                 var match = new MediaItem
                                 {
@@ -230,7 +288,7 @@ namespace LumiereMediaPlayer.Helpers
                                     IsFolder = false,
                                     FileExtension = ext
                                 };
-                                _ = SampleMediaLibrary.AddTrackAsync(match);
+                                _ = MediaLibraryService.AddTrackAsync(match);
                                 return match;
                             }
                         }

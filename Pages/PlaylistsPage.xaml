@@ -14,17 +14,23 @@
 
     <ScrollViewer Margin="0,48,0,0">
         <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="28" Opacity="1">
+            <StackPanel.ChildrenTransitions>
+                <TransitionCollection>
+                    <EntranceThemeTransition />
+                </TransitionCollection>
+            </StackPanel.ChildrenTransitions>
+
             <!-- Header -->
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                    <FontIcon Glyph="&#xE93C;" FontSize="28" VerticalAlignment="Center"/>
+                    <FontIcon Glyph="&#xE93C;" FontSize="24" VerticalAlignment="Center"/>
                     <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Playlists" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Curated collections ready to play." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
             <!-- Playlist grid -->
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Playlists, Mode=OneWay}">
+            <ItemsRepeater x:Name="PlaylistsItemsRepeater" ItemsSource="{x:Bind ViewModel.Playlists, Mode=OneWay}" MaxHeight="4000">
                 <ItemsRepeater.Layout>
                     <UniformGridLayout
                         MinColumnSpacing="16"
@@ -37,13 +43,7 @@
                     <DataTemplate>
                         <Button
                             Style="{StaticResource CardButtonStyle}"
-                            Command="{Binding ElementName=PageRoot, Path=ViewModel.PlayPlaylistCommand}"
-                            CommandParameter="{Binding}">
-                            <Button.Transitions>
-                                <TransitionCollection>
-                                    <EntranceThemeTransition FromHorizontalOffset="0" FromVerticalOffset="24" IsStaggeringEnabled="True" />
-                                </TransitionCollection>
-                            </Button.Transitions>
+                            Click="OnPlayPlaylistClick">
                             <Border
                                 Style="{StaticResource MediaCardStyle}"
                                 Padding="16">
@@ -63,6 +63,14 @@
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
+
+            <!-- Empty state when no playlists exist -->
+            <StackPanel x:Name="PlaylistEmptyState" Visibility="Collapsed" HorizontalAlignment="Center" Spacing="12" Padding="24,32">
+                <FontIcon Glyph="&#xE93C;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Opacity="0.6" />
+                <TextBlock Text="No playlists yet" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                <TextBlock Text="Create a playlist from your music library to see it here." FontSize="14" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
+                <Button Content="Create Playlist" Click="OnCreatePlaylistClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" Margin="0,8,0,0" AutomationProperties.Name="Create Playlist" ToolTipService.ToolTip="Create a new playlist" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </Page>

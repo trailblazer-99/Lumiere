@@ -7,6 +7,7 @@ using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace LumiereMediaPlayer.Helpers;
 
@@ -15,6 +16,24 @@ public static class MediaFlyoutHelper
     public static MenuFlyout CreateMediaFlyout(MediaItem item, FrameworkElement? targetElement = null, Action? onRemoved = null)
     {
         var flyout = new MenuFlyout();
+        FlyoutHelper.SetFollowBackdrop(flyout, true);
+
+        if (Application.Current?.Resources?.TryGetValue("CinematicMenuFlyoutPresenterStyle", out var styleObj) == true && styleObj is Style cinematicStyle)
+        {
+            flyout.MenuFlyoutPresenterStyle = cinematicStyle;
+        }
+
+        flyout.Opening += (s, e) =>
+        {
+            ThemeHelper.ApplySystemBackdropToFlyout(flyout);
+            ThemeHelper.ApplyDarkThemeToMenuFlyout(flyout);
+            ThemeHelper.UpdateFlyoutPresenterInstance(flyout);
+        };
+
+        flyout.Opened += (s, e) =>
+        {
+            ThemeHelper.UpdateFlyoutPresenterInstance(flyout);
+        };
 
         // 1. Play
         var playItem = new MenuFlyoutItem
@@ -59,7 +78,7 @@ public static class MediaFlyoutHelper
             Icon = new FontIcon { Glyph = "\uE8F4" }
         };
 
-        var playlists = SampleMediaLibrary.Playlists;
+        var playlists = MediaLibraryService.Playlists;
         if (playlists.Count > 0)
         {
             foreach (var playlist in playlists)
@@ -72,7 +91,7 @@ public static class MediaFlyoutHelper
                 var targetPl = playlist;
                 plItem.Click += async (s, e) =>
                 {
-                    await SampleMediaLibrary.AddTracksToPlaylistAsync(targetPl.Id, new[] { item });
+                    await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, new[] { item });
                 };
                 playlistSubMenu.Items.Add(plItem);
             }
@@ -95,13 +114,34 @@ public static class MediaFlyoutHelper
         var favoriteItem = new MenuFlyoutItem
         {
             Text = item.IsFavorite ? "Remove from favorites" : "Add to favorites",
-            Icon = new FontIcon { Glyph = item.IsFavorite ? "\uE735" : "\uE734" }
+            Icon = new FontIcon
+            {
+                Glyph = item.IsFavorite ? "\uEB52" : "\uEB51",
+                Foreground = item.IsFavorite
+                    ? (ThemeResourceHelper.GetThemeBrush("FavoriteIconBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 59, 92)))
+                    : (ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White))
+            }
         };
         favoriteItem.Click += (s, e) =>
         {
             item.IsFavorite = !item.IsFavorite;
+            Services.MediaLibraryService.RequestDebouncedSave();
+            Services.MediaLibraryService.NotifyLibraryChanged();
         };
         flyout.Items.Add(favoriteItem);
+
+        // 6. Select / Deselect
+        var selectItem = new MenuFlyoutItem
+        {
+            Text = item.IsSelected ? "Deselect" : "Select",
+            Icon = new FontIcon { Glyph = "\uE762" }
+        };
+        selectItem.Click += (s, e) =>
+        {
+            item.IsSelected = !item.IsSelected;
+            onRemoved?.Invoke();
+        };
+        flyout.Items.Add(selectItem);
 
         flyout.Items.Add(new MenuFlyoutSeparator());
 
@@ -138,11 +178,15 @@ public static class MediaFlyoutHelper
         var removeItem = new MenuFlyoutItem
         {
             Text = "Remove",
-            Icon = new FontIcon { Glyph = "\uE74D" }
+            Icon = new FontIcon
+            {
+                Glyph = "\uE74D",
+                Foreground = ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77))
+            }
         };
         removeItem.Click += async (s, e) =>
         {
-            await SampleMediaLibrary.RemoveTrackAsync(item);
+            await MediaLibraryService.RemoveTrackAsync(item);
             await AppServices.History.RemoveFromHistoryAsync(item);
             onRemoved?.Invoke();
         };
@@ -212,12 +256,35 @@ public static class MediaFlyoutHelper
             XamlRoot = xamlRoot
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await ShowDialogSafeAsync(dialog);
         if (result == ContentDialogResult.Primary)
         {
             string name = string.IsNullOrWhiteSpace(inputTextBox.Text) ? "New Playlist" : inputTextBox.Text.Trim();
             string desc = descTextBox.Text?.Trim() ?? string.Empty;
-            await SampleMediaLibrary.CreatePlaylistAsync(name, desc, list);
+            await MediaLibraryService.CreatePlaylistAsync(name, desc, list);
+        }
+    }
+
+    private static readonly System.Threading.SemaphoreSlim _dialogLock = new(1, 1);
+
+    public static async Task<ContentDialogResult> ShowDialogSafeAsync(ContentDialog dialog)
+    {
+        if (!await _dialogLock.WaitAsync(0))
+        {
+            return ContentDialogResult.None;
+        }
+        try
+        {
+            return await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MediaFlyoutHelper.ShowDialogSafeAsync] Error: {ex.Message}");
+            return ContentDialogResult.None;
+        }
+        finally
+        {
+            _dialogLock.Release();
         }
     }
 
@@ -237,7 +304,7 @@ public static class MediaFlyoutHelper
             var lblBlock = new TextBlock
             {
                 Text = label,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush"),
                 FontSize = 12
             };
             Grid.SetColumn(lblBlock, 0);
@@ -349,9 +416,225 @@ public static class MediaFlyoutHelper
             Content = new ScrollViewer { Content = panel, MaxHeight = 460 },
             CloseButtonText = "Close",
             DefaultButton = ContentDialogButton.Close,
-            XamlRoot = xamlRoot
+            XamlRoot = xamlRoot,
+            CornerRadius = new CornerRadius(8),
+            RequestedTheme = ThemeHelper.GetEffectiveElementTheme()
         };
 
-        await dialog.ShowAsync();
+        try
+        {
+            await ShowDialogSafeAsync(dialog);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ShowPropertiesDialogAsync] Error: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>
+/// Provides safe dynamic theme resource lookups across application and window resources.
+/// Avoids Direct Cast exceptions and ensures active theme dictionaries (Dark/Light) and
+/// backdrop custom brushes are properly resolved.
+/// </summary>
+public static class ThemeResourceHelper
+{
+    public static Microsoft.UI.Xaml.Media.Brush GetThemeBrush(string key, Microsoft.UI.Xaml.Media.Brush? fallback = null)
+    {
+        if (TryGetThemeBrush(key, out var brush))
+        {
+            return brush;
+        }
+
+        if (fallback != null)
+        {
+            return fallback;
+        }
+
+        bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+        return key switch
+        {
+            "SolidBackgroundFillColorBaseBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32) : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243)),
+            "CardBackgroundFillColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42) : Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)),
+            "CardBackgroundFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36) : Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)),
+            "CardStrokeColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58) : Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230)),
+            "SurfaceStrokeColorFlyoutBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                isDark 
+                    ? Microsoft.UI.ColorHelper.FromArgb(0x40, 0xFF, 0xFF, 0xFF) 
+                    : Microsoft.UI.ColorHelper.FromArgb(0x26, 0x00, 0x00, 0x00)),
+            "TextFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(200, 255, 255, 255) : Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0)),
+            "AccentFillColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0)),
+            "AccentTextFillColorPrimaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0)),
+            "FavoriteIconBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 59, 92)),
+            "SystemFillColorCriticalBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 106, 106) : Microsoft.UI.ColorHelper.FromArgb(255, 219, 0, 0)),
+            "YouTubeBrandBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 0, 0)),
+            "TwitchBrandBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 145, 70, 255)),
+            "HdrStatusGoldBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 230, 200, 0)),
+            "FlyoutPresenterBackground" or "MenuFlyoutPresenterBackground" =>
+                ThemeHelper.GetFlyoutPresenterBackground(AppServices.Settings.Current.BackdropType, isDark ? ElementTheme.Dark : ElementTheme.Light),
+            _ => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255))
+        };
+    }
+
+    public static bool TryGetThemeBrush(string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Microsoft.UI.Xaml.Media.Brush? brush)
+    {
+        try
+        {
+            // 1. Check MainWindowContent resources (backdrop and accent overrides)
+            if (App.MainWindowContent != null && App.MainWindowContent.Resources.TryGetValue(key, out var winRes))
+            {
+                if (winRes is Microsoft.UI.Xaml.Media.Brush wb)
+                {
+                    brush = wb;
+                    return true;
+                }
+                if (winRes is Windows.UI.Color wc)
+                {
+                    brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(wc);
+                    return true;
+                }
+            }
+
+            // 2. Check active ThemeDictionary in Application.Current.Resources
+            bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+            string[] themeKeys = isDark ? new[] { "Default", "Dark" } : new[] { "Light" };
+
+            if (Application.Current?.Resources != null)
+            {
+                foreach (var tk in themeKeys)
+                {
+                    if (Application.Current.Resources.ThemeDictionaries.TryGetValue(tk, out var tdObj) &&
+                        tdObj is ResourceDictionary td &&
+                        td.TryGetValue(key, out var tb))
+                    {
+                        if (tb is Microsoft.UI.Xaml.Media.Brush b1)
+                        {
+                            brush = b1;
+                            return true;
+                        }
+                        if (tb is Windows.UI.Color c1)
+                        {
+                            brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(c1);
+                            return true;
+                        }
+                    }
+                }
+
+                // 3. Check top-level Application resources
+                if (Application.Current.Resources.TryGetValue(key, out var topRes))
+                {
+                    if (topRes is Microsoft.UI.Xaml.Media.Brush b2)
+                    {
+                        brush = b2;
+                        return true;
+                    }
+                    if (topRes is Windows.UI.Color c2)
+                    {
+                        brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(c2);
+                        return true;
+                    }
+                }
+
+                // 4. Search merged dictionaries (including XamlControlsResources)
+                if (TryFindBrushInMergedDictionaries(Application.Current.Resources, key, themeKeys, out var mb))
+                {
+                    brush = mb;
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore any lookup exceptions
+        }
+
+        brush = null;
+        return false;
+    }
+
+    private static bool TryFindBrushInMergedDictionaries(ResourceDictionary dict, string key, string[] themeKeys, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Microsoft.UI.Xaml.Media.Brush? brush)
+    {
+        foreach (var merged in dict.MergedDictionaries)
+        {
+            foreach (var tk in themeKeys)
+            {
+                if (merged.ThemeDictionaries.TryGetValue(tk, out var tdObj) &&
+                    tdObj is ResourceDictionary td &&
+                    td.TryGetValue(key, out var tb))
+                {
+                    if (tb is Microsoft.UI.Xaml.Media.Brush b1)
+                    {
+                        brush = b1;
+                        return true;
+                    }
+                    if (tb is Windows.UI.Color c1)
+                    {
+                        brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(c1);
+                        return true;
+                    }
+                }
+            }
+
+            if (merged.TryGetValue(key, out var val))
+            {
+                if (val is Microsoft.UI.Xaml.Media.Brush mb)
+                {
+                    brush = mb;
+                    return true;
+                }
+                if (val is Windows.UI.Color mc)
+                {
+                    brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(mc);
+                    return true;
+                }
+            }
+
+            if (TryFindBrushInMergedDictionaries(merged, key, themeKeys, out brush))
+            {
+                return true;
+            }
+        }
+
+        brush = null;
+        return false;
+    }
+
+    public static bool TryGetResource<T>(string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? resource) where T : class
+    {
+        try
+        {
+            if (App.MainWindowContent != null && App.MainWindowContent.Resources.TryGetValue(key, out var winRes) && winRes is T wr)
+            {
+                resource = wr;
+                return true;
+            }
+
+            if (Application.Current?.Resources != null)
+            {
+                bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+                string[] themeKeys = isDark ? new[] { "Default", "Dark" } : new[] { "Light" };
+
+                foreach (var tk in themeKeys)
+                {
+                    if (Application.Current.Resources.ThemeDictionaries.TryGetValue(tk, out var tdObj) &&
+                        tdObj is ResourceDictionary td &&
+                        td.TryGetValue(key, out var tb) && tb is T tr)
+                    {
+                        resource = tr;
+                        return true;
+                    }
+                }
+
+                if (Application.Current.Resources.TryGetValue(key, out var topRes) && topRes is T ar)
+                {
+                    resource = ar;
+                    return true;
+                }
+            }
+        }
+        catch { }
+
+        resource = null;
+        return false;
     }
 }

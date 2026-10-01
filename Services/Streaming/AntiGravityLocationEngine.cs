@@ -15,8 +15,9 @@ namespace LumiereMediaPlayer.Services.Streaming
         // Ordered list of free geo-IP services to try
         private static readonly (string Url, string Key)[] GeoProviders = new[]
         {
-            ("http://ip-api.com/json/?fields=countryCode", "countryCode"),
             ("https://ipwho.is/", "country_code"),
+            ("https://ip-api.com/json/?fields=countryCode", "countryCode"),
+            ("https://ipapi.co/json/", "country_code"),
         };
 
         public static async Task<string> GetCountryCodeAsync()

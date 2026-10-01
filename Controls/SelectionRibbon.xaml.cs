@@ -9,6 +9,7 @@ using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
+using Microsoft.UI.Xaml.Media;
 
 namespace LumiereMediaPlayer.Controls;
 
@@ -94,7 +95,7 @@ public sealed partial class SelectionRibbon : UserControl
 
             var slideAnim = compositor.CreateVector3KeyFrameAnimation();
             slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
+            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 32));
             slideAnim.Duration = TimeSpan.FromMilliseconds(250);
             visual.StartAnimation("Translation", slideAnim);
         }
@@ -149,6 +150,7 @@ public sealed partial class SelectionRibbon : UserControl
         else if (_selectedItems.Count > 0)
         {
             AppServices.PlaybackViewModel.SetQueue(_selectedItems, 0);
+            ClearSelection();
         }
     }
 
@@ -161,6 +163,7 @@ public sealed partial class SelectionRibbon : UserControl
         else if (_selectedItems.Count > 0)
         {
             AppServices.PlaybackViewModel.PlayNextRange(_selectedItems);
+            ClearSelection();
         }
     }
 
@@ -173,6 +176,7 @@ public sealed partial class SelectionRibbon : UserControl
         else if (_selectedItems.Count > 0)
         {
             AppServices.PlaybackViewModel.EnqueueRange(_selectedItems);
+            ClearSelection();
         }
     }
 
@@ -189,7 +193,26 @@ public sealed partial class SelectionRibbon : UserControl
             if (_selectedItems.Count == 0) return;
 
             var flyout = new MenuFlyout();
-            var playlists = SampleMediaLibrary.Playlists;
+            FlyoutHelper.SetFollowBackdrop(flyout, true);
+
+            if (Application.Current?.Resources?.TryGetValue("CinematicMenuFlyoutPresenterStyle", out var styleObj) == true && styleObj is Style cinematicStyle)
+            {
+                flyout.MenuFlyoutPresenterStyle = cinematicStyle;
+            }
+
+            flyout.Opening += (s, e) =>
+            {
+                ThemeHelper.ApplySystemBackdropToFlyout(flyout);
+                ThemeHelper.ApplyDarkThemeToMenuFlyout(flyout);
+                ThemeHelper.UpdateFlyoutPresenterInstance(flyout);
+            };
+
+            flyout.Opened += (s, e) =>
+            {
+                ThemeHelper.UpdateFlyoutPresenterInstance(flyout);
+            };
+
+            var playlists = MediaLibraryService.Playlists;
 
             if (playlists.Count > 0)
             {
@@ -204,7 +227,7 @@ public sealed partial class SelectionRibbon : UserControl
                     var itemsSnapshot = _selectedItems.ToList();
                     plItem.Click += async (s, args) =>
                     {
-                        await SampleMediaLibrary.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
+                        await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
                     };
                     flyout.Items.Add(plItem);
                 }
@@ -279,7 +302,7 @@ public sealed partial class SelectionRibbon : UserControl
         else if (_selectedItems.Count > 0)
         {
             var itemsSnapshot = _selectedItems.ToList();
-            _ = SampleMediaLibrary.RemoveTracksAsync(itemsSnapshot);
+            _ = MediaLibraryService.RemoveTracksAsync(itemsSnapshot);
             ClearSelection();
         }
     }

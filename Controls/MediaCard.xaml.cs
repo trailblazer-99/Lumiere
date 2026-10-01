@@ -26,7 +26,7 @@ public sealed partial class MediaCard : UserControl
 
     public static readonly DependencyProperty AccentColorProperty =
         DependencyProperty.Register(nameof(AccentColor), typeof(string), typeof(MediaCard),
-            new PropertyMetadata("#0078D4", OnAccentColorChanged));
+            new PropertyMetadata(null, OnAccentColorChanged));
 
     public static readonly DependencyProperty ArtworkProperty =
         DependencyProperty.Register(nameof(Artwork), typeof(ImageSource), typeof(MediaCard),
@@ -71,14 +71,52 @@ public sealed partial class MediaCard : UserControl
     public string EffectiveLocationRep => !string.IsNullOrWhiteSpace(LocationRep) ? LocationRep : (Item?.LocationRep ?? string.Empty);
     public string EffectiveToolTip => Item?.SourcePath ?? EffectiveLocationRep;
 
+    private MediaItem? _subscribedItem;
+
     private void OnItemChanged(MediaItem? newItem)
     {
+        if (_subscribedItem != null)
+        {
+            _subscribedItem.PropertyChanged -= OnSubscribedItemPropertyChanged;
+            _subscribedItem = null;
+        }
+
         if (newItem != null)
         {
+            _subscribedItem = newItem;
+            _subscribedItem.PropertyChanged += OnSubscribedItemPropertyChanged;
             IsSelected = newItem.IsSelected;
             if (string.IsNullOrEmpty(LocationRep))
             {
                 LocationRep = newItem.LocationRep;
+            }
+        }
+        else
+        {
+            IsSelected = false;
+        }
+    }
+
+    private void OnSubscribedItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MediaItem.IsSelected) && sender is MediaItem mi)
+        {
+            if (DispatcherQueue?.HasThreadAccess == true)
+            {
+                if (IsSelected != mi.IsSelected)
+                {
+                    IsSelected = mi.IsSelected;
+                }
+            }
+            else
+            {
+                DispatcherQueue?.TryEnqueue(() =>
+                {
+                    if (IsSelected != mi.IsSelected)
+                    {
+                        IsSelected = mi.IsSelected;
+                    }
+                });
             }
         }
     }
@@ -88,10 +126,6 @@ public sealed partial class MediaCard : UserControl
         if (SelectionBorder != null)
         {
             SelectionBorder.Visibility = isSelected ? Visibility.Visible : Visibility.Collapsed;
-        }
-        if (SelectionHost != null)
-        {
-            SelectionHost.Opacity = isSelected || _isHovered ? 1.0 : 0.0;
         }
         if (Item != null && Item.IsSelected != isSelected)
         {
@@ -105,50 +139,11 @@ public sealed partial class MediaCard : UserControl
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnSubControlPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    private void OnSubControlPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    private void OnCardCheckBoxChanged(object sender, RoutedEventArgs e)
-    {
-        if (CardCheckBox != null)
-        {
-            IsSelected = CardCheckBox.IsChecked == true;
-        }
-    }
-
     private MediaItem? GetAssociatedMediaItem()
     {
         if (Item != null) return Item;
         if (DataContext is MediaItem ctx) return ctx;
         return null;
-    }
-
-    private void OnMoreOptionsClick(object sender, RoutedEventArgs e)
-    {
-        var mediaItem = GetAssociatedMediaItem();
-        if (mediaItem == null)
-        {
-            mediaItem = new MediaItem
-            {
-                Title = this.Title,
-                Artist = this.Subtitle,
-                PosterUrl = this.PosterUrl,
-                AccentColor = this.AccentColor
-            };
-        }
-
-        var flyout = MediaFlyoutHelper.CreateMediaFlyout(mediaItem, MoreOptionsButton, () =>
-        {
-            SelectionChanged?.Invoke(this, EventArgs.Empty);
-        });
-        flyout.ShowAt(MoreOptionsButton);
     }
 
     private void OnCardRightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -199,17 +194,137 @@ public sealed partial class MediaCard : UserControl
         catch { }
     }
 
+    public FrameworkElement TitleContainerElement => TitleContainer;
+
+    public static DateTime LastScrollActivityTime => ScrollDebounceHelper.LastScrollActivityTime;
+
+    public static bool IsScrollActive => ScrollDebounceHelper.IsScrollActive;
+
+    public static void NotifyScrollActivity() => ScrollDebounceHelper.NotifyScrollActivity();
+
     private DropShadow? _dropShadow;
+    private SpriteVisual? _shadowVisual;
+    private ExpressionAnimation? _bindSizeAnimation;
+    private CompositionClip? _imageClip;
 
     public MediaCard()
     {
         InitializeComponent();
+        this.PointerWheelChanged += (s, e) => NotifyScrollActivity();
+        this.DataContextChanged += (s, e) =>
+        {
+            if (Item == null && e.NewValue is MediaItem dcItem)
+            {
+                OnItemChanged(dcItem);
+            }
+        };
         this.Loaded += (s, e) =>
         {
+            ScrollDebounceHelper.ScrollActivityOccurred -= OnGlobalScrollActivity;
+            ScrollDebounceHelper.ScrollActivityOccurred += OnGlobalScrollActivity;
             InitializeShadow();
+            EnsureCardImageClip();
             UpdateDisplayImage();
             ApplyAccent(AccentColor);
+
+            var effectiveItem = Item ?? (DataContext as MediaItem);
+            if (effectiveItem != null)
+            {
+                if (_subscribedItem != effectiveItem)
+                {
+                    OnItemChanged(effectiveItem);
+                }
+                else
+                {
+                    IsSelected = effectiveItem.IsSelected;
+                }
+            }
         };
+        this.SizeChanged += (s, e) => EnsureCardImageClip();
+        this.Unloaded += (s, e) =>
+        {
+            ScrollDebounceHelper.ScrollActivityOccurred -= OnGlobalScrollActivity;
+            CleanupShadow();
+            if (_imageClip != null)
+            {
+                if (PosterImageElement != null)
+                {
+                    var visual = ElementCompositionPreview.GetElementVisual(PosterImageElement);
+                    if (visual != null) visual.Clip = null;
+                }
+                try { _imageClip.Dispose(); } catch { }
+                _imageClip = null;
+            }
+            if (PosterImageElement != null)
+            {
+                PosterImageElement.Source = null;
+            }
+            if (_subscribedItem != null)
+            {
+                _subscribedItem.PropertyChanged -= OnSubscribedItemPropertyChanged;
+                _subscribedItem = null;
+            }
+            _previewDwellTimer?.Stop();
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this) && !previewControl.IsExpanded)
+            {
+                previewControl.ClosePreview();
+            }
+        };
+    }
+
+    private void EnsureCardImageClip()
+    {
+        try
+        {
+            if (PosterImageElement == null) return;
+            var visual = ElementCompositionPreview.GetElementVisual(PosterImageElement);
+            if (visual == null) return;
+            var compositor = visual.Compositor;
+            if (compositor == null) return;
+
+            float w = (float)(ActualWidth > 0 ? ActualWidth : CardWidth);
+            float h = (float)(CardHeight > 0 ? CardHeight : 168);
+            if (w <= 0 || h <= 0) return;
+
+            var oldClip = _imageClip;
+            var clip = compositor.CreateGeometricClip();
+            var geom = compositor.CreateRoundedRectangleGeometry();
+            geom.Size = new System.Numerics.Vector2(w, h);
+            geom.CornerRadius = new System.Numerics.Vector2(8f, 8f);
+            clip.Geometry = geom;
+            visual.Clip = clip;
+            _imageClip = clip;
+            try { oldClip?.Dispose(); } catch { }
+        }
+        catch { }
+    }
+
+    private void CleanupShadow()
+    {
+        try
+        {
+            if (ShadowHost != null)
+            {
+                ElementCompositionPreview.SetElementChildVisual(ShadowHost, null);
+            }
+            if (_bindSizeAnimation != null)
+            {
+                try { _bindSizeAnimation.Dispose(); } catch { }
+                _bindSizeAnimation = null;
+            }
+            if (_dropShadow != null)
+            {
+                try { _dropShadow.Dispose(); } catch { }
+                _dropShadow = null;
+            }
+            if (_shadowVisual != null)
+            {
+                try { _shadowVisual.Dispose(); } catch { }
+                _shadowVisual = null;
+            }
+        }
+        catch { }
     }
 
     private void InitializeShadow()
@@ -223,21 +338,21 @@ public sealed partial class MediaCard : UserControl
             var compositor = hostVisual?.Compositor;
             if (compositor == null || artVisual == null) return;
 
-            var shadowVisual = compositor.CreateSpriteVisual();
+            _shadowVisual = compositor.CreateSpriteVisual();
             _dropShadow = compositor.CreateDropShadow();
             _dropShadow.BlurRadius = 16f;
             _dropShadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
             _dropShadow.Opacity = 0.0f; // Hidden initially
             _dropShadow.Offset = new System.Numerics.Vector3(0, 4, 0);
 
-            shadowVisual.Shadow = _dropShadow;
+            _shadowVisual.Shadow = _dropShadow;
 
             // Keep size synchronized
-            var bindSizeAnimation = compositor.CreateExpressionAnimation("artVisual.Size");
-            bindSizeAnimation.SetReferenceParameter("artVisual", artVisual);
-            shadowVisual.StartAnimation("Size", bindSizeAnimation);
+            _bindSizeAnimation = compositor.CreateExpressionAnimation("artVisual.Size");
+            _bindSizeAnimation.SetReferenceParameter("artVisual", artVisual);
+            _shadowVisual.StartAnimation("Size", _bindSizeAnimation);
 
-            ElementCompositionPreview.SetElementChildVisual(ShadowHost, shadowVisual);
+            ElementCompositionPreview.SetElementChildVisual(ShadowHost, _shadowVisual);
         }
         catch { }
     }
@@ -306,38 +421,136 @@ public sealed partial class MediaCard : UserControl
 
     private static void OnAccentColorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is MediaCard card && e.NewValue is string hex)
+        if (d is MediaCard card)
         {
-            card.ApplyAccent(hex);
+            card.ApplyAccent(e.NewValue as string);
         }
     }
 
-    private void ApplyAccent(string hex)
+    private void ApplyAccent(string? hex)
     {
-        if (AlbumArtBackground != null && !string.IsNullOrEmpty(hex))
+        if (AlbumArtBackground != null)
         {
             try
             {
-                AlbumArtBackground.Background = new SolidColorBrush(ColorHelper.FromHex(hex));
+                var color = !string.IsNullOrWhiteSpace(hex)
+                    ? ColorHelper.FromHex(hex)
+                    : ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor);
+                AlbumArtBackground.Background = new SolidColorBrush(color);
             }
-            catch { }
+            catch
+            {
+                try
+                {
+                    AlbumArtBackground.Background = new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
+                }
+                catch { }
+            }
         }
     }
 
     private bool _isHovered;
-    private ScalarKeyFrameAnimation? _overlayInAnim;
-    private ScalarKeyFrameAnimation? _overlayOutAnim;
+    private bool _isDwellSuppressedUntilExit;
+    private DispatcherTimer? _previewDwellTimer;
+
+    public void SuppressDwellUntilExit()
+    {
+        _isDwellSuppressedUntilExit = true;
+        _previewDwellTimer?.Stop();
+    }
+
+    private void OnGlobalScrollActivity()
+    {
+        if (DispatcherQueue?.HasThreadAccess == true)
+        {
+            _previewDwellTimer?.Stop();
+            _isDwellSuppressedUntilExit = true;
+        }
+        else
+        {
+            DispatcherQueue?.TryEnqueue(() =>
+            {
+                _previewDwellTimer?.Stop();
+                _isDwellSuppressedUntilExit = true;
+            });
+        }
+    }
+
+    private void OnTitlePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        // Suppress preview dwell when pointer enters the title area - preview should only trigger from thumbnail
+        _previewDwellTimer?.Stop();
+        _isDwellSuppressedUntilExit = true;
+    }
+
+    private void OnTitlePointerExited(object sender, PointerRoutedEventArgs e)
+    {
+    }
+
+    private void TryStartPreviewDwell()
+    {
+        if (IsScrollActive) return;
+        var mediaItem = GetAssociatedMediaItem();
+        if (_isDwellSuppressedUntilExit || mediaItem?.IsVideo != true || !AppServices.Settings.Current.EnableHoverVideoPreview) return;
+        if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+
+        var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+        if (previewControl?.IsExpanded == true) return;
+
+        var mainWindow = App.MainWindowInstance;
+        bool isFullscreen = mainWindow?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
+        if (!isFullscreen)
+        {
+            int dwellMs = (previewControl != null && previewControl.IsPreviewActive) ? 180 : 320;
+            if (_previewDwellTimer == null)
+            {
+                _previewDwellTimer = new DispatcherTimer();
+                _previewDwellTimer.Tick += OnPreviewDwellTimerTick;
+            }
+            _previewDwellTimer.Interval = TimeSpan.FromMilliseconds(dwellMs);
+            _previewDwellTimer.Stop();
+            _previewDwellTimer.Start();
+        }
+    }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         try
         {
+            if (IsScrollActive)
+            {
+                _isDwellSuppressedUntilExit = true;
+                return;
+            }
+
             _isHovered = true;
-            AnimateOverlay(1.0);
+
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true)
+            {
+                // In expanded TV show modal mode, ignore background card hover
+                return;
+            }
+
             AnimateScale(1.03);
             AnimateShadow(0.55, 12f);
-            AnimateSubControlOpacity(SelectionHost, 1.0);
-            AnimateSubControlOpacity(MoreOptionsButton, 1.0);
+
+            if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+
+            if (previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
+            {
+                previewControl.OnSourceCardPointerEntered(this);
+            }
+
+            // Do not start preview dwell if pointer entered directly within the title container
+            var point = e.GetCurrentPoint(this).Position;
+            if (point.Y >= (CardHeight > 0 ? CardHeight : 168))
+            {
+                _isDwellSuppressedUntilExit = true;
+                return;
+            }
+
+            TryStartPreviewDwell();
         }
         catch { }
     }
@@ -347,87 +560,56 @@ public sealed partial class MediaCard : UserControl
         try
         {
             _isHovered = false;
-            AnimateOverlay(0.0);
+            _isDwellSuppressedUntilExit = false;
+            _previewDwellTimer?.Stop();
+
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true)
+            {
+                return;
+            }
+
+            if (previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
+            {
+                previewControl.OnSourceCardPointerExited(this);
+            }
+
             AnimateScale(1.0);
             AnimateShadow(0.0, 4f);
-            if (!IsSelected) AnimateSubControlOpacity(SelectionHost, 0.0);
-            AnimateSubControlOpacity(MoreOptionsButton, 0.0);
         }
         catch { }
     }
 
-    private void AnimateSubControlOpacity(UIElement? element, double targetOpacity)
+    private void OnPreviewDwellTimerTick(object? sender, object e)
     {
-        if (element == null) return;
-        try
+        _previewDwellTimer?.Stop();
+        if (_isDwellSuppressedUntilExit || IsScrollActive) return;
+        if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+        var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+        if (previewControl?.IsExpanded == true) return;
+        var mediaItem = GetAssociatedMediaItem();
+        if (_isHovered && mediaItem?.IsVideo == true && AppServices.Settings.Current.EnableHoverVideoPreview)
         {
-            var visual = ElementCompositionPreview.GetElementVisual(element);
-            if (visual == null) return;
-            var compositor = visual.Compositor;
-            if (compositor == null) return;
-
-            var anim = compositor.CreateScalarKeyFrameAnimation();
-            anim.Duration = TimeSpan.FromMilliseconds(90);
-            anim.InsertKeyFrame(1.0f, (float)targetOpacity);
-            visual.StartAnimation("Opacity", anim);
+            previewControl?.ShowPreview(this, mediaItem);
         }
-        catch { }
-    }
-
-    private void AnimateOverlay(double targetOpacity)
-    {
-        if (PlayOverlay == null) return;
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
-            if (visual == null) return;
-            var compositor = visual.Compositor;
-            if (compositor == null) return;
-
-            if (targetOpacity > 0.5)
-            {
-                if (_overlayInAnim == null)
-                {
-                    _overlayInAnim = compositor.CreateScalarKeyFrameAnimation();
-                    _overlayInAnim.Duration = TimeSpan.FromMilliseconds(90);
-                    _overlayInAnim.InsertKeyFrame(1.0f, 1.0f, compositor.CreateCubicBezierEasingFunction(
-                        new System.Numerics.Vector2(0.0f, 0.0f),
-                        new System.Numerics.Vector2(0.2f, 1.0f)));
-                }
-                visual.StartAnimation("Opacity", _overlayInAnim);
-            }
-            else
-            {
-                if (_overlayOutAnim == null)
-                {
-                    _overlayOutAnim = compositor.CreateScalarKeyFrameAnimation();
-                    _overlayOutAnim.Duration = TimeSpan.FromMilliseconds(80);
-                    _overlayOutAnim.InsertKeyFrame(1.0f, 0.0f);
-                }
-                visual.StartAnimation("Opacity", _overlayOutAnim);
-            }
-        }
-        catch { }
     }
 
     private SpringVector3NaturalMotionAnimation? _springAnimation;
 
     private void AnimateScale(double targetScale)
     {
-        if (AlbumArtBackground == null || PlayOverlay == null) return;
+        if (AlbumArtBackground == null) return;
         try
         {
             var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
-            var overlayVisual = ElementCompositionPreview.GetElementVisual(PlayOverlay);
             var selectionVisual = SelectionBorder != null ? ElementCompositionPreview.GetElementVisual(SelectionBorder) : null;
-            if (artVisual == null || overlayVisual == null) return;
+            if (artVisual == null) return;
 
             var centerPoint = new System.Numerics.Vector3(
                 (float)(AlbumArtBackground.ActualWidth / 2),
                 (float)(AlbumArtBackground.ActualHeight / 2),
                 0);
             artVisual.CenterPoint = centerPoint;
-            overlayVisual.CenterPoint = centerPoint;
             if (selectionVisual != null)
             {
                 selectionVisual.CenterPoint = centerPoint;
@@ -447,7 +629,6 @@ public sealed partial class MediaCard : UserControl
             _springAnimation.FinalValue = new System.Numerics.Vector3((float)targetScale);
 
             artVisual.StartAnimation("Scale", _springAnimation);
-            overlayVisual.StartAnimation("Scale", _springAnimation);
             selectionVisual?.StartAnimation("Scale", _springAnimation);
         }
         catch { }

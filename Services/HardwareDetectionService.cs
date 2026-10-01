@@ -27,12 +27,16 @@ public static class HardwareDetectionService
             {
                 // Check RAM
                 using (var searcher = new ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem"))
+                using (var coll = searcher.Get())
                 {
-                    foreach (var item in searcher.Get())
+                    foreach (var item in coll)
                     {
-                        if (item["TotalPhysicalMemory"] != null && long.TryParse(item["TotalPhysicalMemory"].ToString(), out long bytes))
+                        using (item)
                         {
-                            result.TotalPhysicalMemoryMB = bytes / (1024 * 1024);
+                            if (item["TotalPhysicalMemory"] != null && long.TryParse(item["TotalPhysicalMemory"].ToString(), out long bytes))
+                            {
+                                result.TotalPhysicalMemoryMB = bytes / (1024 * 1024);
+                            }
                         }
                     }
                 }
@@ -40,21 +44,25 @@ public static class HardwareDetectionService
                 // Check GPU
                 bool hasDedicatedGpu = false;
                 using (var searcher = new ManagementObjectSearcher("SELECT Name, AdapterRAM FROM Win32_VideoController"))
+                using (var coll = searcher.Get())
                 {
-                    foreach (var item in searcher.Get())
+                    foreach (var item in coll)
                     {
-                        string name = item["Name"]?.ToString() ?? "";
-                        // Simple heuristic for dedicated GPUs
-                        if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
-                            name.Contains("AMD Radeon RX", StringComparison.OrdinalIgnoreCase) ||
-                            name.Contains("Arc", StringComparison.OrdinalIgnoreCase))
+                        using (item)
                         {
-                            hasDedicatedGpu = true;
-                            result.GpuName = name;
-                        }
-                        else if (string.IsNullOrEmpty(result.GpuName))
-                        {
-                            result.GpuName = name; // fallback to integrated if no dedicated found
+                            string name = item["Name"]?.ToString() ?? "";
+                            // Simple heuristic for dedicated GPUs
+                            if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                                name.Contains("AMD Radeon RX", StringComparison.OrdinalIgnoreCase) ||
+                                name.Contains("Arc", StringComparison.OrdinalIgnoreCase))
+                            {
+                                hasDedicatedGpu = true;
+                                result.GpuName = name;
+                            }
+                            else if (string.IsNullOrEmpty(result.GpuName))
+                            {
+                                result.GpuName = name; // fallback to integrated if no dedicated found
+                            }
                         }
                     }
                 }

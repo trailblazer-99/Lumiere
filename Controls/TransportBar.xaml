@@ -10,6 +10,8 @@
     mc:Ignorable="d"
     Height="{StaticResource TransportBarHeight}">
 
+
+
     <Grid
         x:Name="BarGrid"
         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
@@ -41,20 +43,31 @@
                 <Slider
                     x:Name="ProgressSlider"
                     Maximum="100"
+                    Padding="10,0,10,0"
                     IsThumbToolTipEnabled="False"
                     IsEnabled="False"
                     ValueChanged="OnProgressSliderValueChanged"
-                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
-                    VerticalAlignment="Center" />
+                    VerticalAlignment="Center">
+                    <Slider.Resources>
+                        <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+                        <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+                        <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+                    </Slider.Resources>
+                </Slider>
                 
                 <!-- Hover Preview Popup -->
                 <Popup x:Name="HoverPreviewPopup" IsLightDismissEnabled="False" IsHitTestVisible="False" VerticalOffset="-126">
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                    <Border Background="{ThemeResource FlyoutPresenterBackground}" 
+                            BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" 
                             BorderThickness="1" 
                             CornerRadius="8" 
                             Padding="6"
+                            Translation="0,0,16"
                             IsHitTestVisible="False">
+                        <Border.Shadow>
+                            <ThemeShadow />
+                        </Border.Shadow>
                         <StackPanel Spacing="6" HorizontalAlignment="Center">
                             <Border x:Name="HoverThumbnailBorder" CornerRadius="6" BorderThickness="0" Background="Transparent" Width="144" Height="81" Visibility="Collapsed">
                                 <Image x:Name="HoverThumbnailImage" Width="144" Height="81" Stretch="UniformToFill" />
@@ -103,7 +116,7 @@
                         <Grid>
                             <FontIcon
                                 x:Name="FallbackIcon"
-                                FontSize="18"
+                                FontSize="24"
                                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                 Glyph="&#xE8D6;"
                                 HorizontalAlignment="Center"
@@ -135,7 +148,7 @@
                                 Padding="4,1"
                                 VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="3">
-                                    <FontIcon Glyph="&#xE8B7;" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                    <FontIcon Glyph="&#xE8B7;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                                     <TextBlock x:Name="TrackLocationText" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Border>
@@ -162,11 +175,12 @@
                 <Button
                     x:Name="ShuffleButton"
                     AutomationProperties.Name="Shuffle"
+                    Click="OnShuffleClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Shuffle">
-                    <FontIcon x:Name="ShuffleIcon" FontSize="14" Glyph="&#xE8B1;" />
+                    <FontIcon x:Name="ShuffleIcon" FontSize="16" Glyph="&#xE8B1;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
                 <Button
                     x:Name="PreviousButton"
@@ -176,7 +190,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Previous">
-                    <FontIcon x:Name="PreviousIcon" FontSize="16" Glyph="&#xE892;" />
+                    <FontIcon x:Name="PreviousIcon" FontSize="16" Glyph="&#xE892;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
                 <Button
                     x:Name="SkipBackButton"
@@ -186,7 +200,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip back 10 seconds">
-                    <FontIcon x:Name="SkipBackIcon" FontSize="16" Glyph="&#xED3C;" />
+                    <FontIcon x:Name="SkipBackIcon" FontSize="16" Glyph="&#xED3C;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Left" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
@@ -195,31 +209,12 @@
                     x:Name="ReplayButton"
                     AutomationProperties.Name="Replay from beginning"
                     Click="OnReplayClick"
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    Background="#12B76A"
-                    BorderThickness="0"
-                    CornerRadius="6"
-                    Foreground="White"
+                    Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Replay from beginning"
                     VerticalAlignment="Center">
-                    <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackground" Color="#12B76A" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#0E9F5D" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0A7A46" />
-                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#12B76A" />
-                        <SolidColorBrush x:Key="ButtonForeground" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="White" />
-                        <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
-                    </Button.Resources>
-                    <FontIcon x:Name="ReplayIcon" FontSize="12" Glyph="&#xE72C;" Foreground="White" />
+                    <FontIcon x:Name="ReplayIcon" FontSize="16" Glyph="&#xE72C;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="R" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
@@ -230,7 +225,7 @@
                     x:Name="PlayPauseButton"
                     AutomationProperties.Name="Play"
                     ToolTipService.ToolTip="Play"
-                    Foreground="White"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                     Style="{StaticResource CleanPlayPauseButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
@@ -252,9 +247,9 @@
                         <!-- Static Play/Pause FontIcon -->
                         <FontIcon
                             x:Name="PlayPauseIcon"
-                            FontSize="14"
-                            Foreground="White"
-                            Glyph="&#xE102;"
+                            FontSize="16"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Glyph="&#xE768;"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center" />
                     </Grid>
@@ -264,31 +259,12 @@
                     x:Name="StopButton"
                     AutomationProperties.Name="Stop"
                     Click="OnStopClick"
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    Background="#D92D20"
-                    BorderThickness="0"
-                    CornerRadius="6"
-                    Foreground="White"
+                    Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Stop"
                     VerticalAlignment="Center">
-                    <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackground" Color="#D92D20" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B42318" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#912018" />
-                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#D92D20" />
-                        <SolidColorBrush x:Key="ButtonForeground" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
-                        <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="White" />
-                        <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
-                    </Button.Resources>
-                    <FontIcon x:Name="StopIcon" FontSize="11" Glyph="&#xE15B;" Foreground="White" />
+                    <FontIcon x:Name="StopIcon" FontSize="16" Glyph="&#xE71A;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
                 <Button
                     x:Name="SkipForwardButton"
@@ -298,7 +274,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Skip forward 30 seconds">
-                    <FontIcon x:Name="SkipForwardIcon" FontSize="16" Glyph="&#xED3D;" />
+                    <FontIcon x:Name="SkipForwardIcon" FontSize="16" Glyph="&#xED3D;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Right" Modifiers="Control" />
                     </Button.KeyboardAccelerators>
@@ -311,16 +287,17 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Next">
-                    <FontIcon x:Name="NextIcon" FontSize="16" Glyph="&#xE893;" />
+                    <FontIcon x:Name="NextIcon" FontSize="16" Glyph="&#xE893;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
                 <Button
                     x:Name="RepeatButton"
                     AutomationProperties.Name="Repeat"
+                    Click="OnRepeatClick"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Repeat">
-                    <FontIcon x:Name="RepeatIcon" FontSize="14" Glyph="&#xE8EE;" />
+                    <FontIcon x:Name="RepeatIcon" FontSize="16" Glyph="&#xE8EE;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
             </StackPanel>
 
@@ -339,9 +316,10 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Audio track">
-                    <FontIcon x:Name="AudioIcon" FontSize="14" Glyph="&#xE8D6;" />
+                    <FontIcon x:Name="AudioIcon" FontSize="16" Glyph="&#xE8D6;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" />
+                        <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        </MenuFlyout>
                     </Button.Flyout>
                 </Button>
 
@@ -352,9 +330,10 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Subtitles">
-                    <FontIcon x:Name="SubtitlesIcon" FontSize="14" Glyph="&#xED1E;" />
+                    <FontIcon x:Name="SubtitlesIcon" FontSize="16" Glyph="&#xED1E;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" />
+                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        </MenuFlyout>
                     </Button.Flyout>
                 </Button>
 
@@ -366,48 +345,90 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Volume">
-                    <FontIcon x:Name="VolumeIcon" FontSize="14" Glyph="&#xE995;" />
+                    <FontIcon x:Name="VolumeIcon" FontSize="16" Glyph="&#xE995;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.Flyout>
-                        <Flyout Placement="Top" Opening="OnVolumeFlyoutOpening">
+                        <Flyout x:Name="VolumeFlyout" Placement="Top" Opening="OnVolumeFlyoutOpening" Opened="OnVolumeFlyoutOpened" helpers:FlyoutHelper.FollowBackdrop="True">
                             <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Padding" Value="16,10,16,10" />
-                                    <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
-                                    <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                                <Style TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+                                    <Setter Property="Padding" Value="12,8,12,8" />
+                                    <Setter Property="Background" Value="{ThemeResource VolumeFlyoutPresenterBackground}" />
+                                    <Setter Property="BorderBrush" Value="{ThemeResource VolumeFlyoutPresenterBorderBrush}" />
                                     <Setter Property="BorderThickness" Value="1" />
                                     <Setter Property="CornerRadius" Value="8" />
+                                    <Setter Property="MinHeight" Value="48" />
+                                    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                                    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
                                 </Style>
                             </Flyout.FlyoutPresenterStyle>
-                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Grid Height="32" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="36" />
+                                </Grid.ColumnDefinitions>
+
                                 <!-- Volume toggle button inside flyout -->
                                 <Button
                                     x:Name="FlyoutVolumeButton"
-                                    Click="OnVolumeClick"
+                                    Grid.Column="0"
                                     Style="{StaticResource TransportIconButtonStyle}"
-                                    Padding="4"
-                                    VerticalAlignment="Center">
-                                    <FontIcon x:Name="FlyoutVolumeIcon" FontSize="14" Glyph="&#xE995;" />
+                                    AutomationProperties.Name="Volume"
+                                    Click="OnVolumeClick"
+                                    Width="32"
+                                    Height="32"
+                                    Padding="0"
+                                    CornerRadius="6"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Mute / Unmute">
+                                    <FontIcon
+                                        x:Name="FlyoutVolumeIcon"
+                                        FontSize="16"
+                                        Glyph="&#xE995;"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
                                 </Button>
+
                                 <!-- The volume slider -->
                                 <Slider
                                     x:Name="VolumeSlider"
-                                    Width="120"
+                                    Grid.Column="2"
+                                    AutomationProperties.Name="Volume level"
+                                    Width="130"
+                                    Height="32"
+                                    Padding="8,0,8,0"
                                     Minimum="0"
                                     Maximum="100"
                                     Value="100"
                                     IsThumbToolTipEnabled="False"
                                     ValueChanged="OnVolumeValueChanged"
-                                    VerticalAlignment="Center"
-                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center">
+                                    <Slider.Resources>
+                                        <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+                                        <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+                                        <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+                                        <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+                                    </Slider.Resources>
+                                </Slider>
+
                                 <!-- Volume value text label -->
                                 <TextBlock
                                     x:Name="VolumeValueText"
+                                    Grid.Column="4"
                                     Text="100"
-                                    Width="28"
-                                    TextAlignment="Right"
+                                    MinWidth="36"
+                                    TextAlignment="Left"
                                     VerticalAlignment="Center"
-                                    FontSize="12" />
-                            </StackPanel>
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </Grid>
                         </Flyout>
                     </Button.Flyout>
                 </Button>
@@ -420,7 +441,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Fullscreen">
-                    <FontIcon x:Name="FullscreenIcon" FontSize="14" Glyph="&#xE740;" />
+                    <FontIcon x:Name="FullscreenIcon" FontSize="16" Glyph="&#xE740;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
 
                 <!-- Picture in Picture (Mini Player) Button -->
@@ -432,7 +453,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Picture in Picture">
-                    <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="14" Glyph="&#xE93A;" />
+                    <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE93A;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
 
                 <!-- More Options (3-dot) Button -->
@@ -443,9 +464,9 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="More options">
-                    <FontIcon x:Name="MoreIcon" FontSize="14" Glyph="&#xE712;" />
+                    <FontIcon x:Name="MoreIcon" FontSize="16" Glyph="&#xE712;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <Button.Flyout>
-                        <MenuFlyout Placement="Top" Opening="OnMoreMenuOpening">
+                        <MenuFlyout Placement="Top" Opening="OnMoreMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                             <MenuFlyoutItem x:Name="MenuPropertiesItem" Text="Properties" Click="OnInfoClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE946;" />
@@ -456,7 +477,7 @@
                             </MenuFlyoutItem>
                              <MenuFlyoutItem x:Name="MenuClipchampItem" Text="Edit with Clipchamp" Click="OnEditWithClipchampClick">
                                  <MenuFlyoutItem.Icon>
-                                     <FontIcon Glyph="&#xE294;" />
+                                     <FontIcon Glyph="&#xE78B;" />
                                  </MenuFlyoutItem.Icon>
                              </MenuFlyoutItem>
                              <MenuFlyoutItem x:Name="MenuEqualiserItem" Text="Equaliser" Click="OnEqualiserClick">
@@ -472,11 +493,14 @@
                                  <MenuFlyoutSubItem.Icon>
                                      <FontIcon Glyph="&#xEBE6;" />
                                  </MenuFlyoutSubItem.Icon>
-                                 <MenuFlyoutItem Text="0.25x" Click="OnSpeedClick" Tag="0.25" />
-                                 <MenuFlyoutItem Text="0.5x" Click="OnSpeedClick" Tag="0.5" />
-                                 <MenuFlyoutItem Text="1.0x (Normal)" Click="OnSpeedClick" Tag="1.0" />
-                                 <MenuFlyoutItem Text="1.5x" Click="OnSpeedClick" Tag="1.5" />
-                                 <MenuFlyoutItem Text="2.0x" Click="OnSpeedClick" Tag="2.0" />
+                                 <RadioMenuFlyoutItem Text="0.25x" Click="OnSpeedClick" Tag="0.25" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="0.5x" Click="OnSpeedClick" Tag="0.5" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="0.75x" Click="OnSpeedClick" Tag="0.75" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="1.0x (Normal)" Click="OnSpeedClick" Tag="1.0" GroupName="PlaybackSpeedGroup" IsChecked="True" />
+                                 <RadioMenuFlyoutItem Text="1.25x" Click="OnSpeedClick" Tag="1.25" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="1.5x" Click="OnSpeedClick" Tag="1.5" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="1.75x" Click="OnSpeedClick" Tag="1.75" GroupName="PlaybackSpeedGroup" />
+                                 <RadioMenuFlyoutItem Text="2.0x" Click="OnSpeedClick" Tag="2.0" GroupName="PlaybackSpeedGroup" />
                              </MenuFlyoutSubItem>
 
                               <MenuFlyoutSubItem x:Name="MenuSleepTimerSubItem" Text="Sleep Timer">
@@ -514,7 +538,7 @@
                              </MenuFlyoutSubItem>
                              <MenuFlyoutItem x:Name="MenuQueueItem" Text="Open queue" Click="OnQueueClick">
                                 <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE14C;" />
+                                    <FontIcon Glyph="&#xEA37;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                         </MenuFlyout>

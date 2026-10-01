@@ -51,4 +51,29 @@ public class HomeViewModelTests
 
         mockHistory.Verify(h => h.ClearHistoryAsync(), Times.Once);
     }
+
+    [TestMethod]
+    public void HomeViewModel_FavoriteVideos_UpdatesWhenLibraryChanges()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new List<MediaItem>());
+        mockSession.Setup(s => s.CurrentIndex).Returns(-1);
+        var playback = new PlaybackViewModel(mockSession.Object);
+
+        var mockHistory = new Mock<IHistoryService>();
+        mockHistory.Setup(h => h.RecentlyPlayed).Returns(new ObservableCollection<MediaItem>());
+
+        MediaLibraryService.ClearLibrary();
+        var item1 = new MediaItem { Id = "fav_v1", Title = "Fav Video", Kind = MediaKind.Video, IsFavorite = true };
+        var item2 = new MediaItem { Id = "reg_v2", Title = "Regular Video", Kind = MediaKind.Video, IsFavorite = false };
+        _ = MediaLibraryService.AddTrackAsync(item1).Result;
+        _ = MediaLibraryService.AddTrackAsync(item2).Result;
+
+        var vm = new HomeViewModel(playback, mockHistory.Object);
+
+        Assert.AreEqual(1, vm.FavoriteVideos.Count);
+        Assert.AreEqual("Fav Video", vm.FavoriteVideos[0].Title);
+
+        MediaLibraryService.ClearLibrary();
+    }
 }

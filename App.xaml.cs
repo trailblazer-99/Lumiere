@@ -32,30 +32,78 @@ public partial class App : Application
         _logger = Services.GetService<ILogger<App>>();
 
         // ── Unhandled exception handlers ────────────────────────────
-        var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-        var crashLogDir = System.IO.Path.Combine(appData, "LumiereMediaPlayer");
-        System.IO.Directory.CreateDirectory(crashLogDir);
-        var crashLogPath = System.IO.Path.Combine(crashLogDir, "crash.txt");
-
         this.UnhandledException += (s, e) =>
         {
-            e.Handled = true;
             var exceptionStr = e.Exception?.ToString() ?? "No Exception Object";
             _logger?.LogCritical(e.Exception, "Unhandled UI exception: {Message}", e.Message);
-            try { System.IO.File.AppendAllText(crashLogPath, "UI: " + exceptionStr + "\n" + e.Message + "\n"); } catch { }
+            LogCrash("UI", e.Message, exceptionStr);
+
+            // Do not handle catastrophic COM or corrupted-state errors to avoid zombie compositor freezes
+            if (e.Exception is OutOfMemoryException or AccessViolationException or System.Runtime.InteropServices.SEHException)
+            {
+                e.Handled = false;
+                return;
+            }
+            if (e.Exception is System.Runtime.InteropServices.COMException comEx &&
+                ((uint)comEx.HResult is 0x8000FFFF /* E_UNEXPECTED */ or 0x887A0005 /* DXGI_ERROR_DEVICE_REMOVED */))
+            {
+                e.Handled = false;
+                return;
+            }
+            e.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
         {
             var exceptionStr = e.ExceptionObject?.ToString() ?? "No Exception Object";
             _logger?.LogCritical("Unhandled AppDomain exception: {Exception}", exceptionStr);
-            try { System.IO.File.AppendAllText(crashLogPath, "AppDomain: " + exceptionStr + "\n"); } catch { }
+            LogCrash("AppDomain", "Unhandled Domain Exception", exceptionStr);
         };
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, e) =>
         {
+            e.SetObserved();
             var exceptionStr = e.Exception?.ToString() ?? "No Exception Object";
             _logger?.LogWarning(e.Exception, "Unobserved task exception");
-            try { System.IO.File.AppendAllText(crashLogPath, "Task: " + exceptionStr + "\n"); } catch { }
+            LogCrash("Task", "Unobserved Task Exception", exceptionStr);
         };
+    }
+
+    private static readonly object _crashLogLock = new();
+
+    public static void ClearWindowReferences()
+    {
+        MainWindowInstance = null;
+        MainWindowContent = null!;
+    }
+
+    private static void LogCrash(string category, string? message, string details)
+    {
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        var logEntry = $"[{timestamp}] [{category}] {message}\n{details}\n\n";
+        System.Diagnostics.Debug.WriteLine(logEntry);
+
+        lock (_crashLogLock)
+        {
+            string[] candidateDirs = [
+                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer"),
+                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "LumiereMediaPlayer")
+            ];
+
+            foreach (var dir in candidateDirs)
+            {
+                try
+                {
+                    System.IO.Directory.CreateDirectory(dir);
+                    var filePath = System.IO.Path.Combine(dir, "crash.txt");
+                    var fileInfo = new System.IO.FileInfo(filePath);
+                    if (fileInfo.Exists && fileInfo.Length > 2 * 1024 * 1024)
+                    {
+                        System.IO.File.Move(filePath, System.IO.Path.Combine(dir, "crash.bak.txt"), true);
+                    }
+                    System.IO.File.AppendAllText(filePath, logEntry);
+                }
+                catch { }
+            }
+        }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -64,15 +112,15 @@ public partial class App : Application
         {
             MainDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 
+            // Kick off history load immediately in parallel so it's ready when HomePage renders
+            var historyLoadTask = AppServices.History.LoadHistoryAsync();
+
             var mainWindow = new MainWindow();
             _window = mainWindow;
             MainWindowInstance = mainWindow;
             MainWindowContent = (FrameworkElement)_window.Content;
 
-            try { ThemeHelper.ApplyTheme(MainWindowContent, AppServices.Settings.Current.Theme); } catch (Exception ex) { _logger?.LogWarning(ex, "Failed to apply theme"); }
-            try { ThemeHelper.ApplyAccentColor(AppServices.Settings.Current.AccentColor); } catch (Exception ex) { _logger?.LogWarning(ex, "Failed to apply accent color"); }
             try { AccessibilityHelper.Apply(AppServices.Settings.Current); } catch (Exception ex) { _logger?.LogWarning(ex, "Failed to apply accessibility settings"); }
-            try { mainWindow.ApplyBackdrop(AppServices.Settings.Current.BackdropType); } catch (Exception ex) { _logger?.LogWarning(ex, "Failed to apply backdrop"); }
 
             _window.Activate();
 
@@ -82,13 +130,19 @@ public partial class App : Application
                 try
                 {
                     // Fast local disk operations
-                    await AppServices.History.LoadHistoryAsync();
-                    await LumiereMediaPlayer.Services.SampleMediaLibrary.LoadLibraryAsync();
+                    await historyLoadTask;
+                    await LumiereMediaPlayer.Services.MediaLibraryService.LoadLibraryAsync();
                     AudioPipelineHelper.CleanupTempTranscodedFiles();
 
                     // Non-critical network sync deferred slightly to prevent network/socket contention
                     await Task.Delay(1500);
                     await AppServices.WatchmodeSync.SyncLibraryAsync();
+
+                    if (AppServices.Settings.Current.AutomaticLibraryScan)
+                    {
+                        await Task.Delay(2500);
+                        await LumiereMediaPlayer.Services.MediaLibraryService.ScanAllLibraryFoldersAsync();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -99,11 +153,8 @@ public partial class App : Application
         catch (Exception ex)
         {
             _logger?.LogCritical(ex, "OnLaunched failed");
-            var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-            var crashLogPath = System.IO.Path.Combine(appData, "LumiereMediaPlayer", "crash.txt");
-            try { System.IO.File.AppendAllText(crashLogPath, "OnLaunched: " + ex + "\n"); } catch { }
-
-            try { _window?.Activate(); } catch { }
+            LogCrash("OnLaunched", ex.Message, ex.ToString());
+            // Do not call Activate() on a corrupt/failed window instance
         }
     }
 }

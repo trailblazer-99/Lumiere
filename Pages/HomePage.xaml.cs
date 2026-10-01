@@ -1,3 +1,5 @@
+using LumiereMediaPlayer.Helpers;
+using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
@@ -15,31 +17,63 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
-        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        HomeScrollViewer.ViewChanging += (s, e) => Controls.MediaCard.NotifyScrollActivity();
+        HomeScrollViewer.ViewChanged += (s, e) => Controls.MediaCard.NotifyScrollActivity();
+        HomeScrollViewer.PointerWheelChanged += (s, e) => Controls.MediaCard.NotifyScrollActivity();
+    }
+
+    private void OnHistoryLoaded(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(UpdateRecentEmptyState);
+    }
+
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
 
         SetGreeting();
         UpdateOpenFileButtonVisibility();
+
+        AppServices.History.HistoryLoaded -= OnHistoryLoaded;
+        AppServices.History.HistoryLoaded += OnHistoryLoaded;
+
+        AppServices.Settings.SettingsChanged -= OnSettingsChanged;
         AppServices.Settings.SettingsChanged += OnSettingsChanged;
-        this.Unloaded += OnUnloaded;
+
+        ViewModel.RecentlyPlayed.CollectionChanged -= RecentlyPlayed_CollectionChanged;
+        ViewModel.RecentlyPlayed.CollectionChanged += RecentlyPlayed_CollectionChanged;
+
+        this.KeyDown -= OnPageKeyDown;
         this.KeyDown += OnPageKeyDown;
 
-        ViewModel.RecentlyPlayed.CollectionChanged += RecentlyPlayed_CollectionChanged;
+        if (GetAllHomeItems().Any(i => i.IsSelected))
+        {
+            foreach (var item in GetAllHomeItems())
+            {
+                item.IsSelected = false;
+            }
+        }
+        HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
+
+        UpdateRecentEmptyState();
+        _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
+    }
+
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+
+        this.KeyDown -= OnPageKeyDown;
+        AppServices.History.HistoryLoaded -= OnHistoryLoaded;
+        AppServices.Settings.SettingsChanged -= OnSettingsChanged;
+        ViewModel.RecentlyPlayed.CollectionChanged -= RecentlyPlayed_CollectionChanged;
     }
 
     private void RecentlyPlayed_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            RecentSection.Visibility = ViewModel.RecentlyPlayed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        });
+        DispatcherQueue.TryEnqueue(UpdateRecentEmptyState);
         _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        this.KeyDown -= OnPageKeyDown;
-        AppServices.Settings.SettingsChanged -= OnSettingsChanged;
-        ViewModel.RecentlyPlayed.CollectionChanged -= RecentlyPlayed_CollectionChanged;
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -52,9 +86,105 @@ public sealed partial class HomePage : Page
 
     private void UpdateOpenFileButtonVisibility()
     {
-        if (OpenFileButton != null)
+        if (OpenFileButton == null || FloatingOpenFileButton == null) return;
+
+        var settings = AppServices.Settings.Current;
+        if (!settings.ShowOpenFilesOnHome)
         {
-            OpenFileButton.Visibility = AppServices.Settings.Current.ShowOpenFilesOnHome ? Visibility.Visible : Visibility.Collapsed;
+            OpenFileButton.Visibility = Visibility.Collapsed;
+            FloatingOpenFileButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        switch (settings.OpenFilePositionCorner)
+        {
+            case OpenFileCorner.TopRight:
+                HeaderCol0.Width = new GridLength(1, GridUnitType.Star);
+                HeaderCol1.Width = GridLength.Auto;
+
+                Grid.SetRow(GreetingPanel, 0);
+                Grid.SetColumn(GreetingPanel, 0);
+                Grid.SetColumnSpan(GreetingPanel, 1);
+                GreetingPanel.HorizontalAlignment = HorizontalAlignment.Left;
+                GreetingPanel.Margin = new Thickness(0);
+
+                Grid.SetRow(OpenFileButton, 0);
+                Grid.SetColumn(OpenFileButton, 1);
+                Grid.SetColumnSpan(OpenFileButton, 1);
+                OpenFileButton.HorizontalAlignment = HorizontalAlignment.Right;
+                OpenFileButton.VerticalAlignment = VerticalAlignment.Center;
+                OpenFileButton.Margin = new Thickness(0);
+                OpenFileButton.Visibility = Visibility.Visible;
+
+                FloatingOpenFileButton.Visibility = Visibility.Collapsed;
+                break;
+
+            case OpenFileCorner.TopLeft:
+                HeaderCol0.Width = new GridLength(1, GridUnitType.Star);
+                HeaderCol1.Width = GridLength.Auto;
+
+                // Greeting stays in Row 0 spanning full width so "Good morning" and subtitle never clip
+                Grid.SetRow(GreetingPanel, 0);
+                Grid.SetColumn(GreetingPanel, 0);
+                Grid.SetColumnSpan(GreetingPanel, 2);
+                GreetingPanel.HorizontalAlignment = HorizontalAlignment.Left;
+                GreetingPanel.Margin = new Thickness(0);
+
+                // Button is placed on Row 1, aligned to the left directly below greeting
+                Grid.SetRow(OpenFileButton, 1);
+                Grid.SetColumn(OpenFileButton, 0);
+                Grid.SetColumnSpan(OpenFileButton, 2);
+                OpenFileButton.HorizontalAlignment = HorizontalAlignment.Left;
+                OpenFileButton.VerticalAlignment = VerticalAlignment.Center;
+                OpenFileButton.Margin = new Thickness(0, 16, 0, 0);
+                OpenFileButton.Visibility = Visibility.Visible;
+
+                FloatingOpenFileButton.Visibility = Visibility.Collapsed;
+                break;
+
+            case OpenFileCorner.BottomLeft:
+                HeaderCol0.Width = new GridLength(1, GridUnitType.Star);
+                HeaderCol1.Width = GridLength.Auto;
+
+                Grid.SetRow(GreetingPanel, 0);
+                Grid.SetColumn(GreetingPanel, 0);
+                Grid.SetColumnSpan(GreetingPanel, 2);
+                GreetingPanel.HorizontalAlignment = HorizontalAlignment.Left;
+                GreetingPanel.Margin = new Thickness(0);
+
+                OpenFileButton.Visibility = Visibility.Collapsed;
+
+                FloatingOpenFileButton.HorizontalAlignment = HorizontalAlignment.Left;
+                FloatingOpenFileButton.VerticalAlignment = VerticalAlignment.Bottom;
+                FloatingOpenFileButton.Margin = new Thickness(32, 0, 0, 24);
+                if (FloatingOpenFileButton.Flyout is MenuFlyout flyoutLeft)
+                {
+                    flyoutLeft.Placement = FlyoutPlacementMode.TopEdgeAlignedLeft;
+                }
+                FloatingOpenFileButton.Visibility = Visibility.Visible;
+                break;
+
+            case OpenFileCorner.BottomRight:
+                HeaderCol0.Width = new GridLength(1, GridUnitType.Star);
+                HeaderCol1.Width = GridLength.Auto;
+
+                Grid.SetRow(GreetingPanel, 0);
+                Grid.SetColumn(GreetingPanel, 0);
+                Grid.SetColumnSpan(GreetingPanel, 2);
+                GreetingPanel.HorizontalAlignment = HorizontalAlignment.Left;
+                GreetingPanel.Margin = new Thickness(0);
+
+                OpenFileButton.Visibility = Visibility.Collapsed;
+
+                FloatingOpenFileButton.HorizontalAlignment = HorizontalAlignment.Right;
+                FloatingOpenFileButton.VerticalAlignment = VerticalAlignment.Bottom;
+                FloatingOpenFileButton.Margin = new Thickness(0, 0, 32, 24);
+                if (FloatingOpenFileButton.Flyout is MenuFlyout flyoutRight)
+                {
+                    flyoutRight.Placement = FlyoutPlacementMode.TopEdgeAlignedRight;
+                }
+                FloatingOpenFileButton.Visibility = Visibility.Visible;
+                break;
         }
     }
 
@@ -73,95 +203,40 @@ public sealed partial class HomePage : Page
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         UpdateOpenFileButtonVisibility();
-        foreach (var item in ViewModel.RecentlyPlayed)
+        if (GetAllHomeItems().Any(item => item.IsSelected))
         {
-            item.IsSelected = false;
+            foreach (var item in GetAllHomeItems())
+            {
+                item.IsSelected = false;
+            }
         }
-        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+        HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
 
-        RecentSection.Visibility = ViewModel.RecentlyPlayed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        PlayEntranceAnimation();
+        UpdateRecentEmptyState();
+        PageContent.Opacity = 1.0;
+        RecentSection.Opacity = 1.0;
         _ = ViewModel.EnrichRecentlyPlayedMetadataAsync();
     }
 
-    private void PlayEntranceAnimation()
+    private void UpdateRecentEmptyState()
     {
-        try
+        if (RecentSection == null || ClearHistoryButton == null || RecentItemsRepeater == null || RecentEmptyState == null)
+            return;
+
+        if (!AppServices.History.IsLoaded)
         {
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                try
-                {
-                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
-                    v.Opacity = 1f;
-                }
-                catch { }
-                PageContent.Opacity = 1.0;
-                RecentSection.Opacity = 1.0;
-                return;
-            }
-
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            // Fade in
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(400);
-            visual.StartAnimation("Opacity", fadeAnimation);
-
-            // Slide up
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 30, 0));
-            slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(500);
-            visual.StartAnimation("Offset", slideAnimation);
-
-            // Staggered section animations
-            AnimateSectionEntrance(RecentSection, 120);
+            // History is still being read from disk; avoid flashing false empty state
+            ClearHistoryButton.Visibility = Visibility.Collapsed;
+            RecentItemsRepeater.Visibility = Visibility.Collapsed;
+            RecentEmptyState.Visibility = Visibility.Collapsed;
+            return;
         }
-        catch (System.Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to animate HomePage entrance: {ex.Message}");
-            PageContent.Opacity = 1.0;
-            RecentSection.Opacity = 1.0;
-        }
-    }
 
-    private void AnimateSectionEntrance(FrameworkElement element, int delayMs)
-    {
-        try
-        {
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                element.Opacity = 1.0;
-                return;
-            }
-
-            var visual = ElementCompositionPreview.GetElementVisual(element);
-            var compositor = visual.Compositor;
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(350);
-            fadeAnimation.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
-            slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(400);
-            slideAnimation.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-
-            visual.StartAnimation("Opacity", fadeAnimation);
-            visual.StartAnimation("Offset", slideAnimation);
-        }
-        catch (System.Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to animate section entrance: {ex.Message}");
-            element.Opacity = 1.0;
-        }
+        bool hasItems = ViewModel.RecentlyPlayed.Count > 0;
+        RecentSection.Visibility = Visibility.Visible;
+        ClearHistoryButton.Visibility = hasItems ? Visibility.Visible : Visibility.Collapsed;
+        RecentItemsRepeater.Visibility = hasItems ? Visibility.Visible : Visibility.Collapsed;
+        RecentEmptyState.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnOpenFileClick(SplitButton sender, SplitButtonClickEventArgs args)
@@ -193,10 +268,10 @@ public sealed partial class HomePage : Page
                 XamlRoot = this.XamlRoot
             };
 
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            if (await MediaFlyoutHelper.ShowDialogSafeAsync(dialog) == ContentDialogResult.Primary)
             {
                 ViewModel.ClearHistoryCommand.Execute(null);
-                RecentSection.Visibility = Visibility.Collapsed;
+                UpdateRecentEmptyState();
             }
         }
         catch (Exception ex)
@@ -205,33 +280,69 @@ public sealed partial class HomePage : Page
         }
     }
 
+    private IEnumerable<MediaItem> GetAllHomeItems()
+    {
+        return ViewModel.RecentlyPlayed.Concat(ViewModel.FavoriteVideos).Distinct();
+    }
+
+    private void OnHomePlayRequested(object? sender, EventArgs e)
+    {
+        var selected = GetAllHomeItems().Where(i => i.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.SetQueue(selected, 0);
+            HomeSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private void OnHomePlayNextRequested(object? sender, EventArgs e)
+    {
+        var selected = GetAllHomeItems().Where(i => i.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.PlayNextRange(selected);
+            HomeSelectionRibbon?.ClearSelection();
+        }
+    }
+
+    private void OnHomeAddToQueueRequested(object? sender, EventArgs e)
+    {
+        var selected = GetAllHomeItems().Where(i => i.IsSelected).ToList();
+        if (selected.Count > 0)
+        {
+            AppServices.PlaybackViewModel.EnqueueRange(selected);
+            HomeSelectionRibbon?.ClearSelection();
+        }
+    }
+
     private void OnCardSelectionChanged(object? sender, EventArgs e)
     {
-        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+        HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
     }
 
     private void OnSelectAllRequested(object? sender, EventArgs e)
     {
-        foreach (var item in ViewModel.RecentlyPlayed)
+        foreach (var item in GetAllHomeItems())
         {
             item.IsSelected = true;
         }
-        HomeSelectionRibbon?.UpdateSelection(ViewModel.RecentlyPlayed);
+        HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
     }
 
     private void OnClearSelectionRequested(object? sender, EventArgs e)
     {
-        foreach (var item in ViewModel.RecentlyPlayed)
+        foreach (var item in GetAllHomeItems())
         {
             item.IsSelected = false;
         }
+        HomeSelectionRibbon?.ClearSelection();
     }
 
     private async void OnRemoveSelectedRequested(object? sender, EventArgs e)
     {
         try
         {
-            var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+            var selected = GetAllHomeItems().Where(i => i.IsSelected).ToList();
             if (selected.Count > 0)
             {
                 await AppServices.History.RemoveRangeFromHistoryAsync(selected);
@@ -248,9 +359,31 @@ public sealed partial class HomePage : Page
     {
         try
         {
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            if (isCtrl && e.Key == Windows.System.VirtualKey.A)
+            {
+                e.Handled = true;
+                foreach (var item in GetAllHomeItems())
+                {
+                    item.IsSelected = true;
+                }
+                HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
+                return;
+            }
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                e.Handled = true;
+                foreach (var item in GetAllHomeItems())
+                {
+                    item.IsSelected = false;
+                }
+                HomeSelectionRibbon?.ClearSelection();
+                return;
+            }
             if (e.Key == Windows.System.VirtualKey.Delete)
             {
-                var selected = ViewModel.RecentlyPlayed.Where(i => i.IsSelected).ToList();
+                var selected = GetAllHomeItems().Where(i => i.IsSelected).ToList();
                 if (selected.Count > 0)
                 {
                     e.Handled = true;
@@ -262,6 +395,32 @@ public sealed partial class HomePage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[OnPageKeyDown] error: {ex.Message}");
+        }
+    }
+
+    public void NotifySelectionChanged()
+    {
+        HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
+    }
+
+    private void OnMediaCardButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is MediaItem item)
+        {
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            bool hasSelection = HomeSelectionRibbon != null && HomeSelectionRibbon.SelectedItems.Count > 0;
+
+            if (isCtrl || isShift || hasSelection)
+            {
+                item.IsSelected = !item.IsSelected;
+                HomeSelectionRibbon?.UpdateSelection(GetAllHomeItems());
+                return;
+            }
+
+            ViewModel.PlayTrackCommand.Execute(item);
         }
     }
 }

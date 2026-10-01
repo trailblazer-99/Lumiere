@@ -22,6 +22,9 @@ public static class AppServices
     public static HistoryService History
         => App.Services.GetRequiredService<HistoryService>();
 
+    public static HistoryService HistoryService
+        => History;
+
     public static WatchmodeSyncService WatchmodeSync
         => App.Services.GetRequiredService<WatchmodeSyncService>();
 
@@ -49,6 +52,9 @@ public static class AppServices
 
     public static IFullscreenManager Fullscreen
         => App.Services.GetRequiredService<IFullscreenManager>();
+
+    public static IAppleTvLifecycleService AppleTvLifecycle
+        => App.Services.GetRequiredService<IAppleTvLifecycleService>();
 
     public static PlaybackViewModel PlaybackViewModel
         => App.Services.GetRequiredService<PlaybackViewModel>();

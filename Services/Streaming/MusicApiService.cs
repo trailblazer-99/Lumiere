@@ -145,11 +145,47 @@ namespace LumiereMediaPlayer.Services.Streaming
                     links.Add(new MusicStreamingLink { ServiceName = "Tidal", Url = track.ExternalUrls.Tidal, IconUrl = GetIconUrl("tidal") });
                 if (!string.IsNullOrEmpty(track.ExternalUrls.SoundCloud))
                     links.Add(new MusicStreamingLink { ServiceName = "SoundCloud", Url = track.ExternalUrls.SoundCloud, IconUrl = GetIconUrl("soundcloud") });
+            }
 
-                if (links.Count > 0)
+            // Ensure Spotify is always resolved with a true deep link
+            bool hasSpotify = links.Any(l => l.ServiceName.Equals("Spotify", StringComparison.OrdinalIgnoreCase));
+            if (!hasSpotify)
+            {
+                try
                 {
-                    return links;
+                    string itemType = track.ResultType?.ToLowerInvariant() switch
+                    {
+                        "artist" => "artist",
+                        "album" => "album",
+                        "playlist" => "playlist",
+                        _ => "track"
+                    };
+
+                    var (_, spotifyWebUrl) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                        track.Name,
+                        itemType,
+                        track.DisplayArtist,
+                        track.Album);
+
+                    if (!string.IsNullOrEmpty(spotifyWebUrl))
+                    {
+                        links.Insert(0, new MusicStreamingLink
+                        {
+                            ServiceName = "Spotify",
+                            Url = spotifyWebUrl,
+                            IconUrl = GetIconUrl("spotify")
+                        });
+                    }
                 }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MusicApiService] Failed to resolve Spotify link: {ex.Message}");
+                }
+            }
+
+            if (links.Count > 0)
+            {
+                return links;
             }
 
             // Fallback to Odesli via existing service if no external URLs or if iTunes fallback was used

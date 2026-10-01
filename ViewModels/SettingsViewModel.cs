@@ -6,12 +6,15 @@ using LumiereMediaPlayer.Services;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly ISettingsService _settingsService;
     private readonly IDisplayManager _displayManager;
     private bool _isSyncing;
     private readonly Microsoft.UI.Xaml.DispatcherTimer? _textScaleDebounceTimer;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer? _customAccentDebounceTimer;
+    private readonly EventHandler _settingsChangedHandler;
+    private readonly EventHandler _advancedColorChangedHandler;
 
     // ── Playback ───────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeOption SelectedTheme { get; set; }
@@ -31,6 +34,7 @@ public partial class SettingsViewModel : ObservableObject
 
     // ── Video ──────────────────────────────────────────────────────
     [ObservableProperty] public partial AspectRatioOption DefaultAspectRatio { get; set; }
+    [ObservableProperty] public partial bool EnableHoverVideoPreview { get; set; }
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     [ObservableProperty] public partial HdrMode SelectedHdrMode { get; set; }
@@ -42,6 +46,8 @@ public partial class SettingsViewModel : ObservableObject
     // ── Appearance ─────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeBackdrop SelectedBackdrop { get; set; }
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
+    [ObservableProperty] public partial Windows.UI.Color CurrentAccentColor { get; set; }
+    [ObservableProperty] public partial bool IsCustomAccentExpanded { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
     [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
     [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
@@ -92,8 +98,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string LocalAiHardwareSuggestion { get; set; } = string.Empty;
 
     // ── Update Status ──────────────────────────────────────────────
-    [ObservableProperty] public partial bool IsCheckingForUpdates { get; set; }
-    [ObservableProperty] public partial bool IsUpdateAvailable { get; set; }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsCheckingForUpdates { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsUpdateAvailable { get; set; }
     [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
     [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
 
@@ -112,6 +123,14 @@ public partial class SettingsViewModel : ObservableObject
                 _textScaleDebounceTimer.Stop();
                 SaveAndApplyAccessibility();
             };
+
+            _customAccentDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _customAccentDebounceTimer.Tick += (s, e) =>
+            {
+                _customAccentDebounceTimer.Stop();
+                _settingsService.Save();
+                AccessibilityHelper.Apply(_settingsService.Current);
+            };
         }
         catch
         {
@@ -119,18 +138,67 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         SyncFromSettings();
-        _settingsService.SettingsChanged += (_, _) => SyncFromSettings();
-        _displayManager.AdvancedColorInfoChanged += (_, _) =>
+        _settingsChangedHandler = (_, _) => SyncFromSettings();
+        _settingsService.SettingsChanged += _settingsChangedHandler;
+
+        _advancedColorChangedHandler = (_, _) =>
         {
             App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
             {
                 OnPropertyChanged(nameof(ActiveDisplayProfileSummary));
             });
         };
+        _displayManager.AdvancedColorInfoChanged += _advancedColorChangedHandler;
 
         // Analyze hardware async in background
         _ = AnalyzeHardwareBackgroundAsync();
         _ = CheckWindowsHelloStatusAsync();
+
+        try
+        {
+            var packageVersion = Windows.ApplicationModel.Package.Current.Id.Version;
+            UpdateStatusText = $"Current version: v{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}";
+        }
+        catch
+        {
+            UpdateStatusText = "Current version: v1.0.0 (Development build)";
+        }
+
+        if (UpdateService.LastCheckResult != null)
+        {
+            ApplyUpdateInfo(UpdateService.LastCheckResult);
+        }
+    }
+
+    public void ApplyUpdateInfo(AppUpdateInfo info)
+    {
+        if (info == null) return;
+        if (info.IsUpdateAvailable)
+        {
+            IsUpdateAvailable = true;
+            UpdateStatusText = $"Update available: v{info.LatestVersion} (Current: v{info.CurrentVersion})";
+            LatestVersion = info.LatestVersion;
+            _downloadUri = info.DownloadUri;
+        }
+        else if (!string.IsNullOrEmpty(info.LatestVersion))
+        {
+            IsUpdateAvailable = false;
+            UpdateStatusText = $"You're on the latest version (v{info.CurrentVersion}).";
+        }
+    }
+
+    public void Dispose()
+    {
+        _settingsService.SettingsChanged -= _settingsChangedHandler;
+        _displayManager.AdvancedColorInfoChanged -= _advancedColorChangedHandler;
+        if (_textScaleDebounceTimer != null)
+        {
+            _textScaleDebounceTimer.Stop();
+        }
+        if (_customAccentDebounceTimer != null)
+        {
+            _customAccentDebounceTimer.Stop();
+        }
     }
 
     public SettingsViewModel(ISettingsService settingsService)
@@ -142,6 +210,8 @@ public partial class SettingsViewModel : ObservableObject
         : this(AppServices.Settings, AppServices.DisplayManager)
     {
     }
+
+    private string _downloadUri = string.Empty;
 
     private async System.Threading.Tasks.Task CheckWindowsHelloStatusAsync()
     {
@@ -174,30 +244,44 @@ public partial class SettingsViewModel : ObservableObject
         UpdateStatusText = "Checking for updates...";
         IsUpdateAvailable = false;
 
-        var info = await UpdateService.CheckForUpdatesAsync();
+        try
+        {
+            var info = await UpdateService.CheckForUpdatesAsync();
 
-        IsCheckingForUpdates = false;
-
-        if (info.IsUpdateAvailable)
-        {
-            IsUpdateAvailable = true;
-            UpdateStatusText = $"Update Available: v{info.LatestVersion} (Current: {info.CurrentVersion})";
-            LatestVersion = info.LatestVersion;
+            if (info.IsUpdateAvailable)
+            {
+                ApplyUpdateInfo(info);
+            }
+            else if (!string.IsNullOrEmpty(info.LatestVersion))
+            {
+                UpdateStatusText = $"You're on the latest version (v{info.CurrentVersion}).";
+            }
+            else if (!string.IsNullOrEmpty(info.CurrentVersion))
+            {
+                UpdateStatusText = $"Current version: v{info.CurrentVersion}. Unable to reach update server.";
+            }
+            else
+            {
+                UpdateStatusText = "Failed to check for updates. Try again later.";
+            }
         }
-        else if (!string.IsNullOrEmpty(info.CurrentVersion))
+        catch (Exception ex)
         {
-            UpdateStatusText = $"You're on the latest version ({info.CurrentVersion}).";
+            UpdateStatusText = $"Update check failed: {ex.Message}";
         }
-        else
+        finally
         {
-            UpdateStatusText = "Failed to check for updates. Try again later.";
+            IsCheckingForUpdates = false;
         }
     }
 
-    [RelayCommand]
+    public bool CanInstallUpdate => IsUpdateAvailable && !IsCheckingForUpdates;
+
+    [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
     private async System.Threading.Tasks.Task InstallUpdateAsync()
     {
-        await UpdateService.InstallUpdateAsync();
+        if (!IsUpdateAvailable || IsCheckingForUpdates) return;
+        await UpdateService.InstallUpdateAsync(_downloadUri);
     }
 
     // ── Index properties for ComboBox bindings ─────────────────────
@@ -328,11 +412,21 @@ public partial class SettingsViewModel : ObservableObject
             }
             catch { }
         }
+        App.MainWindowInstance?.UpdateTheme();
         OnPropertyChanged(nameof(SelectedThemeIndex));
     }
 
     partial void OnAutoplayOnLaunchChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoplayOnLaunch = value; _settingsService.Save(); } }
-    partial void OnResumePlaybackPositionChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ResumePlaybackPosition = value; _settingsService.Save(); } }
+    partial void OnResumePlaybackPositionChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.ResumePlaybackPosition = value;
+            _settingsService.Current.RememberPlaybackPositionPerTrack = value;
+            _settingsService.Save();
+            RememberPlaybackPositionPerTrack = value;
+        }
+    }
 
     partial void OnSkipForwardIntervalChanged(int value)
     {
@@ -387,6 +481,13 @@ public partial class SettingsViewModel : ObservableObject
         _settingsService.Current.DefaultAspectRatio = value;
         _settingsService.Save();
         OnPropertyChanged(nameof(SelectedAspectRatioIndex));
+    }
+
+    partial void OnEnableHoverVideoPreviewChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.EnableHoverVideoPreview = value;
+        _settingsService.Save();
     }
 
     // HDR & Color Pipeline
@@ -455,9 +556,53 @@ public partial class SettingsViewModel : ObservableObject
     {
         if (_isSyncing) return;
         _settingsService.Current.AccentColor = value;
+        if (value == AccentColorOption.Custom)
+        {
+            IsCustomAccentExpanded = true;
+            if (!string.IsNullOrEmpty(_settingsService.Current.CustomAccentColorHex))
+            {
+                var color = ColorHelper.FromHex(_settingsService.Current.CustomAccentColorHex);
+                _isSyncing = true;
+                CurrentAccentColor = color;
+                _isSyncing = false;
+                ThemeHelper.ApplyAccentColor(color);
+            }
+            else
+            {
+                ThemeHelper.ApplyAccentColor(CurrentAccentColor);
+            }
+        }
+        else
+        {
+            var color = ThemeHelper.GetAccentColor(value);
+            _isSyncing = true;
+            CurrentAccentColor = color;
+            _isSyncing = false;
+            ThemeHelper.ApplyAccentColor(value);
+        }
         _settingsService.Save();
-        ThemeHelper.ApplyAccentColor(value);
         AccessibilityHelper.Apply(_settingsService.Current);
+        OnPropertyChanged(nameof(SelectedAccentColorIndex));
+    }
+
+    partial void OnCurrentAccentColorChanged(Windows.UI.Color value)
+    {
+        if (_isSyncing) return;
+        var hex = ColorHelper.ToHex(value);
+        _settingsService.Current.CustomAccentColorHex = hex;
+        _settingsService.Current.AccentColor = AccentColorOption.Custom;
+        _isSyncing = true;
+        SelectedAccentColor = AccentColorOption.Custom;
+        IsCustomAccentExpanded = true;
+        _isSyncing = false;
+
+        // Instant live visual update across all palettes and theme dictionaries
+        ThemeHelper.ApplyAccentColor(value);
+
+        // Debounce expensive disk file writes and accessibility passes
+        _customAccentDebounceTimer?.Stop();
+        _customAccentDebounceTimer?.Start();
+
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
     }
 
@@ -685,7 +830,17 @@ public partial class SettingsViewModel : ObservableObject
     {
         _settingsService.ResetSettings();
         SyncFromSettings();
-        AccessibilityHelper.Apply(_settingsService.Current);
+        if (App.MainWindowContent != null)
+        {
+            try
+            {
+                ThemeHelper.ApplyTheme(App.MainWindowContent, _settingsService.Current.Theme);
+                ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
+                AccessibilityHelper.Apply(_settingsService.Current);
+            }
+            catch { }
+        }
+        App.MainWindowInstance?.UpdateTheme();
     }
 
     [RelayCommand]
@@ -715,9 +870,24 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearRecentFiles()
+    private async System.Threading.Tasks.Task ClearRecentFilesAsync()
     {
-        // Clears recently opened files from local settings
+        // Clears recently opened files from HistoryService and local settings
+        try
+        {
+            if (AppServices.HistoryService != null)
+            {
+                await AppServices.HistoryService.ClearHistoryAsync();
+            }
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
+
+        try
+        {
+            Windows.Storage.AccessCache.StorageApplicationPermissions.MostRecentlyUsedList.Clear();
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
+
         try
         {
             var s = Windows.Storage.ApplicationData.Current.LocalSettings;
@@ -730,7 +900,7 @@ public partial class SettingsViewModel : ObservableObject
             foreach (var key in keysToRemove)
                 s.Values.Remove(key);
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -766,6 +936,7 @@ public partial class SettingsViewModel : ObservableObject
         DefaultVolume = c.DefaultVolume;
 
         DefaultAspectRatio = c.DefaultAspectRatio;
+        EnableHoverVideoPreview = c.EnableHoverVideoPreview;
 
         SelectedHdrMode = c.HdrMode;
         AutoBoostHdrBrightness = c.AutoBoostHdrBrightness;
@@ -775,6 +946,22 @@ public partial class SettingsViewModel : ObservableObject
 
         SelectedBackdrop = c.BackdropType;
         SelectedAccentColor = c.AccentColor;
+        if (c.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(c.CustomAccentColorHex))
+        {
+            try
+            {
+                CurrentAccentColor = ColorHelper.FromHex(c.CustomAccentColorHex);
+                IsCustomAccentExpanded = true;
+            }
+            catch
+            {
+                CurrentAccentColor = ThemeHelper.GetAccentColor(c.AccentColor);
+            }
+        }
+        else
+        {
+            CurrentAccentColor = ThemeHelper.GetAccentColor(c.AccentColor);
+        }
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
         AcrylicTransportBar = c.AcrylicTransportBar;
         AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;

@@ -58,16 +58,25 @@ internal sealed class BrightnessOverrideHelper : IDisposable
             {
                 try
                 {
-                    byte? currentWmi = GetWmiBrightness();
-                    if (currentWmi.HasValue)
+                    // Offload WMI querying & setting to background task so UI thread never stalls on ACPI/WMI driver
+                    _ = Task.Run(async () =>
                     {
-                        _savedWmiBrightness = currentWmi.Value;
-                        // Fire-and-forget — WMI latency (~50–200 ms) must not block the UI thread.
-                        _ = Task.Run(() => SetWmiBrightness(100));
-                        _wmiOverrideActive = true;
-                        success = true;
-                        Debug.WriteLine($"[HDR Brightness] WMI laptop override applied: {currentWmi.Value} → 100");
-                    }
+                        try
+                        {
+                            byte? currentWmi = await GetWmiBrightnessAsync().ConfigureAwait(false);
+                            if (currentWmi.HasValue)
+                            {
+                                _savedWmiBrightness = currentWmi.Value;
+                                SetWmiBrightness(100);
+                                _wmiOverrideActive = true;
+                                Debug.WriteLine($"[HDR Brightness] WMI laptop override applied: {currentWmi.Value} → 100");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[HDR Brightness] WMI override failed in background: {ex.Message}");
+                        }
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -96,7 +105,17 @@ internal sealed class BrightnessOverrideHelper : IDisposable
                                 success = true;
                                 Debug.WriteLine($"[HDR Brightness] DDC/CI monitor override applied: {current} → {max} (range {min}–{max})");
                             }
-                            if (!_ddcOverrideActive)
+
+                            if (_ddcOverrideActive)
+                            {
+                                if (count > 1)
+                                {
+                                    var extraMonitors = new PHYSICAL_MONITOR[count - 1];
+                                    Array.Copy(monitors, 1, extraMonitors, 0, (int)count - 1);
+                                    DestroyPhysicalMonitors(count - 1, extraMonitors);
+                                }
+                            }
+                            else
                             {
                                 DestroyPhysicalMonitors(count, monitors);
                                 _physicalMonitorHandle = IntPtr.Zero;
@@ -196,6 +215,11 @@ internal sealed class BrightnessOverrideHelper : IDisposable
 
     // ── WMI Helper Methods ────────────────────────────────────────────
 
+    private static Task<byte?> GetWmiBrightnessAsync()
+    {
+        return Task.Run(() => GetWmiBrightness());
+    }
+
     private static byte? GetWmiBrightness()
     {
         try
@@ -206,10 +230,13 @@ internal sealed class BrightnessOverrideHelper : IDisposable
                 {
                     foreach (ManagementObject mObj in collection)
                     {
-                        var val = mObj["CurrentBrightness"];
-                        if (val != null)
+                        using (mObj)
                         {
-                            return Convert.ToByte(val);
+                            var val = mObj["CurrentBrightness"];
+                            if (val != null)
+                            {
+                                return Convert.ToByte(val);
+                            }
                         }
                     }
                 }
@@ -233,10 +260,13 @@ internal sealed class BrightnessOverrideHelper : IDisposable
                     bool success = false;
                     foreach (ManagementObject instance in instances)
                     {
-                        // Invoke on all instances (some drivers report Active=false incorrectly)
-                        // Pass uint 0 (0u) as Timeout so ACPI brightness methods transition immediately without type mismatch
-                        instance.InvokeMethod("WmiSetBrightness", new object[] { 0u, targetBrightness });
-                        success = true;
+                        using (instance)
+                        {
+                            // Invoke on all instances (some drivers report Active=false incorrectly)
+                            // Pass uint 0 (0u) as Timeout so ACPI brightness methods transition immediately without type mismatch
+                            instance.InvokeMethod("WmiSetBrightness", new object[] { 0u, targetBrightness });
+                            success = true;
+                        }
                     }
                     return success;
                 }

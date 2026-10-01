@@ -40,6 +40,24 @@ public sealed partial class NowPlayingPage : Page
         {
             ShowNoLyrics();
         }
+        UpdateEmptyState();
+    }
+
+    private void UpdateEmptyState()
+    {
+        if (IdleEmptyState == null || ContentGrid == null) return;
+        bool isPlaying = AppServices.PlaybackViewModel.CurrentTrack != null;
+        ContentGrid.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        if (AmbientArtworkHost != null)
+        {
+            AmbientArtworkHost.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        }
+        IdleEmptyState.Visibility = isPlaying ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnIdleOpenFileClick(object sender, RoutedEventArgs e)
+    {
+        App.MainWindowInstance?.OpenFilePickerAndPlay();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -50,6 +68,7 @@ public sealed partial class NowPlayingPage : Page
         }
         else if (e.PropertyName is nameof(NowPlayingViewModel.Title))
         {
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
             var currentTrack = AppServices.PlaybackViewModel.CurrentTrack;
             if (currentTrack != null)
             {
@@ -71,6 +90,7 @@ public sealed partial class NowPlayingPage : Page
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        UpdateEmptyState();
         PlayEntranceAnimation();
 
         try
@@ -195,11 +215,11 @@ public sealed partial class NowPlayingPage : Page
                         if (results != null && results.Count > 0)
                         {
                             var track = results[0];
-                            RenderProviders(track.TrackName, track.ArtistName);
+                            RenderProviders(track.TrackName, track.ArtistName, track.CollectionName);
                         }
                         else
                         {
-                            RenderProviders(title, artist);
+                            RenderProviders(title, artist, ViewModel.Album);
                         }
                     }
                 }
@@ -212,9 +232,12 @@ public sealed partial class NowPlayingPage : Page
         }
     }
 
-    private void RenderProviders(string trackName, string artistName)
+    private void RenderProviders(string trackName, string artistName, string? albumName = null)
     {
         InternetMetadataPanel.Children.Clear();
+
+        // Warm up true Spotify deep link in background
+        _ = LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(trackName, "track", artistName, albumName);
 
         var header = new TextBlock
         {
@@ -249,8 +272,8 @@ public sealed partial class NowPlayingPage : Page
             {
                 Padding = new Thickness(12),
                 CornerRadius = new CornerRadius(8),
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
@@ -286,6 +309,7 @@ public sealed partial class NowPlayingPage : Page
             switch (p.Name.ToLower())
             {
                 case "spotify":
+                    // Spotify deep link is resolved dynamically on click and pre-warmed above
                     deepLinkUrl = $"spotify:search:{q}";
                     searchWebUrl = $"https://open.spotify.com/search/{q}";
                     break;
@@ -324,6 +348,17 @@ public sealed partial class NowPlayingPage : Page
             {
                 try
                 {
+                    if (p.Name.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var (spotifyNative, spotifyWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                            trackName,
+                            "track",
+                            artistName,
+                            albumName);
+                        await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spotifyNative, spotifyWeb);
+                        return;
+                    }
+
                     Uri? nativeUri = !string.IsNullOrEmpty(deepLinkUrl) ? new Uri(deepLinkUrl) : null;
                     await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
                 }
@@ -694,14 +729,14 @@ public sealed partial class NowPlayingPage : Page
         {
             if (isActive)
             {
-                textBlock.Foreground = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                textBlock.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
                 textBlock.Opacity = 1.0;
                 textBlock.FontSize = 16;
                 textBlock.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
             }
             else
             {
-                textBlock.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                textBlock.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush");
                 textBlock.Opacity = 0.4;
                 textBlock.FontSize = 13;
                 textBlock.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;

@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Microsoft.UI.Xaml.Media;
+using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Models.Streaming
 {
@@ -209,6 +211,13 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("full_name")]
         public string? FullName { get; set; }
 
+        [JsonPropertyName("name")]
+        public string? Name
+        {
+            get => FullName;
+            set { if (string.IsNullOrEmpty(FullName)) FullName = value; }
+        }
+
         [JsonPropertyName("role")]
         public string? Role { get; set; }
 
@@ -217,6 +226,58 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("order")]
         public int? Order { get; set; }
+
+        [JsonPropertyName("headshot_url")]
+        public string? HeadshotUrl { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
+
+        public string? ProfileImageUrl
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(HeadshotUrl))
+                    return HeadshotUrl;
+                if (!string.IsNullOrEmpty(ProfilePath))
+                {
+                    if (ProfilePath.StartsWith("http", System.StringComparison.OrdinalIgnoreCase))
+                        return ProfilePath;
+                    return $"https://image.tmdb.org/t/p/w185{ProfilePath}";
+                }
+                return null;
+            }
+        }
+
+        public bool HasProfileImage => !string.IsNullOrEmpty(ProfileImageUrl);
+
+        public string Initials
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(FullName)) return "?";
+                var parts = FullName.Trim().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 1) return parts[0].Substring(0, System.Math.Min(2, parts[0].Length)).ToUpperInvariant();
+                return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+            }
+        }
+
+        [JsonIgnore]
+        public ImageSource? ProfileImageSource
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(ProfileImageUrl)) return null;
+                try
+                {
+                    return ImageBindHelper.SafeImageFromUrl(ProfileImageUrl, 64);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
     }
 
     public class WatchmodeSeason
@@ -349,6 +410,9 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("order")]
         public int? Order { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
     }
 
     public class TmdbCrewMember
@@ -361,6 +425,9 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("job")]
         public string? Job { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
     }
 
     public class TmdbMovieDetails
@@ -499,7 +566,9 @@ namespace LumiereMediaPlayer.Models.Streaming
                         Type = "Cast",
                         FullName = c.Name,
                         Role = c.Character,
-                        Order = c.Order
+                        Order = c.Order,
+                        ProfilePath = c.ProfilePath,
+                        HeadshotUrl = !string.IsNullOrEmpty(c.ProfilePath) ? $"https://image.tmdb.org/t/p/w185{c.ProfilePath}" : null
                     });
                 }
             }
@@ -508,14 +577,16 @@ namespace LumiereMediaPlayer.Models.Streaming
             {
                 foreach (var c in credits.Crew)
                 {
-                    if (c.Job == "Director" || c.Job == "Writer" || c.Job == "Producer")
+                    if (c.Job is "Director" or "Writer" or "Producer" or "Screenplay" or "Executive Producer" or "Creator" or "Original Music Composer")
                     {
                         results.Add(new WatchmodeCastCrew
                         {
                             PersonId = c.Id,
                             Type = "Crew",
                             FullName = c.Name,
-                            Role = c.Job
+                            Role = c.Job,
+                            ProfilePath = c.ProfilePath,
+                            HeadshotUrl = !string.IsNullOrEmpty(c.ProfilePath) ? $"https://image.tmdb.org/t/p/w185{c.ProfilePath}" : null
                         });
                     }
                 }
@@ -584,6 +655,12 @@ namespace LumiereMediaPlayer.Models.Streaming
                             ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}"
                             : "https://www.crunchyroll.com";
                     }
+                    else if (providerName.Contains("prime", StringComparison.OrdinalIgnoreCase) || providerName.Contains("amazon", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
+                            : "https://www.primevideo.com";
+                    }
                     else if (providerName.Contains("apple", StringComparison.OrdinalIgnoreCase) || providerName.Contains("itunes", StringComparison.OrdinalIgnoreCase))
                     {
                         webUrl = !string.IsNullOrEmpty(title)
@@ -595,12 +672,6 @@ namespace LumiereMediaPlayer.Models.Streaming
                         webUrl = !string.IsNullOrEmpty(title)
                             ? $"https://www.netflix.com/search?q={Uri.EscapeDataString(title)}"
                             : "https://www.netflix.com";
-                    }
-                    else if (providerName.Contains("prime", StringComparison.OrdinalIgnoreCase) || providerName.Contains("amazon", StringComparison.OrdinalIgnoreCase))
-                    {
-                        webUrl = !string.IsNullOrEmpty(title)
-                            ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
-                            : "https://www.primevideo.com";
                     }
                     else if (providerName.Contains("disney", StringComparison.OrdinalIgnoreCase))
                     {
@@ -725,6 +796,7 @@ namespace LumiereMediaPlayer.Models.Streaming
             return new WatchmodeDetails
             {
                 Id = movie.Id,
+                TmdbId = movie.Id,
                 Title = movie.Title ?? "Unknown Title",
                 PlotOverview = movie.Overview,
                 Type = "movie",
@@ -756,6 +828,7 @@ namespace LumiereMediaPlayer.Models.Streaming
             return new WatchmodeDetails
             {
                 Id = tv.Id,
+                TmdbId = tv.Id,
                 Title = tv.Name ?? "Unknown TV Show",
                 PlotOverview = tv.Overview,
                 Type = "tv_series",

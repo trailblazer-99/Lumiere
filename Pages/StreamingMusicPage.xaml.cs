@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using System;
+using System.Threading.Tasks;
+using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.ViewModels;
 using LumiereMediaPlayer.Models.Streaming;
 using LumiereMediaPlayer.Services.Streaming;
@@ -54,43 +56,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                if (AppServices.Settings.Current.ReduceMotion)
-                {
-                    try
-                    {
-                        var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                        v.Opacity = 1f;
-                    }
-                    catch { }
-                    PageContent.Opacity = 1.0;
-                    return;
-                }
-
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                var compositor = visual.Compositor;
-
-                var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-                fadeAnim.InsertKeyFrame(0f, 0f);
-                fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-                fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
-
-                var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-                slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 20, 0));
-                slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-                slideAnim.Duration = TimeSpan.FromMilliseconds(450);
-
-                visual.StartAnimation("Opacity", fadeAnim);
-                visual.StartAnimation("Offset", slideAnim);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to animate StreamingMusicPage entrance: {ex.Message}");
-                PageContent.Opacity = 1.0;
-            }
+            PageContent.Opacity = 1.0;
         }
 
         private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -157,7 +123,7 @@ namespace LumiereMediaPlayer.Pages
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
 
-                    if (border.Tag == null)
+                    if (border.Tag is not CardShadowHolder holder)
                     {
                         try
                         {
@@ -179,12 +145,14 @@ namespace LumiereMediaPlayer.Pages
                                 container.Children.InsertBelow(shadowVisual, visual);
                             }
 
-                            border.Tag = shadow;
+                            holder = new CardShadowHolder(shadowVisual, shadow);
+                            border.Tag = holder;
+                            border.Unloaded += Card_Unloaded;
                         }
                         catch { }
                     }
 
-                    var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
+                    var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
                     if (dropShadow != null)
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
@@ -234,9 +202,9 @@ namespace LumiereMediaPlayer.Pages
                         }
                     }
 
-                    if (Application.Current.Resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentBrush))
+                    if (ThemeResourceHelper.TryGetThemeBrush("AccentFillColorDefaultBrush", out var accentBrush))
                     {
-                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)accentBrush;
+                        border.BorderBrush = accentBrush;
                     }
                 }
                 catch { }
@@ -254,7 +222,7 @@ namespace LumiereMediaPlayer.Pages
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
 
-                    var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
+                    var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
                     if (dropShadow != null)
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
@@ -302,9 +270,9 @@ namespace LumiereMediaPlayer.Pages
                         }
                     }
 
-                    if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBrush))
+                    if (ThemeResourceHelper.TryGetThemeBrush("CardStrokeColorDefaultBrush", out var defaultBrush))
                     {
-                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)defaultBrush;
+                        border.BorderBrush = defaultBrush;
                     }
                 }
                 catch { }
@@ -343,7 +311,7 @@ namespace LumiereMediaPlayer.Pages
                 Content = new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Center },
                 PrimaryButtonText = isFromLibrary ? "Remove from Library" : "Save to Library",
                 CloseButtonText = "Close",
-                XamlRoot = this.XamlRoot,
+                XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot,
                 RequestedTheme = isLight ? ElementTheme.Light : ElementTheme.Dark,
                 CornerRadius = new CornerRadius(12),
                 Background = new Microsoft.UI.Xaml.Media.AcrylicBrush
@@ -370,7 +338,6 @@ namespace LumiereMediaPlayer.Pages
                         }
                     }
                 }
-
                 else
                 {
                     AppServices.StreamingLibrary.AddItem(new Services.Streaming.SavedStreamingItem
@@ -384,7 +351,17 @@ namespace LumiereMediaPlayer.Pages
                 }
             };
 
-            var dialogTask = dialog.ShowAsync();
+            Task<ContentDialogResult>? dialogTask = null;
+            try
+            {
+                dialogTask = MediaFlyoutHelper.ShowDialogSafeAsync(dialog);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ShowTrackDetailsDialogAsync] ShowAsync error: {ex.Message}");
+                _currentDialog = null;
+                return;
+            }
 
             var mainPanel = new StackPanel { Spacing = 16, Padding = new Thickness(0, 8, 0, 0) };
 
@@ -393,7 +370,7 @@ namespace LumiereMediaPlayer.Pages
             {
                 Text = subtitleText,
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
             };
             mainPanel.Children.Add(subtitle);
 
@@ -419,15 +396,28 @@ namespace LumiereMediaPlayer.Pages
 
             if (streamingLinks != null && streamingLinks.Count > 0)
             {
-                // Ensure Spotify is present (add search fallback if missing)
+                // Ensure Spotify is present with a true deep link
                 bool hasSpotify = System.Linq.Enumerable.Any(streamingLinks, l => l.ServiceName.Equals("Spotify", StringComparison.OrdinalIgnoreCase));
                 if (!hasSpotify)
                 {
-                    var q = Uri.EscapeDataString(track.Name + " " + track.DisplayArtist);
+                    string itemType = track.ResultType?.ToLowerInvariant() switch
+                    {
+                        "artist" => "artist",
+                        "album" => "album",
+                        "playlist" => "playlist",
+                        _ => "track"
+                    };
+
+                    var (_, resolvedSpotifyUrl) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                        track.Name,
+                        itemType,
+                        track.DisplayArtist,
+                        track.Album);
+
                     streamingLinks.Insert(0, new MusicStreamingLink
                     {
                         ServiceName = "Spotify",
-                        Url = $"https://open.spotify.com/search/{q}",
+                        Url = !string.IsNullOrEmpty(resolvedSpotifyUrl) ? resolvedSpotifyUrl : $"https://open.spotify.com/search/{Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
                         IconUrl = "https://www.google.com/s2/favicons?domain=spotify.com&sz=128"
                     });
                 }
@@ -438,8 +428,8 @@ namespace LumiereMediaPlayer.Pages
                     {
                         Padding = new Thickness(12),
                         CornerRadius = new CornerRadius(8),
-                        Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                        BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                        Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                        BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                         BorderThickness = new Thickness(1),
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         VerticalAlignment = VerticalAlignment.Stretch
@@ -461,10 +451,29 @@ namespace LumiereMediaPlayer.Pages
                     btn.Content = contentPanel;
 
                     var linkUrl = link.Url;
+                    var servName = link.ServiceName;
                     btn.Click += async (s, args) =>
                     {
                         try
                         {
+                            if (servName.Equals("Spotify", StringComparison.OrdinalIgnoreCase) && linkUrl.Contains("/search", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string itemType = track.ResultType?.ToLowerInvariant() switch
+                                {
+                                    "artist" => "artist",
+                                    "album" => "album",
+                                    "playlist" => "playlist",
+                                    _ => "track"
+                                };
+                                var (spNative, spWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                                    track.Name,
+                                    itemType,
+                                    track.DisplayArtist,
+                                    track.Album);
+                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spNative, spWeb);
+                                return;
+                            }
+
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                             await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
@@ -500,8 +509,8 @@ namespace LumiereMediaPlayer.Pages
                     {
                         Padding = new Thickness(12),
                         CornerRadius = new CornerRadius(8),
-                        Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                        BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                        Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                        BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                         BorderThickness = new Thickness(1),
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         VerticalAlignment = VerticalAlignment.Stretch
@@ -525,9 +534,27 @@ namespace LumiereMediaPlayer.Pages
                     var provName = p.Name;
                     btn.Click += async (s, args) =>
                     {
+                        if (provName.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string itemType = track.ResultType?.ToLowerInvariant() switch
+                            {
+                                "artist" => "artist",
+                                "album" => "album",
+                                "playlist" => "playlist",
+                                _ => "track"
+                            };
+
+                            var (spNative, spWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                                track.Name,
+                                itemType,
+                                track.DisplayArtist,
+                                track.Album);
+                            await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spNative, spWeb);
+                            return;
+                        }
+
                         string searchUrl = provName switch
                         {
-                            "Spotify" => $"https://open.spotify.com/search/{Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
                             "Apple Music" => $"https://music.apple.com/search?term={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
                             "YouTube Music" => $"https://music.youtube.com/search?q={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
                             _ => ""
@@ -563,7 +590,14 @@ namespace LumiereMediaPlayer.Pages
 
             try
             {
-                await dialogTask;
+                if (dialogTask != null)
+                {
+                    await dialogTask;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ShowTrackDetailsDialogAsync] Dialog error: {ex.Message}");
             }
             finally
             {
@@ -624,6 +658,40 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in LibraryGridView_ItemClick: {ex.Message}");
+            }
+        }
+
+        private void Card_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is Border border)
+            {
+                border.Unloaded -= Card_Unloaded;
+                if (border.Tag is CardShadowHolder holder)
+                {
+                    try
+                    {
+                        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                        if (visual?.Parent is Microsoft.UI.Composition.ContainerVisual container)
+                        {
+                            container.Children.Remove(holder.ShadowVisual);
+                        }
+                    }
+                    catch { }
+                    holder.ShadowVisual.Dispose();
+                    holder.Shadow.Dispose();
+                    border.Tag = null;
+                }
+            }
+        }
+
+        private sealed class CardShadowHolder
+        {
+            public Microsoft.UI.Composition.SpriteVisual ShadowVisual { get; }
+            public Microsoft.UI.Composition.DropShadow Shadow { get; }
+            public CardShadowHolder(Microsoft.UI.Composition.SpriteVisual shadowVisual, Microsoft.UI.Composition.DropShadow shadow)
+            {
+                ShadowVisual = shadowVisual;
+                Shadow = shadow;
             }
         }
     }

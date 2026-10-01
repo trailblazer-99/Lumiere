@@ -8,7 +8,7 @@ using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Services;
 
-public static class SampleMediaLibrary
+public static class MediaLibraryService
 {
     private static List<MediaItem> _allTracks = new();
     private static List<Playlist> _playlists = new();
@@ -22,19 +22,213 @@ public static class SampleMediaLibrary
     private static readonly object _watcherLock = new();
     private static System.Threading.CancellationTokenSource? _watcherDebounceCts;
 
+    private static IReadOnlyList<MediaItem>? _cachedAllTracks;
+    private static IReadOnlyList<MediaItem>? _cachedAudioTracks;
+    private static IReadOnlyList<MediaItem>? _cachedVideoTracks;
+    private static IReadOnlyList<MediaItem>? _cachedFavoriteVideos;
+
+    private static void InvalidatePropertyCaches()
+    {
+        _cachedAllTracks = null;
+        _cachedAudioTracks = null;
+        _cachedVideoTracks = null;
+        _cachedFavoriteVideos = null;
+        LumiereMediaPlayer.Helpers.TvShowHelper.InvalidateConsolidatedCache();
+    }
+
     public static event EventHandler? LibraryChanged;
 
-    public static IReadOnlyList<MediaItem> AllTracks => _allTracks;
-    public static IReadOnlyList<Playlist> Playlists => _playlists;
+    public static IReadOnlyList<MediaItem> AllTracks
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cachedAllTracks ??= _allTracks.ToList();
+            }
+        }
+    }
 
-    public static IReadOnlyList<MediaItem> AudioTracks => _allTracks.Where(t => t.Kind == MediaKind.Audio).ToList();
-    public static IReadOnlyList<MediaItem> VideoTracks => _allTracks.Where(t => t.Kind == MediaKind.Video).ToList();
-    public static IReadOnlyList<MediaItem> RecentlyPlayed => _allTracks.Take(5).ToList();
+    public static Playlist FavoritesPlaylist
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var favs = _allTracks.Where(t => t.IsFavorite).ToList();
+                return new Playlist
+                {
+                    Id = "smart-favorites",
+                    Name = "Favorites",
+                    Description = "Your favorited videos and music tracks",
+                    AccentColor = "#FFE03838",
+                    Tracks = favs
+                };
+            }
+        }
+    }
+
+    public static IReadOnlyList<Playlist> Playlists
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var list = new List<Playlist>();
+                var favs = FavoritesPlaylist;
+                if (favs.Tracks.Count > 0)
+                {
+                    list.Add(favs);
+                }
+                list.AddRange(_playlists);
+                return list;
+            }
+        }
+    }
+
+    public static IReadOnlyList<MediaItem> AudioTracks
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cachedAudioTracks ??= _allTracks.Where(t => t.Kind == MediaKind.Audio).ToList();
+            }
+        }
+    }
+
+    public static IReadOnlyList<MediaItem> VideoTracks
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cachedVideoTracks ??= _allTracks.Where(t => t.Kind == MediaKind.Video).ToList();
+            }
+        }
+    }
+
+    public static IReadOnlyList<MediaItem> FavoriteTracks
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _allTracks.Where(t => t.IsFavorite).ToList();
+            }
+        }
+    }
+
+    public static IReadOnlyList<MediaItem> FavoriteVideos
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cachedFavoriteVideos ??= _allTracks.Where(t => t.Kind == MediaKind.Video && t.IsFavorite).ToList();
+            }
+        }
+    }
+
+    public static IReadOnlyList<MediaItem> RecentlyPlayed
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _allTracks.Take(5).ToList();
+            }
+        }
+    }
+
+    public static void ToggleFavorite(MediaItem item)
+    {
+        if (item == null) return;
+        SetFavorite(item, !item.IsFavorite);
+    }
+
+    public static void SetFavorite(MediaItem item, bool isFavorite)
+    {
+        if (item == null) return;
+        item.IsFavorite = isFavorite;
+
+        if (item.IsSeries && item.Episodes?.Count > 0)
+        {
+            foreach (var ep in item.Episodes)
+            {
+                SetFavorite(ep, isFavorite);
+            }
+        }
+
+        lock (_lock)
+        {
+            var matching = _allTracks.FirstOrDefault(t =>
+                (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(t.SourcePath) &&
+                 string.Equals(NormalizePath(t.SourcePath), NormalizePath(item.SourcePath), StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(item.Id) && string.Equals(t.Id, item.Id, StringComparison.Ordinal)));
+
+            if (matching != null)
+            {
+                matching.IsFavorite = isFavorite;
+            }
+            else if (!string.IsNullOrEmpty(item.SourcePath) && (File.Exists(item.SourcePath) || item.SourcePath.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
+            {
+                var norm = NormalizePath(item.SourcePath);
+                if (!string.IsNullOrEmpty(norm)) _seenPaths.Add(norm);
+                if (!string.IsNullOrEmpty(item.Id)) _seenIds.Add(item.Id);
+                _allTracks.Add(item);
+                UpdateLocationRepresentations();
+            }
+        }
+
+        try
+        {
+            var recentMatching = AppServices.History.RecentlyPlayed.FirstOrDefault(t =>
+                (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(t.SourcePath) &&
+                 string.Equals(NormalizePath(t.SourcePath), NormalizePath(item.SourcePath), StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(item.Id) && string.Equals(t.Id, item.Id, StringComparison.Ordinal)));
+            if (recentMatching != null)
+            {
+                recentMatching.IsFavorite = isFavorite;
+            }
+            _ = AppServices.History.SaveHistoryAsync();
+        }
+        catch { }
+
+        RequestDebouncedSave();
+        InvalidatePropertyCaches();
+        NotifyLibraryChanged();
+    }
+
+    public static void NotifyLibraryChanged()
+    {
+        if (App.MainDispatcher?.HasThreadAccess == true)
+        {
+            LibraryChanged?.Invoke(null, EventArgs.Empty);
+        }
+        else
+        {
+            App.MainDispatcher?.TryEnqueue(() => LibraryChanged?.Invoke(null, EventArgs.Empty));
+        }
+    }
     public static IReadOnlyList<string> Albums => _allTracks
         .Where(t => t.Kind == MediaKind.Audio && !string.IsNullOrEmpty(t.Album))
         .Select(t => t.Album)
         .Distinct()
         .ToList();
+
+    private static string NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        try
+        {
+            return Path.GetFullPath(path).TrimEnd('\\', '/').ToLowerInvariant();
+        }
+        catch
+        {
+            return path.Trim().Replace('/', '\\').TrimEnd('\\').ToLowerInvariant();
+        }
+    }
 
     // RESTORED: Explicit definitions expected by your ViewModels
     public static void ClearLibrary()
@@ -47,22 +241,50 @@ public static class SampleMediaLibrary
             _seenIds.Clear();
         }
         StopAllWatchers();
+        InvalidatePropertyCaches();
         LibraryChanged?.Invoke(null, EventArgs.Empty);
+    }
+
+    public static async Task ClearVideoTracksAsync()
+    {
+        List<MediaItem> videosToRemove;
+        lock (_lock)
+        {
+            videosToRemove = _allTracks.Where(t => t.Kind == MediaKind.Video).ToList();
+            foreach (var v in videosToRemove)
+            {
+                _allTracks.Remove(v);
+                var norm = NormalizePath(v.SourcePath);
+                if (!string.IsNullOrEmpty(norm)) _seenPaths.Remove(norm);
+                if (!string.IsNullOrEmpty(v.SourcePath)) _seenPaths.Remove(v.SourcePath);
+                if (!string.IsNullOrEmpty(v.Id)) _seenIds.Remove(v.Id);
+            }
+            UpdateLocationRepresentations();
+        }
+        InvalidatePropertyCaches();
+        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        await SaveLibraryAsync();
     }
 
     public static async Task<MediaItem?> AddTrackAsync(MediaItem item)
     {
         lock (_lock)
         {
-            if (!string.IsNullOrEmpty(item.SourcePath) && !_seenPaths.Add(item.SourcePath))
+            var norm = NormalizePath(item.SourcePath);
+            if (!string.IsNullOrEmpty(norm))
             {
-                return null;
+                if (!_seenPaths.Add(norm))
+                {
+                    return null;
+                }
             }
-            if (!string.IsNullOrEmpty(item.Id) && !_seenIds.Add(item.Id))
+            if (!string.IsNullOrEmpty(item.Id))
             {
-                // Roll back path add if ID is duplicate
-                if (!string.IsNullOrEmpty(item.SourcePath)) _seenPaths.Remove(item.SourcePath);
-                return null;
+                if (!_seenIds.Add(item.Id))
+                {
+                    if (!string.IsNullOrEmpty(norm)) _seenPaths.Remove(norm);
+                    return null;
+                }
             }
             _allTracks.Add(item);
             UpdateLocationRepresentations();
@@ -72,6 +294,7 @@ public static class SampleMediaLibrary
             var dir = Path.GetDirectoryName(item.SourcePath);
             if (!string.IsNullOrEmpty(dir)) StartWatchingDirectory(dir);
         }
+        InvalidatePropertyCaches();
         LibraryChanged?.Invoke(null, EventArgs.Empty);
         return await Task.FromResult(item);
     }
@@ -134,12 +357,15 @@ public static class SampleMediaLibrary
                     (!string.IsNullOrEmpty(track.Id) && t.Id == track.Id) ||
                     (!string.IsNullOrEmpty(t.SourcePath) && !string.IsNullOrEmpty(track.SourcePath) && string.Equals(t.SourcePath, track.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(t.Title) && !string.IsNullOrEmpty(track.Title) && string.Equals(t.Title, track.Title, StringComparison.OrdinalIgnoreCase)));
+                var norm = NormalizePath(track.SourcePath);
+                if (!string.IsNullOrEmpty(norm)) _seenPaths.Remove(norm);
                 if (!string.IsNullOrEmpty(track.SourcePath)) _seenPaths.Remove(track.SourcePath);
                 if (!string.IsNullOrEmpty(track.Id)) _seenIds.Remove(track.Id);
             }
             UpdateLocationRepresentations();
         }
         await AppServices.History.RemoveRangeFromHistoryAsync(toRemove);
+        InvalidatePropertyCaches();
         LibraryChanged?.Invoke(null, EventArgs.Empty);
         RequestDebouncedSave();
     }
@@ -157,6 +383,7 @@ public static class SampleMediaLibrary
             if (folder == null) return;
             if (await SynchronizeDirectoryAsync(folder.Path))
             {
+                InvalidatePropertyCaches();
                 LibraryChanged?.Invoke(null, EventArgs.Empty);
                 _ = SaveLibraryAsync();
             }
@@ -235,6 +462,8 @@ public static class SampleMediaLibrary
                     foreach (var item in toRemove)
                     {
                         _allTracks.Remove(item);
+                        var norm = NormalizePath(item.SourcePath);
+                        if (!string.IsNullOrEmpty(norm)) _seenPaths.Remove(norm);
                         if (!string.IsNullOrEmpty(item.SourcePath)) _seenPaths.Remove(item.SourcePath);
                         if (!string.IsNullOrEmpty(item.Id)) _seenIds.Remove(item.Id);
                     }
@@ -294,6 +523,7 @@ public static class SampleMediaLibrary
 
             if (wasModified)
             {
+                InvalidatePropertyCaches();
                 LibraryChanged?.Invoke(null, EventArgs.Empty);
                 _ = SaveLibraryAsync();
             }
@@ -316,7 +546,7 @@ public static class SampleMediaLibrary
                 lock (_lock)
                 {
                     seenPaths = new HashSet<string>(
-                        _allTracks.Where(t => !string.IsNullOrEmpty(t.SourcePath)).Select(t => t.SourcePath!),
+                        _allTracks.Where(t => !string.IsNullOrEmpty(t.SourcePath)).Select(t => NormalizePath(t.SourcePath)),
                         StringComparer.OrdinalIgnoreCase);
                 }
             }
@@ -327,13 +557,31 @@ public static class SampleMediaLibrary
                 ".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".wma"
             };
 
-            var files = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.TopDirectoryOnly);
+            IEnumerable<string> files;
+            try
+            {
+                var enumOptions = new EnumerationOptions
+                {
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true,
+                    AttributesToSkip = FileAttributes.ReparsePoint
+                };
+                files = Directory.EnumerateFiles(dirPath, "*.*", enumOptions);
+            }
+            catch
+            {
+                files = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.TopDirectoryOnly);
+            }
+
             foreach (var filePath in files)
             {
                 var ext = Path.GetExtension(filePath);
                 if (string.IsNullOrEmpty(ext) || !extensions.Contains(ext)) continue;
 
-                if (seenPaths.Add(filePath))
+                var normPath = NormalizePath(filePath);
+                if (string.IsNullOrEmpty(normPath)) continue;
+
+                if (seenPaths.Add(normPath))
                 {
                     // ADDITION: New media file found in directory
                     try
@@ -361,6 +609,11 @@ public static class SampleMediaLibrary
 
                         lock (_lock)
                         {
+                            if (!_seenPaths.Add(normPath))
+                            {
+                                continue;
+                            }
+                            _seenIds.Add(item.Id);
                             _allTracks.Add(item);
                         }
                         _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
@@ -466,9 +719,10 @@ public static class SampleMediaLibrary
                             }
 
                             bool isDuplicate = false;
-                            if (!string.IsNullOrEmpty(track.SourcePath))
+                            var norm = NormalizePath(track.SourcePath);
+                            if (!string.IsNullOrEmpty(norm))
                             {
-                                isDuplicate = !seenPaths.Add(track.SourcePath);
+                                isDuplicate = !seenPaths.Add(norm);
                             }
                             else if (!string.IsNullOrEmpty(track.Id))
                             {
@@ -505,6 +759,7 @@ public static class SampleMediaLibrary
 
                         UpdateLocationRepresentations();
                     }
+                    InvalidatePropertyCaches();
                     try { LibraryChanged?.Invoke(null, EventArgs.Empty); } catch { }
 
                     if (wasModified)

@@ -21,6 +21,16 @@ namespace LumiereMediaPlayer.Helpers
 
         private static readonly ConcurrentDictionary<string, string> _dynamicCache = new(StringComparer.OrdinalIgnoreCase);
 
+        private static void CacheDynamic(string key, string url)
+        {
+            if (_dynamicCache.Count > 300)
+            {
+                var keysToPrune = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Take(_dynamicCache.Keys, 50));
+                foreach (var k in keysToPrune) _dynamicCache.TryRemove(k, out _);
+            }
+            _dynamicCache[key] = url;
+        }
+
         // Pre-indexed database of canonical Apple TV+ paths for immediate, zero-latency resolution
         private static readonly Dictionary<string, string> _canonicalDatabase = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -181,7 +191,7 @@ namespace LumiereMediaPlayer.Helpers
                     if (!string.IsNullOrEmpty(bestPath))
                     {
                         string resolvedUrl = $"https://tv.apple.com/{targetRegion}/{bestPath}";
-                        _dynamicCache[cacheKey] = resolvedUrl;
+                        CacheDynamic(cacheKey, resolvedUrl);
                         return resolvedUrl;
                     }
                 }
@@ -215,7 +225,7 @@ namespace LumiereMediaPlayer.Helpers
 
                             if (!string.IsNullOrEmpty(directUrl))
                             {
-                                _dynamicCache[cacheKey] = directUrl;
+                                CacheDynamic(cacheKey, directUrl);
                                 return directUrl;
                             }
                         }

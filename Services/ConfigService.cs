@@ -29,6 +29,10 @@ namespace LumiereMediaPlayer.Services
                         _config.UseProxy = loadedConfig.UseProxy;
                         if (!string.IsNullOrEmpty(loadedConfig.ProxyBaseUrl)) _config.ProxyBaseUrl = loadedConfig.ProxyBaseUrl;
                         if (!string.IsNullOrEmpty(loadedConfig.ProxyAppToken)) _config.ProxyAppToken = loadedConfig.ProxyAppToken;
+
+                        // Spotify API settings
+                        if (!string.IsNullOrEmpty(loadedConfig.SpotifyClientId)) _config.SpotifyClientId = loadedConfig.SpotifyClientId;
+                        if (!string.IsNullOrEmpty(loadedConfig.SpotifyClientSecret)) _config.SpotifyClientSecret = loadedConfig.SpotifyClientSecret;
                     }
                 }
             }

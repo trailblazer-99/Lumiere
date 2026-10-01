@@ -1,4 +1,5 @@
 using LumiereMediaPlayer.Models;
+using System.IO;
 using System.Threading.Tasks;
 using Windows.Storage;
 
@@ -25,6 +26,14 @@ public sealed class SettingsService : ISettingsService
 
     // Video
     private const string DefaultAspectRatioKey = "DefaultAspectRatio";
+    private const string EnableHoverVideoPreviewKey = "EnableHoverVideoPreview";
+
+    // HDR & Color Pipeline
+    private const string HdrModeKey = "HdrMode";
+    private const string AutoBoostHdrBrightnessKey = "AutoBoostHdrBrightness";
+    private const string ToneMappingModeKey = "ToneMappingMode";
+    private const string PeakBrightnessNitsKey = "PeakBrightnessNits";
+    private const string ShowHdrBadgeKey = "ShowHdrBadge";
 
     // Appearance
     private const string BackdropTypeKey = "BackdropType";
@@ -41,6 +50,8 @@ public sealed class SettingsService : ISettingsService
     private const string WindowWidthKey = "WindowWidth";
     private const string WindowHeightKey = "WindowHeight";
     private const string WindowIsMaximizedKey = "WindowIsMaximized";
+    private const string WindowPositionXKey = "WindowPositionX";
+    private const string WindowPositionYKey = "WindowPositionY";
 
     // Library
     private const string AutomaticLibraryScanKey = "AutomaticLibraryScan";
@@ -80,6 +91,12 @@ public sealed class SettingsService : ISettingsService
     private const string CustomEqualizerGainsKey = "CustomEqualizerGains";
     private const string SelectedReverbPresetKey = "SelectedReverbPreset";
 
+    private static readonly string FallbackSettingsDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "LumiereMediaPlayer");
+    private static readonly string FallbackSettingsPath = Path.Combine(FallbackSettingsDirectory, "settings.json");
+    private bool _useFileFallback;
+
     public AppSettings Current { get; private set; } = new();
 
     public event EventHandler? SettingsChanged;
@@ -98,8 +115,14 @@ public sealed class SettingsService : ISettingsService
         }
         catch (InvalidOperationException)
         {
-            // Unpackaged app fallback
-            values = new Windows.Foundation.Collections.PropertySet();
+            _useFileFallback = true;
+            values = LoadFromFileFallback();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.Load] Fallback to file: {ex.Message}");
+            _useFileFallback = true;
+            values = LoadFromFileFallback();
         }
 
         var settingsValues = values ?? new Windows.Foundation.Collections.PropertySet();
@@ -108,7 +131,7 @@ public sealed class SettingsService : ISettingsService
         {
             Theme = ParseEnum(settingsValues, ThemeKey, AppThemeOption.Default),
             LibraryFolders = settingsValues.TryGetValue(FoldersKey, out var fj) && fj is string fjStr
-                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(fjStr) ?? []
+                ? DeserializeFolders(fjStr)
                 : [],
 
             // Playback
@@ -127,12 +150,20 @@ public sealed class SettingsService : ISettingsService
 
             // Video
             DefaultAspectRatio = ParseEnum(settingsValues, DefaultAspectRatioKey, AspectRatioOption.Auto),
+            EnableHoverVideoPreview = ReadBool(settingsValues, EnableHoverVideoPreviewKey, true),
+
+            // HDR & Color Pipeline
+            HdrMode = ParseEnum(settingsValues, HdrModeKey, HdrMode.Auto),
+            AutoBoostHdrBrightness = ReadBool(settingsValues, AutoBoostHdrBrightnessKey, true),
+            ToneMappingMode = ParseEnum(settingsValues, ToneMappingModeKey, ToneMappingMode.DisplayAdaptive),
+            PeakBrightnessNits = ReadInt(settingsValues, PeakBrightnessNitsKey, 1000),
+            ShowHdrBadge = ReadBool(settingsValues, ShowHdrBadgeKey, true),
 
             // Appearance
             BackdropType = ParseEnum(settingsValues, BackdropTypeKey, AppThemeBackdrop.Mica),
             AccentColor = ParseEnum(settingsValues, AccentColorKey, AccentColorOption.SystemDefault),
             AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
-            AcrylicTransportBar = ReadBool(settingsValues, AcrylicTransportBarKey, true),
+            AcrylicTransportBar = ReadBool(settingsValues, AcrylicTransportBarKey, false),
             AutoHideTransportBarInStreaming = ReadBool(settingsValues, AutoHideTransportBarInStreamingKey, true),
 
             // Controls & Interface
@@ -143,6 +174,8 @@ public sealed class SettingsService : ISettingsService
             WindowWidth = ReadDouble(settingsValues, WindowWidthKey, 1200.0),
             WindowHeight = ReadDouble(settingsValues, WindowHeightKey, 800.0),
             WindowIsMaximized = ReadBool(settingsValues, WindowIsMaximizedKey, false),
+            WindowPositionX = ReadInt(settingsValues, WindowPositionXKey, -1),
+            WindowPositionY = ReadInt(settingsValues, WindowPositionYKey, -1),
 
             // Library
             AutomaticLibraryScan = ReadBool(settingsValues, AutomaticLibraryScanKey, true),
@@ -207,81 +240,283 @@ public sealed class SettingsService : ISettingsService
         }
     }
 
+    public void SaveImmediate()
+    {
+        _saveDebounceTimer?.Stop();
+        ExecuteSave();
+    }
+
+    private Windows.Foundation.Collections.IPropertySet LoadFromFileFallback()
+    {
+        var propSet = new Windows.Foundation.Collections.PropertySet();
+        try
+        {
+            if (File.Exists(FallbackSettingsPath))
+            {
+                var json = File.ReadAllText(FallbackSettingsPath);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    switch (prop.Value.ValueKind)
+                    {
+                        case System.Text.Json.JsonValueKind.True:
+                            propSet[prop.Name] = true;
+                            break;
+                        case System.Text.Json.JsonValueKind.False:
+                            propSet[prop.Name] = false;
+                            break;
+                        case System.Text.Json.JsonValueKind.String:
+                            propSet[prop.Name] = prop.Value.GetString() ?? string.Empty;
+                            break;
+                        case System.Text.Json.JsonValueKind.Number:
+                            if (prop.Value.TryGetInt32(out int iVal))
+                            {
+                                propSet[prop.Name] = iVal;
+                            }
+                            else if (prop.Value.TryGetDouble(out double dVal))
+                            {
+                                propSet[prop.Name] = dVal;
+                            }
+                            break;
+                        default:
+                            propSet[prop.Name] = prop.Value.GetRawText();
+                            break;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.LoadFromFileFallback] Error: {ex.Message}");
+        }
+
+        return propSet;
+    }
+
     private void ExecuteSave()
     {
-        var s = ApplicationData.Current.LocalSettings;
-
-        s.Values[ThemeKey] = Current.Theme.ToString();
-        s.Values[FoldersKey] = System.Text.Json.JsonSerializer.Serialize(Current.LibraryFolders);
-
-        // Playback
-        s.Values[AutoplayOnLaunchKey] = Current.AutoplayOnLaunch;
-        s.Values[ResumePlaybackPositionKey] = Current.ResumePlaybackPosition;
-        s.Values[SkipForwardIntervalKey] = Current.SkipForwardInterval;
-        s.Values[SkipBackwardIntervalKey] = Current.SkipBackwardInterval;
-        s.Values[AutoAdvanceToNextTrackKey] = Current.AutoAdvanceToNextTrack;
-        s.Values[RememberLastPlayedTrackKey] = Current.RememberLastPlayedTrack;
-        s.Values[CrossfadeEnabledKey] = Current.CrossfadeEnabled;
-        s.Values[CrossfadeDurationKey] = Current.CrossfadeDuration;
-
-        // Audio
-        s.Values[EqualizerPresetKey] = Current.Equalizer.ToString();
-        s.Values[DefaultVolumeKey] = Current.DefaultVolume;
-
-        // Video
-        s.Values[DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString();
-
-        // Appearance
-        s.Values[BackdropTypeKey] = Current.BackdropType.ToString();
-        s.Values[AccentColorKey] = Current.AccentColor.ToString();
-        s.Values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
-        s.Values[AcrylicTransportBarKey] = Current.AcrylicTransportBar;
-        s.Values[AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming;
-
-        // Controls & Interface
-        s.Values[ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome;
-        s.Values[OpenFilePositionCornerKey] = Current.OpenFilePositionCorner.ToString();
-
-        // Library
-        s.Values[AutomaticLibraryScanKey] = Current.AutomaticLibraryScan;
-
-        // Privacy & Security
-        s.Values[RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack;
-        s.Values[EnableAppLockKey] = Current.EnableAppLock;
-        s.Values[AppLockWhenMinimizedKey] = Current.AppLockWhenMinimized;
-
-        // Accessibility
-        s.Values[HighContrastModeKey] = Current.HighContrastMode;
-        s.Values[TextScaleKey] = Current.TextScale;
-        s.Values[ReduceMotionKey] = Current.ReduceMotion;
-        s.Values[ScreenReaderOptimizationKey] = Current.ScreenReaderOptimization;
-        s.Values[CaptionsAlwaysOnKey] = Current.CaptionsAlwaysOn;
-        s.Values[VisualNotificationsForSoundKey] = Current.VisualNotificationsForSound;
-        s.Values[KeyboardNavigationHighlightKey] = Current.KeyboardNavigationHighlight;
-        s.Values[FocusIndicatorThicknessKey] = Current.FocusIndicatorThickness;
-        s.Values[AutoReadControlsKey] = Current.AutoReadControls;
-        s.Values[LargerClickTargetsKey] = Current.LargerClickTargets;
-        s.Values[ColorBlindModeKey] = Current.ColorBlindMode.ToString();
-
-        // AI Features
-        s.Values[AiLyricsTranslationEnabledKey] = Current.AiLyricsTranslationEnabled;
-        s.Values[AiTranslationTargetLanguageKey] = Current.AiTranslationTargetLanguage;
-        s.Values[AiSemanticSearchEnabledKey] = Current.AiSemanticSearchEnabled;
         Helpers.SecureStorageHelper.SaveSecret("GeminiApiKey", Current.GeminiApiKey);
-        s.Values.Remove(GeminiApiKeyKey); // Never persist plaintext in LocalSettings
-        s.Values[UseLocalAiKey] = Current.UseLocalAi;
-        s.Values[OllamaModelNameKey] = Current.OllamaModelName;
-        s.Values[AiEqualizerMatcherEnabledKey] = Current.AiEqualizerMatcherEnabled;
-        s.Values[VoiceClarityEnabledKey] = Current.VoiceClarityEnabled;
-        s.Values[NightModeEnabledKey] = Current.NightModeEnabled;
 
-        // Premium Features
-        s.Values[SleepTimerMinutesKey] = Current.SleepTimerMinutes;
-        s.Values[SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack;
-        s.Values[CustomEqualizerGainsKey] = Current.CustomEqualizerGains;
-        s.Values[SelectedReverbPresetKey] = Current.SelectedReverbPreset;
+        if (_useFileFallback)
+        {
+            SaveToFileFallback();
+        }
+        else
+        {
+            try
+            {
+                var s = ApplicationData.Current.LocalSettings;
+                if (s?.Values != null)
+                {
+                    SaveToPropertySet(s.Values);
+                }
+                else
+                {
+                    _useFileFallback = true;
+                    SaveToFileFallback();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                _useFileFallback = true;
+                SaveToFileFallback();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SettingsService.ExecuteSave] Error: {ex.Message}");
+                _useFileFallback = true;
+                SaveToFileFallback();
+            }
+        }
 
         SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SaveToPropertySet(Windows.Foundation.Collections.IPropertySet values)
+    {
+        values[ThemeKey] = Current.Theme.ToString();
+        values[FoldersKey] = System.Text.Json.JsonSerializer.Serialize(Current.LibraryFolders);
+
+        // Playback
+        values[AutoplayOnLaunchKey] = Current.AutoplayOnLaunch;
+        values[ResumePlaybackPositionKey] = Current.ResumePlaybackPosition;
+        values[SkipForwardIntervalKey] = Current.SkipForwardInterval;
+        values[SkipBackwardIntervalKey] = Current.SkipBackwardInterval;
+        values[AutoAdvanceToNextTrackKey] = Current.AutoAdvanceToNextTrack;
+        values[RememberLastPlayedTrackKey] = Current.RememberLastPlayedTrack;
+        values[CrossfadeEnabledKey] = Current.CrossfadeEnabled;
+        values[CrossfadeDurationKey] = Current.CrossfadeDuration;
+
+        // Audio
+        values[EqualizerPresetKey] = Current.Equalizer.ToString();
+        values[DefaultVolumeKey] = Current.DefaultVolume;
+
+        // Video
+        values[DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString();
+        values[EnableHoverVideoPreviewKey] = Current.EnableHoverVideoPreview;
+
+        // HDR & Color Pipeline
+        values[HdrModeKey] = Current.HdrMode.ToString();
+        values[AutoBoostHdrBrightnessKey] = Current.AutoBoostHdrBrightness;
+        values[ToneMappingModeKey] = Current.ToneMappingMode.ToString();
+        values[PeakBrightnessNitsKey] = Current.PeakBrightnessNits;
+        values[ShowHdrBadgeKey] = Current.ShowHdrBadge;
+
+        // Appearance
+        values[BackdropTypeKey] = Current.BackdropType.ToString();
+        values[AccentColorKey] = Current.AccentColor.ToString();
+        values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
+        values[AcrylicTransportBarKey] = Current.AcrylicTransportBar;
+        values[AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming;
+
+        // Controls & Interface
+        values[ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome;
+        values[OpenFilePositionCornerKey] = Current.OpenFilePositionCorner.ToString();
+
+        // Window State
+        values[WindowWidthKey] = Current.WindowWidth;
+        values[WindowHeightKey] = Current.WindowHeight;
+        values[WindowIsMaximizedKey] = Current.WindowIsMaximized;
+        values[WindowPositionXKey] = Current.WindowPositionX;
+        values[WindowPositionYKey] = Current.WindowPositionY;
+
+        // Library
+        values[AutomaticLibraryScanKey] = Current.AutomaticLibraryScan;
+
+        // Privacy & Security
+        values[RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack;
+        values[EnableAppLockKey] = Current.EnableAppLock;
+        values[AppLockWhenMinimizedKey] = Current.AppLockWhenMinimized;
+
+        // Accessibility
+        values[HighContrastModeKey] = Current.HighContrastMode;
+        values[TextScaleKey] = Current.TextScale;
+        values[ReduceMotionKey] = Current.ReduceMotion;
+        values[ScreenReaderOptimizationKey] = Current.ScreenReaderOptimization;
+        values[CaptionsAlwaysOnKey] = Current.CaptionsAlwaysOn;
+        values[VisualNotificationsForSoundKey] = Current.VisualNotificationsForSound;
+        values[KeyboardNavigationHighlightKey] = Current.KeyboardNavigationHighlight;
+        values[FocusIndicatorThicknessKey] = Current.FocusIndicatorThickness;
+        values[AutoReadControlsKey] = Current.AutoReadControls;
+        values[LargerClickTargetsKey] = Current.LargerClickTargets;
+        values[ColorBlindModeKey] = Current.ColorBlindMode.ToString();
+
+        // AI Features
+        values[AiLyricsTranslationEnabledKey] = Current.AiLyricsTranslationEnabled;
+        values[AiTranslationTargetLanguageKey] = Current.AiTranslationTargetLanguage;
+        values[AiSemanticSearchEnabledKey] = Current.AiSemanticSearchEnabled;
+        values.Remove(GeminiApiKeyKey); // Never persist plaintext in LocalSettings
+        values[UseLocalAiKey] = Current.UseLocalAi;
+        values[OllamaModelNameKey] = Current.OllamaModelName;
+        values[AiEqualizerMatcherEnabledKey] = Current.AiEqualizerMatcherEnabled;
+        values[VoiceClarityEnabledKey] = Current.VoiceClarityEnabled;
+        values[NightModeEnabledKey] = Current.NightModeEnabled;
+
+        // Premium Features
+        values[SleepTimerMinutesKey] = Current.SleepTimerMinutes;
+        values[SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack;
+        values[CustomEqualizerGainsKey] = Current.CustomEqualizerGains;
+        values[SelectedReverbPresetKey] = Current.SelectedReverbPreset;
+    }
+
+    private void SaveToFileFallback()
+    {
+        try
+        {
+            var dict = new Dictionary<string, object>
+            {
+                [ThemeKey] = Current.Theme.ToString(),
+                [FoldersKey] = System.Text.Json.JsonSerializer.Serialize(Current.LibraryFolders),
+
+                // Playback
+                [AutoplayOnLaunchKey] = Current.AutoplayOnLaunch,
+                [ResumePlaybackPositionKey] = Current.ResumePlaybackPosition,
+                [SkipForwardIntervalKey] = Current.SkipForwardInterval,
+                [SkipBackwardIntervalKey] = Current.SkipBackwardInterval,
+                [AutoAdvanceToNextTrackKey] = Current.AutoAdvanceToNextTrack,
+                [RememberLastPlayedTrackKey] = Current.RememberLastPlayedTrack,
+                [CrossfadeEnabledKey] = Current.CrossfadeEnabled,
+                [CrossfadeDurationKey] = Current.CrossfadeDuration,
+
+                // Audio
+                [EqualizerPresetKey] = Current.Equalizer.ToString(),
+                [DefaultVolumeKey] = Current.DefaultVolume,
+
+                // Video
+                [DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString(),
+                [EnableHoverVideoPreviewKey] = Current.EnableHoverVideoPreview,
+
+                // HDR & Color Pipeline
+                [HdrModeKey] = Current.HdrMode.ToString(),
+                [AutoBoostHdrBrightnessKey] = Current.AutoBoostHdrBrightness,
+                [ToneMappingModeKey] = Current.ToneMappingMode.ToString(),
+                [PeakBrightnessNitsKey] = Current.PeakBrightnessNits,
+                [ShowHdrBadgeKey] = Current.ShowHdrBadge,
+
+                // Appearance
+                [BackdropTypeKey] = Current.BackdropType.ToString(),
+                [AccentColorKey] = Current.AccentColor.ToString(),
+                [AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar,
+                [AcrylicTransportBarKey] = Current.AcrylicTransportBar,
+                [AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming,
+
+                // Controls & Interface
+                [ShowOpenFilesOnHomeKey] = Current.ShowOpenFilesOnHome,
+                [OpenFilePositionCornerKey] = Current.OpenFilePositionCorner.ToString(),
+
+                // Window State
+                [WindowWidthKey] = Current.WindowWidth,
+                [WindowHeightKey] = Current.WindowHeight,
+                [WindowIsMaximizedKey] = Current.WindowIsMaximized,
+                [WindowPositionXKey] = Current.WindowPositionX,
+                [WindowPositionYKey] = Current.WindowPositionY,
+
+                // Library
+                [AutomaticLibraryScanKey] = Current.AutomaticLibraryScan,
+
+                // Privacy & Security
+                [RememberPlaybackPositionPerTrackKey] = Current.RememberPlaybackPositionPerTrack,
+                [EnableAppLockKey] = Current.EnableAppLock,
+                [AppLockWhenMinimizedKey] = Current.AppLockWhenMinimized,
+
+                // Accessibility
+                [HighContrastModeKey] = Current.HighContrastMode,
+                [TextScaleKey] = Current.TextScale,
+                [ReduceMotionKey] = Current.ReduceMotion,
+                [ScreenReaderOptimizationKey] = Current.ScreenReaderOptimization,
+                [CaptionsAlwaysOnKey] = Current.CaptionsAlwaysOn,
+                [VisualNotificationsForSoundKey] = Current.VisualNotificationsForSound,
+                [KeyboardNavigationHighlightKey] = Current.KeyboardNavigationHighlight,
+                [FocusIndicatorThicknessKey] = Current.FocusIndicatorThickness,
+                [AutoReadControlsKey] = Current.AutoReadControls,
+                [LargerClickTargetsKey] = Current.LargerClickTargets,
+                [ColorBlindModeKey] = Current.ColorBlindMode.ToString(),
+
+                // AI Features
+                [AiLyricsTranslationEnabledKey] = Current.AiLyricsTranslationEnabled,
+                [AiTranslationTargetLanguageKey] = Current.AiTranslationTargetLanguage,
+                [AiSemanticSearchEnabledKey] = Current.AiSemanticSearchEnabled,
+                [UseLocalAiKey] = Current.UseLocalAi,
+                [OllamaModelNameKey] = Current.OllamaModelName,
+                [AiEqualizerMatcherEnabledKey] = Current.AiEqualizerMatcherEnabled,
+                [VoiceClarityEnabledKey] = Current.VoiceClarityEnabled,
+                [NightModeEnabledKey] = Current.NightModeEnabled,
+
+                // Premium Features
+                [SleepTimerMinutesKey] = Current.SleepTimerMinutes,
+                [SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack,
+                [CustomEqualizerGainsKey] = Current.CustomEqualizerGains,
+                [SelectedReverbPresetKey] = Current.SelectedReverbPreset
+            };
+
+            Directory.CreateDirectory(FallbackSettingsDirectory);
+            var json = System.Text.Json.JsonSerializer.Serialize(dict, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(FallbackSettingsPath, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.SaveToFileFallback] Error: {ex.Message}");
+        }
     }
 
     public void SetTheme(AppThemeOption theme)
@@ -301,7 +536,7 @@ public sealed class SettingsService : ISettingsService
                 try
                 {
                     var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(path);
-                    await SampleMediaLibrary.ScanFolderAsync(folder);
+                    await MediaLibraryService.ScanFolderAsync(folder);
                 }
                 catch { /* folder may not exist or be accessible */ }
             });
@@ -316,42 +551,57 @@ public sealed class SettingsService : ISettingsService
 
     public void ResetSettings()
     {
-        var s = ApplicationData.Current.LocalSettings;
-
-        // Remove all known keys
-        string[] allKeys =
-        [
-            ThemeKey, FoldersKey,
-            AutoplayOnLaunchKey, ResumePlaybackPositionKey, SkipForwardIntervalKey, SkipBackwardIntervalKey,
-            AutoAdvanceToNextTrackKey, RememberLastPlayedTrackKey,
-            CrossfadeEnabledKey, CrossfadeDurationKey,
-            EqualizerPresetKey, DefaultVolumeKey,
-            DefaultAspectRatioKey,
-            BackdropTypeKey,
-            AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey, AutoHideTransportBarInStreamingKey,
-            ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
-            AutomaticLibraryScanKey,
-            RememberPlaybackPositionPerTrackKey,
-            HighContrastModeKey, TextScaleKey, ReduceMotionKey,
-            ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
-            KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
-            LargerClickTargetsKey, ColorBlindModeKey,
-            AiLyricsTranslationEnabledKey, AiTranslationTargetLanguageKey, AiSemanticSearchEnabledKey, GeminiApiKeyKey,
-            UseLocalAiKey, OllamaModelNameKey,
-            AiEqualizerMatcherEnabledKey, VoiceClarityEnabledKey, NightModeEnabledKey,
-            SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey
-        ];
-
-        foreach (var key in allKeys)
+        try
         {
-            s.Values.Remove(key);
+            var s = ApplicationData.Current.LocalSettings;
+            if (s?.Values != null)
+            {
+                // Remove all known keys
+                string[] allKeys =
+                [
+                    ThemeKey, FoldersKey,
+                    AutoplayOnLaunchKey, ResumePlaybackPositionKey, SkipForwardIntervalKey, SkipBackwardIntervalKey,
+                    AutoAdvanceToNextTrackKey, RememberLastPlayedTrackKey,
+                    CrossfadeEnabledKey, CrossfadeDurationKey,
+                    EqualizerPresetKey, DefaultVolumeKey,
+                    DefaultAspectRatioKey, EnableHoverVideoPreviewKey,
+                    HdrModeKey, AutoBoostHdrBrightnessKey, ToneMappingModeKey, PeakBrightnessNitsKey, ShowHdrBadgeKey,
+                    BackdropTypeKey,
+                    AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey, AutoHideTransportBarInStreamingKey,
+                    ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
+                    AutomaticLibraryScanKey,
+                    RememberPlaybackPositionPerTrackKey,
+                    HighContrastModeKey, TextScaleKey, ReduceMotionKey,
+                    ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
+                    KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
+                    LargerClickTargetsKey, ColorBlindModeKey,
+                    AiLyricsTranslationEnabledKey, AiTranslationTargetLanguageKey, AiSemanticSearchEnabledKey, GeminiApiKeyKey,
+                    UseLocalAiKey, OllamaModelNameKey,
+                    AiEqualizerMatcherEnabledKey, VoiceClarityEnabledKey, NightModeEnabledKey,
+                    SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey
+                ];
+
+                foreach (var key in allKeys)
+                {
+                    s.Values.Remove(key);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.ResetSettings] Error: {ex.Message}");
         }
 
         Helpers.SecureStorageHelper.DeleteSecret("GeminiApiKey");
 
+        if (File.Exists(FallbackSettingsPath))
+        {
+            try { File.Delete(FallbackSettingsPath); } catch { }
+        }
+
         Load();
         Save();
-        SampleMediaLibrary.ClearLibrary();
+        MediaLibraryService.ClearLibrary();
     }
 
     public async System.Threading.Tasks.Task ResetPlaybackHistoryAndCacheAsync()
@@ -406,7 +656,22 @@ public sealed class SettingsService : ISettingsService
         }
         catch { }
 
-        SampleMediaLibrary.ClearLibrary();
+        try
+        {
+            if (AppServices.HistoryService != null)
+            {
+                await AppServices.HistoryService.ClearHistoryAsync();
+            }
+        }
+        catch { }
+
+        try
+        {
+            Windows.Storage.AccessCache.StorageApplicationPermissions.MostRecentlyUsedList.Clear();
+        }
+        catch { }
+
+        MediaLibraryService.ClearLibrary();
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -418,13 +683,39 @@ public sealed class SettingsService : ISettingsService
     private static int ReadInt(Windows.Foundation.Collections.IPropertySet s, string key, int defaultValue) =>
         s.TryGetValue(key, out var v) && (v is int i || (v is double d && (i = (int)d) == i)) ? (v is int val ? val : (int)(double)v) : defaultValue;
 
-    private static double ReadDouble(Windows.Foundation.Collections.IPropertySet s, string key, double defaultValue) =>
-        s.TryGetValue(key, out var v) && v is double d ? d : defaultValue;
+    private static double ReadDouble(Windows.Foundation.Collections.IPropertySet s, string key, double defaultValue)
+    {
+        if (!s.TryGetValue(key, out var v) || v is null) return defaultValue;
+        if (v is double d) return d;
+        if (v is int i) return i;
+        if (v is float f) return f;
+        if (v is long l) return l;
+        if (v is string str && double.TryParse(str, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        return defaultValue;
+    }
 
     private static T ParseEnum<T>(Windows.Foundation.Collections.IPropertySet s, string key, T defaultValue) where T : struct, Enum
     {
         if (s.TryGetValue(key, out var v) && v is string str && Enum.TryParse<T>(str, out var result))
             return result;
         return defaultValue;
+    }
+
+    private static List<string> DeserializeFolders(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.DeserializeFolders] JSON error: {ex.Message}");
+            return [];
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.DeserializeFolders] Unexpected error: {ex.Message}");
+            return [];
+        }
     }
 }

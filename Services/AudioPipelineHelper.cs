@@ -13,13 +13,27 @@ public static class AudioPipelineHelper
     private static readonly Dictionary<string, string> _transcodedCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _cacheLock = new();
 
+    public static string GetSafeTempFolder()
+    {
+        try
+        {
+            return Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+        }
+        catch
+        {
+            return Path.GetTempPath();
+        }
+    }
+
     public static void CleanupTempTranscodedFiles()
     {
+        string tempFolder = GetSafeTempFolder();
+        if (string.IsNullOrEmpty(tempFolder)) return;
+
         Task.Run(() =>
         {
             try
             {
-                var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
                 if (Directory.Exists(tempFolder))
                 {
                     foreach (var file in Directory.GetFiles(tempFolder, "transcoded_*"))
@@ -66,7 +80,14 @@ public static class AudioPipelineHelper
 
             lock (_cacheLock)
             {
-                if (_transcodedCache.Count > 10) { _transcodedCache.Clear(); }
+                if (_transcodedCache.Count > 10)
+                {
+                    foreach (var path in _transcodedCache.Values)
+                    {
+                        try { if (File.Exists(path)) File.Delete(path); } catch { }
+                    }
+                    _transcodedCache.Clear();
+                }
                 if (_transcodedCache.TryGetValue(key, out var cachedPath) && File.Exists(cachedPath))
                 {
                     return cachedPath;
@@ -74,7 +95,7 @@ public static class AudioPipelineHelper
             }
 
             // Create a unique temporary file path in the application's temporary folder
-            var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+            var tempFolder = GetSafeTempFolder();
             var safeName = GetSafeFilename(sourcePath);
             var tempPath = Path.Combine(tempFolder, $"transcoded_{Guid.NewGuid():N}_{safeName}.wav");
 

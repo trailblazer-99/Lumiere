@@ -10,6 +10,9 @@ namespace LumiereMediaPlayer.Helpers;
 
 public static class MediaMetadataScanner
 {
+    // Maximum 2 concurrent background metadata extraction pipelines to prevent CPU/memory exhaustion
+    private static readonly System.Threading.SemaphoreSlim _scanThrottle = new(2, 2);
+
     public static async Task ScanMetadataAsync(MediaItem item)
     {
         if (item == null || string.IsNullOrEmpty(item.SourcePath)) return;
@@ -23,6 +26,7 @@ public static class MediaMetadataScanner
             return;
         }
 
+        await _scanThrottle.WaitAsync();
         try
         {
             string path = item.SourcePath;
@@ -248,15 +252,31 @@ public static class MediaMetadataScanner
                     {
                         item.Codec = codec;
                     }
-                    if (item.Bitrate == 0)
+                    // Populate container properties
+                    var cTracks = MediaTrackFormatHelper.GetContainerTracks(playablePath);
+                    var aTracks = cTracks.FindAll(t => t.TrackType == 2);
+                    var sTracks = cTracks.FindAll(t => t.TrackType == 17);
+                    var vTrack = cTracks.Find(t => t.TrackType == 1);
+
+                    if (vTrack != null && vTrack.FrameRate > 0 && frameRate == 0)
+                    {
+                        frameRate = vTrack.FrameRate;
+                    }
+
+                    if (bitrate == 0 && fileSize > 0 && item.Duration.TotalSeconds > 0)
+                    {
+                        bitrate = (uint)((fileSize * 8) / item.Duration.TotalSeconds);
+                    }
+
+                    if (item.Bitrate == 0 && bitrate > 0)
                     {
                         item.Bitrate = bitrate;
                     }
-                    if (item.FrameRate == 0)
+                    if (item.FrameRate == 0 && frameRate > 0)
                     {
                         item.FrameRate = frameRate;
                     }
-                    if (item.FileSize == 0)
+                    if (item.FileSize == 0 && fileSize > 0)
                     {
                         item.FileSize = fileSize;
                     }
@@ -264,12 +284,6 @@ public static class MediaMetadataScanner
                     {
                         item.PosterUrl = posterUrl;
                     }
-
-                    // Populate container properties
-                    var cTracks = MediaTrackFormatHelper.GetContainerTracks(playablePath);
-                    var aTracks = cTracks.FindAll(t => t.TrackType == 2);
-                    var sTracks = cTracks.FindAll(t => t.TrackType == 17);
-                    var vTrack = cTracks.Find(t => t.TrackType == 1);
 
                     if (aTracks.Count > 0)
                     {
@@ -352,7 +366,7 @@ public static class MediaMetadataScanner
                     };
 
                     // Auto save changes back to cache json debounced
-                    Services.SampleMediaLibrary.RequestDebouncedSave();
+                    Services.MediaLibraryService.RequestDebouncedSave();
                 }
                 catch (Exception ex)
                 {
@@ -363,6 +377,10 @@ public static class MediaMetadataScanner
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] Error scanning: {ex.Message}");
+        }
+        finally
+        {
+            _scanThrottle.Release();
         }
     }
 
@@ -462,10 +480,11 @@ public static class MediaMetadataScanner
     /// </summary>
     private static async Task<string?> ExtractRandomVideoFrameAsync(string itemId, Windows.Storage.StorageFile storageFile)
     {
+        Windows.Media.Editing.MediaComposition? composition = null;
         try
         {
             var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(storageFile);
-            var composition = new Windows.Media.Editing.MediaComposition();
+            composition = new Windows.Media.Editing.MediaComposition();
             composition.Clips.Add(clip);
 
             double totalSeconds = clip.OriginalDuration.TotalSeconds;
@@ -479,7 +498,7 @@ public static class MediaMetadataScanner
             double fraction = minFraction + (random.NextDouble() * (maxFraction - minFraction));
             var seekPosition = TimeSpan.FromSeconds(totalSeconds * fraction);
 
-            var imageStream = await composition.GetThumbnailAsync(
+            using var imageStream = await composition.GetThumbnailAsync(
                 seekPosition, 400, 0,
                 Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
 
@@ -499,6 +518,14 @@ public static class MediaMetadataScanner
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] ExtractRandomVideoFrameAsync failed: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                composition?.Clips.Clear();
+            }
+            catch { }
         }
         return null;
     }

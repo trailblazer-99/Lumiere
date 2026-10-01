@@ -12,4 +12,25 @@ public sealed partial class QueuePanel : UserControl
     {
         InitializeComponent();
     }
+
+    private void OnPlayEntryClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is LumiereMediaPlayer.Models.QueueEntry entry)
+        {
+            ViewModel.PlayEntryCommand.Execute(entry);
+        }
+    }
+
+    private void OnRemoveEntryClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is LumiereMediaPlayer.Models.QueueEntry entry)
+        {
+            ViewModel.RemoveEntryCommand.Execute(entry);
+        }
+    }
+
+    private void OnQueueDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        ViewModel.SyncOrderFromEntries();
+    }
 }
