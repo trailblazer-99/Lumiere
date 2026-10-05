@@ -20,6 +20,7 @@ public sealed partial class MusicLibraryPage : Page
     {
         InitializeComponent();
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)

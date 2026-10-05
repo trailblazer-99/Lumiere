@@ -25,6 +25,7 @@ namespace LumiereMediaPlayer.Pages
             this.InitializeComponent();
             this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
+            this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
             this.Unloaded += OnUnloaded;
         }
 
@@ -168,8 +169,8 @@ namespace LumiereMediaPlayer.Pages
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.04f, 1.04f, 1.0f), compositor.CreateCubicBezierEasingFunction(
-                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
+                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.0f, 1.0f)));
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(167);
 
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -196,8 +197,8 @@ namespace LumiereMediaPlayer.Pages
                         {
                             var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
                             overlayAnim.InsertKeyFrame(1.0f, 1.0f, compositor.CreateCubicBezierEasingFunction(
-                                new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
-                            overlayAnim.Duration = TimeSpan.FromMilliseconds(100);
+                                new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.0f, 1.0f)));
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(83);
                             overlayVisual.StartAnimation("Opacity", overlayAnim);
                         }
                     }
@@ -222,23 +223,26 @@ namespace LumiereMediaPlayer.Pages
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
 
+                    var exitEase = compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(1.0f, 0.0f), new System.Numerics.Vector2(1.0f, 1.0f));
+
                     var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
                     if (dropShadow != null)
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-                        opacityAnim.InsertKeyFrame(1.0f, 0.0f);
-                        opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
+                        opacityAnim.InsertKeyFrame(1.0f, 0.0f, exitEase);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(83);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
 
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 4, 8));
-                        offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
+                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 4, 8), exitEase);
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(83);
                         dropShadow.StartAnimation("Offset", offsetAnim);
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f), exitEase);
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(83);
 
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -264,8 +268,8 @@ namespace LumiereMediaPlayer.Pages
                         if (overlayVisual != null)
                         {
                             var overlayAnim = compositor.CreateScalarKeyFrameAnimation();
-                            overlayAnim.InsertKeyFrame(1.0f, 0.0f);
-                            overlayAnim.Duration = TimeSpan.FromMilliseconds(80);
+                            overlayAnim.InsertKeyFrame(1.0f, 0.0f, exitEase);
+                            overlayAnim.Duration = TimeSpan.FromMilliseconds(83);
                             overlayVisual.StartAnimation("Opacity", overlayAnim);
                         }
                     }

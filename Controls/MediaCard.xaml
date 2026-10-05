@@ -9,10 +9,11 @@
     mc:Ignorable="d"
     Width="{x:Bind CardWidth, Mode=OneWay}"
     PointerEntered="OnPointerEntered"
+    PointerMoved="OnPointerMoved"
     PointerExited="OnPointerExited"
     RightTapped="OnCardRightTapped">
 
-    <StackPanel Spacing="10">
+    <StackPanel Spacing="8">
         <!-- Album art container with hover overlay -->
         <Grid>
             <Canvas x:Name="ShadowHost" />
@@ -23,7 +24,6 @@
                 <Grid>
                     <FontIcon
                         FontSize="48"
-                        Foreground="White"
                         Glyph="&#xE8D6;"
                         HorizontalAlignment="Center"
                         Opacity="0.85"
@@ -50,7 +50,7 @@
 
         <StackPanel
             x:Name="TitleContainer"
-            Spacing="2"
+            Spacing="4"
             Background="Transparent"
             PointerEntered="OnTitlePointerEntered"
             PointerExited="OnTitlePointerExited">
@@ -62,7 +62,7 @@
                 <TextBlock
                     Grid.Column="0"
                     FontWeight="SemiBold"
-                    FontSize="13"
+                    FontSize="14"
                     MaxLines="1"
                     Text="{x:Bind Title, Mode=OneWay}"
                     TextTrimming="CharacterEllipsis" />
@@ -73,15 +73,15 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     CornerRadius="4"
-                    Padding="4,1"
+                    Padding="8,4"
                     Margin="4,0,0,0"
                     VerticalAlignment="Center"
                     ToolTipService.ToolTip="{x:Bind EffectiveToolTip, Mode=OneWay}">
-                    <StackPanel Orientation="Horizontal" Spacing="3">
-                        <FontIcon Glyph="&#xE8B7;" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE8B7;" FontSize="16" VerticalAlignment="Center" />
                         <TextBlock
                             Text="{x:Bind EffectiveLocationRep, Mode=OneWay}"
-                            FontSize="10"
+                            FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             VerticalAlignment="Center"
                             MaxLines="1"

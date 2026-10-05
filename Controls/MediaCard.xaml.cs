@@ -464,14 +464,12 @@ public sealed partial class MediaCard : UserControl
         if (DispatcherQueue?.HasThreadAccess == true)
         {
             _previewDwellTimer?.Stop();
-            _isDwellSuppressedUntilExit = true;
         }
         else
         {
             DispatcherQueue?.TryEnqueue(() =>
             {
                 _previewDwellTimer?.Stop();
-                _isDwellSuppressedUntilExit = true;
             });
         }
     }
@@ -485,6 +483,11 @@ public sealed partial class MediaCard : UserControl
 
     private void OnTitlePointerExited(object sender, PointerRoutedEventArgs e)
     {
+        _isDwellSuppressedUntilExit = false;
+        if (_isHovered)
+        {
+            TryStartPreviewDwell();
+        }
     }
 
     private void TryStartPreviewDwell()
@@ -501,7 +504,7 @@ public sealed partial class MediaCard : UserControl
         bool isFullscreen = mainWindow?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
         if (!isFullscreen)
         {
-            int dwellMs = (previewControl != null && previewControl.IsPreviewActive) ? 180 : 320;
+            int dwellMs = (previewControl != null && previewControl.IsPreviewActive) ? 180 : 300;
             if (_previewDwellTimer == null)
             {
                 _previewDwellTimer = new DispatcherTimer();
@@ -517,13 +520,8 @@ public sealed partial class MediaCard : UserControl
     {
         try
         {
-            if (IsScrollActive)
-            {
-                _isDwellSuppressedUntilExit = true;
-                return;
-            }
-
             _isHovered = true;
+            _isDwellSuppressedUntilExit = false;
 
             var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
             if (previewControl?.IsExpanded == true)
@@ -544,13 +542,52 @@ public sealed partial class MediaCard : UserControl
 
             // Do not start preview dwell if pointer entered directly within the title container
             var point = e.GetCurrentPoint(this).Position;
-            if (point.Y >= (CardHeight > 0 ? CardHeight : 168))
+            double cardH = CardHeight > 0 ? CardHeight : 168;
+            if (point.Y >= cardH)
             {
                 _isDwellSuppressedUntilExit = true;
                 return;
             }
 
             TryStartPreviewDwell();
+        }
+        catch { }
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            if (!_isHovered) _isHovered = true;
+
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true) return;
+            if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+
+            var point = e.GetCurrentPoint(this).Position;
+            double cardH = CardHeight > 0 ? CardHeight : 168;
+
+            if (point.Y < cardH)
+            {
+                // Pointer is over the thumbnail
+                _isDwellSuppressedUntilExit = false;
+
+                if (previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
+                {
+                    previewControl.OnSourceCardPointerEntered(this);
+                    return;
+                }
+
+                if (_previewDwellTimer?.IsEnabled != true && (previewControl == null || !previewControl.IsPreviewActive || !ReferenceEquals(previewControl.ActiveSourceCard, this)))
+                {
+                    TryStartPreviewDwell();
+                }
+            }
+            else
+            {
+                _previewDwellTimer?.Stop();
+                _isDwellSuppressedUntilExit = true;
+            }
         }
         catch { }
     }
@@ -583,7 +620,17 @@ public sealed partial class MediaCard : UserControl
     private void OnPreviewDwellTimerTick(object? sender, object e)
     {
         _previewDwellTimer?.Stop();
-        if (_isDwellSuppressedUntilExit || IsScrollActive) return;
+        if (_isDwellSuppressedUntilExit) return;
+        if (IsScrollActive)
+        {
+            // If scroll was active right when timer ticked, retry shortly once scroll settles
+            if (_previewDwellTimer != null)
+            {
+                _previewDwellTimer.Interval = TimeSpan.FromMilliseconds(120);
+                _previewDwellTimer.Start();
+            }
+            return;
+        }
         if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
         var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
         if (previewControl?.IsExpanded == true) return;

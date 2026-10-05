@@ -23,6 +23,7 @@ public sealed class SettingsService : ISettingsService
     // Audio
     private const string EqualizerPresetKey = "EqualizerPreset";
     private const string DefaultVolumeKey = "DefaultVolume";
+    private const string EnableSoundEffectsKey = "EnableSoundEffects";
 
     // Video
     private const string DefaultAspectRatioKey = "DefaultAspectRatio";
@@ -147,6 +148,7 @@ public sealed class SettingsService : ISettingsService
             // Audio
             Equalizer = ParseEnum(settingsValues, EqualizerPresetKey, EqualizerPreset.Flat),
             DefaultVolume = ReadDouble(settingsValues, DefaultVolumeKey, 100.0),
+            EnableSoundEffects = ReadBool(settingsValues, EnableSoundEffectsKey, true),
 
             // Video
             DefaultAspectRatio = ParseEnum(settingsValues, DefaultAspectRatioKey, AspectRatioOption.Auto),
@@ -350,6 +352,7 @@ public sealed class SettingsService : ISettingsService
         // Audio
         values[EqualizerPresetKey] = Current.Equalizer.ToString();
         values[DefaultVolumeKey] = Current.DefaultVolume;
+        values[EnableSoundEffectsKey] = Current.EnableSoundEffects;
 
         // Video
         values[DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString();
@@ -441,6 +444,7 @@ public sealed class SettingsService : ISettingsService
                 // Audio
                 [EqualizerPresetKey] = Current.Equalizer.ToString(),
                 [DefaultVolumeKey] = Current.DefaultVolume,
+                [EnableSoundEffectsKey] = Current.EnableSoundEffects,
 
                 // Video
                 [DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString(),

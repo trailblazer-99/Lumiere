@@ -294,7 +294,7 @@ namespace LumiereMediaPlayer.Helpers
         {
             if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
             {
-                _httpClient.DefaultRequestHeaders.Add("User-Agent", "LumiereMediaPlayer/2.0.0 (https://github.com/lumiere-media-player)");
+                _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
             }
         }
 
@@ -431,7 +431,7 @@ namespace LumiereMediaPlayer.Helpers
             // 1. If currentUrl already has a valid canonical Spotify path with ID, strip tracking and return directly
             if (!string.IsNullOrWhiteSpace(currentUrl))
             {
-                var directMatch = Regex.Match(currentUrl, @"open\.spotify\.com/(track|album|artist|playlist)/([a-zA-Z0-9]+)", RegexOptions.IgnoreCase);
+                var directMatch = Regex.Match(currentUrl, @"open\.spotify\.com/(?:intl-[a-z]{2}/)?(track|album|artist|playlist)/([a-zA-Z0-9]+)", RegexOptions.IgnoreCase);
                 if (directMatch.Success)
                 {
                     string entityType = directMatch.Groups[1].Value.ToLowerInvariant();

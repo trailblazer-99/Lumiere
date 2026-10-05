@@ -10,7 +10,7 @@ public static class ScrollDebounceHelper
 {
     public static DateTime LastScrollActivityTime { get; private set; } = DateTime.MinValue;
 
-    public static bool IsScrollActive => (DateTime.UtcNow - LastScrollActivityTime).TotalMilliseconds < 600;
+    public static bool IsScrollActive => (DateTime.UtcNow - LastScrollActivityTime).TotalMilliseconds < 250;
 
     public static event Action? ScrollActivityOccurred;
 

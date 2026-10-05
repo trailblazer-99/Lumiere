@@ -374,6 +374,21 @@
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-content">
+                        <h3>Enable Developer Mode (One-Time)</h3>
+                        <p>Windows requires Developer Mode to be enabled before sideloading apps. This only needs to be done once:</p>
+                        <div class="step-details">
+                            <ol>
+                                <li>Open Windows <strong>Settings</strong> (<code>Win + I</code>).</li>
+                                <li>Navigate to <strong>System</strong> &gt; <strong>For developers</strong> (or <strong>Privacy &amp; security</strong> &gt; <strong>For developers</strong>).</li>
+                                <li>Toggle <strong>Developer Mode</strong> to <strong>ON</strong> and confirm the prompt.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
                         <h3>Download and Trust the Security Certificate</h3>
                         <p>Because Lumière is sideloaded, Windows requires trusting its developer certificate before installation. Click <strong>Download Certificate</strong> above to download <code>LumiereMediaPlayer.cer</code>, then:</p>
                         <div class="step-details">
@@ -390,7 +405,7 @@
                 </div>
 
                 <div class="step">
-                    <div class="step-number">2</div>
+                    <div class="step-number">3</div>
                     <div class="step-content">
                         <h3>Run the App Installer</h3>
                         <p>Click the <strong>Install Lumière Player</strong> button to download and run the <code>.appinstaller</code> file. Windows App Installer will launch automatically to download the correct bundle for your system (x64 or ARM64) and install it.</p>
@@ -403,10 +418,10 @@
                 </div>
 
                 <div class="step">
-                    <div class="step-number">3</div>
+                    <div class="step-number">4</div>
                     <div class="step-content">
                         <h3>Automated Background Updates</h3>
-                        <p>Once installed using the App Installer, Windows will automatically query the repository's portal on GitHub Pages for updates. Every time changes are pushed to the repository, the app will be built, signed, and updated on your system seamlessly in the background!</p>
+                        <p>Once installed using the App Installer, Windows will periodically check the repository's portal on GitHub Pages for updates. When a new version is available, you'll see a prompt offering to update. The app is built, signed, and published automatically every time changes are pushed to the repository!</p>
                     </div>
                 </div>
             </div>

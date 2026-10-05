@@ -28,6 +28,7 @@ namespace LumiereMediaPlayer.Pages
         {
             this.InitializeComponent();
             this.NavigationCacheMode = NavigationCacheMode.Disabled;
+            this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
             this.Unloaded += OnUnloaded;
             ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
@@ -51,27 +52,6 @@ namespace LumiereMediaPlayer.Pages
             this.Unloaded -= OnUnloaded;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             CleanupResources();
-        }
-
-        private void OnBackButtonClick(object sender, RoutedEventArgs e)
-        {
-            if (Frame.CanGoBack)
-            {
-                Frame.GoBack();
-            }
-            else
-            {
-                if (string.Equals(CurrentTitleType, "tv_series", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(CurrentTitleType, "tv_miniseries", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(CurrentTitleType, "tv", StringComparison.OrdinalIgnoreCase))
-                {
-                    Frame.Navigate(typeof(StreamingTvShowsPage));
-                }
-                else
-                {
-                    Frame.Navigate(typeof(StreamingMoviesPage));
-                }
-            }
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -793,8 +773,10 @@ namespace LumiereMediaPlayer.Pages
                     Title = $"{person.FullName} — Filmography",
                     Content = container,
                     CloseButtonText = "Close",
+                    DefaultButton = ContentDialogButton.Close,
                     XamlRoot = this.XamlRoot
                 };
+                ThemeHelper.ApplyThemeToContentDialog(dialog);
 
                 _ = Task.Run(async () =>
                 {
@@ -805,6 +787,8 @@ namespace LumiereMediaPlayer.Pages
                         {
                             try
                             {
+                                var theme = ThemeHelper.GetEffectiveElementTheme();
+                                container.RequestedTheme = theme;
                                 container.Children.Clear();
                                 if (details?.KnownFor != null && details.KnownFor.Count > 0)
                                 {
@@ -812,7 +796,8 @@ namespace LumiereMediaPlayer.Pages
                                     {
                                         Text = $"Known for ({details.KnownFor.Count} titles):",
                                         FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                                        Margin = new Thickness(0, 0, 0, 8)
+                                        Margin = new Thickness(0, 0, 0, 8),
+                                        Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
                                     };
                                     container.Children.Add(titleBlock);
 
@@ -821,6 +806,7 @@ namespace LumiereMediaPlayer.Pages
                                         SelectionMode = ListViewSelectionMode.None,
                                         IsItemClickEnabled = true,
                                         MaxHeight = 350,
+                                        RequestedTheme = theme,
                                         ItemTemplate = CreateFilmographyItemTemplate(),
                                         ItemsSource = details.KnownFor
                                     };
@@ -846,6 +832,7 @@ namespace LumiereMediaPlayer.Pages
                                         Margin = new Thickness(0, 12, 0, 12)
                                     });
                                 }
+                                ThemeHelper.ApplyThemeToContentDialog(dialog);
                             }
                             catch { }
                         });
@@ -871,13 +858,13 @@ namespace LumiereMediaPlayer.Pages
         private DataTemplate CreateFilmographyItemTemplate()
         {
             var xaml = @"<DataTemplate xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"">
-                            <Grid Padding=""8"" Margin=""0,0,0,6"">
+                            <Grid Padding=""8,6"" Margin=""0,0,0,4"" CornerRadius=""6"" Background=""Transparent"">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width=""*"" />
                                     <ColumnDefinition Width=""Auto"" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text=""{Binding DisplayTitle}"" FontWeight=""SemiBold"" FontSize=""14"" VerticalAlignment=""Center"" />
-                                <TextBlock Grid.Column=""1"" Text=""{Binding DisplayYear}"" FontSize=""12"" Foreground=""Gray"" VerticalAlignment=""Center"" Margin=""8,0,0,0"" />
+                                <TextBlock Text=""{Binding DisplayTitle}"" FontWeight=""SemiBold"" FontSize=""14"" VerticalAlignment=""Center"" Foreground=""{ThemeResource TextFillColorPrimaryBrush}"" TextTrimming=""CharacterEllipsis"" />
+                                <TextBlock Grid.Column=""1"" Text=""{Binding DisplayYear}"" FontSize=""12"" Foreground=""{ThemeResource TextFillColorSecondaryBrush}"" VerticalAlignment=""Center"" Margin=""12,0,0,0"" />
                             </Grid>
                          </DataTemplate>";
             return (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
@@ -903,9 +890,7 @@ namespace LumiereMediaPlayer.Pages
 
                 try
                 {
-                    GC.Collect(2, GCCollectionMode.Aggressive, true, true);
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                    MemoryTrimHelper.TrimWorkingSet();
                 }
                 catch { }
             }

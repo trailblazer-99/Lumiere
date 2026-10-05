@@ -58,6 +58,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
     private TimeSpan _previewStart = TimeSpan.Zero;
     private TimeSpan _previewEnd = TimeSpan.FromSeconds(8);
+    private DateTime _previewOpenTime = DateTime.MinValue;
     private bool _isPointerInsideHost;
     private bool _isMuted = true;
     private bool _isFlyoutOpen;
@@ -119,13 +120,13 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         _loopTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _loopTimer.Tick += OnLoopTimerTick;
 
-        _exitGraceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _exitGraceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _exitGraceTimer.Tick += OnExitGraceTimerTick;
 
         _videoStartTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _videoStartTimer.Tick += OnVideoStartTimerTick;
 
-        _watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        _watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _watchdogTimer.Tick += OnWatchdogTimerTick;
 
         AppServices.PlaybackViewModel.PropertyChanged += (s, e) =>
@@ -225,6 +226,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         _loadCts = new CancellationTokenSource();
         try { oldCts?.Cancel(); } catch { }
 
+        _previewOpenTime = DateTime.UtcNow;
+        _isPointerInsideHost = true;
         _exitGraceTimer.Stop();
         _watchdogTimer.Start();
         _activeSourceCard = sourceCard;
@@ -354,7 +357,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
         if (EpisodesSectionBorder != null) EpisodesSectionBorder.Visibility = Visibility.Collapsed;
         if (EpisodesListPanel != null) EpisodesListPanel.Children.Clear();
-        if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0);
+        if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
         if (MediaRowDefinition != null) MediaRowDefinition.Height = new GridLength(180);
         if (TitleText != null) TitleText.FontSize = 13;
         if (DurationText != null) DurationText.FontSize = 11;
@@ -809,6 +812,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 break;
         }
 
+        CardBorder.CornerRadius = new CornerRadius(8);
+        CardBorder.Translation = System.Numerics.Vector3.Zero;
         CardBorder.Background = cardBg;
         CardBorder.BorderBrush = strokeBrush;
         if (MetadataContainerBorder != null)
@@ -837,12 +842,15 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (QualityPillBorder != null) QualityPillBorder.BorderBrush = actionBtnBorder;
         if (EpisodesCountSubtitle != null) EpisodesCountSubtitle.Foreground = textSecondary;
 
+        var iconAccentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+            ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
+
         if (MoreOptionsButton != null)
         {
             MoreOptionsButton.Background = actionBtnBg;
             MoreOptionsButton.BorderBrush = actionBtnBorder;
         }
-        if (MoreOptionsIcon != null) MoreOptionsIcon.Foreground = textPrimary;
+        if (MoreOptionsIcon != null) MoreOptionsIcon.Foreground = iconAccentBrush;
 
         if (EpisodesDropdownButton != null)
         {
@@ -851,7 +859,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
         if (EpisodesDropdownIcon != null)
         {
-            EpisodesDropdownIcon.Foreground = textPrimary;
+            EpisodesDropdownIcon.Foreground = iconAccentBrush;
             EpisodesDropdownIcon.Glyph = _isExpanded ? "\uE70E" : "\uE70D";
             EpisodesDropdownIcon.RenderTransform = null;
         }
@@ -861,7 +869,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             CloseButton.Background = actionBtnBg;
             CloseButton.BorderBrush = actionBtnBorder;
         }
-        if (CloseIcon != null) CloseIcon.Foreground = textPrimary;
+        if (CloseIcon != null) CloseIcon.Foreground = iconAccentBrush;
 
         var targetSeries = (_activeItem?.IsSeries == true && _activeItem.Episodes?.Count > 0) ? _activeItem : _effectiveParentSeries;
         bool inWatchlist = _activeItem != null && ((targetSeries?.Episodes?.Count > 0)
@@ -917,12 +925,12 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             var easeOut = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f),
-                new System.Numerics.Vector2(0.2f, 1.0f));
+                new System.Numerics.Vector2(0.0f, 0.0f),
+                new System.Numerics.Vector2(0.0f, 1.0f));
 
             // Smooth opacity bloom (0.0 -> 1.0)
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-            opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
+            opacityAnim.Duration = TimeSpan.FromMilliseconds(167);
             opacityAnim.InsertKeyFrame(0.0f, 0.0f);
             opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeOut);
 
@@ -959,17 +967,17 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 if (prevVisual != null && nextVisual != null)
                 {
                     var fadeEase = compositor.CreateCubicBezierEasingFunction(
-                        new System.Numerics.Vector2(0.1f, 0.9f),
-                        new System.Numerics.Vector2(0.2f, 1.0f));
+                        new System.Numerics.Vector2(0.0f, 0.0f),
+                        new System.Numerics.Vector2(0.0f, 1.0f));
 
                     var fadeOut = compositor.CreateScalarKeyFrameAnimation();
-                    fadeOut.Duration = TimeSpan.FromMilliseconds(260);
+                    fadeOut.Duration = TimeSpan.FromMilliseconds(250);
                     fadeOut.InsertKeyFrame(0.0f, 1.0f);
                     fadeOut.InsertKeyFrame(1.0f, 0.0f, fadeEase);
                     prevVisual.StartAnimation("Opacity", fadeOut);
 
                     var fadeIn = compositor.CreateScalarKeyFrameAnimation();
-                    fadeIn.Duration = TimeSpan.FromMilliseconds(260);
+                    fadeIn.Duration = TimeSpan.FromMilliseconds(250);
                     fadeIn.InsertKeyFrame(0.0f, 0.0f);
                     fadeIn.InsertKeyFrame(1.0f, 1.0f, fadeEase);
                     nextVisual.StartAnimation("Opacity", fadeIn);
@@ -989,11 +997,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             if (metaVisual != null)
             {
                 var metaEase = compositor.CreateCubicBezierEasingFunction(
-                    new System.Numerics.Vector2(0.1f, 0.9f),
-                    new System.Numerics.Vector2(0.2f, 1.0f));
+                    new System.Numerics.Vector2(0.0f, 0.0f),
+                    new System.Numerics.Vector2(0.0f, 1.0f));
 
                 var metaFade = compositor.CreateScalarKeyFrameAnimation();
-                metaFade.Duration = TimeSpan.FromMilliseconds(240);
+                metaFade.Duration = TimeSpan.FromMilliseconds(250);
                 metaFade.InsertKeyFrame(0.0f, 0.5f);
                 metaFade.InsertKeyFrame(1.0f, 1.0f, metaEase);
                 metaVisual.StartAnimation("Opacity", metaFade);
@@ -1115,7 +1123,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             var pt = e.GetCurrentPoint(CardBorder).Position;
             double w = CardBorder.ActualWidth > 0 ? CardBorder.ActualWidth : (!double.IsNaN(CardBorder.Width) && CardBorder.Width > 0 ? CardBorder.Width : 320);
             double h = CardBorder.ActualHeight > 0 ? CardBorder.ActualHeight : (!double.IsNaN(CardBorder.Height) && CardBorder.Height > 0 ? CardBorder.Height : 296);
-            if (pt.X >= 0 && pt.X <= w && pt.Y >= 0 && pt.Y <= h)
+            if (pt.X >= -4 && pt.X <= (w + 4) && pt.Y >= -4 && pt.Y <= (h + 4))
             {
                 _isPointerInsideHost = true;
                 _exitGraceTimer.Stop();
@@ -1139,6 +1147,12 @@ public sealed partial class VideoHoverPreviewHost : UserControl
     {
         e.Handled = true;
         ClosePreview();
+    }
+
+    private void OnCardPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        // Prevent background clicks inside the card bounds from leaking through to underlying gallery cards
+        e.Handled = true;
     }
 
     public bool IsPointOverCard(Windows.Foundation.Point pointInRoot)
@@ -1228,6 +1242,12 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (Visibility != Visibility.Visible) return false;
         if (_isFlyoutOpen || _isExpanded) return true;
 
+        // Grace window: never dismiss during initial entrance / load phase
+        if ((DateTime.UtcNow - _previewOpenTime).TotalMilliseconds < 600)
+        {
+            return true;
+        }
+
         try
         {
             var hwnd = App.MainWindowInstance != null ? WindowHelper.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero;
@@ -1241,7 +1261,20 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
             var dipPoint = new Windows.Foundation.Point(pt.X / scale, pt.Y / scale);
 
-            bool overHost = IsPointInsideElement(CardBorder, dipPoint, 12);
+            // Fast direct check against CardBorder known margin coordinates
+            if (_currentLeft >= 0 && _currentTop >= 0)
+            {
+                double bw = CardBorder.ActualWidth > 0 ? CardBorder.ActualWidth : 320;
+                double bh = CardBorder.ActualHeight > 0 ? CardBorder.ActualHeight : 296;
+                if (dipPoint.X >= (_currentLeft - 16) && dipPoint.X <= (_currentLeft + bw + 16) &&
+                    dipPoint.Y >= (_currentTop - 16) && dipPoint.Y <= (_currentTop + bh + 16))
+                {
+                    _isPointerInsideHost = true;
+                    return true;
+                }
+            }
+
+            bool overHost = IsPointInsideElement(CardBorder, dipPoint, 16);
             if (overHost)
             {
                 _isPointerInsideHost = true;
@@ -1249,7 +1282,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             }
 
             var sourceCard = _activeSourceCard;
-            bool overCard = sourceCard != null && sourceCard.IsLoaded && IsPointInsideElement(sourceCard, dipPoint, 16);
+            bool overCard = sourceCard != null && sourceCard.IsLoaded && IsPointInsideElement(sourceCard, dipPoint, 20);
             if (overCard)
             {
                 return true;
@@ -1266,10 +1299,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
     private static bool IsPointInsideElement(FrameworkElement element, Windows.Foundation.Point dipPoint, double buffer)
     {
-        if (element == null || !element.IsLoaded || element.ActualWidth <= 0 || element.ActualHeight <= 0)
-        {
-            return false;
-        }
+        if (element == null) return false;
+
+        double w = element.ActualWidth > 0 ? element.ActualWidth : (!double.IsNaN(element.Width) && element.Width > 0 ? element.Width : 0);
+        double h = element.ActualHeight > 0 ? element.ActualHeight : (!double.IsNaN(element.Height) && element.Height > 0 ? element.Height : 0);
+        if (w <= 0 || h <= 0) return false;
 
         try
         {
@@ -1288,8 +1322,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
             double minX = topLeft.X - buffer;
             double minY = topLeft.Y - buffer;
-            double maxX = topLeft.X + element.ActualWidth + buffer;
-            double maxY = topLeft.Y + element.ActualHeight + buffer;
+            double maxX = topLeft.X + w + buffer;
+            double maxY = topLeft.Y + h + buffer;
 
             return dipPoint.X >= minX && dipPoint.X <= maxX && dipPoint.Y >= minY && dipPoint.Y <= maxY;
         }
@@ -1434,7 +1468,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (EpisodesDropdownButton != null) EpisodesDropdownButton.Visibility = Visibility.Collapsed;
         if (EpisodesSectionBorder != null) EpisodesSectionBorder.Visibility = Visibility.Collapsed;
         if (EpisodesListPanel != null) EpisodesListPanel.Children.Clear();
-        if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0);
+        if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
         if (MediaRowDefinition != null) MediaRowDefinition.Height = new GridLength(180);
         if (TitleText != null) TitleText.FontSize = 13;
         if (DurationText != null) DurationText.FontSize = 11;
@@ -1708,6 +1742,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                     EpisodesSectionBorder.Background = modalCardBg;
                     EpisodesSectionBorder.Opacity = 1.0;
                     EpisodesSectionBorder.Visibility = Visibility.Visible;
+                    EpisodesSectionBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
                 }
 
                 try
@@ -1739,7 +1774,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 if (MetadataContainerBorder != null)
                 {
                     MetadataContainerBorder.Background = modalCardBg;
-                    MetadataContainerBorder.CornerRadius = new CornerRadius(0);
+                    MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
                 }
 
                 if (EpisodesSectionBorder != null)
@@ -1905,7 +1940,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
                 if (MetadataContainerBorder != null)
                 {
-                    MetadataContainerBorder.CornerRadius = new CornerRadius(0);
+                    MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
                 }
                 if (EpisodesSectionBorder != null)
                 {
@@ -1947,11 +1982,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             var easeOut = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f),
-                new System.Numerics.Vector2(0.2f, 1.0f));
+                new System.Numerics.Vector2(0.0f, 0.0f),
+                new System.Numerics.Vector2(0.0f, 1.0f));
 
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-            opacityAnim.Duration = TimeSpan.FromMilliseconds(180);
+            opacityAnim.Duration = TimeSpan.FromMilliseconds(167);
             opacityAnim.InsertKeyFrame(0.0f, 0.0f);
             opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeOut);
 
@@ -2142,24 +2177,24 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
             // Fluent Design accelerate curve (natural pickup into resting position)
             var easeAccelerate = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.3f, 0.0f),
+                new System.Numerics.Vector2(1.0f, 0.0f),
                 new System.Numerics.Vector2(1.0f, 1.0f));
 
             // Scale animation: expanded ratio → 1.0 (compact size)
             var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-            scaleAnim.Duration = TimeSpan.FromMilliseconds(300);
+            scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
             scaleAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(scaleX, scaleY, 1.0f));
             scaleAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.One, easeAccelerate);
 
             // Offset animation: delta → 0 (glide from expanded center to compact anchor)
             var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnim.Duration = TimeSpan.FromMilliseconds(300);
+            offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
             offsetAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(offsetX, offsetY, 0f));
             offsetAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.Zero, easeAccelerate);
 
             // Opacity: keep fully visible, gentle settle
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-            opacityAnim.Duration = TimeSpan.FromMilliseconds(300);
+            opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
             opacityAnim.InsertKeyFrame(0.0f, 0.85f);
             opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeAccelerate);
 
@@ -2270,24 +2305,13 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 Width = 240,
                 Height = 180,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(6),
+                CornerRadius = new CornerRadius(8),
                 Background = defaultBgBrush,
                 BorderBrush = defaultBorderBrush,
                 BorderThickness = new Thickness(1),
                 Tag = episode,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Stretch
-            };
-
-            // Interactive hover accent glow
-            cardButton.PointerEntered += (s, e) =>
-            {
-                cardButton.BorderBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
-                    ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
-            };
-            cardButton.PointerExited += (s, e) =>
-            {
-                cardButton.BorderBrush = defaultBorderBrush;
             };
 
             var contentGrid = new Grid
@@ -2300,7 +2324,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             // Thumbnail container
             var thumbBorder = new Border
             {
-                CornerRadius = new CornerRadius(5, 5, 0, 0),
+                CornerRadius = new CornerRadius(7, 7, 0, 0),
                 Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 18, 18, 22))
             };
 
@@ -2585,6 +2609,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         UpdateMuteVisuals();
     }
 
+    private void OnMuteToggleButtonTapped(object sender, TappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
     private void UpdateMuteVisuals()
     {
         if (MuteIcon == null) return;
@@ -2703,9 +2732,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             WatchlistButton.Background = actionBtnBg;
             WatchlistButton.BorderBrush = actionBtnBorder;
             WatchlistIcon.Glyph = "\uE710"; // Plus
-            WatchlistIcon.Foreground = isLight
-                ? new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24))
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
+            WatchlistIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
             ToolTipService.SetToolTip(WatchlistButton, "Add to Watchlist");
         }
     }
@@ -2777,9 +2805,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             FavoriteButton.Background = actionBtnBg;
             FavoriteButton.BorderBrush = actionBtnBorder;
             FavoriteIcon.Glyph = "\uEB51"; // Outline heart
-            FavoriteIcon.Foreground = isLight
-                ? new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24))
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
+            FavoriteIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
             ToolTipService.SetToolTip(FavoriteButton, "Like");
         }
     }
@@ -2879,9 +2906,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             PreviewSelectButton.Background = actionBtnBg;
             PreviewSelectButton.BorderBrush = actionBtnBorder;
             PreviewSelectIcon.Glyph = "\uE762"; // Fluent MultiSelect checklist glyph
-            PreviewSelectIcon.Foreground = isLight
-                ? new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24))
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
+            PreviewSelectIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
             ToolTipService.SetToolTip(PreviewSelectButton, "Select");
         }
     }
@@ -2902,10 +2928,6 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             UpdateFavoriteVisuals(itemForFlyout?.IsFavorite == true);
             NotifySelectionRibbons();
         });
-        flyout.Closed += (s, args) =>
-        {
-            _isFlyoutOpen = false;
-        };
         flyout.Closed += (s, args) =>
         {
             _isFlyoutOpen = false;

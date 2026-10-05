@@ -49,6 +49,7 @@ public sealed partial class TransportBar : UserControl
     private bool _isSeeking;
     private bool _isUpdatingVolume;
     private bool _isFullscreenPresentation;
+    private bool _isMiniVideoActive;
     private MediaItem? _observedTrack;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
     private double _pendingScrubValue;
@@ -229,6 +230,7 @@ public sealed partial class TransportBar : UserControl
             _isProgrammaticChange = false;
             ProgressSlider.IsEnabled = false;
 
+            SetMiniVideoPlayer(null);
             if (ArtImage != null)
             {
                 ArtImage.Source = null;
@@ -290,10 +292,13 @@ public sealed partial class TransportBar : UserControl
         {
             var imgSource = Helpers.ImageBindHelper.SafeImageFromUrl(CurrentTrack.PosterUrl, 64);
             ArtImage.Source = imgSource;
-            ArtImage.Visibility = imgSource != null ? Visibility.Visible : Visibility.Collapsed;
-            if (FallbackIcon != null)
+            if (!_isMiniVideoActive)
             {
-                FallbackIcon.Visibility = imgSource != null ? Visibility.Collapsed : Visibility.Visible;
+                ArtImage.Visibility = imgSource != null ? Visibility.Visible : Visibility.Collapsed;
+                if (FallbackIcon != null)
+                {
+                    FallbackIcon.Visibility = imgSource != null ? Visibility.Collapsed : Visibility.Visible;
+                }
             }
         }
 
@@ -348,6 +353,7 @@ public sealed partial class TransportBar : UserControl
         }
         else
         {
+            SetMiniVideoPlayer(null);
             if (SubtitlesButton != null)
             {
                 SubtitlesButton.Visibility = Visibility.Collapsed;
@@ -450,14 +456,17 @@ public sealed partial class TransportBar : UserControl
         if (ShuffleIcon == null) return;
         if (_isShuffleEnabled)
         {
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
-                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+            if (ShuffleButton != null)
+                ShuffleButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: On");
         }
         else
         {
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") 
-                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+            ShuffleButton?.ClearValue(Button.BackgroundProperty);
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: Off");
         }
     }
@@ -469,20 +478,25 @@ public sealed partial class TransportBar : UserControl
         {
             case PlaybackRepeatMode.Off:
                 RepeatIcon.Glyph = "\uE8EE";
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") 
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                RepeatButton?.ClearValue(Button.BackgroundProperty);
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: Off");
                 break;
             case PlaybackRepeatMode.All:
                 RepeatIcon.Glyph = "\uE8EE";
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+                if (RepeatButton != null)
+                    RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: All");
                 break;
             case PlaybackRepeatMode.One:
                 RepeatIcon.Glyph = "\uE8ED";
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+                if (RepeatButton != null)
+                    RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: One");
                 break;
         }
@@ -639,6 +653,7 @@ public sealed partial class TransportBar : UserControl
 
         if (isFullscreen)
         {
+            SetMiniVideoPlayer(null);
             // Increase height slightly in fullscreen for cinematic presence and thumbnail art breathing room
             this.Height = 132;
 
@@ -998,10 +1013,64 @@ public sealed partial class TransportBar : UserControl
         if (ArtImage != null)
         {
             ArtImage.Source = source;
-            ArtImage.Visibility = source != null ? Visibility.Visible : Visibility.Collapsed;
-            if (FallbackIcon != null)
+            if (!_isMiniVideoActive)
             {
-                FallbackIcon.Visibility = source != null ? Visibility.Collapsed : Visibility.Visible;
+                ArtImage.Visibility = source != null ? Visibility.Visible : Visibility.Collapsed;
+                if (FallbackIcon != null)
+                {
+                    FallbackIcon.Visibility = source != null ? Visibility.Collapsed : Visibility.Visible;
+                }
+            }
+        }
+    }
+
+    public void SetMiniVideoPlayer(MediaPlayer? player)
+    {
+        if (MiniVideoPlayer == null) return;
+
+        if (player != null)
+        {
+            if (MiniVideoPlayer.MediaPlayer != player)
+            {
+                MiniVideoPlayer.SetMediaPlayer(player);
+            }
+            _isMiniVideoActive = true;
+            MiniVideoPlayer.Visibility = Visibility.Visible;
+            if (ArtImage != null) ArtImage.Visibility = Visibility.Collapsed;
+            if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Collapsed;
+            if (MiniAlbumArt != null && MiniAlbumArt.Width != 80)
+            {
+                MiniAlbumArt.Width = 80;
+            }
+        }
+        else
+        {
+            if (!_isMiniVideoActive && MiniVideoPlayer.MediaPlayer == null && (MiniAlbumArt == null || MiniAlbumArt.Width == 48))
+            {
+                return;
+            }
+
+            _isMiniVideoActive = false;
+            if (MiniVideoPlayer.MediaPlayer != null)
+            {
+                MiniVideoPlayer.SetMediaPlayer(null);
+            }
+            MiniVideoPlayer.Visibility = Visibility.Collapsed;
+            if (MiniAlbumArt != null)
+            {
+                MiniAlbumArt.Width = 48;
+            }
+            if (ArtImage != null)
+            {
+                ArtImage.Visibility = ArtImage.Source != null ? Visibility.Visible : Visibility.Collapsed;
+                if (FallbackIcon != null)
+                {
+                    FallbackIcon.Visibility = ArtImage.Source != null ? Visibility.Collapsed : Visibility.Visible;
+                }
+            }
+            else if (FallbackIcon != null)
+            {
+                FallbackIcon.Visibility = Visibility.Visible;
             }
         }
     }
@@ -1098,6 +1167,7 @@ public sealed partial class TransportBar : UserControl
             {
                 style.BasedOn = baseStyle;
             }
+            style.Setters.Add(new Setter(FlyoutPresenter.RequestedThemeProperty, effectiveTheme));
             style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(12, 8, 12, 8)));
             style.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, bgBrush));
             style.Setters.Add(new Setter(FlyoutPresenter.BorderBrushProperty, borderBrush));
@@ -1118,6 +1188,7 @@ public sealed partial class TransportBar : UserControl
             FlyoutPresenter? presenter = null;
             if (VolumeFlyout.Content is FrameworkElement fe)
             {
+                fe.RequestedTheme = effectiveTheme;
                 if (fe.Parent is FlyoutPresenter fp)
                 {
                     presenter = fp;
@@ -1139,8 +1210,11 @@ public sealed partial class TransportBar : UserControl
 
             if (presenter != null)
             {
+                presenter.RequestedTheme = effectiveTheme;
                 presenter.Background = bgBrush;
                 presenter.BorderBrush = borderBrush;
+                presenter.CornerRadius = new CornerRadius(8);
+                presenter.BorderThickness = new Thickness(1);
             }
         }
         catch (Exception ex)
@@ -1207,7 +1281,7 @@ public sealed partial class TransportBar : UserControl
             {
                 VolumeIcon.Foreground = isSilenced
                     ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
-                    : (ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White));
+                    : (ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue));
             }
         }
         if (FlyoutVolumeIcon != null)
@@ -1215,7 +1289,7 @@ public sealed partial class TransportBar : UserControl
             FlyoutVolumeIcon.Glyph = glyph;
             FlyoutVolumeIcon.Foreground = isSilenced
                 ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
-                : (ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White));
+                : (ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue));
         }
     }
 

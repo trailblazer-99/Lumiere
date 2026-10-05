@@ -43,7 +43,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
                                     <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Search TV shows..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="260" CornerRadius="8" Height="32">
                                         <AutoSuggestBox.QueryIcon>
                                             <AnimatedIcon x:Name="SearchAnimatedIcon">
@@ -57,17 +57,17 @@
                                         </AutoSuggestBox.QueryIcon>
                                     </AutoSuggestBox>
                                     <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
-                                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
                                     </ToggleButton>
                                 </StackPanel>
                             </StackPanel>
-                            <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Service" ItemsSource="{x:Bind ViewModel.ProviderOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedProvider, Mode=TwoWay}" Width="155" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Network" ItemsSource="{x:Bind ViewModel.NetworkOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedNetwork, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="165" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Rating" ItemsSource="{x:Bind ViewModel.RatingOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedRating, Mode=TwoWay}" Width="135" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox Header="Region" ItemsSource="{x:Bind ViewModel.RegionOptions, Mode=OneWay}" SelectedValuePath="Code" SelectedValue="{x:Bind ViewModel.SelectedRegion, Mode=TwoWay}" SelectionChanged="RegionComboBox_SelectionChanged" DropDownClosed="RegionComboBox_DropDownClosed" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Service" ItemsSource="{x:Bind ViewModel.ProviderOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedProvider, Mode=TwoWay}" Width="155" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Network" ItemsSource="{x:Bind ViewModel.NetworkOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedNetwork, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.GenreOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Access Type" ItemsSource="{x:Bind ViewModel.AccessTypeOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedAccessType, Mode=TwoWay}" Width="165" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Rating" ItemsSource="{x:Bind ViewModel.RatingOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedRating, Mode=TwoWay}" Width="135" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Sort by" ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedSortOrder, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
                         </StackPanel>
                     </ScrollViewer>
 
@@ -86,50 +86,50 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Left Vertical Quick Action Rail -->
-                        <StackPanel Grid.Column="0" Spacing="6" Margin="0,0,16,0" VerticalAlignment="Top" Width="136">
-                            <TextBlock Text="Quick Actions" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+                        <StackPanel Grid.Column="0" Spacing="8" Margin="0,0,16,0" VerticalAlignment="Top" Width="146">
+                            <TextBlock Text="Quick Actions" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
                             
                             <!-- Reset Filters Button -->
-                            <Button x:Name="VerticalResetButton" Command="{x:Bind ViewModel.ResetFiltersCommand}" Click="OnResetFiltersClick" ToolTipService.ToolTip="Reset Search &amp; Filters" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                            <Button x:Name="VerticalResetButton" Command="{x:Bind ViewModel.ResetFiltersCommand}" Click="OnResetFiltersClick" ToolTipService.ToolTip="Reset Search &amp; Filters" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="16" Glyph="&#xE777;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <TextBlock Text="Reset Filters" FontSize="13"/>
+                                    <FontIcon FontSize="16" Glyph="&#xE777;" />
+                                    <TextBlock Text="Reset Filters" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
                             <!-- Surprise Me Button -->
-                            <Button x:Name="VerticalSurpriseButton" Command="{x:Bind ViewModel.SurpriseMeCommand}" ToolTipService.ToolTip="Surprise Me (Pick a Random Show)" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                            <Button x:Name="VerticalSurpriseButton" Command="{x:Bind ViewModel.SurpriseMeCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.SurpriseMeActionToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="16" Glyph="&#xE8B1;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <TextBlock Text="Surprise Me" FontSize="13"/>
+                                    <FontIcon FontSize="16" Glyph="&#xE8B1;" />
+                                    <TextBlock Text="Surprise Me" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
                             <!-- Refresh Feed Button -->
-                            <Button x:Name="VerticalRefreshButton" Command="{x:Bind ViewModel.RefreshFeedCommand}" ToolTipService.ToolTip="Refresh Feed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                            <Button x:Name="VerticalRefreshButton" Command="{x:Bind ViewModel.RefreshFeedCommand}" ToolTipService.ToolTip="Refresh Feed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="16" Glyph="&#xE72C;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <TextBlock Text="Refresh" FontSize="13"/>
+                                    <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                                    <TextBlock Text="Refresh" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
                             <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4"/>
 
-                            <TextBlock Text="Quick Filters" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+                            <TextBlock Text="Quick Filters" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
 
                             <!-- Top Rated Filter -->
-                            <Button Command="{x:Bind ViewModel.QuickFilterTopRatedCommand}" ToolTipService.ToolTip="Show 8.0+ Rated TV Shows" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                            <Button x:Name="VerticalTopRatedButton" Command="{x:Bind ViewModel.QuickFilterTopRatedCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.QuickFilterTopRatedToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE735;" Foreground="#FFD700"/>
-                                    <TextBlock Text="Top Rated" FontSize="13"/>
+                                    <TextBlock Text="{x:Bind ViewModel.QuickFilterTopRatedText, Mode=OneWay}" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
                             <!-- Free Shows Filter -->
-                            <Button Command="{x:Bind ViewModel.QuickFilterFreeCommand}" ToolTipService.ToolTip="Show Free to Stream TV Shows" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="10,7" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
+                            <Button x:Name="VerticalFreeButton" Command="{x:Bind ViewModel.QuickFilterFreeCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.QuickFilterFreeToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="16" Glyph="&#xE774;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <TextBlock Text="Free Shows" FontSize="13"/>
+                                    <FontIcon FontSize="16" Glyph="&#xE774;" />
+                                    <TextBlock Text="{x:Bind ViewModel.QuickFilterFreeText, Mode=OneWay}" FontSize="14"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -145,7 +145,7 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:WatchmodeTitle">
-                                    <Border Width="220" Height="330" CornerRadius="12"
+                                    <Border Width="220" Height="330" CornerRadius="8"
                                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                                             BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
@@ -156,10 +156,10 @@
                                                 <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
                                             </MenuFlyout>
                                         </Border.ContextFlyout>
-                                        <Grid CornerRadius="12">
+                                        <Grid CornerRadius="8">
                                             <FontIcon Glyph="&#xE7F4;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 220), Mode=OneWay}" Stretch="UniformToFill" />
-                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
+                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,8,8">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
@@ -167,8 +167,8 @@
                                                         <GradientStop Color="#F2000000" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
-                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="16,8,16,16" Spacing="4">
+                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="14" LineHeight="20" TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{x:Bind DisplayYear, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12"/>
                                                 </StackPanel>
                                             </Border>
@@ -184,10 +184,10 @@
                         <StackPanel Grid.Column="1" x:Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
                                     Visibility="{x:Bind GetDiscoverEmptyState(ViewModel.IsLoading, ViewModel.HasError), Mode=OneWay}">
                             <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
-                                <FontIcon Glyph="&#xE7F4;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon Glyph="&#xE7F4;" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <TextBlock Text="No TV shows found" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Try adjusting your search query, genre, network, or region filters." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Try adjusting your search query, genre, network, or region filters." FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
 
@@ -195,10 +195,10 @@
                     <!-- Pagination Controls Aligned to 36px Geometry -->
                     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,20,0,16">
                         <Button Content="Previous Page" Command="{x:Bind ViewModel.PreviousPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoPrevious, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}" Height="36" CornerRadius="8" Padding="16,0"/>
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="14,0" Height="36">
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,0" Height="36">
                             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13"/>
-                                <TextBlock Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}" FontWeight="SemiBold" FontSize="13"/>
+                                <TextBlock Text="Page " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="14"/>
+                                <TextBlock Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}" FontWeight="SemiBold" FontSize="14"/>
                             </StackPanel>
                         </Border>
                         <Button Content="Next Page" Command="{x:Bind ViewModel.NextPageCommand}" IsEnabled="{x:Bind ViewModel.CanGoNext, Mode=OneWay}" Style="{StaticResource DefaultButtonStyle}" Height="36" CornerRadius="8" Padding="16,0"/>
@@ -215,7 +215,7 @@
                     </Grid.RowDefinitions>
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,20">
-                        <ComboBox x:Name="LibraryFilterComboBox" Header="Watchlist Category" Width="180" CornerRadius="8" SelectionChanged="OnLibraryFilterChanged">
+                        <ComboBox x:Name="LibraryFilterComboBox" Header="Watchlist Category" Width="180" CornerRadius="8" SelectionChanged="OnLibraryFilterChanged" helpers:ComboBoxHelper.FollowBackdrop="True">
                             <ComboBoxItem Content="All" IsSelected="True" />
                             <ComboBoxItem Content="Watchlist" />
                             <ComboBoxItem Content="Plan to Watch" />
@@ -237,7 +237,7 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="services:SavedStreamingItem">
-                                    <Border Width="220" Height="330" CornerRadius="12"
+                                    <Border Width="220" Height="330" CornerRadius="8"
                                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                                             BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
@@ -247,10 +247,10 @@
                                                 <MenuFlyoutItem Text="Remove from Library" Click="OnContextRemoveFromLibraryClick" Foreground="Red" />
                                             </MenuFlyout>
                                         </Border.ContextFlyout>
-                                        <Grid CornerRadius="12">
+                                        <Grid CornerRadius="8">
                                             <FontIcon Glyph="&#xE7F4;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 220), Mode=OneWay}" Stretch="UniformToFill" />
-                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
+                                            <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,8,8">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
@@ -258,8 +258,8 @@
                                                         <GradientStop Color="#F2000000" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
-                                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="16,8,16,16" Spacing="4">
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="14" LineHeight="20" TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12" />
                                                 </StackPanel>
                                             </Border>
@@ -272,10 +272,10 @@
                         <!-- Empty State for Library -->
                         <StackPanel x:Name="LibraryEmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Visibility="Collapsed">
                             <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
-                                <FontIcon Glyph="&#xE734;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon Glyph="&#xE734;" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <TextBlock Text="Your watchlist is empty" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Explore and add TV shows from Discover or Trending to build your watchlist." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Explore and add TV shows from Discover or Trending to build your watchlist." FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Grid>
@@ -289,8 +289,8 @@
                             <TextBlock Text="Trending TV shows currently popular across streaming platforms." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.75" />
 
                             <!-- Hero Carousel with Directional Scrim and Fluent Design 2 Rectangular Navigation Buttons -->
-                            <Grid Height="360" CornerRadius="14">
-                                <FlipView x:Name="TrendingHeroCarousel" Height="360" CornerRadius="14">
+                            <Grid Height="360" CornerRadius="8">
+                                <FlipView x:Name="TrendingHeroCarousel" Height="360" CornerRadius="8">
                                     <FlipView.Resources>
                                         <Style x:Key="FlipViewPreviousButtonStyleHorizontal" TargetType="Button">
                                             <Setter Property="Visibility" Value="Collapsed" />
@@ -327,10 +327,10 @@
                                     </FlipView.Resources>
                                     <FlipView.ItemTemplate>
                                         <DataTemplate x:DataType="models:TmdbMedia">
-                                            <Grid CornerRadius="14">
+                                            <Grid CornerRadius="8">
                                                 <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(BackdropUrl, 800), Mode=OneWay}" Stretch="UniformToFill" />
                                                 <!-- Directional Scrim Gradient -->
-                                                <Border CornerRadius="14">
+                                                <Border CornerRadius="8">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,1" EndPoint="0.7,0">
                                                             <GradientStop Color="#F5000000" Offset="0.0" />
@@ -340,11 +340,11 @@
                                                         </LinearGradientBrush>
                                                     </Border.Background>
                                                 </Border>
-                                                <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="32" Spacing="10" MaxWidth="720">
-                                                    <Border HorizontalAlignment="Left" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="4" Padding="8,3">
-                                                        <TextBlock Text="TRENDING SHOW" FontSize="11" FontWeight="Bold" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CharacterSpacing="40"/>
+                                                <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="32" Spacing="8" MaxWidth="720">
+                                                    <Border HorizontalAlignment="Left" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="4" Padding="8,4">
+                                                        <TextBlock Text="TRENDING SHOW" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CharacterSpacing="40"/>
                                                     </Border>
-                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" FontSize="32" FontWeight="Bold" Foreground="White" LineHeight="38" TextWrapping="Wrap" MaxLines="2" />
+                                                    <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" FontSize="32" FontWeight="SemiBold" Foreground="White" LineHeight="38" TextWrapping="Wrap" MaxLines="2" />
                                                     <TextBlock Text="{x:Bind Overview, Mode=OneWay}" FontSize="14" Foreground="#E2E8F0" LineHeight="20" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
                                                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
                                                         <Button Style="{StaticResource AccentButtonStyle}" Height="36" CornerRadius="8" Padding="16,0" Click="OnHeroViewDetailsClick">
@@ -399,7 +399,7 @@
                     </GridView.ItemContainerStyle>
                     <GridView.ItemTemplate>
                         <DataTemplate x:DataType="models:TmdbMedia">
-                            <Border Width="220" Height="330" CornerRadius="12"
+                            <Border Width="220" Height="330" CornerRadius="8"
                                     Background="{ThemeResource LayerFillColorDefaultBrush}"
                                     BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
@@ -410,10 +410,10 @@
                                         <MenuFlyoutItem Text="Play Trailer" Click="OnContextPlayTrailerClick" />
                                     </MenuFlyout>
                                 </Border.ContextFlyout>
-                                <Grid CornerRadius="12">
+                                <Grid CornerRadius="8">
                                     <FontIcon Glyph="&#xE7F4;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Opacity="0.15" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 300), Mode=OneWay}" Stretch="UniformToFill" />
-                                    <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,12,12">
+                                    <Border VerticalAlignment="Bottom" Height="104" CornerRadius="0,0,8,8">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                 <GradientStop Color="Transparent" Offset="0"/>
@@ -421,8 +421,8 @@
                                                 <GradientStop Color="#F2000000" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
-                                        <StackPanel VerticalAlignment="Bottom" Padding="14,10,14,14" Spacing="2">
-                                            <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis"/>
+                                        <StackPanel VerticalAlignment="Bottom" Padding="16,8,16,16" Spacing="4">
+                                            <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}" Foreground="White" FontWeight="SemiBold" FontSize="14" LineHeight="20" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{x:Bind DisplayYear, Mode=OneWay}" Foreground="#D1D5DB" FontSize="12"/>
                                         </StackPanel>
                                     </Border>

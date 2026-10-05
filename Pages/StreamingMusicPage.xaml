@@ -40,7 +40,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
                                     <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32">
                                         <AutoSuggestBox.QueryIcon>
                                             <AnimatedIcon x:Name="SearchAnimatedIcon">
@@ -54,12 +54,12 @@
                                         </AutoSuggestBox.QueryIcon>
                                     </AutoSuggestBox>
                                     <ToggleButton x:Name="AiSearchToggle" IsChecked="{x:Bind ViewModel.IsAiSearchActive, Mode=TwoWay}" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center" CornerRadius="8" helpers:SpringAnimationHelper.EnableHoverSpring="True">
-                                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
                                     </ToggleButton>
                                 </StackPanel>
                             </StackPanel>
-                            <ComboBox x:Name="FilterComboBox" Header="Filter by" ItemsSource="{x:Bind ViewModel.SearchFilters, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SearchFilter, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
-                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.Genres, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" SelectionChanged="OnGenreSelectionChanged" Width="150" CornerRadius="8" VerticalAlignment="Bottom" />
+                            <ComboBox x:Name="FilterComboBox" Header="Filter by" ItemsSource="{x:Bind ViewModel.SearchFilters, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SearchFilter, Mode=TwoWay}" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            <ComboBox Header="Genre" ItemsSource="{x:Bind ViewModel.Genres, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGenre, Mode=TwoWay}" SelectionChanged="OnGenreSelectionChanged" Width="150" CornerRadius="8" VerticalAlignment="Bottom" helpers:ComboBoxHelper.FollowBackdrop="True" />
                         </StackPanel>
                     </ScrollViewer>
 
@@ -71,11 +71,11 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate x:DataType="models:MusicApiTrack">
-                                    <Border Width="200" Height="200" CornerRadius="12"
+                                    <Border Width="200" Height="200" CornerRadius="8"
                                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                                             BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                        <Grid CornerRadius="12">
+                                        <Grid CornerRadius="8">
                                             <Image Stretch="UniformToFill">
                                                 <Image.Source>
                                                     <BitmapImage UriSource="{Binding HighResArtworkUrl}" DecodePixelWidth="200" />
@@ -83,7 +83,7 @@
                                             </Image>
                                             
                                             <!-- Hover Overlay -->
-                                            <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
+                                            <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="#00000000" Offset="0.0"/>
@@ -93,7 +93,7 @@
                                             </Border>
 
                                             <!-- Metadata Scrim -->
-                                            <Border VerticalAlignment="Bottom" Height="78" CornerRadius="0,0,12,12">
+                                            <Border VerticalAlignment="Bottom" Height="78" CornerRadius="0,0,8,8">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                         <GradientStop Color="Transparent" Offset="0"/>
@@ -101,27 +101,27 @@
                                                         <GradientStop Color="#F2000000" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <StackPanel VerticalAlignment="Bottom" Padding="12,6,12,10" Spacing="1">
-                                                    <TextBlock Text="{Binding TrackName}" Foreground="White" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding DisplaySubtitle}" Foreground="#D1D5DB" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel VerticalAlignment="Bottom" Padding="12,8,12,8" Spacing="4">
+                                                    <TextBlock Text="{Binding TrackName}" Foreground="White" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding DisplaySubtitle}" Foreground="#D1D5DB" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
                                             </Border>
 
                                             <!-- Media Type Badge -->
-                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,2" CornerRadius="4" Background="#CC000000" BorderThickness="1" BorderBrush="#33FFFFFF">
-                                                <TextBlock Text="{Binding ResultType}" Foreground="White" FontSize="10" FontWeight="SemiBold" />
+                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="8,4" CornerRadius="4" Background="#CC000000" BorderThickness="1" BorderBrush="#33FFFFFF">
+                                                <TextBlock Text="{Binding ResultType}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
                                             </Border>
 
                                             <!-- Streaming Platforms Pill Buttons -->
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Spacing="4">
-                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.Spotify}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasSpotify), Mode=OneTime}" Width="28" Height="28" CornerRadius="14" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Spotify">
+                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.Spotify}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasSpotify), Mode=OneTime}" Width="32" Height="32" CornerRadius="16" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Spotify">
                                                     <Image Width="20" Height="20" Stretch="Uniform" Source="https://www.google.com/s2/favicons?domain=spotify.com&amp;sz=128" />
                                                 </HyperlinkButton>
-                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.AppleMusic}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasAppleMusic), Mode=OneTime}" Width="28" Height="28" CornerRadius="14" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Apple Music">
+                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.AppleMusic}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasAppleMusic), Mode=OneTime}" Width="32" Height="32" CornerRadius="16" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Apple Music">
                                                     <FontIcon Glyph="&#xE93C;" FontSize="16" Foreground="#FA243C" />
                                                 </HyperlinkButton>
-                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.Tidal}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasTidal), Mode=OneTime}" Width="28" Height="28" CornerRadius="14" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Tidal">
-                                                    <TextBlock Text="T" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <HyperlinkButton NavigateUri="{Binding ExternalUrls.Tidal}" Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasTidal), Mode=OneTime}" Width="32" Height="32" CornerRadius="16" Background="#CC000000" Padding="0" ToolTipService.ToolTip="Listen on Tidal">
+                                                    <TextBlock Text="T" Foreground="White" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 </HyperlinkButton>
                                             </StackPanel>
                                         </Grid>
@@ -136,10 +136,10 @@
                         <StackPanel x:Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
                                     Visibility="{x:Bind GetDiscoverEmptyState(ViewModel.IsLoading), Mode=OneWay}">
                             <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
-                                <FontIcon Glyph="&#xE8D6;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon Glyph="&#xE8D6;" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <TextBlock Text="No music tracks found" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Try searching for a song, artist, album, or playlist." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Try searching for a song, artist, album, or playlist." FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Grid>
@@ -154,17 +154,17 @@
                         </GridView.ItemContainerStyle>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="services:SavedStreamingItem">
-                                <Border Width="200" Height="200" CornerRadius="12"
+                                <Border Width="200" Height="200" CornerRadius="8"
                                         Background="{ThemeResource LayerFillColorDefaultBrush}"
                                         BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
-                                    <Grid CornerRadius="12">
+                                    <Grid CornerRadius="8">
                                         <Image Stretch="UniformToFill">
                                             <Image.Source>
                                                 <BitmapImage UriSource="{Binding PosterUrl}" DecodePixelWidth="200" />
                                             </Image.Source>
                                         </Image>
-                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="12">
+                                        <Border x:Name="HoverOverlay" Opacity="0.0" CornerRadius="8">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                     <GradientStop Color="#00000000" Offset="0.0"/>
@@ -172,7 +172,7 @@
                                                 </LinearGradientBrush>
                                             </Border.Background>
                                         </Border>
-                                        <Border VerticalAlignment="Bottom" Height="78" CornerRadius="0,0,12,12">
+                                        <Border VerticalAlignment="Bottom" Height="78" CornerRadius="0,0,8,8">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                     <GradientStop Color="Transparent" Offset="0"/>
@@ -180,9 +180,9 @@
                                                     <GradientStop Color="#F2000000" Offset="1"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
-                                            <StackPanel VerticalAlignment="Bottom" Padding="12,6,12,10" Spacing="1">
-                                                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Subtitle}" Foreground="#D1D5DB" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel VerticalAlignment="Bottom" Padding="12,8,12,8" Spacing="4">
+                                                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="#D1D5DB" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Border>
                                     </Grid>
@@ -194,10 +194,10 @@
                     <!-- Empty State for Music Library -->
                     <StackPanel x:Name="LibraryEmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Visibility="Collapsed">
                         <Border Width="72" Height="72" CornerRadius="36" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xE734;" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <FontIcon Glyph="&#xE734;" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="Your music library is empty" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Save tracks and albums from Discover to your library to access them here." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Save tracks and albums from Discover to your library to access them here." FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Grid>
             </PivotItem>

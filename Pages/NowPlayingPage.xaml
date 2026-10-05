@@ -188,9 +188,9 @@
                     Background="{ThemeResource AccentFillColorDefaultBrush}"
                     CornerRadius="{StaticResource SmallCornerRadius}"
                     HorizontalAlignment="Left"
-                    Padding="10,4">
+                    Padding="12,4">
                     <TextBlock
-                        FontSize="11"
+                        FontSize="12"
                         FontWeight="SemiBold"
                         Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
                         CharacterSpacing="80"
@@ -198,7 +198,7 @@
                 </Border>
 
                 <!-- Title & Location Rep -->
-                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                     <TextBlock
                         Style="{StaticResource DisplayTextStyle}"
                         Text="{x:Bind ViewModel.Title, Mode=OneWay}"
@@ -209,11 +209,11 @@
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="4"
-                        Padding="6,2"
+                        Padding="8,4"
                         VerticalAlignment="Center"
                         ToolTipService.ToolTip="{x:Bind ViewModel.SourcePath, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <FontIcon Glyph="&#xE8B7;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            <FontIcon Glyph="&#xE8B7;" FontSize="16" VerticalAlignment="Center" />
                             <TextBlock
                                 Text="{x:Bind ViewModel.LocationRep, Mode=OneWay}"
                                 FontSize="12"
@@ -254,7 +254,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- Header -->
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -269,8 +269,8 @@
                                     FontSize="14"
                                     Text="Lyrics" />
                             </StackPanel>
-                            <Button Grid.Column="1" x:Name="TranslateLyricsButton" Click="OnTranslateLyricsClick" ToolTipService.ToolTip="Translate Lyrics" Style="{StaticResource TransportIconButtonStyle}" Height="28" Width="28" Visibility="Collapsed" VerticalAlignment="Center">
-                                <FontIcon FontSize="12" Glyph="&#xE8C8;"/>
+                            <Button Grid.Column="1" x:Name="TranslateLyricsButton" Click="OnTranslateLyricsClick" ToolTipService.ToolTip="Translate Lyrics" Style="{StaticResource TransportIconButtonStyle}" Height="32" Width="32" Visibility="Collapsed" VerticalAlignment="Center">
+                                <FontIcon FontSize="16" Glyph="&#xE8C8;"/>
                             </Button>
                         </Grid>
 
@@ -306,7 +306,7 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Spacing="2" Margin="0,4" HorizontalAlignment="Center">
+                                    <StackPanel Spacing="4" Margin="0,4" HorizontalAlignment="Center">
                                         <TextBlock
                                             x:Name="LyricText"
                                             Text="{Binding Text}"
@@ -335,7 +335,7 @@
 
         <!-- Idle empty state when nothing is playing -->
         <StackPanel x:Name="IdleEmptyState" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Padding="24">
-            <FontIcon Glyph="&#xE768;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Opacity="0.6" />
+            <FontIcon Glyph="&#xE768;" FontSize="48" HorizontalAlignment="Center" Opacity="0.6" />
             <TextBlock Text="Nothing playing" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
             <TextBlock Text="Pick a track from your library or queue to start listening." FontSize="14" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
             <Button Content="Open File" Click="OnIdleOpenFileClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" Margin="0,8,0,0" AutomationProperties.Name="Open file" ToolTipService.ToolTip="Open file to play" />

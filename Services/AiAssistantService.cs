@@ -67,7 +67,7 @@ public static class AiAssistantService
         {
             try
             {
-                var ollamaRes = await CallOllamaAsync(prompt, ollamaModel);
+                var ollamaRes = await CallOllamaAsync(prompt, ollamaModel, jsonMimeType);
                 if (!string.IsNullOrWhiteSpace(ollamaRes)) return ollamaRes;
             }
             catch (Exception ex)
@@ -107,7 +107,7 @@ public static class AiAssistantService
         {
             try
             {
-                var ollamaFallbackRes = await CallOllamaAsync(prompt, ollamaModel);
+                var ollamaFallbackRes = await CallOllamaAsync(prompt, ollamaModel, jsonMimeType);
                 if (!string.IsNullOrWhiteSpace(ollamaFallbackRes))
                 {
                     Debug.WriteLine("[AiAssistant] Fallback to Local Ollama succeeded.");
@@ -150,7 +150,7 @@ public static class AiAssistantService
             ? new { contents = new[] { new { parts = new[] { new { text = prompt } } } }, generationConfig = new { responseMimeType = jsonMimeType } }
             : new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
 
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        Func<HttpContent> createContent = () => new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
         if (!string.IsNullOrWhiteSpace(proxyBaseUrl))
         {
@@ -159,7 +159,7 @@ public static class AiAssistantService
                 try
                 {
                     string url = $"{proxyBaseUrl.TrimEnd('/')}/gemini/{version}/models/{model}:generateContent";
-                    using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+                    using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = createContent() };
                     if (!string.IsNullOrWhiteSpace(proxyToken))
                         request.Headers.Add("X-Lumiere-App-Token", proxyToken);
 
@@ -180,7 +180,7 @@ public static class AiAssistantService
                 }
                 catch
                 {
-                    break;
+                    continue; // Try next candidate model instead of breaking completely on transient glitch
                 }
             }
             return null;
@@ -209,7 +209,7 @@ public static class AiAssistantService
                 {
                     // 1. Try with x-goog-api-key header
                     string url = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent";
-                    using (var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content })
+                    using (var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = createContent() })
                     {
                         request.Headers.Add("x-goog-api-key", apiKey);
                         using var response = await _httpClient.SendAsync(request);
@@ -227,7 +227,7 @@ public static class AiAssistantService
 
                     // 2. Fallback: try with URL query parameter ?key=
                     string urlWithKey = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
-                    using (var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json") })
+                    using (var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = createContent() })
                     {
                         using var responseKey = await _httpClient.SendAsync(requestKey);
                         if (responseKey.IsSuccessStatusCode)
@@ -598,14 +598,22 @@ public static class AiAssistantService
         return null;
     }
 
-    private static async Task<string> CallOllamaAsync(string prompt, string modelName)
+    private static async Task<string> CallOllamaAsync(string prompt, string modelName, string? jsonMimeType = null)
     {
-        var requestBody = new
-        {
-            model = string.IsNullOrWhiteSpace(modelName) ? "llama3.2" : modelName,
-            prompt = prompt,
-            stream = false
-        };
+        object requestBody = jsonMimeType == "application/json"
+            ? new
+            {
+                model = string.IsNullOrWhiteSpace(modelName) ? "llama3.2" : modelName,
+                prompt = prompt,
+                stream = false,
+                format = "json"
+            }
+            : new
+            {
+                model = string.IsNullOrWhiteSpace(modelName) ? "llama3.2" : modelName,
+                prompt = prompt,
+                stream = false
+            };
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:11434/api/generate") { Content = content };
@@ -623,8 +631,21 @@ public static class AiAssistantService
         string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
 
         string responseText = await ExecuteAiPromptAsync(prompt, jsonMimeType: null);
-        responseText = Regex.Replace(responseText, @"[^a-zA-Z]", "");
+        if (string.IsNullOrWhiteSpace(responseText)) return EqualizerPreset.Flat;
 
+        // Strip <think> reasoning blocks if model emitted them
+        responseText = Regex.Replace(responseText, @"<think>[\s\S]*?</think>", "", RegexOptions.IgnoreCase);
+
+        // Search for whole-word preset match
+        foreach (var preset in Enum.GetValues<EqualizerPreset>())
+        {
+            if (Regex.IsMatch(responseText, $@"\b{preset}\b", RegexOptions.IgnoreCase))
+            {
+                return preset;
+            }
+        }
+
+        responseText = Regex.Replace(responseText, @"[^a-zA-Z]", "");
         if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
         {
             return parsedPreset;
@@ -826,8 +847,13 @@ public static class AiAssistantService
 
         try
         {
+            string curatorRole = mediaType switch
+            {
+                "song" or "music" or "track" => "expert music curator",
+                _ => "expert film and television curator"
+            };
             var promptBuilder = new StringBuilder();
-            promptBuilder.AppendLine($"You are an expert film and television curator. The user is looking for {mediaType}s using this natural language request: \"{query}\".");
+            promptBuilder.AppendLine($"You are an {curatorRole}. The user is looking for {mediaType}s using this natural language request: \"{query}\".");
             promptBuilder.AppendLine($"Return ONLY a valid JSON array of 12 to 16 best, most famous, acclaimed, and relevant {mediaType} titles that match this genre, theme, or description. Example: [\"Title 1\", \"Title 2\"]");
             promptBuilder.AppendLine("Do not include release years, markdown formatting, explanations, or quotes inside titles. Return ONLY the JSON array of title strings.");
 

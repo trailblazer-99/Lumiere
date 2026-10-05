@@ -22,23 +22,6 @@
         <ScrollViewer>
             <StackPanel Padding="24,48,24,24" Spacing="24">
 
-                <!-- In-page Navigation Back Button -->
-                <Button x:Name="BackButton"
-                        Click="OnBackButtonClick"
-                        ToolTipService.ToolTip="Back"
-                        AutomationProperties.Name="Back"
-                        HorizontalAlignment="Left"
-                        CornerRadius="8"
-                        Padding="12,6"
-                        BorderThickness="1"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        Background="{ThemeResource ControlFillColorDefaultBrush}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon Glyph="&#xE72B;" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                        <TextBlock Text="Back" FontSize="13" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Button>
-
                 <!-- Top Info Section: Backdrop Overlay & Basic Meta -->
                 <Grid Margin="0,8,0,16">
                     <Grid.RowDefinitions>
@@ -53,7 +36,7 @@
 
                         <!-- Poster Column -->
                         <StackPanel Grid.Column="0" Spacing="12">
-                            <Border Width="180" Height="270" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Border Width="180" Height="270" CornerRadius="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                 <Image x:Name="PosterImage" Stretch="UniformToFill" />
                             </Border>
                             <Button x:Name="LibraryButton" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}">
@@ -88,8 +71,8 @@
                             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleTextStyle}" TextWrapping="Wrap"/>
                             
                             <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                                <Border Background="{ThemeResource AccentButtonBackground}" CornerRadius="4" Padding="6,2,6,2" x:Name="TypeBadge">
-                                    <TextBlock x:Name="TypeText" FontSize="11" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" FontWeight="SemiBold"/>
+                                <Border Background="{ThemeResource AccentButtonBackground}" CornerRadius="4" Padding="8,4,8,4" x:Name="TypeBadge">
+                                    <TextBlock x:Name="TypeText" FontSize="12" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" FontWeight="SemiBold"/>
                                 </Border>
                                 <TextBlock x:Name="YearText" Style="{StaticResource PageSubtitleTextStyle}" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="RatingText" Style="{StaticResource PageSubtitleTextStyle}" VerticalAlignment="Center"/>
@@ -100,32 +83,32 @@
                                 <StackPanel x:Name="QualityBadgesPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed" />
                             </ScrollViewer>
 
-                            <TextBlock x:Name="GenresText" FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
-                            <TextBlock x:Name="NetworksText" FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock x:Name="GenresText" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
+                            <TextBlock x:Name="NetworksText" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
 
                             <StackPanel x:Name="ScoresPanel" Orientation="Horizontal" Spacing="12" Margin="0,4,0,4" Visibility="Collapsed">
-                                <Border x:Name="RtScoreBorder" CornerRadius="6" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Border x:Name="RtScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="🍅 RT" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock x:Name="RtScoreText" FontSize="12" FontWeight="Bold" />
+                                        <TextBlock x:Name="RtScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="ImdbScoreBorder" CornerRadius="6" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Border x:Name="ImdbScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="⭐ IMDb" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock x:Name="ImdbScoreText" FontSize="12" FontWeight="Bold" />
+                                        <TextBlock x:Name="ImdbScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="CriticScoreBorder" CornerRadius="6" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Border x:Name="CriticScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="🎬 Critic" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock x:Name="CriticScoreText" FontSize="12" FontWeight="Bold" />
+                                        <TextBlock x:Name="CriticScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="AudienceScoreBorder" CornerRadius="6" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Border x:Name="AudienceScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="🍿 Audience" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock x:Name="AudienceScoreText" FontSize="12" FontWeight="Bold" />
+                                        <TextBlock x:Name="AudienceScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -152,7 +135,7 @@
                         <TextBlock Grid.Column="0" Text="Where to Watch" Style="{StaticResource BodyLargeTextBlockStyle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock Text="Country:" VerticalAlignment="Center" FontSize="12" Opacity="0.8"/>
-                            <ComboBox x:Name="RegionDetailComboBox" Width="140" SelectedValuePath="Code" SelectionChanged="RegionDetailComboBox_SelectionChanged">
+                            <ComboBox x:Name="RegionDetailComboBox" Width="140" SelectedValuePath="Code" SelectionChanged="RegionDetailComboBox_SelectionChanged" helpers:ComboBoxHelper.FollowBackdrop="True">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Name}"/>
@@ -161,7 +144,7 @@
                             </ComboBox>
                         </StackPanel>
                     </Grid>
-                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
+                    <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
                         <StackPanel x:Name="ProvidersContainer" Spacing="16">
                             <!-- Populated programmatically in code-behind -->
                         </StackPanel>
@@ -184,25 +167,25 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Width="250" MinHeight="76" Padding="12,10" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12" ToolTipService.ToolTip="Click to view filmography">
+                                    <Grid Width="250" MinHeight="76" Padding="12,8" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" ToolTipService.ToolTip="Click to view filmography">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
+                                             <ColumnDefinition Width="Auto" />
+                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Person Avatar / Photo with Initial Fallback -->
                                         <PersonPicture Grid.Column="0"
-                                                       Width="50" Height="50"
+                                                       Width="48" Height="48"
                                                        DisplayName="{Binding FullName}"
                                                        ProfilePicture="{Binding ProfileImageSource}"
                                                        VerticalAlignment="Center"
                                                        Margin="0,0,12,0" />
 
                                         <!-- Name & Role -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                                             <TextBlock Text="{Binding FullName}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{Binding Role}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Type}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
+                                            <TextBlock Text="{Binding Type}" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -224,25 +207,25 @@
                             </GridView.ItemContainerStyle>
                             <GridView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Width="250" MinHeight="76" Padding="12,10" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12" ToolTipService.ToolTip="Click to view filmography">
+                                    <Grid Width="250" MinHeight="76" Padding="12,8" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" ToolTipService.ToolTip="Click to view filmography">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
+                                             <ColumnDefinition Width="Auto" />
+                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Person Avatar / Photo with Initial Fallback -->
                                         <PersonPicture Grid.Column="0"
-                                                       Width="50" Height="50"
+                                                       Width="48" Height="48"
                                                        DisplayName="{Binding FullName}"
                                                        ProfilePicture="{Binding ProfileImageSource}"
                                                        VerticalAlignment="Center"
                                                        Margin="0,0,12,0" />
 
                                         <!-- Name & Role -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                                             <TextBlock Text="{Binding FullName}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{Binding Role}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Type}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
+                                            <TextBlock Text="{Binding Type}" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -254,10 +237,10 @@
                         <TreeView x:Name="EpisodesTreeView" Margin="0,12,0,0">
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Spacing="4" Margin="0,6,0,6">
+                                    <StackPanel Spacing="4" Margin="0,8,0,8">
                                         <TextBlock Text="{Binding Content.Title}" FontWeight="SemiBold" FontSize="14" />
                                         <TextBlock Text="{Binding Content.Subtitle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding Content.SubtitleVisibility}" />
-                                        <TextBlock Text="{Binding Content.Description}" FontSize="13" TextWrapping="Wrap" Opacity="0.8" Visibility="{Binding Content.DescriptionVisibility}" Margin="0,2,0,0" LineHeight="18" MaxWidth="700" HorizontalAlignment="Left" />
+                                        <TextBlock Text="{Binding Content.Description}" FontSize="14" TextWrapping="Wrap" Opacity="0.8" Visibility="{Binding Content.DescriptionVisibility}" Margin="0,2,0,0" LineHeight="18" MaxWidth="700" HorizontalAlignment="Left" />
                                     </StackPanel>
                                 </DataTemplate>
                             </TreeView.ItemTemplate>
@@ -279,8 +262,8 @@
                             <GridView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Width="140" Height="240" Margin="0">
-                                        <Border CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <Grid CornerRadius="12">
+                                        <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                            <Grid CornerRadius="8">
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="*" />
                                                     <RowDefinition Height="Auto" />
@@ -290,9 +273,9 @@
                                                         <BitmapImage UriSource="{Binding PosterUrl}" DecodePixelWidth="140" />
                                                     </Image.Source>
                                                 </Image>
-                                                <StackPanel Grid.Row="1" Padding="8" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" CornerRadius="0,0,12,12">
-                                                    <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                                                    <TextBlock Text="{Binding DisplayYear}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                <StackPanel Grid.Row="1" Padding="8" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" CornerRadius="0,0,8,8">
+                                                    <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                                    <TextBlock Text="{Binding DisplayYear}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -310,7 +293,7 @@
                                   ScrollViewer.VerticalScrollMode="Disabled">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,8">
+                                    <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="200" />
@@ -319,14 +302,14 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <FontIcon Glyph="&#xE787;" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                <FontIcon Glyph="&#xE787;" FontSize="16" />
                                                 <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" FontSize="14" />
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="{Binding ReleaseDate}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
-                                            <Border Grid.Column="2" HorizontalAlignment="Left" CornerRadius="4" Background="{ThemeResource SystemFillColorNeutralBackgroundBrush}" Padding="6,2,6,2">
-                                                <TextBlock Text="{Binding Region}" FontSize="11" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ReleaseDate}" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                            <Border Grid.Column="2" HorizontalAlignment="Left" CornerRadius="4" Background="{ThemeResource SystemFillColorNeutralBackgroundBrush}" Padding="8,4,8,4">
+                                                <TextBlock Text="{Binding Region}" FontSize="12" FontWeight="SemiBold" />
                                             </Border>
-                                            <TextBlock Grid.Column="3" Text="{Binding Platform}" FontSize="13" FontStyle="Italic" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="3" Text="{Binding Platform}" FontSize="14" FontStyle="Italic" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

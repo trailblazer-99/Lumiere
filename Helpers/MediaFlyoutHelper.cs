@@ -266,9 +266,23 @@ public static class MediaFlyoutHelper
     }
 
     private static readonly System.Threading.SemaphoreSlim _dialogLock = new(1, 1);
+    private static WeakReference<ContentDialog>? _activeDialog;
+
+    public static void RefreshActiveDialog()
+    {
+        if (_activeDialog != null && _activeDialog.TryGetTarget(out var dialog))
+        {
+            ThemeHelper.ApplyThemeToContentDialog(dialog);
+        }
+    }
 
     public static async Task<ContentDialogResult> ShowDialogSafeAsync(ContentDialog dialog)
     {
+        if (dialog == null) return ContentDialogResult.None;
+
+        ThemeHelper.ApplyThemeToContentDialog(dialog);
+        _activeDialog = new WeakReference<ContentDialog>(dialog);
+
         if (!await _dialogLock.WaitAsync(0))
         {
             return ContentDialogResult.None;
@@ -284,6 +298,7 @@ public static class MediaFlyoutHelper
         }
         finally
         {
+            _activeDialog = null;
             _dialogLock.Release();
         }
     }
@@ -471,7 +486,7 @@ public static class ThemeResourceHelper
             "TwitchBrandBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 145, 70, 255)),
             "HdrStatusGoldBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 230, 200, 0)),
             "FlyoutPresenterBackground" or "MenuFlyoutPresenterBackground" =>
-                ThemeHelper.GetFlyoutPresenterBackground(AppServices.Settings.Current.BackdropType, isDark ? ElementTheme.Dark : ElementTheme.Light),
+                ThemeHelper.GetFlyoutPresenterBackground(AppServices.Settings.Current.BackdropType, isDark ? ElementTheme.Dark : ElementTheme.Light, hasSystemBackdrop: true),
             _ => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255))
         };
     }

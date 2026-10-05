@@ -48,7 +48,8 @@
             PaneClosed="OnNavigationPaneClosed"
             PaneOpening="OnNavigationPaneOpening"
             PaneClosing="OnNavigationPaneClosing"
-            DisplayModeChanged="OnNavigationDisplayModeChanged">
+            DisplayModeChanged="OnNavigationDisplayModeChanged"
+            Loaded="OnRootNavigationViewLoaded">
 
             <NavigationView.PaneHeader>
                 <Grid Height="40" VerticalAlignment="Center" Margin="6,0,0,0">
@@ -94,11 +95,23 @@
                 <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
                 <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
 
+                <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+                <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+                <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+                <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+                <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">0</Thickness>
+                <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0</Thickness>
+                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="Transparent" />
+                <x:Double x:Key="NavigationViewItemSelectionIndicatorWidth">0</x:Double>
+                <x:Double x:Key="NavigationViewItemSelectionIndicatorHeight">0</x:Double>
+
                 <Style x:Key="StreamingFlyoutItemButtonStyle" TargetType="Button">
                     <Setter Property="Background" Value="Transparent" />
                     <Setter Property="BorderBrush" Value="Transparent" />
                     <Setter Property="BorderThickness" Value="0" />
-                    <Setter Property="CornerRadius" Value="6" />
+                    <Setter Property="CornerRadius" Value="4" />
                     <Setter Property="Padding" Value="0" />
                     <Setter Property="HorizontalAlignment" Value="Stretch" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -146,7 +159,9 @@
                     x:Name="StreamingCompactFlyout"
                     x:Key="StreamingCompactFlyout"
                     Placement="RightEdgeAlignedTop"
+                    ShouldConstrainToRootBounds="False"
                     Opening="OnStreamingCompactFlyoutOpening"
+                    Opened="OnStreamingCompactFlyoutOpened"
                     helpers:FlyoutHelper.FollowBackdrop="True">
                     <Flyout.FlyoutPresenterStyle>
                         <Style TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
@@ -162,13 +177,15 @@
                         </Style>
                     </Flyout.FlyoutPresenterStyle>
 
-                    <StackPanel x:Name="StreamingFlyoutContainer" Spacing="2" Orientation="Vertical">
+                    <StackPanel x:Name="StreamingFlyoutContainer" Spacing="4" Orientation="Vertical">
                         <!-- Music -->
                         <Button
                             x:Name="FlyoutStreamMusicBtn"
                             Style="{StaticResource StreamingFlyoutItemButtonStyle}"
                             Tag="streamMusic"
-                            Click="OnStreamMusicFlyoutClick">
+                            Click="OnStreamMusicFlyoutClick"
+                            PointerEntered="OnFlyoutItemPointerEntered"
+                            PointerPressed="OnFlyoutItemPointerPressed">
                             <Grid Height="36" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="12" />
@@ -193,14 +210,19 @@
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     Glyph="&#xE8D6;"
                                     FontSize="16"
-                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
 
                                 <TextBlock
                                     Grid.Column="2"
                                     Text="Music"
-                                    FontSize="13"
+                                    FontSize="14"
                                     Margin="8,0,12,0"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -212,7 +234,9 @@
                             x:Name="FlyoutStreamMoviesBtn"
                             Style="{StaticResource StreamingFlyoutItemButtonStyle}"
                             Tag="streamMovies"
-                            Click="OnStreamMoviesFlyoutClick">
+                            Click="OnStreamMoviesFlyoutClick"
+                            PointerEntered="OnFlyoutItemPointerEntered"
+                            PointerPressed="OnFlyoutItemPointerPressed">
                             <Grid Height="36" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="12" />
@@ -237,14 +261,19 @@
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     Glyph="&#xE8B2;"
                                     FontSize="16"
-                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
 
                                 <TextBlock
                                     Grid.Column="2"
                                     Text="Movies"
-                                    FontSize="13"
+                                    FontSize="14"
                                     Margin="8,0,12,0"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -256,7 +285,9 @@
                             x:Name="FlyoutStreamTvShowsBtn"
                             Style="{StaticResource StreamingFlyoutItemButtonStyle}"
                             Tag="streamTvShows"
-                            Click="OnStreamTvShowsFlyoutClick">
+                            Click="OnStreamTvShowsFlyoutClick"
+                            PointerEntered="OnFlyoutItemPointerEntered"
+                            PointerPressed="OnFlyoutItemPointerPressed">
                             <Grid Height="36" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="12" />
@@ -281,14 +312,19 @@
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     Glyph="&#xE7F4;"
                                     FontSize="16"
-                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
 
                                 <TextBlock
                                     Grid.Column="2"
                                     Text="TV Shows"
-                                    FontSize="13"
+                                    FontSize="14"
                                     Margin="8,0,12,0"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -300,7 +336,9 @@
                             x:Name="FlyoutStreamYouTubeBtn"
                             Style="{StaticResource StreamingFlyoutItemButtonStyle}"
                             Tag="streamYouTube"
-                            Click="OnStreamYouTubeFlyoutClick">
+                            Click="OnStreamYouTubeFlyoutClick"
+                            PointerEntered="OnFlyoutItemPointerEntered"
+                            PointerPressed="OnFlyoutItemPointerPressed">
                             <Grid Height="36" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="12" />
@@ -326,13 +364,18 @@
                                     Glyph="&#xE714;"
                                     FontSize="16"
                                     Foreground="{StaticResource YouTubeBrandBrush}"
+                                    RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
 
                                 <TextBlock
                                     Grid.Column="2"
                                     Text="YouTube"
-                                    FontSize="13"
+                                    FontSize="14"
                                     Margin="8,0,12,0"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -344,7 +387,9 @@
                             x:Name="FlyoutStreamTwitchBtn"
                             Style="{StaticResource StreamingFlyoutItemButtonStyle}"
                             Tag="streamTwitch"
-                            Click="OnStreamTwitchFlyoutClick">
+                            Click="OnStreamTwitchFlyoutClick"
+                            PointerEntered="OnFlyoutItemPointerEntered"
+                            PointerPressed="OnFlyoutItemPointerPressed">
                             <Grid Height="36" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="12" />
@@ -370,13 +415,18 @@
                                     Glyph="&#xE7FC;"
                                     FontSize="16"
                                     Foreground="{StaticResource TwitchBrandBrush}"
+                                    RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
 
                                 <TextBlock
                                     Grid.Column="2"
                                     Text="Twitch"
-                                    FontSize="13"
+                                    FontSize="14"
                                     Margin="8,0,12,0"
                                     VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -387,16 +437,109 @@
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Uid="NavHome" Content="Home" Icon="Home" Tag="home" />
-                <NavigationViewItem x:Uid="NavMusic" Content="Music" Icon="MusicInfo" Tag="music" />
-                <NavigationViewItem x:Uid="NavVideo" Content="Videos" Icon="Video" Tag="videos" />
-                <NavigationViewItem x:Uid="NavPlaylists" Content="Playlists" Icon="List" Tag="playlists" />
+                <NavigationViewItem
+                    x:Name="NavHomeItem"
+                    x:Uid="NavHome"
+                    Content="Home"
+                    Tag="home"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            x:Name="HomeNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE80F;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="NavMusicItem"
+                    x:Uid="NavMusic"
+                    Content="Music"
+                    Tag="music"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            x:Name="MusicNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE8D6;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="NavVideoItem"
+                    x:Uid="NavVideo"
+                    Content="Videos"
+                    Tag="videos"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            x:Name="VideoNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE714;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="NavPlaylistsItem"
+                    x:Uid="NavPlaylists"
+                    Content="Playlists"
+                    Tag="playlists"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            x:Name="PlaylistsNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE90B;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
                 <NavigationViewItem
                     x:Name="NowPlayingNavItem"
                     x:Uid="NavNowPlaying"
                     Content="Now playing"
-                    Icon="Play"
-                    Tag="nowPlaying">
+                    Tag="nowPlaying"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            x:Name="NowPlayingNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE768;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </NavigationViewItem.Icon>
                     <NavigationViewItem.InfoBadge>
                         <InfoBadge x:Name="PlaybackInfoBadge" Visibility="Collapsed">
                             <InfoBadge.IconSource>
@@ -405,35 +548,117 @@
                         </InfoBadge>
                     </NavigationViewItem.InfoBadge>
                 </NavigationViewItem>
+
                 <NavigationViewItemSeparator />
-                <NavigationViewItem x:Name="StreamingNavItem" Content="Streaming" Tag="streaming" SelectsOnInvoked="False">
+
+                <NavigationViewItem
+                    x:Name="StreamingNavItem"
+                    Content="Streaming"
+                    Tag="streaming"
+                    SelectsOnInvoked="False"
+                    PointerEntered="OnNavItemPointerEntered"
+                    PointerPressed="OnNavItemPointerPressed">
                     <NavigationViewItem.Icon>
-                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE93E;" />
+                        <FontIcon
+                            x:Name="StreamingNavIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            Glyph="&#xE93E;"
+                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
                     </NavigationViewItem.Icon>
                     <NavigationViewItem.MenuItems>
-                        <NavigationViewItem Content="Music" Tag="streamMusic">
+                        <NavigationViewItem
+                            Content="Music"
+                            Tag="streamMusic"
+                            SelectsOnInvoked="False"
+                            PointerEntered="OnNavItemPointerEntered"
+                            PointerPressed="OnNavItemPointerPressed">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8D6;" />
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE8D6;"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="Movies" Tag="streamMovies">
+                        <NavigationViewItem
+                            Content="Movies"
+                            Tag="streamMovies"
+                            SelectsOnInvoked="False"
+                            PointerEntered="OnNavItemPointerEntered"
+                            PointerPressed="OnNavItemPointerPressed">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8B2;" />
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE8B2;"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="TV Shows" Tag="streamTvShows">
+                        <NavigationViewItem
+                            Content="TV Shows"
+                            Tag="streamTvShows"
+                            SelectsOnInvoked="False"
+                            PointerEntered="OnNavItemPointerEntered"
+                            PointerPressed="OnNavItemPointerPressed">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE7F4;" />
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE7F4;"
+                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="YouTube" Tag="streamYouTube">
+                        <NavigationViewItem
+                            Content="YouTube"
+                            Tag="streamYouTube"
+                            SelectsOnInvoked="False"
+                            PointerEntered="OnNavItemPointerEntered"
+                            PointerPressed="OnNavItemPointerPressed">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE714;" Foreground="{StaticResource YouTubeBrandBrush}" />
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE714;"
+                                    Foreground="{StaticResource YouTubeBrandBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
-                        <NavigationViewItem Content="Twitch" Tag="streamTwitch">
+                        <NavigationViewItem
+                            Content="Twitch"
+                            Tag="streamTwitch"
+                            SelectsOnInvoked="False"
+                            PointerEntered="OnNavItemPointerEntered"
+                            PointerPressed="OnNavItemPointerPressed">
                             <NavigationViewItem.Icon>
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE7FC;" Foreground="{StaticResource TwitchBrandBrush}" />
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    Glyph="&#xE7FC;"
+                                    Foreground="{StaticResource TwitchBrandBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                    <FontIcon.RenderTransform>
+                                        <CompositeTransform Rotation="0" ScaleX="1" ScaleY="1" />
+                                    </FontIcon.RenderTransform>
+                                </FontIcon>
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
                     </NavigationViewItem.MenuItems>
@@ -449,7 +674,7 @@
                     PointerEntered="OnSettingsNavItemPointerEntered"
                     PointerExited="OnSettingsNavItemPointerExited">
                     <NavigationViewItem.Icon>
-                        <AnimatedIcon x:Name="SettingsNavAnimatedIcon">
+                        <AnimatedIcon x:Name="SettingsNavAnimatedIcon" Foreground="{ThemeResource AccentFillColorDefaultBrush}">
                             <AnimatedIcon.Source>
                                 <animatedvisuals:AnimatedSettingsVisualSource />
                             </AnimatedIcon.Source>
@@ -513,7 +738,7 @@
                 Margin="0,0,0,0"
                 Visibility="Collapsed"
                 IsHitTestVisible="False">
-                <Image Width="18" Height="18" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
+                <Image Width="16" Height="16" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
                 <TextBlock
                     FontSize="12"
                     FontWeight="SemiBold"
@@ -655,14 +880,14 @@
                             VerticalAlignment="Top" 
                             Background="Transparent"
                             BorderBrush="Transparent">
-                        <FontIcon Glyph="&#xE711;" FontSize="12" Foreground="White" />
+                        <FontIcon Glyph="&#xE711;" FontSize="16" Foreground="White" />
                     </Button>
                     
                     <ScrollViewer VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                         <StackPanel Spacing="12" MaxWidth="350">
                     <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
                     
-                    <Grid ColumnSpacing="20" RowSpacing="7">
+                    <Grid ColumnSpacing="20" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -680,43 +905,43 @@
                             <RowDefinition />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
 
-                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
-                            <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
-                            <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="•" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" />
-                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, FallbackValue='Unknown'}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
                     </Grid>
 
                     <!-- Divider between File Information and Internet Match -->
@@ -732,12 +957,12 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="FullscreenInternetMetadataPosterBorder" x:FieldModifier="public" Grid.Column="0" CornerRadius="6" VerticalAlignment="Top" Visibility="Collapsed">
+                            <Border x:Name="FullscreenInternetMetadataPosterBorder" x:FieldModifier="public" Grid.Column="0" CornerRadius="8" VerticalAlignment="Top" Visibility="Collapsed">
                                 <Image x:Name="FullscreenInternetMetadataPoster" x:FieldModifier="public" Width="90" Stretch="UniformToFill" MaxHeight="130" />
                             </Border>
                             <StackPanel Grid.Column="1" Spacing="8">
                                 <TextBlock x:Name="FullscreenInternetMetadataTitle" x:FieldModifier="public" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" FontSize="14" />
-                                <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" LineHeight="15" />
+                                <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" LineHeight="16" />
                             </StackPanel>
                         </Grid>
 
@@ -765,12 +990,12 @@
                     BorderThickness="1"
                     Visibility="Collapsed"
                     Opacity="0">
-                    <StackPanel Spacing="6" HorizontalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                             <FontIcon Glyph="&#xED3C;" FontSize="32" Foreground="White" VerticalAlignment="Center" />
-                            <TextBlock x:Name="FullscreenSeekBackText" Text="-10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock x:Name="FullscreenSeekBackText" Text="-10s" FontSize="28" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
                         </StackPanel>
-                        <TextBlock x:Name="FullscreenSeekBackSubtext" Text="Seek Backward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="FullscreenSeekBackSubtext" Text="Seek Backward" FontSize="14" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <!-- Seek Forward Overlay (Right) -->
@@ -786,12 +1011,12 @@
                     BorderThickness="1"
                     Visibility="Collapsed"
                     Opacity="0">
-                    <StackPanel Spacing="6" HorizontalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
-                            <TextBlock x:Name="FullscreenSeekForwardText" Text="+10s" FontSize="26" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                            <TextBlock x:Name="FullscreenSeekForwardText" Text="+10s" FontSize="28" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
                             <FontIcon Glyph="&#xED3D;" FontSize="32" Foreground="White" VerticalAlignment="Center" />
                         </StackPanel>
-                        <TextBlock x:Name="FullscreenSeekForwardSubtext" Text="Seek Forward" FontSize="13" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="FullscreenSeekForwardSubtext" Text="Seek Forward" FontSize="14" Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
             </Grid>
@@ -813,6 +1038,7 @@
             Grid.RowSpan="2"
             Background="#FF0C0C0E"
             Visibility="Collapsed"
+            IsHitTestVisible="False"
             PointerMoved="OnMiniPlayerPointerMoved"
             PointerEntered="OnMiniPlayerPointerEntered"
             PointerExited="OnMiniPlayerPointerExited">
@@ -844,7 +1070,7 @@
                 <Border
                     Width="105"
                     Height="105"
-                    CornerRadius="14"
+                    CornerRadius="8"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Margin="0,0,0,36"
@@ -853,7 +1079,7 @@
                     <Border.Shadow>
                         <ThemeShadow />
                     </Border.Shadow>
-                    <Grid CornerRadius="13">
+                    <Grid CornerRadius="8">
                         <Image
                             x:Name="MiniAudioArt"
                             Stretch="UniformToFill"
@@ -904,7 +1130,7 @@
                         <TextBlock
                             x:Name="MiniArtistTitle"
                             Text="Artist Name"
-                            FontSize="10"
+                            FontSize="12"
                             Foreground="#B3FFFFFF"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
@@ -916,10 +1142,10 @@
                         <Button
                             x:Name="MiniVolumeButton"
                             Click="OnMiniVolumeClick"
-                            Width="30"
-                            Height="30"
+                            Width="32"
+                            Height="32"
                             Padding="0"
-                            CornerRadius="6"
+                            CornerRadius="4"
                             Style="{StaticResource TransportIconButtonStyle}"
                             ToolTipService.ToolTip="Mute / Unmute"
                             helpers:SpringAnimationHelper.EnableHoverSpring="True"
@@ -935,10 +1161,10 @@
                         <!-- Expand / Exit PiP Button -->
                         <Button
                             Click="OnMiniExitPipClick"
-                            Width="30"
-                            Height="30"
+                            Width="32"
+                            Height="32"
                             Padding="0"
-                            CornerRadius="6"
+                            CornerRadius="4"
                             Style="{StaticResource TransportIconButtonStyle}"
                             ToolTipService.ToolTip="Expand to window"
                             helpers:SpringAnimationHelper.EnableHoverSpring="True"
@@ -959,7 +1185,7 @@
                         Background="#80121216"
                         BorderBrush="#35FFFFFF"
                         BorderThickness="1"
-                        Padding="10,6"
+                        Padding="12,8"
                         Translation="0,0,16">
                         <Border.Shadow>
                             <ThemeShadow />
@@ -972,15 +1198,15 @@
                             <!-- Previous Button -->
                             <Button
                                 Click="OnMiniPreviousClick"
-                                Width="34"
-                                Height="34"
+                                Width="32"
+                                Height="32"
                                 Padding="0"
-                                CornerRadius="6"
+                                CornerRadius="4"
                                 Style="{StaticResource TransportIconButtonStyle}"
                                 ToolTipService.ToolTip="Previous"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" Foreground="White" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" />
                             </Button>
 
                             <!-- Play/Pause Button (Exact button used in Media Player) -->
@@ -1005,7 +1231,6 @@
                                         x:Name="MiniPlayPauseIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         FontSize="16"
-                                        Foreground="White"
                                         Glyph="&#xE768;"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
@@ -1016,15 +1241,15 @@
                             <!-- Next Button -->
                             <Button
                                 Click="OnMiniNextClick"
-                                Width="34"
-                                Height="34"
+                                Width="32"
+                                Height="32"
                                 Padding="0"
-                                CornerRadius="6"
+                                CornerRadius="4"
                                 Style="{StaticResource TransportIconButtonStyle}"
                                 ToolTipService.ToolTip="Next"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" Foreground="White" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" />
                             </Button>
                         </StackPanel>
                     </Border>
@@ -1065,18 +1290,18 @@
                     </Slider>
 
                     <!-- Timestamp row -->
-                    <Grid Grid.Row="1" Margin="0,2,0,0">
+                    <Grid Grid.Row="1" Margin="0,4,0,0">
                         <TextBlock
                             x:Name="MiniPositionText"
                             Text="00:00"
-                            FontSize="10"
+                            FontSize="12"
                             FontWeight="Medium"
                             Foreground="#B3FFFFFF"
                             HorizontalAlignment="Left" />
                         <TextBlock
                             x:Name="MiniDurationText"
                             Text="00:00"
-                            FontSize="10"
+                            FontSize="12"
                             FontWeight="Medium"
                             Foreground="#B3FFFFFF"
                             HorizontalAlignment="Right" />
@@ -1128,7 +1353,7 @@
                     </Grid>
 
                     <!-- Text Branding -->
-                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
                         <TextBlock
                             Text="Lumière is Locked"
                             FontSize="22"
@@ -1137,7 +1362,7 @@
                             Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         <TextBlock
                             Text="Use Windows Hello face, fingerprint, or your Windows PIN to unlock."
-                            FontSize="13"
+                            FontSize="14"
                             TextAlignment="Center"
                             TextWrapping="Wrap"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -1154,13 +1379,13 @@
                         Visibility="Collapsed" />
 
                     <!-- Action Buttons -->
-                    <StackPanel Spacing="10" HorizontalAlignment="Stretch" Margin="0,8,0,0">
+                    <StackPanel Spacing="8" HorizontalAlignment="Stretch" Margin="0,8,0,0">
                         <Button
                             x:Name="AppLockUnlockButton"
                             Content="Unlock with Windows Hello"
                             Style="{StaticResource AccentButtonStyle}"
                             HorizontalAlignment="Stretch"
-                            Height="38"
+                            Height="40"
                             CornerRadius="8"
                             helpers:SpringAnimationHelper.EnableHoverSpring="True"
                             helpers:SpringAnimationHelper.HoverScale="1.03"

@@ -31,6 +31,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // ── Audio ──────────────────────────────────────────────────────
     [ObservableProperty] public partial EqualizerPreset SelectedEqualizer { get; set; }
     [ObservableProperty] public partial double DefaultVolume { get; set; }
+    [ObservableProperty] public partial bool EnableSoundEffects { get; set; }
 
     // ── Video ──────────────────────────────────────────────────────
     [ObservableProperty] public partial AspectRatioOption DefaultAspectRatio { get; set; }
@@ -472,6 +473,18 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Current.DefaultVolume = value;
         _settingsService.Save();
         OnPropertyChanged(nameof(DefaultVolumeText));
+    }
+
+    partial void OnEnableSoundEffectsChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.EnableSoundEffects = value;
+        _settingsService.Save();
+        try
+        {
+            Microsoft.UI.Xaml.ElementSoundPlayer.State = value ? Microsoft.UI.Xaml.ElementSoundPlayerState.On : Microsoft.UI.Xaml.ElementSoundPlayerState.Off;
+        }
+        catch { }
     }
 
     // Video
@@ -934,6 +947,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         SelectedEqualizer = c.Equalizer;
         DefaultVolume = c.DefaultVolume;
+        EnableSoundEffects = c.EnableSoundEffects;
 
         DefaultAspectRatio = c.DefaultAspectRatio;
         EnableHoverVideoPreview = c.EnableHoverVideoPreview;

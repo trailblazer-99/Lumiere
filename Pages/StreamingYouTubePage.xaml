@@ -83,7 +83,6 @@
                     <FontIcon
                         Glyph="&#xE783;"
                         FontSize="24"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />
                 </Border>

@@ -23,9 +23,50 @@ namespace LumiereMediaPlayer.Services.Streaming
 
         private static string? _cachedRegion;
 
+        public static string GetDefaultDetectedRegion()
+        {
+            try
+            {
+                var saved = LumiereMediaPlayer.AppServices.Settings?.Current?.PreferredStreamingRegion;
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _cachedRegion = saved.ToUpperInvariant();
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(_cachedRegion))
+                return _cachedRegion;
+
+            try
+            {
+                var sysRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToUpperInvariant();
+                if (sysRegion is "IN" or "US" or "GB" or "CA" or "AU")
+                {
+                    _cachedRegion = sysRegion;
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            return "US";
+        }
+
         public static async Task<string> GetCurrentRegionAsync()
         {
-            if (!string.IsNullOrEmpty(_cachedRegion))
+            try
+            {
+                var saved = LumiereMediaPlayer.AppServices.Settings?.Current?.PreferredStreamingRegion;
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _cachedRegion = saved.ToUpperInvariant();
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(_cachedRegion) && _cachedRegion != "US")
                 return _cachedRegion;
 
             string detected = "";
@@ -56,7 +97,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 }
             }
 
-            if (detected == "IN" || detected == "US" || detected == "GB")
+            if (detected is "IN" or "US" or "GB" or "CA" or "AU")
             {
                 _cachedRegion = detected;
             }
@@ -72,9 +113,11 @@ namespace LumiereMediaPlayer.Services.Streaming
         {
             return new List<RegionItem>
             {
-                new() { Code = "IN", Name = "India" },
                 new() { Code = "US", Name = "United States" },
-                new() { Code = "GB", Name = "United Kingdom" }
+                new() { Code = "GB", Name = "United Kingdom" },
+                new() { Code = "IN", Name = "India" },
+                new() { Code = "CA", Name = "Canada" },
+                new() { Code = "AU", Name = "Australia" }
             };
         }
     }

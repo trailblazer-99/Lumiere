@@ -461,14 +461,14 @@ jobs:
             throw "The signing certificate has expired. Renew it before publishing a release."
           }
 
-          # This is a self-signed sideload release, so an RFC 3161 timestamp is
-          # optional. Sign locally without /tr to keep the build independent of
-          # external timestamp services and their network timeouts.
-          Write-Output "Signing bundle without an RFC 3161 timestamp: $bundlePath"
+          # Timestamp the signature with an RFC 3161 server so the bundle
+          # remains trusted even after the signing certificate expires and so
+          # Windows App Installer accepts it during differential update flows.
+          Write-Output "Signing bundle with RFC 3161 timestamp: $bundlePath"
           Invoke-ProcessWithTimeout -FilePath $signtool -ArgumentList @(
-            "sign", "/fd", "SHA256", "/f", $pfxPath, "/p", $env:LUMIERE_SIGNING_PFX_PASSWORD, $bundlePath
+            "sign", "/fd", "SHA256", "/f", $pfxPath, "/p", $env:LUMIERE_SIGNING_PFX_PASSWORD, "/tr", "http://timestamp.digicert.com", "/td", "SHA256", $bundlePath
           ) -TimeoutSeconds 120
-          Write-Output "Bundle signed successfully (no timestamp)."
+          Write-Output "Bundle signed and timestamped successfully."
 
           # GitHub-hosted runners do not trust the self-signed release
           # certificate. Authenticode policy verification requires a trusted
@@ -612,7 +612,7 @@ jobs:
         $xml += "`n" + '<AppInstaller Uri="https://' + $owner + '.github.io/' + $repoName + '/LumiereMediaPlayer.appinstaller" Version="' + $packageVersion + '" xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">'
         $xml += "`n" + '  <MainBundle Name="' + $packageIdentityName + '" Version="' + $packageVersion + '" Publisher="' + $packagePublisher + '" Uri="' + $releaseDownloadUrl + '" />'
         $xml += "`n" + '  <UpdateSettings>'
-        $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false" />'
+        $xml += "`n" + '    <OnLaunch HoursBetweenUpdateChecks="24" ShowPrompt="true" UpdateBlocksActivation="false" />'
         $xml += "`n" + '  </UpdateSettings>'
         $xml += "`n" + '</AppInstaller>'
         

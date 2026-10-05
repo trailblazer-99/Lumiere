@@ -198,6 +198,8 @@ public static class ThemeHelper
             if (forceThemeRefresh)
             {
                 RefreshThemeBindings();
+                ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, GetEffectiveElementTheme());
+                App.MainWindowInstance?.RefreshFlyoutTheming();
             }
         }
         catch (Exception ex)
@@ -210,6 +212,7 @@ public static class ThemeHelper
     {
         void ApplyToDict(ResourceDictionary dict)
         {
+            if (dict == null || dict.Source != null) return;
             // Colors
             dict["SystemAccentColor"] = palette.Default;
             dict["SystemAccentColorLight1"] = palette.Light1;
@@ -272,7 +275,7 @@ public static class ThemeHelper
             SetOrCreateBrush(dict, "RadioButtonBackgroundSelected", palette.Default);
             SetOrCreateBrush(dict, "RadioButtonBorderBrushSelected", palette.Default);
 
-            SetOrCreateBrush(dict, "NavigationViewSelectionIndicatorForeground", palette.Default);
+            SetOrCreateBrush(dict, "NavigationViewSelectionIndicatorForeground", Microsoft.UI.Colors.Transparent);
             SetOrCreateBrush(dict, "NavigationViewItemForegroundSelected", palette.Default);
             SetOrCreateBrush(dict, "NavigationViewItemForegroundSelectedPointerOver", palette.Light1);
 
@@ -286,8 +289,21 @@ public static class ThemeHelper
             SetOrCreateBrush(dict, "TextOnAccentFillColorPrimaryBrush", White);
             SetOrCreateBrush(dict, "AccentTextFillColorPrimaryBrush", palette.Default);
 
+            SetOrCreateBrush(dict, "ToggleButtonBackgroundChecked", palette.Default);
+            SetOrCreateBrush(dict, "ToggleButtonBackgroundCheckedPointerOver", palette.Light1);
+            SetOrCreateBrush(dict, "ToggleButtonBackgroundCheckedPressed", palette.Dark1);
+            SetOrCreateBrush(dict, "ToggleButtonForegroundChecked", White);
+            SetOrCreateBrush(dict, "ToggleButtonForegroundCheckedPointerOver", White);
+            SetOrCreateBrush(dict, "ToggleButtonForegroundCheckedPressed", White);
+            SetOrCreateBrush(dict, "ToggleButtonBorderBrushChecked", palette.Light1);
+            SetOrCreateBrush(dict, "ToggleButtonBorderBrushCheckedPointerOver", palette.Light2);
+            SetOrCreateBrush(dict, "ToggleButtonBorderBrushCheckedPressed", palette.Default);
+
             SetOrCreateBrush(dict, "ListViewItemSelectionIndicatorFill", palette.Default);
             SetOrCreateBrush(dict, "TreeViewItemSelectionIndicatorFill", palette.Default);
+            SetOrCreateBrush(dict, "ComboBoxItemSelectionIndicatorFill", palette.Default);
+            SetOrCreateBrush(dict, "ComboBoxItemPillFill", palette.Default);
+            SetOrCreateBrush(dict, "ComboBoxItemPillFillSelected", palette.Default);
 
             SetOrCreateBrush(dict, "TextControlSelectionHighlightBrush", palette.Default);
 
@@ -637,53 +653,26 @@ public static class ThemeHelper
             SetScopedBrush("ScrollBarBorderBrushPointerOver", Transparent, themeKey);
             SetScopedBrush("ScrollBarBorderBrushDisabled", Transparent, themeKey);
 
-            Color flyoutBg = backdrop switch
-            {
-                AppThemeBackdrop.Solid => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38),
-                AppThemeBackdrop.MicaAlt => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(250, 252, 252, 254)
-                    : Microsoft.UI.ColorHelper.FromArgb(250, 36, 36, 42),
-                AppThemeBackdrop.Mica => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(250, 250, 250, 252)
-                    : Microsoft.UI.ColorHelper.FromArgb(250, 32, 32, 38),
-                AppThemeBackdrop.Acrylic => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(228, 255, 255, 255)
-                    : Microsoft.UI.ColorHelper.FromArgb(208, 30, 30, 36),
-                _ => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(250, 252, 252, 254)
-                    : Microsoft.UI.ColorHelper.FromArgb(250, 36, 36, 42)
-            };
+            var accentPalette = GetAccentPalette(AppServices.Settings.Current.AccentColor);
 
-            Color flyoutStroke = backdrop switch
-            {
-                AppThemeBackdrop.Solid => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58),
-                AppThemeBackdrop.Acrylic => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(36, 0, 0, 0)
-                    : Microsoft.UI.ColorHelper.FromArgb(44, 255, 255, 255),
-                AppThemeBackdrop.MicaAlt => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(32, 0, 0, 0)
-                    : Microsoft.UI.ColorHelper.FromArgb(38, 255, 255, 255),
-                _ => isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0)
-                    : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255)
-            };
+            // Generate backdrop-tailored flyout background and border brushes
+            Func<object> getFlyoutBg = () => GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+            Func<object> getFlyoutStroke = () => GetFlyoutBorderBrush(backdrop, effectiveTheme);
 
-            SetScopedBrush("FlyoutPresenterBackground", flyoutBg, themeKey);
-            SetScopedBrush("MenuFlyoutPresenterBackground", flyoutBg, themeKey);
-            SetScopedBrush("VolumeFlyoutPresenterBackground", flyoutBg, themeKey);
-            SetScopedBrush("FlyoutPresenterWindowBackground", flyoutBg, themeKey);
+            SetScopedResource("FlyoutPresenterBackground", getFlyoutBg, themeKey);
+            SetScopedResource("MenuFlyoutPresenterBackground", getFlyoutBg, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBackground", getFlyoutBg, themeKey);
+            SetScopedResource("ComboBoxDropDownBackground", getFlyoutBg, themeKey);
+            SetScopedResource("AutoSuggestBoxSuggestionsListBackground", getFlyoutBg, themeKey);
 
-            SetScopedBrush("SurfaceStrokeColorFlyoutBrush", flyoutStroke, themeKey);
-            SetScopedBrush("FlyoutBorderThemeBrush", flyoutStroke, themeKey);
-            SetScopedBrush("VolumeFlyoutPresenterBorderBrush", flyoutStroke, themeKey);
-
-            Color dropBg = flyoutBg;
-            SetScopedBrush("ComboBoxDropDownBackground", dropBg, themeKey);
-            SetScopedBrush("AutoSuggestBoxSuggestionsListBackground", dropBg, themeKey);
+            SetScopedResource("FlyoutPresenterWindowBackground", () => new SolidColorBrush(Transparent), themeKey);
+            SetScopedResource("SurfaceStrokeColorFlyoutBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("FlyoutBorderThemeBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("FlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("MenuFlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("ComboBoxDropDownBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", getFlyoutStroke, themeKey);
 
             Color ribbonBg = backdrop switch
             {
@@ -696,10 +685,13 @@ public static class ThemeHelper
             };
             SetScopedBrush("SelectionRibbonBackground", ribbonBg, themeKey);
 
-            var accentPalette = GetAccentPalette(AppServices.Settings.Current.AccentColor);
             ApplyTextControlFocusedBrushes(accentPalette);
 
             RefreshThemeBindings();
+            App.MainWindowInstance?.UpdateNavigationPaneTheming();
+            FlyoutHelper.RefreshAllFlyouts();
+            ComboBoxHelper.RefreshAllComboBoxes();
+            MediaFlyoutHelper.RefreshActiveDialog();
         }
         catch (Exception ex)
         {
@@ -709,142 +701,176 @@ public static class ThemeHelper
 
     private static void SetScopedBrush(string key, Color color, string themeKey)
     {
-        // 1. Application-level resources and theme dictionaries
+        var visited = new System.Collections.Generic.HashSet<ResourceDictionary>();
+
+        void ApplyToDictionary(ResourceDictionary dict)
+        {
+            if (dict == null || dict.Source != null || !visited.Add(dict)) return;
+            try
+            {
+                SetOrCreateBrush(dict, key, color);
+
+                if (dict.ThemeDictionaries.TryGetValue(themeKey, out var themeObj) && themeObj is ResourceDictionary themeDict && visited.Add(themeDict))
+                {
+                    if (themeDict.Source == null)
+                        SetOrCreateBrush(themeDict, key, color);
+                }
+                if (dict.ThemeDictionaries.TryGetValue("Default", out var defObj) && defObj is ResourceDictionary defDict && visited.Add(defDict))
+                {
+                    if (defDict.Source == null)
+                        SetOrCreateBrush(defDict, key, color);
+                }
+
+                foreach (var merged in dict.MergedDictionaries)
+                {
+                    ApplyToDictionary(merged);
+                }
+            }
+            catch { }
+        }
+
         try
         {
-            SetOrCreateBrush(Application.Current.Resources, key, color);
-
-            if (!Application.Current.Resources.ThemeDictionaries.TryGetValue(themeKey, out var appThemeObj) || appThemeObj is not ResourceDictionary appThemeDict)
-            {
-                appThemeDict = new ResourceDictionary();
-                Application.Current.Resources.ThemeDictionaries[themeKey] = appThemeDict;
-            }
-            SetOrCreateBrush(appThemeDict, key, color);
-
-            if (Application.Current.Resources.ThemeDictionaries.TryGetValue("Default", out var defThemeObj) && defThemeObj is ResourceDictionary defThemeDict)
-            {
-                SetOrCreateBrush(defThemeDict, key, color);
-            }
+            if (Application.Current?.Resources != null)
+                ApplyToDictionary(Application.Current.Resources);
         }
         catch { }
 
-        // 2. MainWindow root resources and theme dictionaries
         try
         {
             if (App.MainWindowContent != null)
-            {
-                SetOrCreateBrush(App.MainWindowContent.Resources, key, color);
-
-                if (!App.MainWindowContent.Resources.ThemeDictionaries.TryGetValue(themeKey, out var winThemeObj) || winThemeObj is not ResourceDictionary winThemeDict)
-                {
-                    winThemeDict = new ResourceDictionary();
-                    App.MainWindowContent.Resources.ThemeDictionaries[themeKey] = winThemeDict;
-                }
-                SetOrCreateBrush(winThemeDict, key, color);
-
-                if (App.MainWindowContent.Resources.ThemeDictionaries.TryGetValue("Default", out var winDefThemeObj) && winDefThemeObj is ResourceDictionary winDefThemeDict)
-                {
-                    SetOrCreateBrush(winDefThemeDict, key, color);
-                }
-            }
+                ApplyToDictionary(App.MainWindowContent.Resources);
         }
         catch { }
 
-        // 3. Active hosted Page in ContentFrame (e.g. SettingsPage, VideoPage)
         try
         {
             if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement activePage)
-            {
-                SetOrCreateBrush(activePage.Resources, key, color);
-
-                if (!activePage.Resources.ThemeDictionaries.TryGetValue(themeKey, out var pageThemeObj) || pageThemeObj is not ResourceDictionary pageThemeDict)
-                {
-                    pageThemeDict = new ResourceDictionary();
-                    activePage.Resources.ThemeDictionaries[themeKey] = pageThemeDict;
-                }
-                SetOrCreateBrush(pageThemeDict, key, color);
-
-                if (activePage.Resources.ThemeDictionaries.TryGetValue("Default", out var pageDefThemeObj) && pageDefThemeObj is ResourceDictionary pageDefThemeDict)
-                {
-                    SetOrCreateBrush(pageDefThemeDict, key, color);
-                }
-            }
+                ApplyToDictionary(activePage.Resources);
         }
         catch { }
     }
 
     private static void SetOrCreateBrush(ResourceDictionary dictionary, string key, Color color)
     {
-        if (dictionary.TryGetValue(key, out var res) && res is SolidColorBrush scb)
+        if (dictionary.Source != null) return;
+        try
         {
-            scb.Color = color;
-        }
-        else
-        {
-            dictionary[key] = new SolidColorBrush(color);
-        }
-    }
-
-    private static void SetScopedAcrylicBrush(string key, Color tintColor, double tintOpacity, double tintLuminosity, Color fallbackColor, string themeKey)
-    {
-        void Apply(ResourceDictionary dict)
-        {
-            if (dict.TryGetValue(key, out var res) && res is Microsoft.UI.Xaml.Media.AcrylicBrush ab)
+            if (dictionary.TryGetValue(key, out var res) && res is SolidColorBrush scb)
             {
-                ab.AlwaysUseFallback = false;
-                ab.TintColor = tintColor;
-                ab.TintOpacity = tintOpacity;
-                ab.TintLuminosityOpacity = tintLuminosity;
-                ab.FallbackColor = fallbackColor;
+                scb.Color = color;
             }
             else
             {
-                dict[key] = new Microsoft.UI.Xaml.Media.AcrylicBrush
-                {
-                    AlwaysUseFallback = false,
-                    TintColor = tintColor,
-                    TintOpacity = tintOpacity,
-                    TintLuminosityOpacity = tintLuminosity,
-                    FallbackColor = fallbackColor
-                };
+                dictionary[key] = new SolidColorBrush(color);
             }
+        }
+        catch { }
+    }
+
+    private static void SetScopedResource(string key, Func<object> resourceFactory, string themeKey)
+    {
+        var visited = new System.Collections.Generic.HashSet<ResourceDictionary>();
+
+        void ApplyToDictionary(ResourceDictionary dict)
+        {
+            if (dict == null || dict.Source != null || !visited.Add(dict)) return;
+            try
+            {
+                void SetValue(ResourceDictionary target)
+                {
+                    if (target.Source != null) return;
+                    try
+                    {
+                        var val = resourceFactory();
+                        if (val is SolidColorBrush newScb)
+                        {
+                            if (target.TryGetValue(key, out var existing))
+                            {
+                                if (existing is SolidColorBrush existScb)
+                                {
+                                    existScb.Color = newScb.Color;
+                                }
+                                else if (existing is Microsoft.UI.Xaml.Media.AcrylicBrush existAcb)
+                                {
+                                    existAcb.TintColor = newScb.Color;
+                                    existAcb.FallbackColor = newScb.Color;
+                                    existAcb.TintOpacity = 1.0;
+                                    existAcb.TintLuminosityOpacity = 1.0;
+                                }
+                            }
+                            target[key] = val;
+                        }
+                        else if (val is Microsoft.UI.Xaml.Media.AcrylicBrush newAcb && target.TryGetValue(key, out var existingAc) && existingAc is Microsoft.UI.Xaml.Media.AcrylicBrush existAcb)
+                        {
+                            existAcb.TintColor = newAcb.TintColor;
+                            existAcb.TintOpacity = newAcb.TintOpacity;
+                            existAcb.TintLuminosityOpacity = newAcb.TintLuminosityOpacity;
+                            existAcb.FallbackColor = newAcb.FallbackColor;
+                            target[key] = existAcb;
+                        }
+                        else
+                        {
+                            target[key] = val;
+                        }
+                    }
+                    catch { }
+                }
+
+                SetValue(dict);
+
+                if (dict.ThemeDictionaries.TryGetValue(themeKey, out var themeObj) && themeObj is ResourceDictionary themeDict && visited.Add(themeDict))
+                {
+                    SetValue(themeDict);
+                }
+                if (dict.ThemeDictionaries.TryGetValue("Default", out var defObj) && defObj is ResourceDictionary defDict && visited.Add(defDict))
+                {
+                    SetValue(defDict);
+                }
+
+                foreach (var merged in dict.MergedDictionaries)
+                {
+                    ApplyToDictionary(merged);
+                }
+            }
+            catch { }
         }
 
         try
         {
-            Apply(Application.Current.Resources);
-            if (Application.Current.Resources.ThemeDictionaries.TryGetValue(themeKey, out var appThemeObj) && appThemeObj is ResourceDictionary appThemeDict)
-                Apply(appThemeDict);
-            if (Application.Current.Resources.ThemeDictionaries.TryGetValue("Default", out var defThemeObj) && defThemeObj is ResourceDictionary defThemeDict)
-                Apply(defThemeDict);
+            if (Application.Current?.Resources != null)
+                ApplyToDictionary(Application.Current.Resources);
         }
         catch { }
 
         try
         {
             if (App.MainWindowContent != null)
-            {
-                Apply(App.MainWindowContent.Resources);
-                if (App.MainWindowContent.Resources.ThemeDictionaries.TryGetValue(themeKey, out var winThemeObj) && winThemeObj is ResourceDictionary winThemeDict)
-                    Apply(winThemeDict);
-                if (App.MainWindowContent.Resources.ThemeDictionaries.TryGetValue("Default", out var winDefThemeObj) && winDefThemeObj is ResourceDictionary winDefThemeDict)
-                    Apply(winDefThemeDict);
-            }
+                ApplyToDictionary(App.MainWindowContent.Resources);
         }
         catch { }
 
         try
         {
             if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement activePage)
-            {
-                Apply(activePage.Resources);
-                if (activePage.Resources.ThemeDictionaries.TryGetValue(themeKey, out var pageThemeObj) && pageThemeObj is ResourceDictionary pageThemeDict)
-                    Apply(pageThemeDict);
-                if (activePage.Resources.ThemeDictionaries.TryGetValue("Default", out var pageDefThemeObj) && pageDefThemeObj is ResourceDictionary pageDefThemeDict)
-                    Apply(pageDefThemeDict);
-            }
+                ApplyToDictionary(activePage.Resources);
         }
         catch { }
+    }
+
+    private static void SetScopedResource(string key, object resource, string themeKey) =>
+        SetScopedResource(key, () => resource, themeKey);
+
+    private static void SetScopedAcrylicBrush(string key, Color tintColor, double tintOpacity, double tintLuminosity, Color fallbackColor, string themeKey)
+    {
+        SetScopedResource(key, () => new Microsoft.UI.Xaml.Media.AcrylicBrush
+        {
+            AlwaysUseFallback = false,
+            TintColor = tintColor,
+            TintOpacity = tintOpacity,
+            TintLuminosityOpacity = tintLuminosity,
+            FallbackColor = fallbackColor
+        }, themeKey);
     }
 
     public static LinearGradientBrush CreateTextControlElevationBorderFocusedBrush(Color accentColor, Color strokeColor)
@@ -877,6 +903,7 @@ public static class ThemeHelper
 
         void ApplyToDict(ResourceDictionary dict, LinearGradientBrush brush)
         {
+            if (dict == null || dict.Source != null) return;
             dict["TextControlElevationBorderFocusedBrush"] = brush;
             dict["TextControlBorderBrushFocused"] = brush;
             dict["TextControlSelectionHighlightColor"] = palette.Default;
@@ -1140,7 +1167,7 @@ public static class ThemeHelper
         }
     }
 
-    private static Color Mix(Color from, Color to, double amount)
+    public static Color Mix(Color from, Color to, double amount)
     {
         static byte Blend(byte a, byte b, double amount) =>
             (byte)Math.Clamp(Math.Round(a + ((b - a) * amount)), byte.MinValue, byte.MaxValue);
@@ -1217,16 +1244,14 @@ public static class ThemeHelper
         {
             AppThemeBackdrop.Mica => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
             AppThemeBackdrop.MicaAlt => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt },
-            AppThemeBackdrop.Acrylic => new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop(),
+            AppThemeBackdrop.Acrylic => new CustomAcrylicBackdrop(),
             AppThemeBackdrop.Solid => null,
             _ => new Microsoft.UI.Xaml.Media.MicaBackdrop()
         };
     }
 
-    public static SystemBackdrop? CreateSystemBackdropForFlyout()
-    {
-        return CreateSystemBackdrop(AppServices.Settings.Current.BackdropType);
-    }
+    public static SystemBackdrop? CreateSystemBackdropForFlyout() =>
+        CreateSystemBackdrop(AppServices.Settings.Current.BackdropType);
 
     public static SolidColorBrush GetFlyoutSolidBackgroundBrush()
     {
@@ -1234,35 +1259,81 @@ public static class ThemeHelper
         bool isLight = effectiveTheme == ElementTheme.Light ||
             (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
         Color solidBg = isLight
-            ? Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243)
-            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+            ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
+            : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38);
         return new SolidColorBrush(solidBg);
     }
 
-    public static Brush GetFlyoutPresenterBackground(AppThemeBackdrop backdrop, ElementTheme effectiveTheme)
+    public static Brush GetFlyoutPresenterBackground(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool hasSystemBackdrop = false)
     {
         bool isLight = effectiveTheme == ElementTheme.Light ||
             (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
 
-        Color bg = backdrop switch
+        switch (backdrop)
         {
-            AppThemeBackdrop.Solid => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
-                : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38),
-            AppThemeBackdrop.MicaAlt => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(250, 252, 252, 254)
-                : Microsoft.UI.ColorHelper.FromArgb(250, 36, 36, 42),
-            AppThemeBackdrop.Mica => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(250, 250, 250, 252)
-                : Microsoft.UI.ColorHelper.FromArgb(250, 32, 32, 38),
-            AppThemeBackdrop.Acrylic => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(228, 255, 255, 255)
-                : Microsoft.UI.ColorHelper.FromArgb(208, 30, 30, 36),
-            _ => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(250, 252, 252, 254)
-                : Microsoft.UI.ColorHelper.FromArgb(250, 36, 36, 42)
-        };
-        return new SolidColorBrush(bg);
+            case AppThemeBackdrop.Solid:
+            {
+                // Solid: 100% Opaque SolidColorBrush - clean elevated card, zero translucency, crisp elevation
+                Color solidBg = isLight
+                    ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
+                    : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 40); // #222228
+                return new SolidColorBrush(solidBg);
+            }
+
+            case AppThemeBackdrop.Mica:
+            {
+                // Fluent 2 elevated translucent card complementing Mica backdrop
+                Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
+                Color micaTint = isLight
+                    ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
+                    : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
+
+                return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                {
+                    AlwaysUseFallback = false,
+                    TintColor = micaTint,
+                    TintOpacity = isLight ? 0.82 : 0.85,
+                    TintLuminosityOpacity = isLight ? 0.88 : 0.90,
+                    FallbackColor = micaTint
+                };
+            }
+
+            case AppThemeBackdrop.MicaAlt:
+            {
+                // Fluent 2 elevated onyx translucent card complementing Mica Alt backdrop
+                Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
+                Color micaAltTint = isLight
+                    ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
+                    : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
+
+                return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                {
+                    AlwaysUseFallback = false,
+                    TintColor = micaAltTint,
+                    TintOpacity = isLight ? 0.85 : 0.88,
+                    TintLuminosityOpacity = isLight ? 0.90 : 0.92,
+                    FallbackColor = micaAltTint
+                };
+            }
+
+            case AppThemeBackdrop.Acrylic:
+            default:
+            {
+                // Fluent 2 frosted-glass Acrylic material matching Windows 11 context menu reference
+                return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                {
+                    AlwaysUseFallback = false,
+                    TintColor = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 250)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 28),
+                    TintOpacity = isLight ? 0.65 : 0.70,
+                    TintLuminosityOpacity = isLight ? 0.75 : 0.85,
+                    FallbackColor = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 245)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34)
+                };
+            }
+        }
     }
 
     public static Brush GetFlyoutBorderBrush(AppThemeBackdrop backdrop, ElementTheme effectiveTheme)
@@ -1270,22 +1341,42 @@ public static class ThemeHelper
         bool isLight = effectiveTheme == ElementTheme.Light ||
             (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
 
-        Color border = backdrop switch
+        switch (backdrop)
         {
-            AppThemeBackdrop.Solid => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220)
-                : Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58),
-            AppThemeBackdrop.Acrylic => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(36, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(44, 255, 255, 255),
-            AppThemeBackdrop.MicaAlt => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(32, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(38, 255, 255, 255),
-            _ => isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255)
-        };
-        return new SolidColorBrush(border);
+            case AppThemeBackdrop.Solid:
+            {
+                // Crisp neutral solid border
+                Color solidBorder = isLight
+                    ? Microsoft.UI.ColorHelper.FromArgb(255, 224, 224, 230)
+                    : Microsoft.UI.ColorHelper.FromArgb(255, 61, 61, 68); // #3D3D44
+                return new SolidColorBrush(solidBorder);
+            }
+
+            case AppThemeBackdrop.Mica:
+            {
+                // Subtle luminous rim matching Windows 11 Mica elevation
+                byte alpha = (byte)(isLight ? 28 : 42); // #2AFFFFFF luminous rim in dark mode
+                Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
+            }
+
+            case AppThemeBackdrop.MicaAlt:
+            {
+                // Crisp onyx border matching Mica Alt elevated surface
+                byte alpha = (byte)(isLight ? 32 : 55); // #37FFFFFF crisp border in dark mode
+                Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
+            }
+
+            case AppThemeBackdrop.Acrylic:
+            default:
+            {
+                // Specular frosted glass rim simulating cut glass edge (matches Windows 11 context menu)
+                byte alpha = (byte)(isLight ? 48 : 72); // #48FFFFFF specular glass rim in dark mode
+                Color glassRim = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, glassRim.R, glassRim.G, glassRim.B));
+            }
+        }
     }
 
     public static void ApplySystemBackdropToFlyout(FlyoutBase? flyout)
@@ -1293,32 +1384,57 @@ public static class ThemeHelper
         if (flyout == null) return;
         try
         {
-            var backdropType = AppServices.Settings.Current.BackdropType;
-            if (backdropType == AppThemeBackdrop.Solid)
+            var backdrop = AppServices.Settings.Current.BackdropType;
+            if (backdrop == AppThemeBackdrop.Acrylic)
+            {
+                if (flyout.SystemBackdrop is not DesktopAcrylicBackdrop && flyout.SystemBackdrop is not CustomAcrylicBackdrop)
+                {
+                    flyout.SystemBackdrop = new DesktopAcrylicBackdrop();
+                }
+            }
+            else
             {
                 if (flyout.SystemBackdrop != null)
                 {
                     flyout.SystemBackdrop = null;
                 }
-                return;
-            }
-
-            bool alreadyMatches = backdropType switch
-            {
-                AppThemeBackdrop.Mica => flyout.SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop mb && mb.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base,
-                AppThemeBackdrop.MicaAlt => flyout.SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop mba && mba.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt,
-                AppThemeBackdrop.Acrylic => flyout.SystemBackdrop is Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop,
-                _ => false
-            };
-
-            if (!alreadyMatches)
-            {
-                flyout.SystemBackdrop = CreateSystemBackdrop(backdropType);
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[ApplySystemBackdropToFlyout] Handled: {ex.Message}");
+        }
+    }
+
+    public static void ApplySystemBackdropToPopup(Microsoft.UI.Xaml.Controls.Primitives.Popup? popup)
+    {
+        if (popup == null) return;
+        try
+        {
+            if (!popup.IsOpen)
+            {
+                popup.ShouldConstrainToRootBounds = false;
+            }
+
+            var backdrop = AppServices.Settings.Current.BackdropType;
+            if (backdrop == AppThemeBackdrop.Acrylic && !popup.ShouldConstrainToRootBounds)
+            {
+                if (popup.SystemBackdrop is not DesktopAcrylicBackdrop && popup.SystemBackdrop is not CustomAcrylicBackdrop)
+                {
+                    popup.SystemBackdrop = new DesktopAcrylicBackdrop();
+                }
+            }
+            else
+            {
+                if (popup.SystemBackdrop != null)
+                {
+                    popup.SystemBackdrop = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplySystemBackdropToPopup] Handled: {ex.Message}");
         }
     }
 
@@ -1331,6 +1447,8 @@ public static class ThemeHelper
             var theme = GetEffectiveElementTheme();
             var bgBrush = GetFlyoutPresenterBackground(backdrop, theme);
             var borderBrush = GetFlyoutBorderBrush(backdrop, theme);
+
+            ApplySystemBackdropToFlyout(flyout);
 
             if (flyout is Flyout f)
             {
@@ -1352,10 +1470,49 @@ public static class ThemeHelper
                         }
                     }
 
+                    if (presenter == null && (fe.XamlRoot ?? App.MainWindowContent?.XamlRoot) is XamlRoot xr)
+                    {
+                        try
+                        {
+                            var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                            foreach (var p in openPopups)
+                            {
+                                ApplySystemBackdropToPopup(p);
+                                if (p.Child is FlyoutPresenter fp)
+                                {
+                                    presenter = fp;
+                                    break;
+                                }
+                                else if (p.Child != null)
+                                {
+                                    var found = FindVisualChild<FlyoutPresenter>(p.Child);
+                                    if (found != null)
+                                    {
+                                        presenter = found;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
                     if (presenter != null)
                     {
+                        presenter.RequestedTheme = theme;
                         presenter.Background = bgBrush;
                         presenter.BorderBrush = borderBrush;
+                        presenter.CornerRadius = new CornerRadius(8);
+                        presenter.BorderThickness = new Thickness(1);
+                        try
+                        {
+                            if (presenter.Shadow == null)
+                            {
+                                presenter.Shadow = new ThemeShadow();
+                                presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+                            }
+                        }
+                        catch { }
                     }
                 }
             }
@@ -1382,10 +1539,50 @@ public static class ThemeHelper
                     }
                 }
 
+                var mxr = (mf.Items.FirstOrDefault() as FrameworkElement)?.XamlRoot ?? App.MainWindowContent?.XamlRoot;
+                if (presenter == null && mxr != null)
+                {
+                    try
+                    {
+                        var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(mxr);
+                        foreach (var p in openPopups)
+                        {
+                            ApplySystemBackdropToPopup(p);
+                            if (p.Child is MenuFlyoutPresenter mfp)
+                            {
+                                presenter = mfp;
+                                break;
+                            }
+                            else if (p.Child != null)
+                            {
+                                var found = FindVisualChild<MenuFlyoutPresenter>(p.Child);
+                                if (found != null)
+                                {
+                                    presenter = found;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
                 if (presenter != null)
                 {
+                    presenter.RequestedTheme = theme;
                     presenter.Background = bgBrush;
                     presenter.BorderBrush = borderBrush;
+                    presenter.CornerRadius = new CornerRadius(8);
+                    presenter.BorderThickness = new Thickness(1);
+                    try
+                    {
+                        if (presenter.Shadow == null)
+                        {
+                            presenter.Shadow = new ThemeShadow();
+                            presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+                        }
+                    }
+                    catch { }
                 }
             }
         }
@@ -1393,6 +1590,45 @@ public static class ThemeHelper
         {
             System.Diagnostics.Debug.WriteLine($"[ThemeHelper.UpdateFlyoutPresenterInstance] Error: {ex.Message}");
         }
+    }
+
+    public static void ApplyThemeToContentDialog(ContentDialog? dialog)
+    {
+        if (dialog == null) return;
+        try
+        {
+            var backdrop = AppServices.Settings.Current.BackdropType;
+            var theme = GetEffectiveElementTheme();
+
+            dialog.RequestedTheme = theme;
+            dialog.Background = GetFlyoutPresenterBackground(backdrop, theme);
+            dialog.BorderBrush = GetFlyoutBorderBrush(backdrop, theme);
+            dialog.BorderThickness = new Thickness(1);
+            dialog.CornerRadius = new CornerRadius(12);
+
+            if (dialog.Content is FrameworkElement fe)
+            {
+                fe.RequestedTheme = theme;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ThemeHelper.ApplyThemeToContentDialog] Error: {ex.Message}");
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            var desc = FindVisualChild<T>(child);
+            if (desc != null) return desc;
+        }
+        return null;
     }
 
     #endregion

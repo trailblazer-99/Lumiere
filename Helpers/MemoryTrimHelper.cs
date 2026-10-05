@@ -10,6 +10,9 @@ public static class MemoryTrimHelper
 {
     private static int _isTrimming;
 
+    [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+    private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, IntPtr dwMinimumWorkingSetSize, IntPtr dwMaximumWorkingSetSize);
+
     public static void TrimWorkingSet()
     {
         try
@@ -17,8 +20,14 @@ public static class MemoryTrimHelper
             // 1. Trim LRU bitmap caches in ImageBindHelper
             ImageBindHelper.TrimCaches();
 
-            // 2. Gentle non-blocking collection without hard page eviction
-            GC.Collect(1, GCCollectionMode.Optimized, blocking: false);
+            // 2. Full generational collection with finalizers to release COM RCWs and unmanaged buffers
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+
+            // 3. Reclaim unreferenced and clean physical memory pages from the process working set
+            using var process = Process.GetCurrentProcess();
+            SetProcessWorkingSetSize(process.Handle, (IntPtr)(-1), (IntPtr)(-1));
         }
         catch { }
     }

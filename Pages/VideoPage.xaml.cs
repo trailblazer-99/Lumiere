@@ -33,7 +33,7 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
-        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
         _closeFullscreenHandler = (_, _) => HideMetadataOverlay();
@@ -144,6 +144,7 @@ public sealed partial class VideoPage : Page
         SyncMediaPlayer(true);
         UpdateUiLuminance();
         UpdateEmptyState();
+        ComboBoxHelper.ApplyBackdropToVisualTree(this);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -405,6 +406,11 @@ public sealed partial class VideoPage : Page
                 HideMetadataOverlay();
                 AppServices.Playback.Stop();
                 AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
+                App.MainWindowInstance?.GlobalVideoPlayer?.SetMediaPlayer(null);
+                if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
+                if (App.MainWindowInstance?.FullscreenInternetMetadataPoster != null)
+                    App.MainWindowInstance.FullscreenInternetMetadataPoster.Source = null;
+                MemoryTrimHelper.TrimWorkingSet();
                 App.MainWindowInstance?.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
             };
             StreamingDetailsButton.Click += _streamingClickHandler;
@@ -422,6 +428,11 @@ public sealed partial class VideoPage : Page
                     HideMetadataOverlay();
                     AppServices.Playback.Stop();
                     AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
+                    mainWin.GlobalVideoPlayer?.SetMediaPlayer(null);
+                    if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
+                    if (mainWin.FullscreenInternetMetadataPoster != null)
+                        mainWin.FullscreenInternetMetadataPoster.Source = null;
+                    MemoryTrimHelper.TrimWorkingSet();
 
                     if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
                     {

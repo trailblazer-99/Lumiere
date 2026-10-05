@@ -44,13 +44,17 @@ namespace LumiereMediaPlayer.Services.Streaming
             return null;
         }
 
-        public async Task<List<WatchmodeTitle>> ListMoviesAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "")
+        public async Task<List<WatchmodeTitle>> ListMoviesAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "", string sortBy = "")
         {
+            var effectiveRegion = string.IsNullOrWhiteSpace(region) ? "US" : region;
+            var effectiveSourceTypes = string.IsNullOrWhiteSpace(sourceTypes) ? "sub,free,rent,buy" : sourceTypes;
+
             var query = $"types=movie&page={page}&limit={limit}";
-            if (!string.IsNullOrEmpty(region)) query += $"&region={region}";
-            if (!string.IsNullOrEmpty(sourceTypes)) query += $"&source_types={sourceTypes}";
+            if (!string.IsNullOrEmpty(effectiveRegion)) query += $"&region={effectiveRegion}";
+            if (!string.IsNullOrEmpty(effectiveSourceTypes)) query += $"&source_types={effectiveSourceTypes}";
             if (!string.IsNullOrEmpty(genres)) query += $"&genres={genres}";
             if (!string.IsNullOrEmpty(sourceIds)) query += $"&source_ids={sourceIds}";
+            if (!string.IsNullOrEmpty(sortBy)) query += $"&sort_by={sortBy}";
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";
@@ -59,14 +63,18 @@ namespace LumiereMediaPlayer.Services.Streaming
             return results ?? new List<WatchmodeTitle>();
         }
 
-        public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "", string networkIds = "")
+        public async Task<List<WatchmodeTitle>> ListTvShowsAsync(int page = 1, int limit = 20, string region = "", string sourceTypes = "", string genres = "", string sourceIds = "", string networkIds = "", string sortBy = "")
         {
+            var effectiveRegion = string.IsNullOrWhiteSpace(region) ? "US" : region;
+            var effectiveSourceTypes = string.IsNullOrWhiteSpace(sourceTypes) ? "sub,free,rent,buy" : sourceTypes;
+
             var query = $"types=tv_series&page={page}&limit={limit}";
-            if (!string.IsNullOrEmpty(region)) query += $"&region={region}";
-            if (!string.IsNullOrEmpty(sourceTypes)) query += $"&source_types={sourceTypes}";
+            if (!string.IsNullOrEmpty(effectiveRegion)) query += $"&region={effectiveRegion}";
+            if (!string.IsNullOrEmpty(effectiveSourceTypes)) query += $"&source_types={effectiveSourceTypes}";
             if (!string.IsNullOrEmpty(genres)) query += $"&genres={genres}";
             if (!string.IsNullOrEmpty(sourceIds)) query += $"&source_ids={sourceIds}";
             if (!string.IsNullOrEmpty(networkIds)) query += $"&network_ids={networkIds}";
+            if (!string.IsNullOrEmpty(sortBy)) query += $"&sort_by={sortBy}";
 
             var servicePath = $"watchmode/list-titles/?{query}";
             var url = $"{BaseUrl}/list-titles/?apiKey={ApiKey}&{query}";

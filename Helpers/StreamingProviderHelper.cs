@@ -59,7 +59,7 @@ namespace LumiereMediaPlayer.Helpers
                                                 clean.StartsWith(t, StringComparison.OrdinalIgnoreCase));
         }
 
-        public static int GetProviderPriority(WatchmodeSource source, WatchmodeDetails? details)
+        public static int GetProviderPriority(WatchmodeSource source, WatchmodeDetails? details, string? region = null)
         {
             if (source == null || string.IsNullOrEmpty(source.Name)) return 100;
             var lower = source.Name.ToLowerInvariant();
@@ -97,23 +97,7 @@ namespace LumiereMediaPlayer.Helpers
                 tierOffset = 80;
             }
 
-            int baseRank = 40;
-            if (lower.Contains("apple")) baseRank = 1;
-            else if (lower.Contains("netflix")) baseRank = 2;
-            else if (lower.Contains("prime") || lower.Contains("amazon")) baseRank = 3;
-            else if (lower.Contains("disney")) baseRank = 4;
-            else if (lower.Contains("max") || lower.Contains("hbo")) baseRank = 5;
-            else if (lower.Contains("hulu")) baseRank = 6;
-            else if (lower.Contains("paramount")) baseRank = 7;
-            else if (lower.Contains("peacock")) baseRank = 8;
-            else if (lower.Contains("youtube") || lower.Contains("google")) baseRank = 9;
-            else if (lower.Contains("vudu") || lower.Contains("fandango")) baseRank = 10;
-            else if (lower.Contains("tubi")) baseRank = 11;
-            else if (lower.Contains("pluto")) baseRank = 12;
-            else if (lower.Contains("roku")) baseRank = 13;
-            else if (lower.Contains("plex")) baseRank = 14;
-            else if (lower.Contains("crunchyroll")) baseRank = 15;
-
+            int baseRank = StreamingRegionPreferences.GetRegionalProviderPriority(source.Name, region);
             return tierOffset + baseRank;
         }
 
@@ -501,19 +485,19 @@ namespace LumiereMediaPlayer.Helpers
 
             grouped.SubscriptionSources = deduped
                 .Where(s => s.Type == "sub" || s.Type == "sub_addon" || s.Type == "tve" || s.Type == "subscription")
-                .OrderBy(s => GetProviderPriority(s, details))
+                .OrderBy(s => GetProviderPriority(s, details, regionKey))
                 .ThenBy(s => s.Name)
                 .ToList();
 
             grouped.FreeSources = deduped
                 .Where(s => s.Type == "free" || s.Type == "free_with_ads" || s.Type == "avod")
-                .OrderBy(s => GetProviderPriority(s, details))
+                .OrderBy(s => GetProviderPriority(s, details, regionKey))
                 .ThenBy(s => s.Name)
                 .ToList();
 
             grouped.PurchaseSources = deduped
                 .Where(s => s.Type == "purchase" || s.Type == "rent" || s.Type == "buy" || s.Type == "tvod")
-                .OrderBy(s => GetProviderPriority(s, details))
+                .OrderBy(s => GetProviderPriority(s, details, regionKey))
                 .ThenBy(s => s.Name)
                 .ToList();
 
@@ -522,7 +506,7 @@ namespace LumiereMediaPlayer.Helpers
                 grouped.SubscriptionSources.Concat(grouped.FreeSources).Concat(grouped.PurchaseSources));
             var remaining = deduped
                 .Where(s => !accounted.Contains(s))
-                .OrderBy(s => GetProviderPriority(s, details))
+                .OrderBy(s => GetProviderPriority(s, details, regionKey))
                 .ThenBy(s => s.Name)
                 .ToList();
 

@@ -8,12 +8,14 @@ namespace LumiereMediaPlayer.Helpers;
 
 /// <summary>
 /// A custom system backdrop that uses <see cref="DesktopAcrylicController"/> configured
-/// with <see cref="DesktopAcrylicKind.Thin"/> to provide genuine, translucent frosted-glass
+/// with <see cref="DesktopAcrylicKind.Base"/> to provide genuine, translucent frosted-glass
 /// acrylic transparency behind the window.
 /// </summary>
 public sealed class CustomAcrylicBackdrop : SystemBackdrop
 {
     private DesktopAcrylicController? _acrylicController;
+    private ICompositionSupportsSystemBackdrop? _target;
+    private XamlRoot? _xamlRoot;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop connectedTarget, XamlRoot xamlRoot)
     {
@@ -37,11 +39,13 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
 
                 _acrylicController = new DesktopAcrylicController
                 {
-                    Kind = DesktopAcrylicKind.Thin
+                    Kind = DesktopAcrylicKind.Base
                 };
 
                 // Per Windows App SDK lifecycle contract, target must be attached BEFORE configuration
                 _acrylicController.AddSystemBackdropTarget(connectedTarget);
+                _target = connectedTarget;
+                _xamlRoot = xamlRoot;
 
                 var config = GetDefaultSystemBackdropConfiguration(connectedTarget, xamlRoot);
                 if (config != null)
@@ -53,7 +57,7 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnTargetConnected] Handled: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnTargetConnected] Error: {ex.Message}");
         }
     }
 
@@ -76,7 +80,7 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnDefaultSystemBackdropConfigurationChanged] Handled: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnDefaultSystemBackdropConfigurationChanged] Error: {ex.Message}");
         }
     }
 
@@ -96,30 +100,33 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
                 isLight = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Light;
             }
 
-            _acrylicController.Kind = DesktopAcrylicKind.Thin;
+            _acrylicController.Kind = DesktopAcrylicKind.Base;
             if (isLight)
             {
-                _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 245, 245, 247);
+                _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 245, 245, 248);
                 _acrylicController.TintOpacity = 0.35f;
-                _acrylicController.LuminosityOpacity = 0.50f;
-                _acrylicController.FallbackColor = Windows.UI.Color.FromArgb(255, 243, 243, 243);
+                _acrylicController.LuminosityOpacity = 0.55f;
+                _acrylicController.FallbackColor = Windows.UI.Color.FromArgb(255, 240, 240, 244);
             }
             else
             {
-                _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 20, 20, 24);
+                _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 18, 18, 22);
                 _acrylicController.TintOpacity = 0.50f;
-                _acrylicController.LuminosityOpacity = 0.65f;
-                _acrylicController.FallbackColor = Windows.UI.Color.FromArgb(255, 32, 32, 32);
+                _acrylicController.LuminosityOpacity = 0.70f;
+                _acrylicController.FallbackColor = Windows.UI.Color.FromArgb(255, 24, 24, 28);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.UpdateControllerConfiguration] Handled: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.UpdateControllerConfiguration] Error: {ex.Message}");
         }
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop disconnectedTarget)
     {
+        _target = null;
+        _xamlRoot = null;
+
         try
         {
             if (_acrylicController != null)
@@ -144,7 +151,7 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnTargetDisconnected] Handled: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnTargetDisconnected] Error: {ex.Message}");
         }
 
         try
@@ -152,5 +159,32 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
             base.OnTargetDisconnected(disconnectedTarget);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Refreshes the acrylic controller's backdrop configuration and theme parameters.
+    /// </summary>
+    public void Refresh()
+    {
+        try
+        {
+            if (_acrylicController != null && _target != null)
+            {
+                var xr = _xamlRoot ?? App.MainWindowContent?.XamlRoot;
+                if (xr != null)
+                {
+                    var config = GetDefaultSystemBackdropConfiguration(_target, xr);
+                    if (config != null)
+                    {
+                        _acrylicController.SetSystemBackdropConfiguration(config);
+                        UpdateControllerConfiguration(config);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.Refresh] Error: {ex.Message}");
+        }
     }
 }

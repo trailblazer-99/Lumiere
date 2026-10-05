@@ -42,7 +42,7 @@
                 <VisualStateGroup x:Name="HeaderLayoutStates">
                     <VisualState x:Name="WideHeader">
                         <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="850" />
+                            <AdaptiveTrigger MinWindowWidth="641" />
                         </VisualState.StateTriggers>
                     </VisualState>
                     <VisualState x:Name="NarrowHeader">
@@ -92,19 +92,19 @@
                 
                 <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" Grid.Column="0" Grid.Row="0">
                     <Button Command="{x:Bind ViewModel.AddFolderCommand}" AutomationProperties.Name="Add Folder" ToolTipService.ToolTip="Add folder to library">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8B7;" FontSize="16" />
                             <TextBlock Text="Add Folder" />
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.AddFilesCommand}" AutomationProperties.Name="Add Files" ToolTipService.ToolTip="Add files to library">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8E5;" FontSize="16" />
                             <TextBlock Text="Add Files" />
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.RefreshCommand}" AutomationProperties.Name="Refresh" ToolTipService.ToolTip="Refresh library and update unavailable titles">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE72C;" FontSize="16" />
                             <TextBlock Text="Refresh" />
                         </StackPanel>
@@ -114,7 +114,7 @@
                             Style="{StaticResource AccentButtonStyle}"
                             AutomationProperties.Name="Play selected"
                             ToolTipService.ToolTip="Play selected track">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE768;" FontSize="16" />
                             <TextBlock Text="Play selected" />
                         </StackPanel>
@@ -143,13 +143,14 @@
                         Header="Sort By"
                         ItemsSource="{x:Bind ViewModel.SortOptions}"
                         SelectedItem="{x:Bind ViewModel.SelectedSort, Mode=TwoWay}"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center"
+                        helpers:ComboBoxHelper.FollowBackdrop="True" />
                     <ToggleButton x:Name="AiSearchToggle" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" AutomationProperties.Name="Toggle AI Semantic Search" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center">
-                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
                     </ToggleButton>
                     <Button x:Name="SaveAiPlaylistButton" Click="OnSaveAiPlaylistClick" AutomationProperties.Name="Save Playlist" ToolTipService.ToolTip="Save Search Results as AI Playlist" Height="32" Visibility="Collapsed" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontSize="12" Glyph="&#xE8F4;"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="16" Glyph="&#xE8F4;"/>
                             <TextBlock Text="Save Playlist" FontSize="12"/>
                         </StackPanel>
                     </Button>
@@ -262,7 +263,7 @@
                                     VerticalAlignment="Center">
                                     <Grid CornerRadius="4">
                                         <FontIcon
-                                            FontSize="12"
+                                            FontSize="16"
                                             Glyph="&#xE8D6;"
                                             Opacity="0.5"
                                             HorizontalAlignment="Center"
@@ -270,7 +271,7 @@
                                         <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 48), Mode=OneWay}" Stretch="UniformToFill" />
                                     </Grid>
                                 </Border>
-                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                     <TextBlock
                                         FontSize="14"
                                         Text="{x:Bind Title, Mode=OneWay}"
@@ -281,14 +282,14 @@
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="1"
                                         CornerRadius="4"
-                                        Padding="5,1"
+                                        Padding="8,4"
                                         VerticalAlignment="Center"
                                         ToolTipService.ToolTip="{x:Bind SourcePath, Mode=OneWay}">
-                                        <StackPanel Orientation="Horizontal" Spacing="3">
-                                            <FontIcon Glyph="&#xE8B7;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="16" VerticalAlignment="Center" />
                                             <TextBlock
                                                 Text="{x:Bind LocationRep, Mode=OneWay}"
-                                                FontSize="11"
+                                                FontSize="12"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 VerticalAlignment="Center" />
                                         </StackPanel>
@@ -319,17 +320,17 @@
                                 Grid.Column="5"
                                 Click="OnTrackMoreClick"
                                 Style="{StaticResource TransportIconButtonStyle}"
-                                Width="30"
-                                Height="30"
+                                Width="32"
+                                Height="32"
                                 Padding="0"
-                                CornerRadius="15"
+                                CornerRadius="16"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 AutomationProperties.Name="More options"
                                 ToolTipService.ToolTip="More options"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.15">
-                                <FontIcon Glyph="&#xE712;" FontSize="12" />
+                                <FontIcon Glyph="&#xE712;" FontSize="16" />
                             </Button>
                         </Grid>
                     </DataTemplate>
@@ -339,7 +340,7 @@
 
         <!-- Empty state when no music tracks -->
         <StackPanel x:Name="MusicEmptyState" Grid.Row="2" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Padding="24">
-            <FontIcon Glyph="&#xE8D6;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Opacity="0.6" />
+            <FontIcon Glyph="&#xE8D6;" FontSize="48" HorizontalAlignment="Center" Opacity="0.6" />
             <TextBlock Text="Your music library is empty" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
             <TextBlock Text="Add folders or files to start building your collection." FontSize="14" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">

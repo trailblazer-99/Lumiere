@@ -22,6 +22,21 @@ namespace LumiereMediaPlayer.Pages
             this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
             this.Unloaded += OnUnloaded;
+            this.Loaded += (s, e) =>
+            {
+                LumiereMediaPlayer.Helpers.ComboBoxHelper.ApplyBackdropToVisualTree(this);
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.SetupStackedAccordionButtons(new[]
+                {
+                    VerticalResetButton,
+                    VerticalSurpriseButton,
+                    VerticalRefreshButton
+                }, 50f, 1.08f);
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.SetupStackedAccordionButtons(new[]
+                {
+                    VerticalTopRatedButton,
+                    VerticalFreeButton
+                }, 50f, 1.08f);
+            };
             ViewModel.OnSurpriseMeRequested += OnSurpriseMePicked;
             TrendingHeroCarousel.Loaded += (s, e) => CollapseInternalFlipViewButtons(TrendingHeroCarousel);
         }
@@ -41,11 +56,11 @@ namespace LumiereMediaPlayer.Pages
             if (title == null) return;
             if (title.TmdbId.HasValue && (title.Id == 0 || title.Id == title.TmdbId.Value))
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{title.TmdbId.Value}", ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{title.TmdbId.Value}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
             else
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), (title.Id, ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), (title.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
         }
 
@@ -168,6 +183,10 @@ namespace LumiereMediaPlayer.Pages
             if (ViewModel == null) return;
             if (string.IsNullOrEmpty(ViewModel.ActiveSearchQuery)) _ = ViewModel.LoadMoviesAsync();
             else ViewModel.PerformSearchCommand.Execute(ViewModel.ActiveSearchQuery);
+            if (MainPivot?.SelectedItem is PivotItem pi && pi.Header?.ToString() == "Trending")
+            {
+                _ = LoadTrendingAsync();
+            }
         }
 
         private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
@@ -224,11 +243,11 @@ namespace LumiereMediaPlayer.Pages
 
                 if (title.TmdbId.HasValue && (title.Id == 0 || title.Id == title.TmdbId.Value))
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{title.TmdbId.Value}", ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{title.TmdbId.Value}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
                 else
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), (title.Id, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), (title.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
             }
         }
@@ -305,11 +324,26 @@ namespace LumiereMediaPlayer.Pages
                 }
                 if (TrendingGridView == null || TrendingHeroCarousel == null) return;
 
-                var popularMovies = await _tmdbService.GetPopularMoviesAsync(1);
+                string targetRegion = ViewModel?.SelectedRegion ?? "US";
+                var popularMovies = await _tmdbService.GetStreamablePopularMoviesAsync(1, targetRegion);
                 if (popularMovies == null || popularMovies.Count == 0) return;
 
-                var heroItems = popularMovies.Take(5).ToList();
-                var gridItems = popularMovies.Skip(5).ToList();
+                // Verify streaming provider availability in target region
+                var checkTasks = popularMovies.Select(async m =>
+                {
+                    try
+                    {
+                        var prov = await _tmdbService.GetProvidersAsync(m.Id, "movie", targetRegion);
+                        if (TmdbService.HasStreamingProviders(prov)) return m;
+                    }
+                    catch { }
+                    return null;
+                });
+                var verified = (await System.Threading.Tasks.Task.WhenAll(checkTasks)).Where(m => m != null).Select(m => m!).ToList();
+                var finalMovies = verified.Count >= 5 ? verified : popularMovies;
+
+                var heroItems = finalMovies.Take(5).ToList();
+                var gridItems = finalMovies.Skip(5).ToList();
 
                 TrendingHeroCarousel.ItemsSource = heroItems;
                 TrendingGridView.ItemsSource = gridItems;
@@ -399,7 +433,7 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tmdbItem.Id}", ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tmdbItem.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
         }
 
@@ -418,15 +452,15 @@ namespace LumiereMediaPlayer.Pages
             if (sender is FrameworkElement fe)
             {
                 if (fe.DataContext is WatchmodeTitle wm)
-                    Frame.Navigate(typeof(StreamingDetailsPage), (wm.Id, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), (wm.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 else if (fe.DataContext is TmdbMedia tm)
-                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tm.Id}", ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tm.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 else if (fe.DataContext is SavedStreamingItem saved)
                 {
                     if (saved.Id.StartsWith("tmdb_"))
-                        Frame.Navigate(typeof(StreamingDetailsPage), (saved.Id, ViewModel.SelectedRegion));
+                        Frame.Navigate(typeof(StreamingDetailsPage), (saved.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                     else if (int.TryParse(saved.Id, out int wid))
-                        Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion));
+                        Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
             }
         }
@@ -483,7 +517,7 @@ namespace LumiereMediaPlayer.Pages
                         Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
                     }
                 }
-                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tmdbItem.Id}", ViewModel.SelectedRegion));
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{tmdbItem.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
         }
 
@@ -501,11 +535,11 @@ namespace LumiereMediaPlayer.Pages
                 }
                 if (item.Id.StartsWith("tmdb_"))
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), (item.Id, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), (item.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
                 else if (int.TryParse(item.Id, out int watchmodeId))
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
             }
         }
@@ -565,8 +599,8 @@ namespace LumiereMediaPlayer.Pages
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
                     scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.05f, 1.05f, 1.0f), compositor.CreateCubicBezierEasingFunction(
-                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.2f, 1.0f)));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(120);
+                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.0f, 1.0f)));
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(167);
 
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);
@@ -593,23 +627,26 @@ namespace LumiereMediaPlayer.Pages
                     var compositor = visual.Compositor;
                     if (compositor == null) return;
 
+                    var exitEase = compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(1.0f, 0.0f), new System.Numerics.Vector2(1.0f, 1.0f));
+
                     var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
                     if (dropShadow != null)
                     {
                         var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-                        opacityAnim.InsertKeyFrame(1.0f, 0.0f);
-                        opacityAnim.Duration = TimeSpan.FromMilliseconds(100);
+                        opacityAnim.InsertKeyFrame(1.0f, 0.0f, exitEase);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(83);
                         dropShadow.StartAnimation("Opacity", opacityAnim);
 
                         var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 6, 12));
-                        offsetAnim.Duration = TimeSpan.FromMilliseconds(100);
+                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 12), exitEase);
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(83);
                         dropShadow.StartAnimation("Offset", offsetAnim);
                     }
 
                     var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
-                    scaleAnim.Duration = TimeSpan.FromMilliseconds(100);
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f), exitEase);
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(83);
 
                     visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
                     visual.StartAnimation("Scale", scaleAnim);

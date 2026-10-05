@@ -19,9 +19,9 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Default) -->
-                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
-                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
-                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA1E1E22" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA1E1E22" />
+                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
 
@@ -29,20 +29,8 @@
                     <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
 
                     <!-- Volume Flyout Dynamic Theming Brushes (Default/Dark) -->
-                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA1E1E22" />
                     <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
-
-                    <!-- Expander Fluent 2 Theme Brushes (Default) -->
-                    <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#0EFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#1CFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#08FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#0EFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderContentBackground" Color="#08FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#1AFFFFFF" />
 
                     <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
@@ -53,6 +41,18 @@
                     <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
                     <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
                     <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+                    <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+                    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+                    <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">0</Thickness>
+                    <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0</Thickness>
+                    <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="Transparent" />
+                    <x:Double x:Key="NavigationViewItemSelectionIndicatorWidth">0</x:Double>
+                    <x:Double x:Key="NavigationViewItemSelectionIndicatorHeight">0</x:Double>
 
                     <!-- ScrollBar Fluent 2 Neutral Brushes (Default/Dark) -->
                     <Color x:Key="ScrollBarThumbBackgroundColor">#8BFFFFFF</Color>
@@ -95,30 +95,18 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Light) -->
-                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FAFCFCFE" />
-                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FAFCFCFE" />
-                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FAFCFCFE" />
-                    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FAFCFCFE" />
-                    <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FAFCFCFE" />
+                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FAF8F8FC" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FAF8F8FC" />
+                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FAF8F8FC" />
+                    <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FAF8F8FC" />
 
                     <!-- Selection Ribbon Elevated Background (Light) -->
                     <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6F5F5FA" />
 
                     <!-- Volume Flyout Dynamic Theming Brushes (Light) -->
-                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FAFCFCFE" />
+                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FAF8F8FC" />
                     <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#18000000" />
-
-                    <!-- Expander Fluent 2 Theme Brushes (Light) -->
-                    <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#40FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#60FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#30FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#40FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#18000000" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#18000000" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#18000000" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#18000000" />
-                    <SolidColorBrush x:Key="ExpanderContentBackground" Color="#28FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#18000000" />
 
                     <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
@@ -129,6 +117,15 @@
                     <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
                     <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
                     <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+                    <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+                    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
+                    <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">1,0,0,0</Thickness>
+                    <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0,0,0,0</Thickness>
+                    <StaticResource x:Key="NavigationViewContentGridBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
 
                     <!-- ScrollBar Fluent 2 Neutral Brushes (Light) -->
                     <Color x:Key="ScrollBarThumbBackgroundColor">#72000000</Color>
@@ -171,9 +168,9 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Dark) -->
-                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
-                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
-                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+                    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA1E1E22" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA1E1E22" />
+                    <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
 
@@ -181,20 +178,8 @@
                     <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
 
                     <!-- Volume Flyout Dynamic Theming Brushes (Dark) -->
-                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+                    <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA1E1E22" />
                     <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
-
-                    <!-- Expander Fluent 2 Theme Brushes (Dark) -->
-                    <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#0EFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#1CFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#08FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBackgroundDisabled" Color="#0EFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderHeaderBorderBrushDisabled" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderContentBackground" Color="#08FFFFFF" />
-                    <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#1AFFFFFF" />
 
                     <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
@@ -205,6 +190,18 @@
                     <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
                     <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
                     <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
+
+                    <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+                    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+                    <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">0</Thickness>
+                    <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0</Thickness>
+                    <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="Transparent" />
+                    <x:Double x:Key="NavigationViewItemSelectionIndicatorWidth">0</x:Double>
+                    <x:Double x:Key="NavigationViewItemSelectionIndicatorHeight">0</x:Double>
 
                     <!-- ScrollBar Fluent 2 Neutral Brushes (Dark) -->
                     <Color x:Key="ScrollBarThumbBackgroundColor">#8BFFFFFF</Color>
@@ -282,6 +279,15 @@
                     <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
                     <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
 
+                    <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+                    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+                    <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+                    <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
+                    <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">1,0,0,0</Thickness>
+                    <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0,0,0,0</Thickness>
+                    <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
                     <!-- ScrollBar Fluent 2 Brushes (HighContrast) -->
                     <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="{ThemeResource SystemColorButtonTextColor}" />
                     <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{ThemeResource SystemColorButtonTextColor}" />
@@ -329,6 +335,18 @@
             <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
             <CornerRadius x:Key="SliderThumbCornerRadius">10</CornerRadius>
 
+            <!-- NavigationView Content straight edge (boundary of menu and pages) -->
+            <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="TopNavigationViewContentGridCornerRadius">0</CornerRadius>
+            <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+            <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">0</Thickness>
+            <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0</Thickness>
+            <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="Transparent" />
+            <x:Double x:Key="NavigationViewItemSelectionIndicatorWidth">0</x:Double>
+            <x:Double x:Key="NavigationViewItemSelectionIndicatorHeight">0</x:Double>
+
             <!-- Fallback ScrollBar Brushes -->
             <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#8BFFFFFF" />
             <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#8BFFFFFF" />
@@ -355,14 +373,14 @@
             <SolidColorBrush x:Key="SystemControlTransparentBrush" Color="Transparent" />
 
             <!-- Fallback Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes -->
-            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA24242A" />
-            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA24242A" />
-            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="#FA24242A" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
             <AcrylicBrush x:Key="AutoSuggestBoxSuggestionsListBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
 
             <!-- Fallback Volume Flyout Surface & Border Brushes -->
-            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA24242A" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FA1E1E22" />
             <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
 
             <!-- Fallback Selection Ribbon Elevated Background -->

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
@@ -362,8 +363,65 @@ public static class SpringAnimationHelper
 
     public static Brush GetAiUncheckedIconBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out var res) && res is Brush b)
+        if (Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var res) && res is Brush b)
             return b;
-        return new SolidColorBrush(Microsoft.UI.Colors.Gray);
+        return new SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+    }
+
+    /// <summary>
+    /// Configures a cascading accordion push-down ExpressionAnimation across a vertical stack of buttons.
+    /// When any button scales up on hover, all buttons beneath it dynamically translate downward
+    /// on the compositor thread relative to the scale and translation of the button above.
+    /// </summary>
+    /// <param name="buttons">The ordered vertical list of buttons (from top to bottom).</param>
+    /// <param name="step">The translation displacement multiplier (defaults to 50, matching the expression formula).</param>
+    /// <param name="hoverScale">Hover scale factor for spring animation (defaults to 1.08).</param>
+    public static void SetupStackedAccordionButtons(IReadOnlyList<FrameworkElement> buttons, float step = 50f, float hoverScale = 1.08f)
+    {
+        if (buttons == null || buttons.Count < 2) return;
+
+        try
+        {
+            var firstVisual = ElementCompositionPreview.GetElementVisual(buttons[0]);
+            var compositor = firstVisual?.Compositor;
+            if (compositor == null) return;
+
+            // 1. Enable translation and set up hover spring scaling on each button
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                var btn = buttons[i];
+                if (btn == null) continue;
+
+                ElementCompositionPreview.SetIsTranslationEnabled(btn, true);
+
+                SetHoverScale(btn, hoverScale);
+                SetEnableHoverSpring(btn, true);
+            }
+
+            // 2. Animate the translation of each button relative to the scale and translation of the button above
+            for (int i = 1; i < buttons.Count; i++)
+            {
+                var aboveBtn = buttons[i - 1];
+                var currentBtn = buttons[i];
+                if (aboveBtn == null || currentBtn == null) continue;
+
+                var aboveVisual = ElementCompositionPreview.GetElementVisual(aboveBtn);
+                var currentVisual = ElementCompositionPreview.GetElementVisual(currentBtn);
+                if (aboveVisual == null || currentVisual == null) continue;
+
+                var anim = compositor.CreateExpressionAnimation();
+                anim.Expression = $"(above.Scale.Y - 1) * {step:F0} + above.Translation.Y % ({step:F0} * index)";
+                anim.Target = "Translation.Y";
+
+                anim.SetExpressionReferenceParameter("above", aboveVisual);
+                anim.SetScalarParameter("index", (float)i);
+
+                currentVisual.StartAnimation("Translation.Y", anim);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SpringAnimationHelper] SetupStackedAccordionButtons failed: {ex.Message}");
+        }
     }
 }

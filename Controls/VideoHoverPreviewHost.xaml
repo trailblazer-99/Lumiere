@@ -30,12 +30,14 @@
             VerticalAlignment="Top"
             Width="320"
             Height="296"
-            CornerRadius="0"
+            CornerRadius="8"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="1"
             Translation="0,0,0"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
             PointerEntered="OnCardPointerEntered"
             PointerExited="OnCardPointerExited"
+            PointerPressed="OnCardPointerPressed"
             RightTapped="OnCardRightTapped">
             <Border.Shadow>
                 <ThemeShadow />
@@ -52,14 +54,14 @@
                 <Border
                     x:Name="MediaContainerBorder"
                     Grid.Row="0"
-                    CornerRadius="0"
+                    CornerRadius="7,7,0,0"
                     Background="#FF000000"
                     Tapped="OnMediaBannerTapped">
                     <Grid>
                         <!-- Previous Poster Image (for Cross-Fade Dissolve during Card Traversal) -->
                         <Border
                             x:Name="PreviousPosterBorder"
-                            CornerRadius="0"
+                            CornerRadius="7,7,0,0"
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Stretch"
                             Opacity="0">
@@ -73,7 +75,7 @@
                         <!-- High-Res Poster Image (Instant Placeholder with Native Rounded Corners) -->
                         <Border
                             x:Name="PreviewPosterBorder"
-                            CornerRadius="0"
+                            CornerRadius="7,7,0,0"
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Stretch">
                             <Border.Background>
@@ -86,7 +88,7 @@
                         <!-- Live Mini Video Player Element -->
                         <MediaPlayerElement
                             x:Name="PreviewVideoPlayer"
-                            CornerRadius="0"
+                            CornerRadius="7,7,0,0"
                             Stretch="Uniform"
                             AreTransportControlsEnabled="False"
                             AutoPlay="False"
@@ -99,7 +101,7 @@
                         <Border
                             VerticalAlignment="Top"
                             Height="48"
-                            CornerRadius="0"
+                            CornerRadius="7,7,0,0"
                             IsHitTestVisible="False">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -110,8 +112,8 @@
                         </Border>
 
                         <!-- Top Bar: Quality/HDR Badges -->
-                        <Grid VerticalAlignment="Top" Margin="10,10,10,0">
-                            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Grid VerticalAlignment="Top" Margin="12,12,12,0">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center">
                                 <!-- HDR Badge -->
                                 <Border
                                     x:Name="HdrBadgeBorder"
@@ -119,13 +121,13 @@
                                     BorderBrush="#40FFD700"
                                     BorderThickness="1"
                                     CornerRadius="4"
-                                    Padding="5,1"
+                                    Padding="8,4"
                                     Visibility="Collapsed">
                                     <TextBlock
                                         x:Name="HdrBadgeText"
                                         Text="HDR"
-                                        FontSize="10"
-                                        FontWeight="Bold"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
                                         Foreground="#FFD700" />
                                 </Border>
                             </StackPanel>
@@ -137,20 +139,21 @@
                             AutomationProperties.Name="Toggle mute"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Bottom"
-                            Margin="0,0,10,10"
-                            Width="30"
-                            Height="30"
+                            Margin="0,0,8,8"
+                            Width="32"
+                            Height="32"
                             Padding="0"
-                            CornerRadius="15"
+                            CornerRadius="16"
                             Background="{ThemeResource ControlFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1"
                             ToolTipService.ToolTip="Toggle mute"
-                            Click="OnMuteToggleClicked">
+                            Click="OnMuteToggleClicked"
+                            Tapped="OnMuteToggleButtonTapped">
                             <FontIcon
                                 x:Name="MuteIcon"
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="13"
+                                FontSize="16"
                                 Glyph="&#xE74F;"
                                 Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </Button>
@@ -174,8 +177,8 @@
                     Grid.Row="1"
                     Background="Transparent"
                     MinHeight="104"
-                    CornerRadius="0">
-                    <Grid Padding="12,6,12,6">
+                    CornerRadius="0,0,7,7">
+                    <Grid Padding="12,8,12,8">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -186,7 +189,7 @@
                         <TextBlock
                             x:Name="TitleText"
                             Grid.Row="0"
-                            FontSize="13"
+                            FontSize="14"
                             FontWeight="SemiBold"
                             MaxLines="1"
                             TextTrimming="CharacterEllipsis"
@@ -211,7 +214,7 @@
                                     <FontIcon
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         Glyph="&#xF5B0;"
-                                        FontSize="13"
+                                        FontSize="16"
                                         Margin="2,0,0,0"
                                         Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                 </Button>
@@ -220,10 +223,10 @@
                                 <Button
                                     x:Name="WatchlistButton"
                                     AutomationProperties.Name="Add to Watchlist"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -233,18 +236,17 @@
                                         x:Name="WatchlistIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         Glyph="&#xE710;"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                </Button>
+                                        FontSize="16" />
+                                 </Button>
 
                                 <!-- Like / Favorite Button -->
                                 <Button
                                     x:Name="FavoriteButton"
                                     AutomationProperties.Name="Like"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -254,18 +256,17 @@
                                         x:Name="FavoriteIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         Glyph="&#xEB51;"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        FontSize="16" />
                                 </Button>
 
                                 <!-- Selection Button -->
                                 <Button
                                     x:Name="PreviewSelectButton"
                                     AutomationProperties.Name="Select"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -274,22 +275,21 @@
                                     <FontIcon
                                         x:Name="PreviewSelectIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        FontSize="12"
-                                        Glyph="&#xE762;"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        FontSize="16"
+                                        Glyph="&#xE762;" />
                                 </Button>
                             </StackPanel>
 
                             <!-- Right: More Options & Close Button -->
-                            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <!-- 3-Dot More Options Button -->
                                 <Button
                                     x:Name="MoreOptionsButton"
                                     AutomationProperties.Name="More options"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -298,19 +298,18 @@
                                     <FontIcon
                                         x:Name="MoreOptionsIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        FontSize="12"
-                                        Glyph="&#xE712;"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        FontSize="16"
+                                        Glyph="&#xE712;" />
                                 </Button>
 
                                 <!-- Netflix Dropdown / Expand Episodes Chevron Button -->
                                 <Button
                                     x:Name="EpisodesDropdownButton"
                                     AutomationProperties.Name="Episodes and info"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -322,19 +321,18 @@
                                     <FontIcon
                                         x:Name="EpisodesDropdownIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        FontSize="11"
-                                        Glyph="&#xE70D;"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        FontSize="16"
+                                        Glyph="&#xE70D;" />
                                 </Button>
 
                                 <!-- Close Button -->
                                 <Button
                                     x:Name="CloseButton"
                                     AutomationProperties.Name="Close preview"
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Padding="0"
-                                    CornerRadius="15"
+                                    CornerRadius="16"
                                     Background="{ThemeResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
@@ -344,18 +342,17 @@
                                         x:Name="CloseIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         Glyph="&#xE711;"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        FontSize="16" />
                                 </Button>
                             </StackPanel>
                         </Grid>
 
                         <!-- Row 2: Metadata Strip (Duration + Quality Badges) -->
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="7" Margin="0,4,0,0" VerticalAlignment="Center">
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,4,0,0" VerticalAlignment="Center">
                             <!-- Seasons or Duration -->
                             <TextBlock
                                 x:Name="DurationText"
-                                FontSize="11"
+                                FontSize="12"
                                 FontWeight="Medium"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 VerticalAlignment="Center" />
@@ -365,14 +362,14 @@
                                 x:Name="QualityPillBorder"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
-                                CornerRadius="3"
-                                Padding="4,0,4,1"
+                                CornerRadius="4"
+                                Padding="4,4,4,4"
                                 VerticalAlignment="Center">
                                 <TextBlock
                                     x:Name="QualityPillText"
                                     Text="HD"
-                                    FontSize="9"
-                                    FontWeight="Bold"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </Border>
 
@@ -381,15 +378,15 @@
                                 x:Name="HdrPillBorder"
                                 BorderBrush="#40FFD700"
                                 BorderThickness="1"
-                                CornerRadius="3"
-                                Padding="4,0,4,1"
+                                CornerRadius="4"
+                                Padding="4,4,4,4"
                                 VerticalAlignment="Center"
                                 Visibility="Collapsed">
                                 <TextBlock
                                     x:Name="HdrPillText"
                                     Text="HDR"
-                                    FontSize="9"
-                                    FontWeight="Bold"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
                                     Foreground="#FFD700" />
                             </Border>
                         </StackPanel>
@@ -402,15 +399,15 @@
                     Grid.Row="2"
                     Visibility="Collapsed"
                     Background="Transparent"
-                    CornerRadius="0">
-                    <Grid Margin="12,2,12,10">
+                    CornerRadius="0,0,7,7">
+                    <Grid Margin="12,4,12,12">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
                         <!-- Netflix Episodes Header Strip -->
-                        <Grid Grid.Row="0" Margin="0,2,0,8">
+                        <Grid Grid.Row="0" Margin="0,4,0,8">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <TextBlock
                                     Text="Episodes"
@@ -420,7 +417,7 @@
                                 <TextBlock
                                     x:Name="EpisodesCountSubtitle"
                                     Text="Season 1"
-                                    FontSize="11"
+                                    FontSize="12"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     VerticalAlignment="Center" />
                             </StackPanel>
@@ -439,7 +436,7 @@
                                 <StackPanel
                                     x:Name="EpisodesListPanel"
                                     Orientation="Horizontal"
-                                    Spacing="14" />
+                                    Spacing="16" />
                             </ScrollViewer>
 
                             <!-- Left Scroll Chevron Button -->
@@ -462,8 +459,7 @@
                                 <FontIcon
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     Glyph="&#xE76B;"
-                                    FontSize="12"
-                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    FontSize="16" />
                             </Button>
 
                             <!-- Right Scroll Chevron Button -->
@@ -486,8 +482,7 @@
                                 <FontIcon
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     Glyph="&#xE76C;"
-                                    FontSize="12"
-                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    FontSize="16" />
                             </Button>
                         </Grid>
                     </Grid>
@@ -496,7 +491,7 @@
                 <!-- Top Border Stroke Overlay -->
                 <Border
                     Grid.RowSpan="3"
-                    CornerRadius="0"
+                    CornerRadius="8"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     IsHitTestVisible="False" />

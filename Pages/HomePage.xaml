@@ -38,7 +38,7 @@
                         <VisualStateGroup x:Name="HeaderLayoutStates">
                             <VisualState x:Name="WideHeader">
                                 <VisualState.StateTriggers>
-                                    <AdaptiveTrigger MinWindowWidth="800" />
+                                    <AdaptiveTrigger MinWindowWidth="641" />
                                 </VisualState.StateTriggers>
                             </VisualState>
                             <VisualState x:Name="NarrowHeader">
@@ -61,7 +61,7 @@
                     <!-- App Logo & Greeting Brand Section -->
                     <StackPanel x:Name="GreetingPanel" Grid.Column="0" Grid.Row="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                         <Image Width="64" Height="64" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
-                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
                             <TextBlock
                                 x:Name="GreetingText"
                                 Style="{StaticResource PageTitleTextStyle}"
@@ -85,7 +85,7 @@
                         helpers:SpringAnimationHelper.HoverScale="1.04"
                         Click="OnOpenFileClick">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="14" Glyph="&#xE838;" />
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE838;" />
                             <TextBlock Text="Open file(s)" />
                         </StackPanel>
                         <SplitButton.Flyout>
@@ -153,19 +153,19 @@
 
                     <!-- Empty state when no recently played items -->
                     <StackPanel x:Name="RecentEmptyState" Visibility="Collapsed" HorizontalAlignment="Center" Spacing="12" Padding="24,32">
-                        <FontIcon Glyph="&#xE823;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Opacity="0.6" />
+                        <FontIcon Glyph="&#xE823;" FontSize="48" HorizontalAlignment="Center" Opacity="0.6" />
                         <TextBlock Text="Nothing played yet" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         <TextBlock Text="Open a file or browse your library to get started." FontSize="14" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
                         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
                             <Button Style="{StaticResource AccentButtonStyle}" Click="OnOpenFileMenuItemClick" AutomationProperties.Name="Open file" ToolTipService.ToolTip="Open file">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE8E5;" FontSize="16"/>
                                     <TextBlock Text="Open file"/>
                                 </StackPanel>
                             </Button>
                             <Button Style="{StaticResource DefaultButtonStyle}" Click="OnOpenFolderMenuItemClick" AutomationProperties.Name="Open folder" ToolTipService.ToolTip="Open folder">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE838;" FontSize="14"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE838;" FontSize="16"/>
                                     <TextBlock Text="Open folder"/>
                                 </StackPanel>
                             </Button>

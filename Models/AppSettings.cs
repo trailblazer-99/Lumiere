@@ -35,6 +35,8 @@ public sealed class AppSettings
     // ── Audio & Output Settings ────────────────────────────────────
     public EqualizerPreset Equalizer { get; set; } = EqualizerPreset.Flat;
     public double DefaultVolume { get; set; } = 100.0;
+    /// <summary>Enables native Windows UI interaction sound effects via ElementSoundPlayer.</summary>
+    public bool EnableSoundEffects { get; set; } = true;
 
     // ── Video Settings ─────────────────────────────────────────────
     public AspectRatioOption DefaultAspectRatio { get; set; } = AspectRatioOption.Auto;
@@ -60,6 +62,7 @@ public sealed class AppSettings
     public bool AlwaysShowTransportBar { get; set; } = false;
     public bool AcrylicTransportBar { get; set; } = false;
     public bool AutoHideTransportBarInStreaming { get; set; } = true;
+    public string PreferredStreamingRegion { get; set; } = "";
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

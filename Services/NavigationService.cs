@@ -89,14 +89,28 @@ public class NavigationService : INavigationService
                 _frame.BackStack.Clear();
                 _frame.Navigate(pageType, parameter, transitionInfo);
 
-                if (IsStreamingSection(pageType) && _navigationView != null)
+                if (_navigationView != null)
                 {
-                    _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
-                    _navigationView.IsPaneOpen = false;
-                    if (_navigationView.AutoSuggestBox != null)
+                    _navigationView.DispatcherQueue?.TryEnqueue(() =>
                     {
-                        _navigationView.AutoSuggestBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-                    }
+                        try
+                        {
+                            if (IsStreamingSection(pageType))
+                            {
+                                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
+                                _navigationView.IsPaneOpen = false;
+                                if (_navigationView.AutoSuggestBox != null)
+                                {
+                                    _navigationView.AutoSuggestBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                                }
+                            }
+                            else
+                            {
+                                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                            }
+                        }
+                        catch { }
+                    });
                 }
             }
             catch (Exception ex)

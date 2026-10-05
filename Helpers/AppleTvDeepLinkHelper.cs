@@ -74,13 +74,13 @@ namespace LumiereMediaPlayer.Helpers
             ["Dickinson"] = "show/dickinson/umc.cmc.1ogyy5s2agasxa5qztabrlykn",
             ["Physical"] = "show/physical/umc.cmc.6gdc6v4vwyaab7klocftv2s10",
             ["Invasion"] = "show/invasion/umc.cmc.70b7z97fv7azfzn5baqnj88p6",
-            ["The Afterparty"] = "show/the-afterparty/umc.cmc.4bdf27j2p10q14p11w996u7d7",
-            ["Schmigadoon!"] = "show/schmigadoon/umc.cmc.1r93v58w2p9q8n6m5x4z3c2b1",
-            ["Trying"] = "show/trying/umc.cmc.3x4c5v6b7n8m9a0s1d2f3g4h5",
-            ["Loot"] = "show/loot/umc.cmc.2435n8p5p1t4p40w1x2u0a2i5",
-            ["Sharper"] = "movie/sharper/umc.cmc.14g099qj457s44e5x1g4v980k",
-            ["The Banker"] = "movie/the-banker/umc.cmc.5s6y478v29j4v80k3x1g4e80k",
-            ["Cherry"] = "movie/cherry/umc.cmc.3y4e0g64z7b8a7b14g099qj45"
+            ["The Afterparty"] = "show/the-afterparty/umc.cmc.5wg8cnigwrkfzbdruaufzb6b0",
+            ["Schmigadoon!"] = "show/schmigadoon/umc.cmc.1tqmf2znhr4oui4vo69ircyui",
+            ["Trying"] = "show/trying/umc.cmc.6muy4la7lj1omu5nci4bt2m66",
+            ["Loot"] = "show/loot/umc.cmc.5erbujil1mpazuerhr1udnk45",
+            ["Sharper"] = "movie/sharper/umc.cmc.5ud0ivpwgqw2st0u4z73gwpar",
+            ["The Banker"] = "movie/the-banker/umc.cmc.2f8qhsa039voq5x0iwn1eixj1",
+            ["Cherry"] = "movie/cherry/umc.cmc.40gvwq6hnbilmnxuutvmejx4r"
         };
 
         static AppleTvDeepLinkHelper()
@@ -109,12 +109,22 @@ namespace LumiereMediaPlayer.Helpers
             string clean = title.Trim();
             if (_canonicalDatabase.TryGetValue(clean, out var path)) return path;
 
+            // Strip trailing parenthetical expressions like "(2024)" or "(Season 1)"
+            string stripped = Regex.Replace(clean, @"\s*[\(\[][^\)\]]*[\)\]]", "").Trim();
+            if (!string.IsNullOrEmpty(stripped) && _canonicalDatabase.TryGetValue(stripped, out var strippedPath))
+            {
+                return strippedPath;
+            }
+
+            // Match if input title begins with full canonical show/movie title followed by a delimiter (e.g. colon, dash, space)
             foreach (var kvp in _canonicalDatabase)
             {
-                if (clean.StartsWith(kvp.Key, StringComparison.OrdinalIgnoreCase) ||
-                    kvp.Key.StartsWith(clean, StringComparison.OrdinalIgnoreCase))
+                if (clean.StartsWith(kvp.Key, StringComparison.OrdinalIgnoreCase))
                 {
-                    return kvp.Value;
+                    if (clean.Length == kvp.Key.Length || !char.IsLetterOrDigit(clean[kvp.Key.Length]))
+                    {
+                        return kvp.Value;
+                    }
                 }
             }
 

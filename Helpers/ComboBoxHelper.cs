@@ -110,12 +110,13 @@ public static class ComboBoxHelper
             {
                 var backdrop = AppServices.Settings.Current.BackdropType;
                 var theme = ThemeHelper.GetEffectiveElementTheme();
-                var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme, hasSystemBackdrop: false);
+                var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
                 var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
                 var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot);
                 foreach (var p in openPopups)
                 {
+                    ThemeHelper.ApplySystemBackdropToPopup(p);
                     if (p.Child != null)
                     {
                         var borders = FindAllBordersRecursively(p.Child);
@@ -186,6 +187,11 @@ public static class ComboBoxHelper
             var popups = FindAllVisualChildren<Popup>(comboBox);
             foreach (var popup in popups)
             {
+                if (!popup.IsOpen)
+                {
+                    popup.ShouldConstrainToRootBounds = false;
+                }
+                ThemeHelper.ApplySystemBackdropToPopup(popup);
                 popup.Opened -= OnPopupOpened;
                 popup.Opened += OnPopupOpened;
             }
@@ -197,10 +203,17 @@ public static class ComboBoxHelper
     {
         if (sender is Popup popup)
         {
+            if (!popup.IsOpen)
+            {
+                popup.ShouldConstrainToRootBounds = false;
+            }
+            ThemeHelper.ApplySystemBackdropToPopup(popup);
+            ApplyThemeToPopupChild(popup);
             popup.DispatcherQueue?.TryEnqueue(() =>
             {
                 try
                 {
+                    ThemeHelper.ApplySystemBackdropToPopup(popup);
                     ApplyThemeToPopupChild(popup);
                 }
                 catch { }
@@ -212,6 +225,8 @@ public static class ComboBoxHelper
     {
         if (sender is ComboBox cb)
         {
+            TryHookPopupOpened(cb);
+
             // Immediate pass
             ApplyBackdropThemeToComboBox(cb);
 
@@ -220,6 +235,7 @@ public static class ComboBoxHelper
             {
                 try
                 {
+                    TryHookPopupOpened(cb);
                     ApplyBackdropThemeToComboBox(cb);
                 }
                 catch { }
@@ -230,6 +246,7 @@ public static class ComboBoxHelper
             {
                 try
                 {
+                    TryHookPopupOpened(cb);
                     ApplyBackdropThemeToComboBox(cb);
                 }
                 catch { }
@@ -248,7 +265,7 @@ public static class ComboBoxHelper
         {
             var backdrop = AppServices.Settings.Current.BackdropType;
             var theme = ThemeHelper.GetEffectiveElementTheme();
-            var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme, hasSystemBackdrop: false);
+            var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
             var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
             // 1. Direct control lightweight styling resource injection.
@@ -282,6 +299,7 @@ public static class ComboBoxHelper
                 var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot);
                 foreach (var p in openPopups)
                 {
+                    ThemeHelper.ApplySystemBackdropToPopup(p);
                     if (p.Child != null)
                     {
                         var borders = FindAllBordersRecursively(p.Child);
@@ -314,6 +332,7 @@ public static class ComboBoxHelper
             var popups = FindAllVisualChildren<Popup>(comboBox);
             foreach (var popup in popups)
             {
+                ThemeHelper.ApplySystemBackdropToPopup(popup);
                 popup.Opened -= OnPopupOpened;
                 popup.Opened += OnPopupOpened;
 
@@ -338,9 +357,10 @@ public static class ComboBoxHelper
     /// </summary>
     private static void ApplyThemeToPopupChild(Popup popup)
     {
+        ThemeHelper.ApplySystemBackdropToPopup(popup);
         var backdrop = AppServices.Settings.Current.BackdropType;
         var theme = ThemeHelper.GetEffectiveElementTheme();
-        var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme, hasSystemBackdrop: false);
+        var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
         var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
         if (popup.Child != null)
@@ -361,10 +381,17 @@ public static class ComboBoxHelper
     /// </summary>
     private static bool IsComboBoxPopupBorder(Border border)
     {
+        // Never theme borders that are inside a FlyoutPresenter or MenuFlyoutPresenter
+        DependencyObject? parent = border;
+        while (parent != null)
+        {
+            if (parent is FlyoutPresenter || parent is MenuFlyoutPresenter) return false;
+            parent = VisualTreeHelper.GetParent(parent);
+        }
+
         if (border.Name == "PopupBorder") return true;
         if (border.Parent is Popup) return true;
-        if (FindVisualChild<ScrollViewer>(border) != null) return true;
-        if (FindVisualChild<ItemsPresenter>(border) != null) return true;
+        if (FindVisualChild<ItemsPresenter>(border) != null && FindVisualChild<ScrollViewer>(border) != null) return true;
         return false;
     }
 
@@ -414,6 +441,16 @@ public static class ComboBoxHelper
         border.BorderBrush = borderBrush;
         border.BorderThickness = new Thickness(1);
         border.CornerRadius = new CornerRadius(8);
+
+        try
+        {
+            var sv = FindVisualChild<ScrollViewer>(border);
+            if (sv != null)
+            {
+                sv.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+        }
+        catch { }
 
         try
         {

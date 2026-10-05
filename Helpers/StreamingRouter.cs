@@ -22,6 +22,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"netflix://title/{match.Groups[1].Value}");
                     }
+                    var jbvMatch = Regex.Match(uri.Query, @"[?&]jbv=(\d+)", RegexOptions.IgnoreCase);
+                    if (jbvMatch.Success)
+                    {
+                        return new Uri($"netflix://title/{jbvMatch.Groups[1].Value}");
+                    }
                     var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
                     if (qMatch.Success)
                     {
@@ -30,7 +35,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("spotify.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/(track|album|artist|playlist|show|episode)/([a-zA-Z0-9]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:intl-[a-z]{2}/)?(track|album|artist|playlist|show|episode)/([a-zA-Z0-9]+)");
                     if (match.Success)
                     {
                         return new Uri($"spotify:{match.Groups[1].Value}:{match.Groups[2].Value}");
@@ -49,7 +54,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("disneyplus.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/(?:video|play|movies|series)/(?:[a-zA-Z0-9-]+/)?([a-zA-Z0-9-]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"/(?:video|play|movies|series|browse)/(?:[a-zA-Z0-9-]+/)?([a-zA-Z0-9-]+)");
                     if (match.Success)
                     {
                         return new Uri($"disneyplus://video/{match.Groups[1].Value}");
@@ -60,9 +65,9 @@ namespace LumiereMediaPlayer.Helpers
                         return new Uri($"disneyplus://search?q={qMatch.Groups[1].Value}");
                     }
                 }
-                else if (host.Contains("primevideo.com") || host.Contains("amazon.com") || host.Contains("amazon."))
+                else if (host.Contains("primevideo.com") || ((host.Contains("amazon.com") || host.Contains("amazon.")) && !host.Contains("music.amazon.")))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"(?:/detail/|/gp/video/detail/|/gp/product/|/dp/)/?([a-zA-Z0-9_]{8,20})");
+                    var match = Regex.Match(uri.AbsolutePath, @"(?:/detail/|/gp/video/detail/|/gp/product/|/dp/)/?([a-zA-Z0-9_.-]{8,64})");
                     if (match.Success)
                     {
                         var id = match.Groups[1].Value;
@@ -151,7 +156,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("peacocktv.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/watch/(?:playback/vod|asset/[^/]+)/([a-zA-Z0-9]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"/watch/(?:playback/vod|asset(?:/[^/]+)+)/([a-zA-Z0-9-]+)");
                     if (match.Success)
                     {
                         return new Uri($"peacock://watch/{match.Groups[1].Value}");
@@ -169,6 +174,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"tubitv://show/{match.Groups[1].Value}");
                     }
+                    var searchMatch = Regex.Match(uri.AbsolutePath, @"/search/(.+)", RegexOptions.IgnoreCase);
+                    if (searchMatch.Success)
+                    {
+                        return new Uri($"tubitv://search?q={searchMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("pluto.tv"))
                 {
@@ -176,6 +186,11 @@ namespace LumiereMediaPlayer.Helpers
                     if (match.Success)
                     {
                         return new Uri($"plutotv://vod/{match.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"plutotv://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("tv.apple.com"))
@@ -249,6 +264,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"vudu://watch/{match.Groups[1].Value}");
                     }
+                    var qMatch = Regex.Match(uri.Query, @"[?&](?:searchString|q)=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"vudu://search?q={qMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("hotstar.com"))
                 {
@@ -274,6 +294,11 @@ namespace LumiereMediaPlayer.Helpers
                     if (searchMatch.Success)
                     {
                         return new Uri($"jiocinema://search?q={searchMatch.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"jiocinema://search?q={qMatch.Groups[1].Value}");
                     }
                     var idMatch = Regex.Match(uri.AbsolutePath, @"/(?:movies|tv-shows|tv|watch)?(?:/[^/]+)?/(\d+)");
                     if (idMatch.Success)
@@ -306,6 +331,11 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"sonyliv://watch/{idMatch.Groups[1].Value}");
                     }
+                    var pathSearch = Regex.Match(uri.AbsolutePath, @"/search/(.+)", RegexOptions.IgnoreCase);
+                    if (pathSearch.Success)
+                    {
+                        return new Uri($"sonyliv://search?q={pathSearch.Groups[1].Value}");
+                    }
                     var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
                     if (qMatch.Success)
                     {
@@ -314,10 +344,23 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("youtube.com") || host.Contains("youtu.be"))
                 {
+                    if (host.Contains("youtu.be"))
+                    {
+                        var shortId = uri.AbsolutePath.Trim('/');
+                        if (!string.IsNullOrEmpty(shortId) && shortId.Length >= 6)
+                        {
+                            return new Uri($"vnd.youtube://{shortId}");
+                        }
+                    }
                     var vMatch = Regex.Match(uri.Query, @"[?&]v=([^&]+)", RegexOptions.IgnoreCase);
                     if (vMatch.Success)
                     {
                         return new Uri($"vnd.youtube://{vMatch.Groups[1].Value}");
+                    }
+                    var embedOrShortsMatch = Regex.Match(uri.AbsolutePath, @"/(?:embed|shorts|v)/([a-zA-Z0-9_-]+)");
+                    if (embedOrShortsMatch.Success)
+                    {
+                        return new Uri($"vnd.youtube://{embedOrShortsMatch.Groups[1].Value}");
                     }
                     var qMatch = Regex.Match(uri.Query, @"[?&](?:q|search_query)=([^&]+)", RegexOptions.IgnoreCase);
                     if (qMatch.Success)
@@ -331,6 +374,11 @@ namespace LumiereMediaPlayer.Helpers
                     if (match.Success)
                     {
                         return new Uri($"discoveryplus://show/{match.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"discoveryplus://search?q={qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("bbc.co.uk") && uri.AbsolutePath.Contains("iplayer"))
@@ -364,26 +412,51 @@ namespace LumiereMediaPlayer.Helpers
                     {
                         return new Uri($"tidal://{match.Groups[1].Value}");
                     }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"tidal://search?q={qMatch.Groups[1].Value}");
+                    }
                 }
-                else if (host.Contains("music.amazon.com"))
+                else if (host.Contains("music.amazon."))
                 {
                     var match = Regex.Match(uri.AbsolutePath, @"/(?:albums|tracks|artists)/([a-zA-Z0-9_]+)");
                     if (match.Success)
                     {
                         return new Uri($"amzn-music://play?asin={match.Groups[1].Value}");
                     }
+                    var searchMatch = Regex.Match(uri.AbsolutePath, @"/search/(.+)", RegexOptions.IgnoreCase);
+                    if (searchMatch.Success)
+                    {
+                        return new Uri($"amznmp3://search?q={searchMatch.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&](?:q|k|keywords|search_query)=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"amznmp3://search?q={qMatch.Groups[1].Value}");
+                    }
                 }
                 else if (host.Contains("deezer.com"))
                 {
-                    var match = Regex.Match(uri.AbsolutePath, @"/(?:track|album|artist)/([0-9]+)");
+                    var match = Regex.Match(uri.AbsolutePath, @"/(track|album|artist)/([0-9]+)");
                     if (match.Success)
                     {
-                        return new Uri($"deezer://www.deezer.com/track/{match.Groups[1].Value}");
+                        return new Uri($"deezer://www.deezer.com/{match.Groups[1].Value}/{match.Groups[2].Value}");
+                    }
+                    var searchMatch = Regex.Match(uri.AbsolutePath, @"/search/(.+)", RegexOptions.IgnoreCase);
+                    if (searchMatch.Success)
+                    {
+                        return new Uri($"deezer://search/{searchMatch.Groups[1].Value}");
+                    }
+                    var qMatch = Regex.Match(uri.Query, @"[?&]q=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success)
+                    {
+                        return new Uri($"deezer://search/{qMatch.Groups[1].Value}");
                     }
                 }
                 else if (host.Contains("soundcloud.com"))
                 {
-                    return new Uri($"soundcloud://{uri.AbsolutePath.Trim('/')}");
+                    return new Uri($"soundcloud://{uri.AbsolutePath.Trim('/')}{uri.Query}");
                 }
                 else if (host.Contains("plex.tv"))
                 {
@@ -405,6 +478,26 @@ namespace LumiereMediaPlayer.Helpers
 
             try
             {
+                // If a native protocol URI was passed in, convert known ones to https:// for the fallback web URL
+                if (webLink.StartsWith("videos://", StringComparison.OrdinalIgnoreCase))
+                    webLink = "https://" + webLink.Substring(9);
+                else if (webLink.StartsWith("musics://", StringComparison.OrdinalIgnoreCase))
+                    webLink = "https://" + webLink.Substring(9);
+                else if (webLink.StartsWith("itunes://", StringComparison.OrdinalIgnoreCase))
+                    webLink = "https://" + webLink.Substring(9);
+                else if (webLink.StartsWith("spotify:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = webLink.Split(':');
+                    if (parts.Length >= 3 && !parts[1].Equals("search", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webLink = $"https://open.spotify.com/{parts[1]}/{parts[2]}";
+                    }
+                    else if (parts.Length >= 3 && parts[1].Equals("search", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webLink = $"https://open.spotify.com/search/{parts[2]}";
+                    }
+                }
+
                 var uri = new Uri(webLink);
                 var host = uri.Host.ToLower();
 
@@ -455,16 +548,28 @@ namespace LumiereMediaPlayer.Helpers
                 }
             }
 
-            if (nativeUri != null && nativeUri.Scheme == "videos" && nativeUri.Query.Contains("term=", StringComparison.OrdinalIgnoreCase))
+            if ((nativeUri != null && nativeUri.Scheme.Equals("videos", StringComparison.OrdinalIgnoreCase) && nativeUri.Query.Contains("term=", StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(fallbackCleanUrl) && fallbackCleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) && fallbackCleanUrl.Contains("/search", StringComparison.OrdinalIgnoreCase)))
             {
-                var qMatch = Regex.Match(nativeUri.Query, @"[?&]term=([^&]+)", RegexOptions.IgnoreCase);
-                if (qMatch.Success)
+                string rawTerm = "";
+                if (nativeUri != null && nativeUri.Query.Contains("term=", StringComparison.OrdinalIgnoreCase))
                 {
-                    string rawTerm = Uri.UnescapeDataString(qMatch.Groups[1].Value);
+                    var qMatch = Regex.Match(nativeUri.Query, @"[?&]term=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success) rawTerm = qMatch.Groups[1].Value;
+                }
+                else if (!string.IsNullOrEmpty(fallbackCleanUrl))
+                {
+                    var qMatch = Regex.Match(fallbackCleanUrl, @"[?&]term=([^&]+)", RegexOptions.IgnoreCase);
+                    if (qMatch.Success) rawTerm = qMatch.Groups[1].Value;
+                }
+
+                if (!string.IsNullOrEmpty(rawTerm))
+                {
                     try
                     {
+                        string unescaped = Uri.UnescapeDataString(rawTerm);
                         string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
-                        string canonicalUrl = await AppleTvDeepLinkHelper.ResolveAppleTvUrlAsync(rawTerm, "tvShow", null, targetRegion);
+                        string canonicalUrl = await AppleTvDeepLinkHelper.ResolveAppleTvUrlAsync(unescaped, "tvShow", null, targetRegion);
                         if (!string.IsNullOrEmpty(canonicalUrl) && !canonicalUrl.Contains("/search", StringComparison.OrdinalIgnoreCase))
                         {
                             nativeUri = GetNativeUri(canonicalUrl);
