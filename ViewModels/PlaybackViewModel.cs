@@ -83,7 +83,11 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
     public void CycleRepeatMode() => _session.CycleRepeatMode();
 
     [RelayCommand]
-    public void Stop() => _session.Stop();
+    public void Stop()
+    {
+        IsVideoPlayerActive = false;
+        _session.Stop();
+    }
 
     public void Seek(double seconds)
     {

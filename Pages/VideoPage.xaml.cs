@@ -141,6 +141,7 @@ public sealed partial class VideoPage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
+        AttachRibbonToHost();
         AttachEventHandlers();
         SyncMediaPlayer(true);
         UpdateUiLuminance();
@@ -151,7 +152,45 @@ public sealed partial class VideoPage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
+        DetachRibbonFromHost();
         DetachEventHandlers();
+    }
+
+    private void AttachRibbonToHost()
+    {
+        try
+        {
+            var host = App.MainWindowInstance?.PageRibbonHost;
+            if (host != null && VideoSelectionRibbon != null && VideoSelectionRibbon.Parent != host)
+            {
+                if (VideoSelectionRibbon.Parent is Panel currentParent)
+                {
+                    currentParent.Children.Remove(VideoSelectionRibbon);
+                }
+                host.Children.Clear();
+                host.Children.Add(VideoSelectionRibbon);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoPage] AttachRibbonToHost error: {ex.Message}");
+        }
+    }
+
+    private void DetachRibbonFromHost()
+    {
+        try
+        {
+            var host = App.MainWindowInstance?.PageRibbonHost;
+            if (host != null && VideoSelectionRibbon != null && host.Children.Contains(VideoSelectionRibbon))
+            {
+                host.Children.Remove(VideoSelectionRibbon);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoPage] DetachRibbonFromHost error: {ex.Message}");
+        }
     }
 
     private void UpdateEmptyState()
@@ -242,6 +281,7 @@ public sealed partial class VideoPage : Page
         base.OnNavigatedFrom(e);
         try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
         VideoSelectionRibbon?.ClearSelection();
+        DetachRibbonFromHost();
         App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
         DetachEventHandlers();
     }

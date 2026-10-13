@@ -2739,6 +2739,7 @@ public sealed class PlaybackSession : IPlaybackSession
             try
             {
                 _mediaPlayer.Pause();
+                _mediaPlayer.Source = null;
             }
             catch (Exception ex)
             {
@@ -2775,6 +2776,9 @@ public sealed class PlaybackSession : IPlaybackSession
             _preloadedNextSource = null;
             _preloadedTrackId = null;
         }
+
+        TrimThumbnailCache(0);
+        Helpers.MemoryTrimHelper.TrimWorkingSetAsync(150, deep: true);
     }
 
 
@@ -2854,7 +2858,7 @@ public sealed class PlaybackSession : IPlaybackSession
             _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
 
             _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
-            try { _mediaPlayer.Pause(); } catch { }
+            try { _mediaPlayer.Pause(); _mediaPlayer.Source = null; } catch { }
         }
         catch (Exception ex)
         {

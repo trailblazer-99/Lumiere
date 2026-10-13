@@ -39,6 +39,7 @@
         BorderThickness="1"
         Padding="16,0"
         Height="52"
+        HorizontalAlignment="Center"
         Translation="0,0,32">
         <Border.Shadow>
             <ThemeShadow />

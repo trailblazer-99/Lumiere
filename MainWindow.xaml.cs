@@ -3571,11 +3571,19 @@ public sealed partial class MainWindow : Window
                     Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
                 }
                 TransportControls?.SetMiniVideoPlayer(null);
+                if (GlobalVideoPlayer != null)
+                {
+                    try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
+                }
                 SetFullScreenMode(false);
                 return;
             }
 
             TransportControls?.SetMiniVideoPlayer(null);
+            if (GlobalVideoPlayer != null)
+            {
+                try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
+            }
             if (FloatingVideoContainer != null)
             {
                 FloatingVideoContainer.Visibility = Visibility.Collapsed;
@@ -7122,6 +7130,10 @@ public sealed partial class MainWindow : Window
                 FloatingVideoContainer.IsHitTestVisible = false;
                 Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
                 TransportControls?.SetMiniVideoPlayer(null);
+                if (GlobalVideoPlayer != null)
+                {
+                    try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
+                }
                 if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
                 {
                     FloatingVideoContainer.Visibility = Visibility.Collapsed;

@@ -1414,6 +1414,17 @@
             </Border>
         </Grid>
 
+        <!-- Page Selection Ribbon Overlay Host (renders in front of FloatingVideoContainer Z:10) -->
+        <Grid
+            x:Name="PageRibbonHost"
+            x:FieldModifier="public"
+            Grid.Row="0"
+            Canvas.ZIndex="65"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,16"
+            IsHitTestVisible="True" />
+
         <!-- Elevated Netflix-Style Video Hover Preview Host -->
         <controls:VideoHoverPreviewHost
             x:Name="VideoHoverPreview"
