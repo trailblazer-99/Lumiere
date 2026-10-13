@@ -225,9 +225,9 @@ public static class MediaFlyoutHelper
         }
     }
 
-    public static async Task ShowNewPlaylistDialogAsync(IEnumerable<MediaItem> items, XamlRoot? xamlRoot)
+    public static async Task<bool> ShowNewPlaylistDialogAsync(IEnumerable<MediaItem> items, XamlRoot? xamlRoot)
     {
-        if (xamlRoot == null) return;
+        if (xamlRoot == null) return false;
         var list = items.ToList();
 
         var inputTextBox = new TextBox
@@ -262,7 +262,9 @@ public static class MediaFlyoutHelper
             string name = string.IsNullOrWhiteSpace(inputTextBox.Text) ? "New Playlist" : inputTextBox.Text.Trim();
             string desc = descTextBox.Text?.Trim() ?? string.Empty;
             await MediaLibraryService.CreatePlaylistAsync(name, desc, list);
+            return true;
         }
+        return false;
     }
 
     private static readonly System.Threading.SemaphoreSlim _dialogLock = new(1, 1);

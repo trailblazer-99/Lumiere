@@ -27,6 +27,7 @@ public sealed partial class SelectionRibbon : UserControl
     private List<MediaItem> _selectedItems = new();
     public IReadOnlyList<MediaItem> SelectedItems => _selectedItems;
     private bool _suppressMasterCheckEvents;
+    private bool _isHiding;
 
     public SelectionRibbon()
     {
@@ -79,7 +80,8 @@ public sealed partial class SelectionRibbon : UserControl
 
     public void ShowRibbon()
     {
-        if (this.Visibility == Visibility.Visible && this.Opacity > 0.9) return;
+        if (this.Visibility == Visibility.Visible && !_isHiding && this.Opacity > 0.9) return;
+        _isHiding = false;
         this.Visibility = Visibility.Visible;
 
         try
@@ -107,7 +109,8 @@ public sealed partial class SelectionRibbon : UserControl
 
     public void HideRibbon()
     {
-        if (this.Visibility == Visibility.Collapsed) return;
+        if (this.Visibility == Visibility.Collapsed || _isHiding) return;
+        _isHiding = true;
 
         try
         {
@@ -128,12 +131,16 @@ public sealed partial class SelectionRibbon : UserControl
             {
                 try
                 {
-                    this.Visibility = Visibility.Collapsed;
-                    visual.Opacity = 1.0f;
-                    visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                    if (_isHiding)
+                    {
+                        this.Visibility = Visibility.Collapsed;
+                        visual.Opacity = 1.0f;
+                        visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                    }
                 }
                 finally
                 {
+                    _isHiding = false;
                     batch.Dispose();
                 }
             };
@@ -143,6 +150,7 @@ public sealed partial class SelectionRibbon : UserControl
         }
         catch
         {
+            _isHiding = false;
             this.Visibility = Visibility.Collapsed;
         }
     }
@@ -257,6 +265,8 @@ public sealed partial class SelectionRibbon : UserControl
                         try
                         {
                             await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
+                            ClearSelection();
+                            ClearRequested?.Invoke(this, EventArgs.Empty);
                         }
                         catch (Exception ex)
                         {
@@ -278,7 +288,12 @@ public sealed partial class SelectionRibbon : UserControl
             {
                 try
                 {
-                    await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot);
+                    bool created = await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
+                    if (created)
+                    {
+                        ClearSelection();
+                        ClearRequested?.Invoke(this, EventArgs.Empty);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -320,7 +335,7 @@ public sealed partial class SelectionRibbon : UserControl
 
             if (_selectedItems.Count > 0)
             {
-                await MediaFlyoutHelper.ShowPropertiesDialogAsync(_selectedItems[0], this.XamlRoot);
+                await MediaFlyoutHelper.ShowPropertiesDialogAsync(_selectedItems[0], this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
             }
         }
         catch (Exception ex)

@@ -156,19 +156,26 @@ public sealed partial class VideoPage : Page
         DetachEventHandlers();
     }
 
+    private Panel? _originalRibbonParent;
+
     private void AttachRibbonToHost()
     {
         try
         {
             var host = App.MainWindowInstance?.PageRibbonHost;
-            if (host != null && VideoSelectionRibbon != null && VideoSelectionRibbon.Parent != host)
+            if (host != null && VideoSelectionRibbon != null)
             {
-                if (VideoSelectionRibbon.Parent is Panel currentParent)
+                if (VideoSelectionRibbon.Parent != host)
                 {
-                    currentParent.Children.Remove(VideoSelectionRibbon);
+                    if (VideoSelectionRibbon.Parent is Panel currentParent)
+                    {
+                        _originalRibbonParent = currentParent;
+                        currentParent.Children.Remove(VideoSelectionRibbon);
+                    }
+                    host.Children.Clear();
+                    host.Children.Add(VideoSelectionRibbon);
                 }
-                host.Children.Clear();
-                host.Children.Add(VideoSelectionRibbon);
+                VideoSelectionRibbon.Margin = new Thickness(0);
             }
         }
         catch (Exception ex)
@@ -185,6 +192,11 @@ public sealed partial class VideoPage : Page
             if (host != null && VideoSelectionRibbon != null && host.Children.Contains(VideoSelectionRibbon))
             {
                 host.Children.Remove(VideoSelectionRibbon);
+                VideoSelectionRibbon.Margin = new Thickness(0, 0, 0, 16);
+                if (_originalRibbonParent != null && !_originalRibbonParent.Children.Contains(VideoSelectionRibbon))
+                {
+                    _originalRibbonParent.Children.Add(VideoSelectionRibbon);
+                }
             }
         }
         catch (Exception ex)
@@ -209,6 +221,7 @@ public sealed partial class VideoPage : Page
             if (ViewModel.CurrentVideo != null)
             {
                 VideoSelectionRibbon?.ClearSelection();
+                UpdateQueueSelectAllState();
             }
             bool force = e.PropertyName == nameof(VideoViewModel.CurrentVideo);
             DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
@@ -216,7 +229,11 @@ public sealed partial class VideoPage : Page
         else if (e.PropertyName is nameof(VideoViewModel.FilteredVideos)
                  or nameof(VideoViewModel.OverlayVisibility))
         {
-            DispatcherQueue.TryEnqueue(UpdateEmptyState);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UpdateEmptyState();
+                UpdateQueueSelectAllState();
+            });
         }
         else if (e.PropertyName is nameof(VideoViewModel.PlayerVisibility))
         {
@@ -236,6 +253,7 @@ public sealed partial class VideoPage : Page
             {
                 App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
                 VideoSelectionRibbon?.ClearSelection();
+                UpdateQueueSelectAllState();
             }
             DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
         }
@@ -271,6 +289,7 @@ public sealed partial class VideoPage : Page
     {
         base.OnNavigatedTo(e);
         try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
+        AttachRibbonToHost();
         AttachEventHandlers();
         UpdateUiLuminance();
         DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
@@ -297,6 +316,7 @@ public sealed partial class VideoPage : Page
     {
         try
         {
+            AttachRibbonToHost();
             if (ViewModel.FilteredVideos.Any(v => v.IsSelected))
             {
                 foreach (var v in ViewModel.FilteredVideos)
@@ -304,6 +324,7 @@ public sealed partial class VideoPage : Page
                     v.IsSelected = false;
                 }
                 VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
             }
             UpdateEmptyState();
             PageContent.Opacity = 1.0;
@@ -844,6 +865,7 @@ public sealed partial class VideoPage : Page
                     v.IsSelected = true;
                 }
                 VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
                 return;
             }
             if (e.Key == Windows.System.VirtualKey.Escape)
@@ -854,6 +876,7 @@ public sealed partial class VideoPage : Page
                     v.IsSelected = false;
                 }
                 VideoSelectionRibbon?.ClearSelection();
+                UpdateQueueSelectAllState();
                 return;
             }
             if (e.Key == Windows.System.VirtualKey.Delete)
@@ -864,6 +887,7 @@ public sealed partial class VideoPage : Page
                     e.Handled = true;
                     await MediaLibraryService.RemoveTracksAsync(selected);
                     VideoSelectionRibbon?.ClearSelection();
+                    UpdateQueueSelectAllState();
                 }
             }
         }
@@ -880,6 +904,7 @@ public sealed partial class VideoPage : Page
             var flyout = Helpers.MediaFlyoutHelper.CreateMediaFlyout(video, element, () =>
             {
                 VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
             });
             flyout.ShowAt(element, e.GetPosition(element));
             e.Handled = true;
@@ -889,6 +914,7 @@ public sealed partial class VideoPage : Page
     public void NotifySelectionChanged()
     {
         VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+        UpdateQueueSelectAllState();
     }
 
     private void OnVideoCardButtonClick(object sender, RoutedEventArgs e)
