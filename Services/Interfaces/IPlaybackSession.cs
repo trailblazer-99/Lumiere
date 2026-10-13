@@ -25,6 +25,7 @@ public interface IPlaybackSession : IDisposable
 
     bool HasActiveComposition { get; }
     IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache { get; }
+    void TrimThumbnailCache(int targetCount = 0);
 
     event EventHandler? StateChanged;
 

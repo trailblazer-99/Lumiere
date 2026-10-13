@@ -1077,32 +1077,21 @@ public sealed partial class MainWindow : Window
         bool isMinimized = overlapped?.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd));
         try { AppServices.HdrPipeline.SetSuspended(isMinimized); } catch { }
 
-        if (args.DidVisibilityChange)
+        if (isMinimized || (args.DidVisibilityChange && !sender.IsVisible))
         {
-            if (!sender.IsVisible || isMinimized)
-            {
-                _ = Task.Run(() =>
-                {
-                    try
-                    {
-                        Helpers.ImageBindHelper.ClearCache();
-                        GC.Collect(1, GCCollectionMode.Optimized, false);
-                    }
-                    catch { }
-                });
+            Helpers.MemoryTrimHelper.TrimWorkingSetAsync(150, deep: true);
 
-                if (AppServices.Settings.Current.EnableAppLock && AppServices.Settings.Current.AppLockWhenMinimized)
-                {
-                    _isMinimizedForLock = true;
-                }
-            }
-            else if (_isMinimizedForLock)
+            if (AppServices.Settings.Current.EnableAppLock && AppServices.Settings.Current.AppLockWhenMinimized)
             {
-                _isMinimizedForLock = false;
-                if (AppServices.Settings.Current.EnableAppLock && !_isLocked)
-                {
-                    LockApp(autoPrompt: true);
-                }
+                _isMinimizedForLock = true;
+            }
+        }
+        else if (_isMinimizedForLock)
+        {
+            _isMinimizedForLock = false;
+            if (AppServices.Settings.Current.EnableAppLock && !_isLocked)
+            {
+                LockApp(autoPrompt: true);
             }
         }
 
@@ -3225,6 +3214,7 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        try { AppIconHelper.ClearIconHandles(keepActive: false); } catch { }
         ScheduleSwiftProcessExit();
     }
 

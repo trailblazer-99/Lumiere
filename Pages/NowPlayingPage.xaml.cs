@@ -121,6 +121,12 @@ public sealed partial class NowPlayingPage : Page
 
         try
         {
+            _visualizerTimer?.Stop();
+        }
+        catch { }
+
+        try
+        {
             if (this.Resources["AmbientAnimation"] is Microsoft.UI.Xaml.Media.Animation.Storyboard ambientStory)
             {
                 ambientStory.Stop();
@@ -135,6 +141,11 @@ public sealed partial class NowPlayingPage : Page
         {
             _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
             ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+        }
+
+        if (AppServices.PlaybackViewModel.IsPlaying)
+        {
+            _visualizerTimer?.Start();
         }
 
         UpdateEmptyState();

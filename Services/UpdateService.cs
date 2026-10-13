@@ -430,11 +430,41 @@ public static class UpdateService
         }
     }
 
+    public static void CleanStaleUpdatePackages()
+    {
+        try
+        {
+            string downloadDir = GetUpdateDownloadDirectory();
+            if (Directory.Exists(downloadDir))
+            {
+                var files = Directory.GetFiles(downloadDir, "*.msixbundle")
+                    .Concat(Directory.GetFiles(downloadDir, "*.appinstaller"))
+                    .Concat(Directory.GetFiles(downloadDir, "LumiereUpdate*.*"));
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        if (DateTime.UtcNow - info.LastWriteTimeUtc > TimeSpan.FromMinutes(30))
+                        {
+                            File.Delete(file);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
     public static async Task<bool> InstallUpdateAsync(
         string? directDownloadUri = null,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        CleanStaleUpdatePackages();
+
         string targetUri = !string.IsNullOrWhiteSpace(directDownloadUri)
             ? directDownloadUri
             : (!string.IsNullOrWhiteSpace(LastCheckResult?.DownloadUri) ? LastCheckResult.DownloadUri : GitHubReleasesUrl);

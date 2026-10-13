@@ -3703,30 +3703,35 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache => _videoThumbnailCache;
 
-
+    public void TrimThumbnailCache(int targetCount = 0)
+    {
+        lock (VideoThumbnailCacheLock)
+        {
+            if (targetCount <= 0)
+            {
+                _videoThumbnailCache.Clear();
+            }
+            else
+            {
+                while (_videoThumbnailCache.Count > targetCount)
+                {
+                    _videoThumbnailCache.RemoveAt(0);
+                }
+            }
+        }
+    }
 
     public void AddCachedThumbnail(TimeSpan time, Microsoft.UI.Xaml.Media.ImageSource image)
-
     {
-
         lock (VideoThumbnailCacheLock)
-
         {
-
             _videoThumbnailCache.RemoveAll(x => Math.Abs((x.Time - time).TotalSeconds) < 0.5);
-
             _videoThumbnailCache.Add((time, image));
-
             while (_videoThumbnailCache.Count > 240)
-
             {
-
                 _videoThumbnailCache.RemoveAt(0);
-
             }
-
         }
-
     }
 
 

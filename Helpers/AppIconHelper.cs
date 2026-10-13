@@ -44,6 +44,10 @@ public static class AppIconHelper
     [DllImport("user32.dll", EntryPoint = "SetClassLongW", SetLastError = true)]
     private static extern int SetClassLong32(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
     [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
@@ -108,6 +112,58 @@ public static class AppIconHelper
 
     private static readonly object _cacheLock = new();
     private static readonly Dictionary<string, (IntPtr Big, IntPtr Small)> _iconHandleCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Cleans up cached unmanaged Win32 icon handles to release GDI/USER resources.
+    /// If keepActive is true, preserves the currently assigned window icon handles.
+    /// </summary>
+    public static void ClearIconHandles(bool keepActive = true)
+    {
+        lock (_cacheLock)
+        {
+            var keysToRemove = new List<string>();
+            foreach (var kvp in _iconHandleCache)
+            {
+                var handles = kvp.Value;
+                bool isBigActive = keepActive && handles.Big == _currentBigHIcon && handles.Big != IntPtr.Zero;
+                bool isSmallActive = keepActive && handles.Small == _currentSmallHIcon && handles.Small != IntPtr.Zero;
+
+                if (!isBigActive && handles.Big != IntPtr.Zero)
+                {
+                    try { DestroyIcon(handles.Big); } catch { }
+                }
+                if (!isSmallActive && handles.Small != IntPtr.Zero)
+                {
+                    try { DestroyIcon(handles.Small); } catch { }
+                }
+
+                if (!isBigActive && !isSmallActive)
+                {
+                    keysToRemove.Add(kvp.Key);
+                }
+            }
+
+            foreach (var key in keysToRemove)
+            {
+                _iconHandleCache.Remove(key);
+            }
+
+            if (!keepActive)
+            {
+                if (_currentBigHIcon != IntPtr.Zero)
+                {
+                    try { DestroyIcon(_currentBigHIcon); } catch { }
+                    _currentBigHIcon = IntPtr.Zero;
+                }
+                if (_currentSmallHIcon != IntPtr.Zero)
+                {
+                    try { DestroyIcon(_currentSmallHIcon); } catch { }
+                    _currentSmallHIcon = IntPtr.Zero;
+                }
+                _iconHandleCache.Clear();
+            }
+        }
+    }
 
     private static readonly (string Key, double Hue)[] Palettes =
     [

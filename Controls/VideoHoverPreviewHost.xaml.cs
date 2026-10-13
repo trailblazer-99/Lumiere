@@ -75,6 +75,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
     private MediaItem? _effectiveParentSeries;
     private Storyboard? _activeGlideStoryboard;
     private DispatcherTimer? _episodeHoverDebounceTimer;
+    private DispatcherTimer? _collapseTimer;
+    private EventHandler<object>? _collapseTimerTickHandler;
     private MediaItem? _pendingHoverEpisode;
     private string? _currentlyLoadedPath;
 
@@ -1605,6 +1607,19 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         try { oldCts?.Cancel(); } catch { }
 
         try { _episodeHoverDebounceTimer?.Stop(); } catch { }
+        if (_collapseTimer != null)
+        {
+            try
+            {
+                _collapseTimer.Stop();
+                if (_collapseTimerTickHandler != null)
+                {
+                    _collapseTimer.Tick -= _collapseTimerTickHandler;
+                    _collapseTimerTickHandler = null;
+                }
+            }
+            catch { }
+        }
         _pendingHoverEpisode = null;
         _currentlyLoadedPath = null;
 
@@ -2158,10 +2173,32 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             catch { }
 
             int delayMs = (EpisodesSectionBorder != null && EpisodesSectionBorder.Visibility == Visibility.Visible) ? 140 : 40;
-            var collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
-            collapseTimer.Tick += (ct, ce) =>
+            if (_collapseTimer == null)
             {
-                ((DispatcherTimer)ct!).Stop();
+                _collapseTimer = new DispatcherTimer();
+            }
+            else
+            {
+                _collapseTimer.Stop();
+                if (_collapseTimerTickHandler != null)
+                {
+                    _collapseTimer.Tick -= _collapseTimerTickHandler;
+                    _collapseTimerTickHandler = null;
+                }
+            }
+            _collapseTimer.Interval = TimeSpan.FromMilliseconds(delayMs);
+
+            _collapseTimerTickHandler = (ct, ce) =>
+            {
+                if (_collapseTimer != null)
+                {
+                    _collapseTimer.Stop();
+                    if (_collapseTimerTickHandler != null)
+                    {
+                        _collapseTimer.Tick -= _collapseTimerTickHandler;
+                        _collapseTimerTickHandler = null;
+                    }
+                }
 
                 // Restore compact typography and active item title/duration
                 if (TitleText != null)
@@ -2225,7 +2262,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 PlayCollapseAnimation(expandedLeft, expandedTop, expandedW, expandedH,
                     compactWidth, compactHeight, targetLeft, targetTop);
             };
-            collapseTimer.Start();
+            _collapseTimer.Tick += _collapseTimerTickHandler;
+            _collapseTimer.Start();
         }
     }
 
