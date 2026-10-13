@@ -1,0 +1,50 @@
+# Lumière Media Player - .editorconfig
+# Root editorconfig file for codebase quality, formatting, and Roslyn static analysis
+
+root = true
+
+# All files
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# C# files
+[*.cs]
+# Formatting
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_prefer_braces = true:warning
+
+# Language Rules
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_null_coalescing_operator = true:suggestion
+csharp_style_null_propagation = true:suggestion
+
+# Async and Threading Analyzers
+dotnet_diagnostic.CA2007.severity = none                    # ConfigureAwait(false) not strictly required in WinUI UI apps
+dotnet_diagnostic.CA2008.severity = warning                 # Do not create tasks without passing TaskScheduler
+dotnet_diagnostic.CA2012.severity = error                   # Use ValueTask correctly
+dotnet_diagnostic.CA2254.severity = warning                 # Template should be static string for logging
+dotnet_diagnostic.CA1822.severity = suggestion              # Mark members as static
+
+# Nullability & Quality
+dotnet_diagnostic.CS8600.severity = suggestion              # Converting null literal or possible null value to non-nullable type
+dotnet_diagnostic.CS8602.severity = warning                 # Dereference of a possibly null reference
+dotnet_diagnostic.CS8604.severity = warning                 # Possible null reference argument
+dotnet_diagnostic.CS8618.severity = suggestion              # Non-nullable variable must contain a non-null value
+
+# XAML files
+[*.xaml]
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true

@@ -31,6 +31,7 @@ public sealed partial class SelectionRibbon : UserControl
     public SelectionRibbon()
     {
         InitializeComponent();
+        SizeChanged += (_, e) => UpdateResponsiveRibbon(e.NewSize.Width);
     }
 
     public void UpdateSelection(IEnumerable<MediaItem> items)
@@ -83,7 +84,6 @@ public sealed partial class SelectionRibbon : UserControl
 
         try
         {
-            ElementCompositionPreview.SetIsTranslationEnabled(RibbonCard, true);
             var visual = ElementCompositionPreview.GetElementVisual(RibbonCard);
             var compositor = visual.Compositor;
 
@@ -95,9 +95,9 @@ public sealed partial class SelectionRibbon : UserControl
 
             var slideAnim = compositor.CreateVector3KeyFrameAnimation();
             slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 32));
+            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
             slideAnim.Duration = TimeSpan.FromMilliseconds(250);
-            visual.StartAnimation("Translation", slideAnim);
+            visual.StartAnimation("Offset", slideAnim);
         }
         catch
         {
@@ -111,7 +111,6 @@ public sealed partial class SelectionRibbon : UserControl
 
         try
         {
-            ElementCompositionPreview.SetIsTranslationEnabled(RibbonCard, true);
             var visual = ElementCompositionPreview.GetElementVisual(RibbonCard);
             var compositor = visual.Compositor;
 
@@ -127,12 +126,19 @@ public sealed partial class SelectionRibbon : UserControl
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             batch.Completed += (s, e) =>
             {
-                this.Visibility = Visibility.Collapsed;
-                visual.Opacity = 1.0f;
-                visual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, 0, 0));
+                try
+                {
+                    this.Visibility = Visibility.Collapsed;
+                    visual.Opacity = 1.0f;
+                    visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                }
+                finally
+                {
+                    batch.Dispose();
+                }
             };
             visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Translation", slideAnim);
+            visual.StartAnimation("Offset", slideAnim);
             batch.End();
         }
         catch
@@ -143,40 +149,61 @@ public sealed partial class SelectionRibbon : UserControl
 
     private void OnPlayClick(object sender, RoutedEventArgs e)
     {
-        if (PlayRequested != null)
+        try
         {
-            PlayRequested.Invoke(this, EventArgs.Empty);
+            if (PlayRequested != null)
+            {
+                PlayRequested.Invoke(this, EventArgs.Empty);
+            }
+            else if (_selectedItems.Count > 0)
+            {
+                AppServices.PlaybackViewModel.SetQueue(_selectedItems, 0);
+                ClearSelection();
+            }
         }
-        else if (_selectedItems.Count > 0)
+        catch (Exception ex)
         {
-            AppServices.PlaybackViewModel.SetQueue(_selectedItems, 0);
-            ClearSelection();
+            System.Diagnostics.Debug.WriteLine($"[SelectionRibbon.OnPlayClick] error: {ex.Message}");
         }
     }
 
     private void OnPlayNextClick(object sender, RoutedEventArgs e)
     {
-        if (PlayNextRequested != null)
+        try
         {
-            PlayNextRequested.Invoke(this, EventArgs.Empty);
+            if (PlayNextRequested != null)
+            {
+                PlayNextRequested.Invoke(this, EventArgs.Empty);
+            }
+            else if (_selectedItems.Count > 0)
+            {
+                AppServices.PlaybackViewModel.PlayNextRange(_selectedItems);
+                ClearSelection();
+            }
         }
-        else if (_selectedItems.Count > 0)
+        catch (Exception ex)
         {
-            AppServices.PlaybackViewModel.PlayNextRange(_selectedItems);
-            ClearSelection();
+            System.Diagnostics.Debug.WriteLine($"[SelectionRibbon.OnPlayNextClick] error: {ex.Message}");
         }
     }
 
     private void OnAddToQueueClick(object sender, RoutedEventArgs e)
     {
-        if (AddToQueueRequested != null)
+        try
         {
-            AddToQueueRequested.Invoke(this, EventArgs.Empty);
+            if (AddToQueueRequested != null)
+            {
+                AddToQueueRequested.Invoke(this, EventArgs.Empty);
+            }
+            else if (_selectedItems.Count > 0)
+            {
+                AppServices.PlaybackViewModel.EnqueueRange(_selectedItems);
+                ClearSelection();
+            }
         }
-        else if (_selectedItems.Count > 0)
+        catch (Exception ex)
         {
-            AppServices.PlaybackViewModel.EnqueueRange(_selectedItems);
-            ClearSelection();
+            System.Diagnostics.Debug.WriteLine($"[SelectionRibbon.OnAddToQueueClick] error: {ex.Message}");
         }
     }
 
@@ -227,7 +254,14 @@ public sealed partial class SelectionRibbon : UserControl
                     var itemsSnapshot = _selectedItems.ToList();
                     plItem.Click += async (s, args) =>
                     {
-                        await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
+                        try
+                        {
+                            await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, itemsSnapshot);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[SelectionRibbon] AddTracksToPlaylistAsync error: {ex.Message}");
+                        }
                     };
                     flyout.Items.Add(plItem);
                 }
@@ -242,7 +276,14 @@ public sealed partial class SelectionRibbon : UserControl
             var itemsForDialog = _selectedItems.ToList();
             newPlItem.Click += async (s, args) =>
             {
-                await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot);
+                try
+                {
+                    await MediaFlyoutHelper.ShowNewPlaylistDialogAsync(itemsForDialog, this.XamlRoot);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SelectionRibbon] ShowNewPlaylistDialogAsync error: {ex.Message}");
+                }
             };
             flyout.Items.Add(newPlItem);
 
@@ -293,17 +334,24 @@ public sealed partial class SelectionRibbon : UserControl
         SelectAllRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnRemoveClick(object sender, RoutedEventArgs e)
+    private async void OnRemoveClick(object sender, RoutedEventArgs e)
     {
-        if (RemoveRequested != null)
+        try
         {
-            RemoveRequested.Invoke(this, EventArgs.Empty);
+            if (RemoveRequested != null)
+            {
+                RemoveRequested.Invoke(this, EventArgs.Empty);
+            }
+            else if (_selectedItems.Count > 0)
+            {
+                var itemsSnapshot = _selectedItems.ToList();
+                await MediaLibraryService.RemoveTracksAsync(itemsSnapshot);
+                ClearSelection();
+            }
         }
-        else if (_selectedItems.Count > 0)
+        catch (Exception ex)
         {
-            var itemsSnapshot = _selectedItems.ToList();
-            _ = MediaLibraryService.RemoveTracksAsync(itemsSnapshot);
-            ClearSelection();
+            System.Diagnostics.Debug.WriteLine($"[SelectionRibbon.OnRemoveClick] error: {ex.Message}");
         }
     }
 
@@ -324,5 +372,29 @@ public sealed partial class SelectionRibbon : UserControl
         if (MasterCheckBox != null) MasterCheckBox.IsChecked = false;
         _suppressMasterCheckEvents = false;
         HideRibbon();
+    }
+
+    private void UpdateResponsiveRibbon(double width)
+    {
+        if (width <= 0) return;
+
+        bool isCompact = width < 620.0;
+        if (RibbonGrid != null) RibbonGrid.ColumnSpacing = isCompact ? 8 : 24;
+        if (ActionButtonsPanel != null) ActionButtonsPanel.Spacing = isCompact ? 4 : 8;
+
+        var textVis = isCompact ? Visibility.Collapsed : Visibility.Visible;
+        if (PlayNextText != null) PlayNextText.Visibility = textVis;
+        if (QueueText != null) QueueText.Visibility = textVis;
+        if (AddToPlaylistText != null) AddToPlaylistText.Visibility = textVis;
+        if (RemoveText != null) RemoveText.Visibility = textVis;
+        if (PropertiesText != null) PropertiesText.Visibility = textVis;
+
+        var compactPadding = new Thickness(10, 0, 10, 0);
+        var normalPadding = new Thickness(13, 0, 13, 0);
+        if (PlayNextButton != null) PlayNextButton.Padding = isCompact ? compactPadding : normalPadding;
+        if (AddToQueueButton != null) AddToQueueButton.Padding = isCompact ? compactPadding : normalPadding;
+        if (AddToPlaylistButton != null) AddToPlaylistButton.Padding = isCompact ? compactPadding : normalPadding;
+        if (RemoveButton != null) RemoveButton.Padding = isCompact ? compactPadding : normalPadding;
+        if (PropertiesButton != null) PropertiesButton.Padding = isCompact ? compactPadding : normalPadding;
     }
 }

@@ -71,7 +71,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                     }
                 }
 
-                if (!string.IsNullOrEmpty(json))
+                if (!string.IsNullOrWhiteSpace(json))
                 {
                     var searchResponse = JsonSerializer.Deserialize<MusicApiSearchResponse>(json, _jsonOptions);
                     if (searchResponse?.Results != null)

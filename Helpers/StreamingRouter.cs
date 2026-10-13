@@ -272,7 +272,7 @@ namespace LumiereMediaPlayer.Helpers
                 }
                 else if (host.Contains("hotstar.com"))
                 {
-                    var qMatch = Regex.Match(uri.Query, @"[?&](?:q|search_query)=([^&]+)", RegexOptions.IgnoreCase);
+                    var qMatch = Regex.Match(uri.Query, @"[?&](?:q|search_query|searchQuery)=([^&]+)", RegexOptions.IgnoreCase);
                     if (qMatch.Success)
                     {
                         return new Uri($"hotstar://search?q={qMatch.Groups[1].Value}");

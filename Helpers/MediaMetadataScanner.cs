@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
 using Windows.Storage;
@@ -45,19 +46,6 @@ public static class MediaMetadataScanner
                 }
             }
             catch { }
-
-            // If not in FutureAccessList, try getting by path
-            if (storageFile == null)
-            {
-                try
-                {
-                    if (File.Exists(playablePath))
-                    {
-                        storageFile = await StorageFile.GetFileFromPathAsync(playablePath);
-                    }
-                }
-                catch { }
-            }
 
             long fileSize = 0;
             if (storageFile != null)
@@ -239,8 +227,8 @@ public static class MediaMetadataScanner
                 posterUrl = await ExtractRandomVideoFrameAsync(item.Id, storageFile);
             }
 
-            // Apply results on main dispatcher to update UI cleanly
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            // Apply results on main dispatcher to update UI cleanly, or directly if no dispatcher
+            void ApplyUpdates()
             {
                 try
                 {
@@ -328,21 +316,39 @@ public static class MediaMetadataScanner
                         item.Encoder = vTrack.Name;
                     }
 
-                    string fName = Path.GetFileName(playablePath);
-                    if (fName.Contains("DV", StringComparison.OrdinalIgnoreCase) || fName.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase))
+                    if (vTrack != null && !string.IsNullOrEmpty(vTrack.HdrFormat))
                     {
-                        item.HdrFormat = fName.Contains("HDR", StringComparison.OrdinalIgnoreCase) ? "Dolby Vision / HDR10" : "Dolby Vision";
+                        item.HdrFormat = vTrack.HdrFormat;
+                        if (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10)
+                        {
+                            item.BitDepth = $"{Math.Max(vTrack.BitDepth, vTrack.VideoBitDepth)}-bit";
+                        }
+                    }
+
+                    string fName = Path.GetFileName(playablePath);
+                    if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])"))
+                    {
+                        bool isHdrToken = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG)(?:$|[\s._\-\])+])");
+                        item.HdrFormat = isHdrToken ? "Dolby Vision / HDR10" : "Dolby Vision";
                         item.BitDepth = "10-bit";
                     }
-                    else if (fName.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                    else if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG|ST2084|ST-2084|BT2020|BT\.2020)(?:$|[\s._\-\])+])"))
                     {
-                        item.HdrFormat = fName.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) ? "HDR10+" : "HDR10";
+                        if (string.IsNullOrEmpty(item.HdrFormat) || item.HdrFormat == "SDR")
+                        {
+                            item.HdrFormat = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR10\+|HDR10Plus)(?:$|[\s._\-\])+])") ? "HDR10+" :
+                                             Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])HLG(?:$|[\s._\-\])+])") ? "HLG" : "HDR10";
+                        }
                         item.BitDepth = "10-bit";
                     }
 
                     if (fName.Contains("10bit", StringComparison.OrdinalIgnoreCase) || fName.Contains("10-bit", StringComparison.OrdinalIgnoreCase))
                     {
                         item.BitDepth = "10-bit";
+                    }
+                    else if (vTrack != null && (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10))
+                    {
+                        item.BitDepth = $"{Math.Max(vTrack.BitDepth, vTrack.VideoBitDepth)}-bit";
                     }
 
                     if (fName.Contains("IMAX", StringComparison.OrdinalIgnoreCase))
@@ -372,7 +378,17 @@ public static class MediaMetadataScanner
                 {
                     System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] UI update error: {ex.Message}");
                 }
-            });
+            }
+
+            var dispatcher = App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(ApplyUpdates);
+            }
+            else
+            {
+                ApplyUpdates();
+            }
         }
         catch (Exception ex)
         {
@@ -392,23 +408,7 @@ public static class MediaMetadataScanner
         try
         {
             string path = item.SourcePath;
-            StorageFile? storageFile = null;
-
-            try
-            {
-                if (Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.ContainsItem(item.Id))
-                {
-                    storageFile = await Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.GetFileAsync(item.Id);
-                }
-            }
-            catch { }
-
-            if (storageFile == null && File.Exists(path))
-            {
-                try { storageFile = await StorageFile.GetFileFromPathAsync(path); } catch { }
-            }
-
-            // 1. Try TagLib
+            // 1. Try TagLib embedded artwork first via direct Win32 FileStream (fastest, zero WinRT permission overhead)
             if (File.Exists(path))
             {
                 try
@@ -432,7 +432,18 @@ public static class MediaMetadataScanner
                 catch { }
             }
 
-            // 2. Try Windows Shell Thumbnail
+            // 2. If no embedded picture, check if file is accessible via FutureAccessList token
+            StorageFile? storageFile = null;
+            try
+            {
+                if (Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.ContainsItem(item.Id))
+                {
+                    storageFile = await Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.GetFileAsync(item.Id);
+                }
+            }
+            catch { }
+
+            // 3. Try Windows Shell Thumbnail if storageFile exists
             if (storageFile != null)
             {
                 try
@@ -454,16 +465,9 @@ public static class MediaMetadataScanner
                     }
                 }
                 catch { }
-            }
 
-            // 3. For videos, extract a random frame using MediaComposition
-            if (item.Kind == MediaKind.Video)
-            {
-                if (storageFile == null && File.Exists(path))
-                {
-                    try { storageFile = await StorageFile.GetFileFromPathAsync(path); } catch { }
-                }
-                if (storageFile != null)
+                // 4. For videos, extract a random frame using MediaComposition
+                if (item.Kind == MediaKind.Video)
                 {
                     var frameThumb = await ExtractRandomVideoFrameAsync(item.Id, storageFile);
                     if (!string.IsNullOrEmpty(frameThumb)) return frameThumb;

@@ -26,7 +26,7 @@ public sealed partial class VideoPage : Page
     private readonly RoutedEventHandler _closeFullscreenHandler;
     private bool _eventHandlersDetached = true;
     private int _videoTapClickCount = 0;
-    private System.Threading.CancellationTokenSource? _videoTapCts;
+    private int _videoTapVersion = 0;
     private RoutedEventHandler? _streamingClickHandler;
     private RoutedEventHandler? _fullscreenStreamingClickHandler;
 
@@ -140,6 +140,7 @@ public sealed partial class VideoPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
         AttachEventHandlers();
         SyncMediaPlayer(true);
         UpdateUiLuminance();
@@ -149,6 +150,7 @@ public sealed partial class VideoPage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
         DetachEventHandlers();
     }
 
@@ -173,10 +175,17 @@ public sealed partial class VideoPage : Page
             DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
         }
         else if (e.PropertyName is nameof(VideoViewModel.FilteredVideos)
-                 or nameof(VideoViewModel.OverlayVisibility)
-                 or nameof(VideoViewModel.PlayerVisibility))
+                 or nameof(VideoViewModel.OverlayVisibility))
         {
             DispatcherQueue.TryEnqueue(UpdateEmptyState);
+        }
+        else if (e.PropertyName is nameof(VideoViewModel.PlayerVisibility))
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UpdateEmptyState();
+                SyncMediaPlayer(true);
+            });
         }
     }
 
@@ -201,6 +210,11 @@ public sealed partial class VideoPage : Page
             DispatcherQueue.TryEnqueue(async () =>
             {
                 SyncMediaPlayer(true);
+                if (AppServices.PlaybackViewModel.CurrentTrack == null)
+                {
+                    HideMetadataOverlay();
+                    return;
+                }
                 if (ViewModel.CurrentVideo != null)
                 {
                     bool isFsVisible = App.MainWindowInstance != null && App.MainWindowInstance.FullscreenMetadataOverlay.Visibility == Visibility.Visible;
@@ -217,6 +231,7 @@ public sealed partial class VideoPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
         AttachEventHandlers();
         UpdateUiLuminance();
         DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
@@ -225,6 +240,8 @@ public sealed partial class VideoPage : Page
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+        try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
+        VideoSelectionRibbon?.ClearSelection();
         App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
         DetachEventHandlers();
     }
@@ -250,6 +267,7 @@ public sealed partial class VideoPage : Page
             }
             UpdateEmptyState();
             PageContent.Opacity = 1.0;
+            SyncMediaPlayer(true);
         }
         catch (System.Exception ex)
         {
@@ -406,11 +424,9 @@ public sealed partial class VideoPage : Page
                 HideMetadataOverlay();
                 AppServices.Playback.Stop();
                 AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
-                App.MainWindowInstance?.GlobalVideoPlayer?.SetMediaPlayer(null);
                 if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
                 if (App.MainWindowInstance?.FullscreenInternetMetadataPoster != null)
                     App.MainWindowInstance.FullscreenInternetMetadataPoster.Source = null;
-                MemoryTrimHelper.TrimWorkingSet();
                 App.MainWindowInstance?.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
             };
             StreamingDetailsButton.Click += _streamingClickHandler;
@@ -426,18 +442,15 @@ public sealed partial class VideoPage : Page
                 _fullscreenStreamingClickHandler = async (s, args) =>
                 {
                     HideMetadataOverlay();
-                    AppServices.Playback.Stop();
-                    AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
-                    mainWin.GlobalVideoPlayer?.SetMediaPlayer(null);
-                    if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
-                    if (mainWin.FullscreenInternetMetadataPoster != null)
-                        mainWin.FullscreenInternetMetadataPoster.Source = null;
-                    MemoryTrimHelper.TrimWorkingSet();
-
                     if (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
                     {
                         await mainWin.SetFullScreenModeAsync(false);
                     }
+                    AppServices.Playback.Stop();
+                    AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
+                    if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
+                    if (mainWin.FullscreenInternetMetadataPoster != null)
+                        mainWin.FullscreenInternetMetadataPoster.Source = null;
 
                     mainWin.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
                 };
@@ -501,7 +514,7 @@ public sealed partial class VideoPage : Page
         {
             e.Handled = true;
             _videoTapClickCount = 0;
-            _videoTapCts?.Cancel();
+            _videoTapVersion++;
             App.MainWindowInstance?.ToggleFullscreen();
         }
     }
@@ -520,30 +533,17 @@ public sealed partial class VideoPage : Page
 
                     if (_videoTapClickCount == 1)
                     {
-                        var cts = new System.Threading.CancellationTokenSource();
-                        _videoTapCts = cts;
-                        try
+                        int tapVersion = ++_videoTapVersion;
+                        await System.Threading.Tasks.Task.Delay(225);
+                        if (tapVersion != _videoTapVersion) return;
+                        _videoTapClickCount = 0;
+                        if (AppServices.PlaybackViewModel.IsPlaying)
                         {
-                            await System.Threading.Tasks.Task.Delay(225, cts.Token);
-                            if (AppServices.PlaybackViewModel.IsPlaying)
-                            {
-                                AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
-                            }
-                            else
-                            {
-                                AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
-                            }
+                            AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
                         }
-                        catch (System.Threading.Tasks.TaskCanceledException)
+                        else
                         {
-                        }
-                        finally
-                        {
-                            _videoTapClickCount = 0;
-                            // Only dispose if we still own the CTS (another tap may have replaced it)
-                            if (_videoTapCts == cts)
-                                _videoTapCts = null;
-                            cts.Dispose();
+                            AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
                         }
                     }
                 }
@@ -599,9 +599,30 @@ public sealed partial class VideoPage : Page
         VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private bool _isUpdatingQueueSelectAll;
+
+    private void OnCheckBoxTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void OnCheckBoxDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
     private void OnVideoTrackCheckBoxClicked(object sender, RoutedEventArgs e)
     {
+        if (sender is CheckBox cb)
+        {
+            var item = cb.DataContext as MediaItem ?? (cb.Parent as FrameworkElement)?.DataContext as MediaItem;
+            if (item != null)
+            {
+                item.IsSelected = cb.IsChecked == true;
+            }
+        }
         VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+        UpdateQueueSelectAllState();
     }
 
     private void OnVideoItemTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
@@ -618,6 +639,7 @@ public sealed partial class VideoPage : Page
             {
                 video.IsSelected = !video.IsSelected;
                 VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
                 e.Handled = true;
                 return;
             }
@@ -629,12 +651,72 @@ public sealed partial class VideoPage : Page
 
     private void OnCardSelectionChanged(object? sender, EventArgs e)
     {
-        if (AppServices.PlaybackViewModel.IsVideoPlayerActive || !ViewModel.ShowNoSourceOverlay)
+        VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+        UpdateQueueSelectAllState();
+    }
+
+    private void OnQueueSelectAllClick(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingQueueSelectAll) return;
+        bool targetState = QueueSelectAllCheckBox?.IsChecked == true;
+        foreach (var v in ViewModel.FilteredVideos)
+        {
+            v.IsSelected = targetState;
+        }
+        if (targetState)
+        {
+            VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+        }
+        else
         {
             VideoSelectionRibbon?.ClearSelection();
-            return;
+        }
+    }
+
+    private void OnQueueSelectAllChecked(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingQueueSelectAll) return;
+        foreach (var v in ViewModel.FilteredVideos)
+        {
+            v.IsSelected = true;
         }
         VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+    }
+
+    private void OnQueueSelectAllUnchecked(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingQueueSelectAll) return;
+        foreach (var v in ViewModel.FilteredVideos)
+        {
+            v.IsSelected = false;
+        }
+        VideoSelectionRibbon?.ClearSelection();
+    }
+
+    private void UpdateQueueSelectAllState()
+    {
+        if (QueueSelectAllCheckBox == null || ViewModel.FilteredVideos.Count == 0) return;
+        _isUpdatingQueueSelectAll = true;
+        try
+        {
+            int selectedCount = ViewModel.FilteredVideos.Count(v => v.IsSelected);
+            if (selectedCount == 0)
+            {
+                QueueSelectAllCheckBox.IsChecked = false;
+            }
+            else if (selectedCount == ViewModel.FilteredVideos.Count)
+            {
+                QueueSelectAllCheckBox.IsChecked = true;
+            }
+            else
+            {
+                QueueSelectAllCheckBox.IsChecked = null;
+            }
+        }
+        finally
+        {
+            _isUpdatingQueueSelectAll = false;
+        }
     }
 
     private void OnVideoPlayRequested(object? sender, EventArgs e)
@@ -644,6 +726,7 @@ public sealed partial class VideoPage : Page
         {
             AppServices.PlaybackViewModel.SetQueue(selected, 0);
             VideoSelectionRibbon?.ClearSelection();
+            UpdateQueueSelectAllState();
         }
     }
 
@@ -654,6 +737,7 @@ public sealed partial class VideoPage : Page
         {
             AppServices.PlaybackViewModel.PlayNextRange(selected);
             VideoSelectionRibbon?.ClearSelection();
+            UpdateQueueSelectAllState();
         }
     }
 
@@ -664,6 +748,7 @@ public sealed partial class VideoPage : Page
         {
             AppServices.PlaybackViewModel.EnqueueRange(selected);
             VideoSelectionRibbon?.ClearSelection();
+            UpdateQueueSelectAllState();
         }
     }
 
@@ -674,6 +759,7 @@ public sealed partial class VideoPage : Page
             v.IsSelected = true;
         }
         VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+        UpdateQueueSelectAllState();
     }
 
     private void OnVideoClearRequested(object? sender, EventArgs e)
@@ -683,6 +769,7 @@ public sealed partial class VideoPage : Page
             v.IsSelected = false;
         }
         VideoSelectionRibbon?.ClearSelection();
+        UpdateQueueSelectAllState();
     }
 
     private async void OnVideoRemoveRequested(object? sender, EventArgs e)
@@ -694,6 +781,7 @@ public sealed partial class VideoPage : Page
             {
                 await MediaLibraryService.RemoveTracksAsync(selected);
                 VideoSelectionRibbon?.ClearSelection();
+                UpdateQueueSelectAllState();
             }
         }
         catch (Exception ex)
@@ -777,6 +865,7 @@ public sealed partial class VideoPage : Page
             {
                 video.IsSelected = !video.IsSelected;
                 VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
                 return;
             }
 

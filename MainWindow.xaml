@@ -32,6 +32,7 @@
         <!-- Left Pane Navigation and Content Frame -->
         <NavigationView
             x:Name="RootNavigationView"
+            x:FieldModifier="public"
             Grid.Row="0"
             IsTabStop="False"
             IsBackButtonVisible="Collapsed"
@@ -54,7 +55,7 @@
             <NavigationView.PaneHeader>
                 <Grid Height="40" VerticalAlignment="Center" Margin="6,0,0,0">
                     <StackPanel x:Name="PaneBrandPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Image Width="18" Height="18" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
+                        <Image x:Name="TitleBarBrandIcon" Width="18" Height="18" UseLayoutRounding="True" Source="ms-appx:///Assets/Icons/Lumiere_Dark_Blue_small.png" VerticalAlignment="Center" Stretch="Uniform" />
                         <TextBlock
                             FontSize="12"
                             FontWeight="SemiBold"
@@ -711,11 +712,11 @@
             PointerExited="OnControlsPointerExited">
             <Grid.ColumnDefinitions>
                 <!-- Column 0: 48px slot for Back / Hamburger button -->
-                <ColumnDefinition Width="48" />
+                <ColumnDefinition x:Name="AppTitleBarLeftPaddingColumn" Width="48" />
                 <!-- Column 1: Window drag region -->
                 <ColumnDefinition Width="*" />
                 <!-- Column 2: System caption buttons -->
-                <ColumnDefinition Width="140" />
+                <ColumnDefinition x:Name="AppTitleBarRightPaddingColumn" Width="140" />
             </Grid.ColumnDefinitions>
 
             <!-- Hit-testable drag region in Column 1 -->
@@ -726,25 +727,27 @@
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch" />
 
-            <!-- App Title Brand Panel centered in the window header -->
+            <!-- App Title Brand Panel centered in the window header (Column 1 = drag region) -->
             <StackPanel
                 x:Name="CenteredTitleBrandPanel"
-                Grid.Column="0"
-                Grid.ColumnSpan="3"
+                Grid.Column="1"
                 Orientation="Horizontal"
                 Spacing="8"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
-                Margin="0,0,0,0"
+                Margin="4,0,4,0"
                 Visibility="Collapsed"
                 IsHitTestVisible="False">
-                <Image Width="16" Height="16" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
+                <Image x:Name="CenteredBrandIcon" Width="16" Height="16" UseLayoutRounding="True" Source="ms-appx:///Assets/Icons/Lumiere_Dark_Blue_small.png" VerticalAlignment="Center" Stretch="Uniform" />
                 <TextBlock
+                    x:Name="CenteredBrandText"
                     FontSize="12"
                     FontWeight="SemiBold"
                     Text="Lumière Media Player"
                     Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                    VerticalAlignment="Center" />
+                    VerticalAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    MaxWidth="240" />
             </StackPanel>
 
             <!-- Custom back button for video overlay mode -->
@@ -778,7 +781,7 @@
         </Grid>
 
         <!-- The Fullscreen Video Container -->
-        <Grid x:Name="FullscreenVideoContainer" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" RequestedTheme="Dark" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged" SizeChanged="OnFullscreenVideoContainerSizeChanged">
+        <Grid x:Name="FullscreenVideoContainer" Canvas.ZIndex="50" Visibility="Collapsed" Background="#FF000000" Grid.RowSpan="2" RequestedTheme="Dark" DoubleTapped="OnVideoDoubleTapped" Tapped="OnVideoTapped" PointerWheelChanged="OnVideoPointerWheelChanged" SizeChanged="OnFullscreenVideoContainerSizeChanged">
 
 
             <!-- Fullscreen Controls Overlay — sits above video, fades in/out -->
@@ -793,7 +796,9 @@
                 <Grid
                     x:Name="FullscreenTopBar"
                     Grid.Row="0"
-                    Height="80">
+                    Height="80"
+                    PointerEntered="OnControlsPointerEntered"
+                    PointerExited="OnControlsPointerExited">
                     <Grid.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                             <GradientStop Color="#99000000" Offset="0"/>
@@ -829,12 +834,12 @@
                             <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
                             <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="White" />
                         </Button.Resources>
-                        <AnimatedIcon x:Name="FullscreenBackAnimatedIcon" Width="16" Height="16">
+                        <AnimatedIcon x:Name="FullscreenBackAnimatedIcon" Width="16" Height="16" Foreground="White">
                             <AnimatedIcon.Source>
                                 <animatedvisuals:AnimatedBackVisualSource />
                             </AnimatedIcon.Source>
                             <AnimatedIcon.FallbackIconSource>
-                                <SymbolIconSource Symbol="Back" />
+                                <SymbolIconSource Symbol="Back" Foreground="White" />
                             </AnimatedIcon.FallbackIconSource>
                         </AnimatedIcon>
                     </Button>
@@ -856,14 +861,14 @@
                 x:FieldModifier="public"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
-                Margin="24,64,24,24"
+                Margin="24,64,24,96"
                 Padding="20"
                 CornerRadius="8"
                 Visibility="Collapsed"
-                RequestedTheme="Dark"
-                Background="#E6141418"
+                Background="{ThemeResource FlyoutPresenterBackground}"
                 BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
                 BorderThickness="1"
+                Canvas.ZIndex="60"
                 Translation="0,0,32">
                 <Border.Shadow>
                     <ThemeShadow />
@@ -880,12 +885,12 @@
                             VerticalAlignment="Top" 
                             Background="Transparent"
                             BorderBrush="Transparent">
-                        <FontIcon Glyph="&#xE711;" FontSize="16" Foreground="White" />
+                        <FontIcon Glyph="&#xE711;" FontSize="16" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Button>
                     
                     <ScrollViewer VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                         <StackPanel Spacing="12" MaxWidth="350">
-                    <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
+                    <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     
                     <Grid ColumnSpacing="20" RowSpacing="8">
                         <Grid.ColumnDefinitions>
@@ -906,42 +911,42 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Resolution, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Aspect Ratio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AspectRatio, Mode=OneWay, TargetNullValue='16:9'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Video Codec" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.Codec, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="HDR / Color" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                         <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.HdrFormat, Mode=OneWay, TargetNullValue='SDR'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
 
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Audio" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Audio Streams" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.AudioTracksSummary, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SubtitlesSummary, Mode=OneWay, TargetNullValue='None'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
                         <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                         <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.BitrateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                             <TextBlock Text="•" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FrameRateText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </StackPanel>
 
                         <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                         <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.ContainerFormat, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                             <TextBlock Text="•" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                            <TextBlock Text="{x:Bind Playback.CurrentTrack.FileSizeText, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </StackPanel>
 
                         <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="White" />
+                        <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind Playback.CurrentTrack.SourcePath, Mode=OneWay, FallbackValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="260" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Grid>
 
                     <!-- Divider between File Information and Internet Match -->
@@ -949,7 +954,7 @@
 
                     <!-- Internet Metadata Match (syncs with normal mode's metadata side panel) -->
                     <StackPanel x:Name="FullscreenInternetMetadataPanel" x:FieldModifier="public" Spacing="12" Visibility="Collapsed" Width="300">
-                        <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
+                        <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         <ProgressRing x:Name="FullscreenInternetMetadataProgress" x:FieldModifier="public" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                         
                         <Grid x:Name="FullscreenInternetMetadataContent" x:FieldModifier="public" ColumnSpacing="12" Visibility="Collapsed">
@@ -961,13 +966,13 @@
                                 <Image x:Name="FullscreenInternetMetadataPoster" x:FieldModifier="public" Width="90" Stretch="UniformToFill" MaxHeight="130" />
                             </Border>
                             <StackPanel Grid.Column="1" Spacing="8">
-                                <TextBlock x:Name="FullscreenInternetMetadataTitle" x:FieldModifier="public" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" FontSize="14" />
+                                <TextBlock x:Name="FullscreenInternetMetadataTitle" x:FieldModifier="public" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontSize="14" />
                                 <TextBlock x:Name="FullscreenInternetMetadataOverview" x:FieldModifier="public" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" LineHeight="16" />
                             </StackPanel>
                         </Grid>
 
                         <StackPanel x:Name="FullscreenInternetMetadataProvidersPanel" x:FieldModifier="public" Spacing="8" Visibility="Collapsed">
-                            <Button x:Name="FullscreenStreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="{ThemeResource AccentFillColorDefaultBrush}" Foreground="White" BorderBrush="Transparent" />
+                            <Button x:Name="FullscreenStreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="{ThemeResource AccentFillColorDefaultBrush}" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" BorderBrush="Transparent" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -1036,7 +1041,7 @@
             x:Name="MiniPlayerGrid"
             Grid.Row="0"
             Grid.RowSpan="2"
-            Background="#FF0C0C0E"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
             Visibility="Collapsed"
             IsHitTestVisible="False"
             PointerMoved="OnMiniPlayerPointerMoved"
@@ -1064,7 +1069,7 @@
                     Opacity="0.30" />
                 
                 <!-- Dark Vignette over ambient art -->
-                <Rectangle Fill="#85000000" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                <Rectangle x:Name="MiniAudioVignette" Fill="#85000000" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
                 <!-- Center Cover Art Card -->
                 <Border
@@ -1074,7 +1079,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Margin="0,0,0,36"
-                    BorderBrush="#35FFFFFF"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1">
                     <Border.Shadow>
                         <ThemeShadow />
@@ -1124,14 +1129,14 @@
                             Text="Track Title"
                             FontSize="12"
                             FontWeight="SemiBold"
-                            Foreground="White"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
                         <TextBlock
                             x:Name="MiniArtistTitle"
                             Text="Artist Name"
                             FontSize="12"
-                            Foreground="#B3FFFFFF"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
                     </StackPanel>
@@ -1173,7 +1178,7 @@
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                 FontSize="16"
                                 Glyph="&#xE93A;"
-                                Foreground="White" />
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </Button>
                     </StackPanel>
                 </Grid>
@@ -1182,8 +1187,8 @@
                 <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border
                         CornerRadius="26"
-                        Background="#80121216"
-                        BorderBrush="#35FFFFFF"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
                         BorderThickness="1"
                         Padding="12,8"
                         Translation="0,0,16">
@@ -1206,7 +1211,7 @@
                                 ToolTipService.ToolTip="Previous"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                             </Button>
 
                             <!-- Play/Pause Button (Exact button used in Media Player) -->
@@ -1232,6 +1237,7 @@
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                         FontSize="16"
                                         Glyph="&#xE768;"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         Margin="2,0,0,0" />
@@ -1249,7 +1255,7 @@
                                 ToolTipService.ToolTip="Next"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                             </Button>
                         </StackPanel>
                     </Border>
@@ -1296,14 +1302,14 @@
                             Text="00:00"
                             FontSize="12"
                             FontWeight="Medium"
-                            Foreground="#B3FFFFFF"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Left" />
                         <TextBlock
                             x:Name="MiniDurationText"
                             Text="00:00"
                             FontSize="12"
                             FontWeight="Medium"
-                            Foreground="#B3FFFFFF"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Right" />
                     </Grid>
                 </Grid>

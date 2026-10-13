@@ -8,6 +8,12 @@ namespace LumiereMediaPlayer.Services
     public static class HttpHelper
     {
         private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
+        private static DateTime _lastRateLimitUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Indicates whether the proxy recently reported a 429 rate limit (within 30 seconds).
+        /// </summary>
+        public static bool IsRateLimited => (DateTime.UtcNow - _lastRateLimitUtc) < TimeSpan.FromSeconds(30);
 
         /// <summary>
         /// Sends a GET request. If proxy is active and configured, it routes via proxy.
@@ -40,29 +46,63 @@ namespace LumiereMediaPlayer.Services
                         return await response.Content.ReadAsStringAsync(cancellationToken);
                     }
 
-                    if (response.StatusCode == (System.Net.HttpStatusCode)429 && i < maxRetries - 1)
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
-                        await Task.Delay(delayMs, cancellationToken);
-                        delayMs *= 2; // exponential backoff
+                        // Resource does not exist (e.g. 404). Do not retry, return empty string cleanly.
+                        return string.Empty;
+                    }
+
+                    if (response.StatusCode == (System.Net.HttpStatusCode)429)
+                    {
+                        _lastRateLimitUtc = DateTime.UtcNow;
+                        if (i < maxRetries - 1)
+                        {
+                            await Task.Delay(delayMs);
+                            if (cancellationToken.IsCancellationRequested) return string.Empty;
+                            delayMs *= 2; // exponential backoff
+                            continue;
+                        }
+
+                        System.Diagnostics.Debug.WriteLine($"[HttpHelper] Proxy rate limit (429) reached for {servicePath}");
+                        return string.Empty;
+                    }
+
+                    // Client errors (4xx) other than 429 are permanent; do not retry
+                    if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[HttpHelper] Client error {(int)response.StatusCode} for {servicePath}");
+                        return string.Empty;
+                    }
+
+                    // 5xx server errors: retry if attempts remain
+                    if (i < maxRetries - 1)
+                    {
+                        await Task.Delay(delayMs);
+                        if (cancellationToken.IsCancellationRequested) return string.Empty;
+                        delayMs *= 2;
                         continue;
                     }
 
-                    if (i == maxRetries - 1 || response.StatusCode != (System.Net.HttpStatusCode)429)
-                    {
-                        throw new HttpRequestException($"Proxy request failed with status code: {response.StatusCode} for {servicePath}");
-                    }
+                    return string.Empty;
                 }
                 catch (HttpRequestException ex) when (i < maxRetries - 1 && !cancellationToken.IsCancellationRequested)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[HttpHelper] Transient proxy error on attempt {i + 1} for {servicePath}: {ex.Message}. Retrying...");
-                    await Task.Delay(delayMs, cancellationToken);
+                    System.Diagnostics.Debug.WriteLine($"[HttpHelper] Network error on attempt {i + 1} for {servicePath}: {ex.Message}. Retrying...");
+                    await Task.Delay(delayMs);
+                    if (cancellationToken.IsCancellationRequested) return string.Empty;
                     delayMs *= 2;
                 }
                 catch (TaskCanceledException ex) when (i < maxRetries - 1 && !cancellationToken.IsCancellationRequested)
                 {
                     System.Diagnostics.Debug.WriteLine($"[HttpHelper] Proxy request timeout on attempt {i + 1} for {servicePath}: {ex.Message}. Retrying...");
-                    await Task.Delay(delayMs, cancellationToken);
+                    await Task.Delay(delayMs);
+                    if (cancellationToken.IsCancellationRequested) return string.Empty;
                     delayMs *= 2;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HttpHelper] Request exception for {servicePath}: {ex.Message}");
+                    return string.Empty;
                 }
             }
 

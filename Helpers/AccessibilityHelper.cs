@@ -74,11 +74,11 @@ public static class AccessibilityHelper
         }
     }
 
-    public static void ApplyCaptionsPreference(MediaPlayer player)
+    public static void ApplyCaptionsPreference(MediaPlayer? player)
     {
         try
         {
-            if (player.Source is not MediaPlaybackItem item)
+            if (player?.Source is not MediaPlaybackItem item)
             {
                 return;
             }

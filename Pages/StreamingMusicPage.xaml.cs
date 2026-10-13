@@ -60,11 +60,33 @@ namespace LumiereMediaPlayer.Pages
             PageContent.Opacity = 1.0;
         }
 
-        private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
             if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
             {
                 ViewModel.SearchQuery = sender.Text;
+                string query = sender.Text;
+                if (query.Length >= 3)
+                {
+                    try
+                    {
+                        var suggestions = await ViewModel.GetSearchSuggestionsAsync(query);
+                        sender.ItemsSource = suggestions;
+                    }
+                    catch { }
+                }
+                else
+                {
+                    sender.ItemsSource = null;
+                }
+            }
+        }
+
+        private void OnSearchSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        {
+            if (args.SelectedItem != null)
+            {
+                sender.Text = args.SelectedItem.ToString();
             }
         }
 

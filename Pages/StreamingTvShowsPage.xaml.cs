@@ -151,6 +151,14 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
+        private void OnSearchBoxSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        {
+            if (args.SelectedItem != null)
+            {
+                sender.Text = args.SelectedItem.ToString();
+            }
+        }
+
         private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs? args)
         {
             try
@@ -187,8 +195,6 @@ namespace LumiereMediaPlayer.Pages
         private void TriggerRegionReload()
         {
             if (ViewModel == null) return;
-            if (string.IsNullOrEmpty(ViewModel.ActiveSearchQuery)) _ = ViewModel.LoadTvShowsAsync();
-            else ViewModel.PerformSearchCommand.Execute(ViewModel.ActiveSearchQuery);
             if (MainPivot?.SelectedItem is PivotItem pi && pi.Header?.ToString() == "Trending")
             {
                 _ = LoadTrendingAsync();
@@ -230,20 +236,15 @@ namespace LumiereMediaPlayer.Pages
             PageContent.Opacity = 1.0;
         }
 
+        private DateTime _lastTvShowClickTime = DateTime.MinValue;
+
         private void OnTvShowClicked(object sender, ItemClickEventArgs e)
         {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
             if (e.ClickedItem is WatchmodeTitle tvShow)
             {
-                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
-                if (container != null)
-                {
-                    try
-                    {
-                        Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
-                    }
-                    catch { }
-                }
-
                 if (tvShow.TmdbId.HasValue && (tvShow.Id == 0 || tvShow.Id == tvShow.TmdbId.Value))
                 {
                     Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tvShow.TmdbId.Value}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
@@ -366,6 +367,7 @@ namespace LumiereMediaPlayer.Pages
                         catch { }
                     };
                 }
+                _heroTimer.Start();
                 CollapseInternalFlipViewButtons(TrendingHeroCarousel);
             }
             catch (Exception ex)
@@ -414,6 +416,8 @@ namespace LumiereMediaPlayer.Pages
                     int prev = TrendingHeroCarousel.SelectedIndex - 1;
                     if (prev < 0) prev = list.Count - 1;
                     TrendingHeroCarousel.SelectedIndex = prev;
+                    _heroTimer?.Stop();
+                    _heroTimer?.Start();
                 }
             }
             catch { }
@@ -427,6 +431,8 @@ namespace LumiereMediaPlayer.Pages
                 {
                     int next = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
                     TrendingHeroCarousel.SelectedIndex = next;
+                    _heroTimer?.Stop();
+                    _heroTimer?.Start();
                 }
             }
             catch { }
@@ -511,26 +517,22 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnTrendingItemClick(object sender, ItemClickEventArgs e)
         {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
             if (e.ClickedItem is TmdbMedia tmdbItem)
             {
-                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
-                if (container != null)
-                {
-                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
-                }
                 Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tmdbItem.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
         }
 
         private void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
             if (e.ClickedItem is SavedStreamingItem item)
             {
-                var container = ((GridView)sender).ContainerFromItem(e.ClickedItem) as UIElement;
-                if (container != null)
-                {
-                    Microsoft.UI.Xaml.Media.Animation.ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("PosterAnimation", container);
-                }
                 if (item.Id.StartsWith("tmdb_"))
                 {
                     Frame.Navigate(typeof(StreamingDetailsPage), (item.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
@@ -665,6 +667,14 @@ namespace LumiereMediaPlayer.Pages
             if (sender is Border border)
             {
                 border.Unloaded -= Card_Unloaded;
+                // Reset composition state to prevent recycled cards appearing in hover state
+                try
+                {
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                    visual.Scale = new System.Numerics.Vector3(1f, 1f, 1f);
+                    border.Translation = new System.Numerics.Vector3(0, 0, 0);
+                }
+                catch { }
                 if (border.Tag is CardShadowHolder holder)
                 {
                     try

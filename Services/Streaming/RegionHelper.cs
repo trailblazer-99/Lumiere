@@ -55,9 +55,27 @@ namespace LumiereMediaPlayer.Services.Streaming
 
         public static async Task<string> GetCurrentRegionAsync()
         {
+            var settings = LumiereMediaPlayer.AppServices.Settings?.Current;
+            if (settings?.UseLocationForRegion == true)
+            {
+                try
+                {
+                    var locationRegion = await LocationRegionService.Instance.RequestAndDetectRegionAsync();
+                    if (!string.IsNullOrEmpty(locationRegion))
+                    {
+                        _cachedRegion = locationRegion;
+                        return _cachedRegion;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to get region from Location: {ex.Message}");
+                }
+            }
+
             try
             {
-                var saved = LumiereMediaPlayer.AppServices.Settings?.Current?.PreferredStreamingRegion;
+                var saved = settings?.PreferredStreamingRegion;
                 if (!string.IsNullOrWhiteSpace(saved))
                 {
                     _cachedRegion = saved.ToUpperInvariant();

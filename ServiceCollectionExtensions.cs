@@ -23,6 +23,9 @@ public static class ServiceCollectionExtensions
         });
 
         // ── Core Services (Singletons) ──────────────────────────────
+        services.AddSingleton<ConfigService>();
+        services.AddSingleton<IConfigService>(sp => sp.GetRequiredService<ConfigService>());
+
         services.AddSingleton<SettingsService>();
         services.AddSingleton<ISettingsService>(sp => sp.GetRequiredService<SettingsService>());
 
@@ -30,7 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHistoryService>(sp => sp.GetRequiredService<HistoryService>());
 
         services.AddSingleton<PlaybackSession>(sp =>
-            new PlaybackSession(MediaLibraryService.AudioTracks));
+            new PlaybackSession(MediaLibraryService.AudioTracks.Count > 0
+                ? MediaLibraryService.AudioTracks
+                : Array.Empty<Models.MediaItem>()));
         services.AddSingleton<IPlaybackSession>(sp => sp.GetRequiredService<PlaybackSession>());
 
         services.AddSingleton<HdrPipelineService>();
@@ -39,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AdvancedColorDisplayManager>();
         services.AddSingleton<IDisplayManager>(sp => sp.GetRequiredService<AdvancedColorDisplayManager>());
 
+        services.AddSingleton<WatchmodeService>();
         services.AddSingleton<StreamingLibraryService>();
         services.AddSingleton<IStreamingLibraryService>(sp => sp.GetRequiredService<StreamingLibraryService>());
 
@@ -60,21 +66,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AppleTvLifecycleService>();
         services.AddSingleton<IAppleTvLifecycleService>(sp => sp.GetRequiredService<AppleTvLifecycleService>());
 
-        // ── ViewModels ──────────────────────────────────────────────
+        // ── ViewModels (Singletons matching AppServices Lazy singletons) ───
         services.AddSingleton<PlaybackViewModel>();
-
-        // Transient ViewModels — new instance per request (matches previous Lazy behavior
-        // since each ViewModel is only resolved once by the consuming page/control)
-        services.AddTransient<HomeViewModel>();
-        services.AddTransient<MusicLibraryViewModel>();
-        services.AddTransient<NowPlayingViewModel>();
-        services.AddTransient<SettingsViewModel>();
-        services.AddTransient<PlaylistsViewModel>();
-        services.AddTransient<VideoViewModel>();
-        services.AddTransient<QueueViewModel>();
-        services.AddTransient<StreamingMoviesViewModel>();
-        services.AddTransient<StreamingTvShowsViewModel>();
-        services.AddTransient<StreamingMusicViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<HomeViewModel>();
+        services.AddSingleton<MusicLibraryViewModel>();
+        services.AddSingleton<NowPlayingViewModel>();
+        services.AddSingleton<PlaylistsViewModel>();
+        services.AddSingleton<VideoViewModel>();
+        services.AddSingleton<QueueViewModel>();
+        services.AddSingleton<StreamingMoviesViewModel>();
+        services.AddSingleton<StreamingTvShowsViewModel>();
+        services.AddSingleton<StreamingMusicViewModel>();
+        services.AddSingleton<StreamingDetailsViewModel>();
 
         return services;
     }

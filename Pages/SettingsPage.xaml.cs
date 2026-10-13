@@ -18,13 +18,17 @@ public sealed partial class SettingsPage : Page
 
     public SettingsPage()
     {
-        InitializeComponent();
+        InitializeComponent();
+        AppIconHelper.RegisterBrandIcon(SettingsBrandIcon);
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
-        base.OnNavigatedTo(e);
+        base.OnNavigatedTo(e);
+
+        AppIconHelper.ApplyCurrentIcon(SettingsBrandIcon);
+        AppIconHelper.RegisterBrandIcon(SettingsBrandIcon);
 
         if (Services.UpdateService.LastCheckResult != null)
         {
@@ -258,7 +262,10 @@ public sealed partial class SettingsPage : Page
         _allSearchItems.Add(new SettingSearchItem { Title = "Show open files button on home page", Description = "Display quick file picker button on the Home screen", Section = "Appearance & Visuals", Keywords = "open files, browse, home page button, picker button, show button, home browse", TargetElement = AppearanceSection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Open files button position", Description = "Choose corner position for the open files button on Home", Section = "Appearance & Visuals", Keywords = "open files corner, position, top right, top left, button position, home button, bottom right, bottom left", TargetElement = AppearanceSection });
 
-        // 5. Media Library & Files
+        // 5. Streaming & Region
+        _allSearchItems.Add(new SettingSearchItem { Title = "Use Location for Region", Description = "Use Windows location services to automatically detect the streaming region", Section = "Streaming & Region", Keywords = "location, region, streaming, gps, country, detect region, auto region, automatic region, streaming region, geolocation", TargetElement = StreamingSection });
+
+        // 6. Media Library & Files
         _allSearchItems.Add(new SettingSearchItem { Title = "Library folders", Description = "Add or remove local folders to include in your media library", Section = "Media Library & Files", Keywords = "library, folders, scan, folder, add, music, videos, directory, path, watch folder, media folders, remove folder", TargetElement = LibrarySection });
         _allSearchItems.Add(new SettingSearchItem { Title = "Automatic library scan on launch", Description = "Automatically check for new media files on startup", Section = "Media Library & Files", Keywords = "scan, refresh, update, library, startup scan, background scan, auto scan", TargetElement = LibrarySection });
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
 
@@ -17,10 +18,26 @@ public static class MediaLibraryService
     // O(1) deduplication sets (Rule 5)
     private static readonly HashSet<string> _seenPaths = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _seenIds = new(StringComparer.OrdinalIgnoreCase);
-    private static System.Threading.CancellationTokenSource? _saveDebounceCts;
+    private static int _saveDebounceVersion;
     private static readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _watcherLock = new();
-    private static System.Threading.CancellationTokenSource? _watcherDebounceCts;
+    private static int _watcherDebounceVersion;
+    private static CancellationTokenSource? _scanCts;
+    private static readonly object _scanLock = new();
+
+    public static void CancelScanning()
+    {
+        lock (_scanLock)
+        {
+            try
+            {
+                _scanCts?.Cancel();
+                _scanCts?.Dispose();
+                _scanCts = null;
+            }
+            catch { }
+        }
+    }
 
     private static IReadOnlyList<MediaItem>? _cachedAllTracks;
     private static IReadOnlyList<MediaItem>? _cachedAudioTracks;
@@ -211,11 +228,20 @@ public static class MediaLibraryService
             App.MainDispatcher?.TryEnqueue(() => LibraryChanged?.Invoke(null, EventArgs.Empty));
         }
     }
-    public static IReadOnlyList<string> Albums => _allTracks
-        .Where(t => t.Kind == MediaKind.Audio && !string.IsNullOrEmpty(t.Album))
-        .Select(t => t.Album)
-        .Distinct()
-        .ToList();
+    public static IReadOnlyList<string> Albums
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _allTracks
+                    .Where(t => t.Kind == MediaKind.Audio && !string.IsNullOrEmpty(t.Album))
+                    .Select(t => t.Album)
+                    .Distinct()
+                    .ToList();
+            }
+        }
+    }
 
     private static string NormalizePath(string? path)
     {
@@ -394,15 +420,36 @@ public static class MediaLibraryService
         }
     }
 
-    public static async Task ScanAllLibraryFoldersAsync()
+    public static async Task ScanAllLibraryFoldersAsync(CancellationToken cancellationToken = default)
     {
-        await SynchronizeLibraryMediaAsync();
+        await SynchronizeLibraryMediaAsync(cancellationToken);
     }
 
-    public static async Task SynchronizeLibraryMediaAsync()
+    public static async Task SynchronizeLibraryMediaAsync(CancellationToken cancellationToken = default)
     {
+        CancellationTokenSource? linkedCts = null;
+        CancellationToken token;
+
+        lock (_scanLock)
+        {
+            _scanCts?.Cancel();
+            _scanCts?.Dispose();
+            _scanCts = new CancellationTokenSource();
+            if (cancellationToken != default)
+            {
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_scanCts.Token, cancellationToken);
+                token = linkedCts.Token;
+            }
+            else
+            {
+                token = _scanCts.Token;
+            }
+        }
+
         try
         {
+            if (token.IsCancellationRequested) return;
+
             bool wasModified = false;
             List<MediaItem> snapshot;
             lock (_lock)
@@ -416,6 +463,7 @@ public static class MediaLibraryService
             // 1. Check existing tracks for DELETION and UPDATION/CHANGE
             foreach (var track in snapshot)
             {
+                if (token.IsCancellationRequested) return;
                 if (track.IsFolder) continue;
 
                 if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath))
@@ -503,6 +551,7 @@ public static class MediaLibraryService
             // Include unique parent directories of existing tracks to detect newly added files
             foreach (var track in snapshot)
             {
+                if (token.IsCancellationRequested) return;
                 if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath))
                 {
                     var parentDir = Path.GetDirectoryName(track.SourcePath);
@@ -515,8 +564,11 @@ public static class MediaLibraryService
 
             foreach (var dirPath in directoriesToScan)
             {
-                wasModified |= await SynchronizeDirectoryAsync(dirPath, seenPaths);
+                if (token.IsCancellationRequested) return;
+                wasModified |= await SynchronizeDirectoryAsync(dirPath, seenPaths, token);
             }
+
+            if (token.IsCancellationRequested) return;
 
             UpdateLocationRepresentations();
             UpdateWatchers();
@@ -528,18 +580,26 @@ public static class MediaLibraryService
                 _ = SaveLibraryAsync();
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Scanning cleanly cancelled
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[SynchronizeLibraryMediaAsync] Error: {ex.Message}");
         }
+        finally
+        {
+            linkedCts?.Dispose();
+        }
     }
 
-    private static async Task<bool> SynchronizeDirectoryAsync(string dirPath, HashSet<string>? seenPaths = null)
+    private static async Task<bool> SynchronizeDirectoryAsync(string dirPath, HashSet<string>? seenPaths = null, CancellationToken token = default)
     {
         bool wasModified = false;
         try
         {
-            if (!Directory.Exists(dirPath)) return false;
+            if (token.IsCancellationRequested || !Directory.Exists(dirPath)) return false;
 
             if (seenPaths == null)
             {
@@ -575,6 +635,7 @@ public static class MediaLibraryService
 
             foreach (var filePath in files)
             {
+                if (token.IsCancellationRequested) return wasModified;
                 var ext = Path.GetExtension(filePath);
                 if (string.IsNullOrEmpty(ext) || !extensions.Contains(ext)) continue;
 
@@ -632,21 +693,23 @@ public static class MediaLibraryService
 
     public static void RequestDebouncedSave()
     {
-        System.Threading.CancellationTokenSource? cts;
+        int version;
         lock (_lock)
         {
-            _saveDebounceCts?.Cancel();
-            _saveDebounceCts = new System.Threading.CancellationTokenSource();
-            cts = _saveDebounceCts;
+            version = ++_saveDebounceVersion;
         }
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(1000, cts.Token);
+                await Task.Delay(1000);
+                if (version != _saveDebounceVersion) return;
                 await SaveLibraryAsync();
             }
-            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MediaLibraryService] RequestDebouncedSave error: {ex.Message}");
+            }
         });
     }
 
@@ -974,24 +1037,23 @@ public static class MediaLibraryService
 
     private static void OnDirectoryChanged(object sender, FileSystemEventArgs e)
     {
+        int version;
         lock (_watcherLock)
         {
-            _watcherDebounceCts?.Cancel();
-            _watcherDebounceCts = new System.Threading.CancellationTokenSource();
-            var cts = _watcherDebounceCts;
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(500, cts.Token);
-                    await SynchronizeLibraryMediaAsync();
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[FileSystemWatcher] Error handling directory change: {ex.Message}");
-                }
-            });
+            version = ++_watcherDebounceVersion;
         }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(500);
+                if (version != _watcherDebounceVersion) return;
+                await SynchronizeLibraryMediaAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[FileSystemWatcher] Error handling directory change: {ex.Message}");
+            }
+        });
     }
 }

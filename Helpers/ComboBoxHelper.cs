@@ -389,7 +389,7 @@ public static class ComboBoxHelper
             parent = VisualTreeHelper.GetParent(parent);
         }
 
-        if (border.Name == "PopupBorder") return true;
+        if (border.Name == "PopupBorder" || border.Name == "SuggestionsContainer") return true;
         if (border.Parent is Popup) return true;
         if (FindVisualChild<ItemsPresenter>(border) != null && FindVisualChild<ScrollViewer>(border) != null) return true;
         return false;

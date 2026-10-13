@@ -63,11 +63,7 @@ namespace LumiereMediaPlayer.Pages
                 // Sweep for any orphaned Apple TV background remnants if previously closed
                 AppleTvLifecycleService.Instance.CleanupIfOrphaned();
 
-                var animation = ConnectedAnimationService.GetForCurrentView().GetAnimation("PosterAnimation");
-                if (animation != null)
-                {
-                    animation.TryStart(PosterImage);
-                }
+
 
                 int watchmodeId = 0;
                 string selectedRegion = string.Empty;
@@ -185,50 +181,83 @@ namespace LumiereMediaPlayer.Pages
             CrewGridView.ItemsSource = ViewModel.Crew;
             if (ViewModel.Crew.Count == 0)
             {
-                DetailsPivot.Items.Remove(CrewPivotItem);
+                SafeRemovePivotItem(CrewPivotItem);
             }
-            else if (!DetailsPivot.Items.Contains(CrewPivotItem))
+            else
             {
                 int castIndex = DetailsPivot.Items.IndexOf(CastPivotItem);
                 int insertIndex = Math.Clamp(castIndex >= 0 ? castIndex + 1 : 1, 0, DetailsPivot.Items.Count);
-                DetailsPivot.Items.Insert(insertIndex, CrewPivotItem);
+                SafeAddPivotItem(CrewPivotItem, insertIndex);
             }
 
             // Similar titles
             if (ViewModel.SimilarTitles.Count > 0)
             {
                 SimilarTitlesGridView.ItemsSource = ViewModel.SimilarTitles;
-                if (!DetailsPivot.Items.Contains(SimilarPivotItem))
-                    DetailsPivot.Items.Add(SimilarPivotItem);
+                SafeAddPivotItem(SimilarPivotItem);
             }
             else
             {
-                DetailsPivot.Items.Remove(SimilarPivotItem);
+                SafeRemovePivotItem(SimilarPivotItem);
             }
 
             // Releases
             if (ViewModel.Releases.Count > 0)
             {
                 ReleasesListView.ItemsSource = ViewModel.Releases;
-                if (!DetailsPivot.Items.Contains(ReleasesPivotItem))
-                    DetailsPivot.Items.Add(ReleasesPivotItem);
+                SafeAddPivotItem(ReleasesPivotItem);
             }
             else
             {
-                DetailsPivot.Items.Remove(ReleasesPivotItem);
+                SafeRemovePivotItem(ReleasesPivotItem);
             }
 
             // TV show hierarchy TreeView
             if (details.Type == "tv_series" || details.Type == "tv_miniseries")
             {
-                if (!DetailsPivot.Items.Contains(EpisodesPivotItem))
-                    DetailsPivot.Items.Add(EpisodesPivotItem);
+                SafeAddPivotItem(EpisodesPivotItem);
                 PopulateEpisodesTree(ViewModel.Seasons, ViewModel.Episodes);
             }
             else
             {
-                if (DetailsPivot.Items.Contains(EpisodesPivotItem))
-                    DetailsPivot.Items.Remove(EpisodesPivotItem);
+                SafeRemovePivotItem(EpisodesPivotItem);
+            }
+        }
+
+        private void SafeAddPivotItem(PivotItem item, int? insertIndex = null)
+        {
+            try
+            {
+                if (DetailsPivot == null || item == null) return;
+                if (DetailsPivot.Items.Contains(item)) return;
+
+                if (insertIndex.HasValue && insertIndex.Value >= 0 && insertIndex.Value <= DetailsPivot.Items.Count)
+                {
+                    DetailsPivot.Items.Insert(insertIndex.Value, item);
+                }
+                else
+                {
+                    DetailsPivot.Items.Add(item);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] SafeAddPivotItem warning: {ex.Message}");
+            }
+        }
+
+        private void SafeRemovePivotItem(PivotItem item)
+        {
+            try
+            {
+                if (DetailsPivot != null && item != null && DetailsPivot.Items.Contains(item))
+                {
+                    DetailsPivot.Items.Remove(item);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] SafeRemovePivotItem warning: {ex.Message}");
             }
         }
 
@@ -416,6 +445,11 @@ namespace LumiereMediaPlayer.Pages
             card.Click += (_, _) =>
             {
                 AppServices.PlaybackViewModel.PlayTrack(capturedItem);
+                // Navigate to VideoPage for video content so rendering is visible
+                if (capturedItem.IsVideo)
+                {
+                    App.MainWindowInstance?.NavigateTo(typeof(Pages.VideoPage));
+                }
             };
 
             return card;
@@ -535,7 +569,9 @@ namespace LumiereMediaPlayer.Pages
                             }
                             else if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                             {
-                                string targetRegion = AppleTvDeepLinkHelper.GetCurrentRegion();
+                                string targetRegion = !string.IsNullOrEmpty(ViewModel.SelectedRegion)
+                                    ? ViewModel.SelectedRegion.ToLowerInvariant()
+                                    : AppleTvDeepLinkHelper.GetCurrentRegion();
                                 string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
                                 cleanUrl = await AppleTvDeepLinkHelper.ResolveAppleTvUrlAsync(ViewModel.Details?.Title ?? "", mediaType, cleanUrl, targetRegion);
                                 AntiGravityLogger.Log($"Apple TV URL resolved to canonical deep link: {cleanUrl}");
@@ -570,6 +606,11 @@ namespace LumiereMediaPlayer.Pages
                                 }
                                 else if (cleanUrl.Contains("tv.apple.com", StringComparison.OrdinalIgnoreCase) || cleanUrl.Contains("itunes.apple.com", StringComparison.OrdinalIgnoreCase))
                                 {
+                                    string targetRegion = !string.IsNullOrEmpty(ViewModel.SelectedRegion)
+                                        ? ViewModel.SelectedRegion.ToLowerInvariant()
+                                        : AppleTvDeepLinkHelper.GetCurrentRegion();
+                                    string mediaType = (CurrentTitleType?.Equals("movie", StringComparison.OrdinalIgnoreCase) == true) ? "movie" : "tvShow";
+                                    cleanUrl = await AppleTvDeepLinkHelper.ResolveAppleTvUrlAsync(ViewModel.Details?.Title ?? "", mediaType, cleanUrl, targetRegion);
                                     AppleTvLifecycleService.Instance.NotifyAppleTvLaunched();
                                 }
                                 await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
@@ -751,7 +792,14 @@ namespace LumiereMediaPlayer.Pages
         {
             if (e.ClickedItem is WatchmodeTitle clickedTitle)
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+                if (clickedTitle.TmdbId.HasValue && (clickedTitle.Id == 0 || clickedTitle.Id == clickedTitle.TmdbId.Value))
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
+                }
+                else
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), (clickedTitle.Id, ViewModel.SelectedRegion));
+                }
             }
         }
 
@@ -816,7 +864,14 @@ namespace LumiereMediaPlayer.Pages
                                         if (args.ClickedItem is WatchmodeTitle clickedTitle)
                                         {
                                             dialog.Hide();
-                                            Frame.Navigate(typeof(StreamingDetailsPage), clickedTitle.Id);
+                                            if (clickedTitle.TmdbId.HasValue && (clickedTitle.Id == 0 || clickedTitle.Id == clickedTitle.TmdbId.Value))
+                                            {
+                                                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
+                                            }
+                                            else
+                                            {
+                                                Frame.Navigate(typeof(StreamingDetailsPage), (clickedTitle.Id, ViewModel.SelectedRegion));
+                                            }
                                         }
                                     };
 
@@ -890,7 +945,7 @@ namespace LumiereMediaPlayer.Pages
 
                 try
                 {
-                    MemoryTrimHelper.TrimWorkingSet();
+                    MemoryTrimHelper.TrimWorkingSetAsync(350);
                 }
                 catch { }
             }

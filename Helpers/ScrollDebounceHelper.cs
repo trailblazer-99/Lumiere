@@ -26,6 +26,23 @@ public static class ScrollDebounceHelper
 
         try
         {
+            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(ClosePreviewIfActive);
+            }
+            else
+            {
+                ClosePreviewIfActive();
+            }
+        }
+        catch { }
+    }
+
+    private static void ClosePreviewIfActive()
+    {
+        try
+        {
             var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
             if (previewControl != null && previewControl.Visibility == Microsoft.UI.Xaml.Visibility.Visible && !previewControl.IsExpanded)
             {

@@ -10,6 +10,7 @@ namespace LumiereMediaPlayer.Helpers;
 public static class ThemeHelper
 {
     private static AccentPalette? _systemAccentPalette;
+    private static readonly object _accentCacheLock = new();
     private static Windows.UI.ViewManagement.UISettings? _uiSettings;
     private static bool _osListenersInitialized;
 
@@ -29,9 +30,40 @@ public static class ThemeHelper
         }
     }
 
+    /// <summary>
+    /// Gets whether animations are enabled globally, respecting both application 
+    /// reduce motion preference (AppServices.Settings.Current.ReduceMotion) and 
+    /// Windows system accessibility animations settings (UISettings.AnimationsEnabled).
+    /// </summary>
+    public static bool IsAnimationEnabled
+    {
+        get
+        {
+            try
+            {
+                if (AppServices.Settings?.Current?.ReduceMotion == true)
+                {
+                    return false;
+                }
+                if (_uiSettings != null)
+                {
+                    return _uiSettings.AnimationsEnabled;
+                }
+                return new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+    }
+
     public static void InvalidateSystemAccentCache()
     {
-        _systemAccentPalette = ReadSystemAccentPalette();
+        lock (_accentCacheLock)
+        {
+            _systemAccentPalette = ReadSystemAccentPalette();
+        }
     }
 
     private static void OnSystemColorValuesChanged(Windows.UI.ViewManagement.UISettings sender, object args)
@@ -44,6 +76,9 @@ public static class ThemeHelper
         {
             try
             {
+                // Ensure fresh palette on UI thread as well to eliminate race conditions
+                InvalidateSystemAccentCache();
+
                 var settings = AppServices.Settings?.Current;
                 if (settings == null) return;
 
@@ -60,6 +95,8 @@ public static class ThemeHelper
                     ApplyBackdropTheme(settings.BackdropType, effectiveTheme);
                     App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
                 }
+
+                AppIconHelper.UpdateAppIcon();
             }
             catch (Exception ex)
             {
@@ -78,13 +115,20 @@ public static class ThemeHelper
 
     public static ElementTheme GetEffectiveElementTheme()
     {
-        var themeOption = AppServices.Settings.Current.Theme;
-        if (themeOption == AppThemeOption.Light) return ElementTheme.Light;
-        if (themeOption == AppThemeOption.Dark) return ElementTheme.Dark;
+        try
+        {
+            if (App.Services != null)
+            {
+                var themeOption = AppServices.Settings.Current.Theme;
+                if (themeOption == AppThemeOption.Light) return ElementTheme.Light;
+                if (themeOption == AppThemeOption.Dark) return ElementTheme.Dark;
+            }
+        }
+        catch { }
 
         try
         {
-            return Application.Current.RequestedTheme == ApplicationTheme.Light
+            return Application.Current?.RequestedTheme == ApplicationTheme.Light
                 ? ElementTheme.Light
                 : ElementTheme.Dark;
         }
@@ -100,7 +144,11 @@ public static class ThemeHelper
         try
         {
             var effectiveTheme = GetEffectiveElementTheme();
-            ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, effectiveTheme);
+            if (App.Services != null)
+            {
+                ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, effectiveTheme);
+            }
+            AppIconHelper.UpdateAppIcon();
         }
         catch { }
     }
@@ -108,11 +156,26 @@ public static class ThemeHelper
     public static void ApplyAccentColor(AccentColorOption option)
     {
         InitializeOsListeners();
-        if (option == AccentColorOption.Custom && !string.IsNullOrEmpty(AppServices.Settings?.Current?.CustomAccentColorHex))
+        if (option == AccentColorOption.SystemDefault)
+        {
+            InvalidateSystemAccentCache();
+        }
+
+        string? customHex = null;
+        try
+        {
+            if (App.Services != null)
+            {
+                customHex = AppServices.Settings.Current.CustomAccentColorHex;
+            }
+        }
+        catch { }
+
+        if (option == AccentColorOption.Custom && !string.IsNullOrEmpty(customHex))
         {
             try
             {
-                var custom = ColorHelper.FromHex(AppServices.Settings.Current.CustomAccentColorHex);
+                var custom = ColorHelper.FromHex(customHex);
                 ApplyAccentPalette(AccentPalette.FromBase(custom), forceThemeRefresh: true);
                 return;
             }
@@ -201,6 +264,8 @@ public static class ThemeHelper
                 ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, GetEffectiveElementTheme());
                 App.MainWindowInstance?.RefreshFlyoutTheming();
             }
+
+            AppIconHelper.UpdateAppIcon();
         }
         catch (Exception ex)
         {
@@ -347,6 +412,24 @@ public static class ThemeHelper
                 var toggled = current == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
                 root.RequestedTheme = toggled;
                 root.RequestedTheme = current;
+            }
+
+            var effective = GetEffectiveElementTheme();
+            if ((App.MainWindowContent?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot) is XamlRoot xr)
+            {
+                try
+                {
+                    var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                    foreach (var p in openPopups)
+                    {
+                        p.RequestedTheme = effective;
+                        if (p.Child is FrameworkElement childFe)
+                        {
+                            childFe.RequestedTheme = effective;
+                        }
+                    }
+                }
+                catch { }
             }
 
             App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
@@ -968,11 +1051,16 @@ public static class ThemeHelper
 
     public static AccentPalette GetAccentPalette(AccentColorOption option)
     {
-        _systemAccentPalette ??= ReadSystemAccentPalette();
+        AccentPalette systemPalette;
+        lock (_accentCacheLock)
+        {
+            _systemAccentPalette ??= ReadSystemAccentPalette();
+            systemPalette = _systemAccentPalette.Value;
+        }
 
         if (option == AccentColorOption.SystemDefault)
         {
-            return _systemAccentPalette.Value;
+            return systemPalette;
         }
 
         if (option == AccentColorOption.Custom && !string.IsNullOrEmpty(AppServices.Settings?.Current?.CustomAccentColorHex))
@@ -992,7 +1080,7 @@ public static class ThemeHelper
             AccentColorOption.Teal => ColorHelper.FromHex("#00B7C3"),
             AccentColorOption.Red => ColorHelper.FromHex("#D13438"),
             AccentColorOption.Pink => ColorHelper.FromHex("#E3008C"),
-            _ => _systemAccentPalette.Value.Default
+            _ => systemPalette.Default
         };
 
         return AccentPalette.FromBase(accent);
@@ -1002,7 +1090,7 @@ public static class ThemeHelper
     {
         try
         {
-            var uiSettings = _uiSettings ?? new Windows.UI.ViewManagement.UISettings();
+            var uiSettings = new Windows.UI.ViewManagement.UISettings();
             var accent = uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
             var light1 = uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.AccentLight1);
             var light2 = uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.AccentLight2);
@@ -1411,6 +1499,13 @@ public static class ThemeHelper
         if (popup == null) return;
         try
         {
+            var effectiveTheme = GetEffectiveElementTheme();
+            popup.RequestedTheme = effectiveTheme;
+            if (popup.Child is FrameworkElement childFe)
+            {
+                childFe.RequestedTheme = effectiveTheme;
+            }
+
             if (!popup.IsOpen)
             {
                 popup.ShouldConstrainToRootBounds = false;

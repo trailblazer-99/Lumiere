@@ -54,10 +54,12 @@ public interface IPlaybackSession : IDisposable
     void ToggleShuffle();
     void CycleRepeatMode();
     void Seek(double seconds);
+    void SaveCurrentResumePosition();
     void SetVolume(double volume);
     void Stop();
 
     void ApplyAudioEffects();
+    void CancelThumbnailPrefetch();
     void ApplyVoiceClarity(bool enabled);
     void ApplyNightMode(bool enabled);
     void StartSleepTimer(int minutes, bool stopAtEnd);

@@ -102,6 +102,7 @@ namespace LumiereMediaPlayer.Pages
                     var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, userDataFolder, null);
 
                     await _webView.EnsureCoreWebView2Async(env);
+                    if (_webView == null) return;
 
                     // Sync dark/light theme with YouTube profile
                     _webView.CoreWebView2.Profile.PreferredColorScheme = isDark

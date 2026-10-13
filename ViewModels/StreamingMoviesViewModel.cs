@@ -9,12 +9,13 @@ using System.Linq;
 
 namespace LumiereMediaPlayer.ViewModels
 {
-    public partial class StreamingMoviesViewModel : ObservableObject
+    public partial class StreamingMoviesViewModel : ObservableObject, System.IDisposable
     {
         private readonly WatchmodeService _watchmodeService = new();
         private readonly TmdbService _tmdbService = new();
         private int _contentRequestVersion;
         private bool _initialized;
+        private bool _suppressReload = false;
 
         public ObservableCollection<RegionItem> RegionOptions { get; } = new();
 
@@ -122,6 +123,7 @@ namespace LumiereMediaPlayer.ViewModels
 
         partial void OnSelectedRatingChanged(string value)
         {
+            if (_suppressReload) return;
             if (_initialized && value != null)
             {
                 CurrentPage = 1;
@@ -173,6 +175,7 @@ namespace LumiereMediaPlayer.ViewModels
 
         partial void OnSelectedProviderChanged(string value)
         {
+            if (_suppressReload) return;
             if (_initialized && value != null)
             {
                 CurrentPage = 1;
@@ -183,6 +186,7 @@ namespace LumiereMediaPlayer.ViewModels
 
         partial void OnSelectedAccessTypeChanged(string value)
         {
+            if (_suppressReload) return;
             if (_initialized && value != null)
             {
                 CurrentPage = 1;
@@ -197,6 +201,7 @@ namespace LumiereMediaPlayer.ViewModels
 
         partial void OnSelectedSortOrderChanged(string value)
         {
+            if (_suppressReload) return;
             if (_initialized && value != null)
             {
                 CurrentPage = 1;
@@ -207,6 +212,7 @@ namespace LumiereMediaPlayer.ViewModels
 
         partial void OnSelectedGenreChanged(string value)
         {
+            if (_suppressReload) return;
             if (_initialized && value != null)
             {
                 CurrentPage = 1;
@@ -247,51 +253,59 @@ namespace LumiereMediaPlayer.ViewModels
 
         public void ApplyRegionPreferences(string region)
         {
-            // 1. Providers
-            string previousProvider = SelectedProvider;
-            var providers = StreamingRegionPreferences.GetProviderOptions(region);
-            ProviderOptions.Clear();
-            foreach (var p in providers) ProviderOptions.Add(p);
-            SelectedProvider = ProviderOptions.Contains(previousProvider) ? previousProvider : "All Services";
+            _suppressReload = true;
+            try
+            {
+                // 1. Providers
+                string previousProvider = SelectedProvider;
+                var providers = StreamingRegionPreferences.GetProviderOptions(region);
+                ProviderOptions.Clear();
+                foreach (var p in providers) ProviderOptions.Add(p);
+                SelectedProvider = ProviderOptions.Contains(previousProvider) ? previousProvider : "All Services";
 
-            // 2. Genres
-            string previousGenre = SelectedGenre;
-            var genres = StreamingRegionPreferences.GetGenreOptions(region);
-            GenreOptions.Clear();
-            foreach (var g in genres) GenreOptions.Add(g);
-            SelectedGenre = GenreOptions.Contains(previousGenre) ? previousGenre : "All Genres";
+                // 2. Genres
+                string previousGenre = SelectedGenre;
+                var genres = StreamingRegionPreferences.GetGenreOptions(region);
+                GenreOptions.Clear();
+                foreach (var g in genres) GenreOptions.Add(g);
+                SelectedGenre = GenreOptions.Contains(previousGenre) ? previousGenre : "All Genres";
 
-            // 3. Access Types
-            string previousAccess = SelectedAccessType;
-            var accessTypes = StreamingRegionPreferences.GetAccessTypeOptions(region);
-            AccessTypeOptions.Clear();
-            foreach (var a in accessTypes) AccessTypeOptions.Add(a);
-            SelectedAccessType = AccessTypeOptions.Contains(previousAccess) ? previousAccess : "All Access Types";
+                // 3. Access Types
+                string previousAccess = SelectedAccessType;
+                var accessTypes = StreamingRegionPreferences.GetAccessTypeOptions(region);
+                AccessTypeOptions.Clear();
+                foreach (var a in accessTypes) AccessTypeOptions.Add(a);
+                SelectedAccessType = AccessTypeOptions.Contains(previousAccess) ? previousAccess : "All Access Types";
 
-            // 4. Ratings
-            string previousRating = SelectedRating;
-            var ratings = StreamingRegionPreferences.GetRatingOptions(region, isTvShow: false);
-            RatingOptions.Clear();
-            foreach (var r in ratings) RatingOptions.Add(r);
-            SelectedRating = RatingOptions.Contains(previousRating) ? previousRating : "All Ratings";
+                // 4. Ratings
+                string previousRating = SelectedRating;
+                var ratings = StreamingRegionPreferences.GetRatingOptions(region, isTvShow: false);
+                RatingOptions.Clear();
+                foreach (var r in ratings) RatingOptions.Add(r);
+                SelectedRating = RatingOptions.Contains(previousRating) ? previousRating : "All Ratings";
 
-            // 5. Sort By
-            string previousSort = SelectedSortOrder;
-            var sorts = StreamingRegionPreferences.GetSortOptions(region);
-            SortOptions.Clear();
-            foreach (var s in sorts) SortOptions.Add(s);
-            SelectedSortOrder = SortOptions.Contains(previousSort) ? previousSort : (sorts.Count > 0 ? sorts[0] : "Popularity");
+                // 5. Sort By
+                string previousSort = SelectedSortOrder;
+                var sorts = StreamingRegionPreferences.GetSortOptions(region);
+                SortOptions.Clear();
+                foreach (var s in sorts) SortOptions.Add(s);
+                SelectedSortOrder = SortOptions.Contains(previousSort) ? previousSort : (sorts.Count > 0 ? sorts[0] : "Popularity");
 
-            // 6. Quick Actions
-            var qa = StreamingRegionPreferences.GetQuickActions(region, isTvShow: false);
-            SurpriseMeActionToolTip = qa.SurpriseToolTip;
+                // 6. Quick Actions
+                var qa = StreamingRegionPreferences.GetQuickActions(region, isTvShow: false);
+                SurpriseMeActionToolTip = qa.SurpriseToolTip;
 
-            // 7. Quick Filters
-            var qf = StreamingRegionPreferences.GetQuickFilters(region, isTvShow: false);
-            QuickFilterTopRatedText = qf.TopRatedLabel;
-            QuickFilterTopRatedToolTip = qf.TopRatedToolTip;
-            QuickFilterFreeText = qf.FreeLabel;
-            QuickFilterFreeToolTip = qf.FreeToolTip;
+                // 7. Quick Filters
+                var qf = StreamingRegionPreferences.GetQuickFilters(region, isTvShow: false);
+                QuickFilterTopRatedText = qf.TopRatedLabel;
+                QuickFilterTopRatedToolTip = qf.TopRatedToolTip;
+                QuickFilterFreeText = qf.FreeLabel;
+                QuickFilterFreeToolTip = qf.FreeToolTip;
+            }
+            finally
+            {
+                _suppressReload = false;
+            }
         }
 
         public async Task InitializeAndLoadAsync()
@@ -320,9 +334,47 @@ namespace LumiereMediaPlayer.ViewModels
             }
 
             ApplyRegionPreferences(SelectedRegion);
+
+            if (LumiereMediaPlayer.AppServices.Settings?.Current?.UseLocationForRegion == true)
+            {
+                LocationRegionService.Instance.RegionChanged -= OnLocationRegionChanged;
+                LocationRegionService.Instance.RegionChanged += OnLocationRegionChanged;
+                await LocationRegionService.Instance.StartMonitoringAsync();
+            }
+
             _initialized = true;
             await LoadMoviesAsync();
             AntiGravityLogger.Log("InitializeAndLoadAsync (Movies) completed.");
+        }
+
+        private void OnLocationRegionChanged(string newRegion)
+        {
+            if (string.IsNullOrEmpty(newRegion)) return;
+
+            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(() =>
+                {
+                    if (RegionOptions.Any(r => r.Code == newRegion) && SelectedRegion != newRegion)
+                    {
+                        SelectedRegion = newRegion;
+                    }
+                });
+            }
+            else
+            {
+                if (RegionOptions.Any(r => r.Code == newRegion) && SelectedRegion != newRegion)
+                {
+                    SelectedRegion = newRegion;
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            LocationRegionService.Instance.RegionChanged -= OnLocationRegionChanged;
+            System.GC.SuppressFinalize(this);
         }
 
         [RelayCommand]
@@ -357,11 +409,11 @@ namespace LumiereMediaPlayer.ViewModels
                 {
                     var movieList = response ?? new System.Collections.Generic.List<WatchmodeTitle>();
 
-                    // Apply rating filter if selected
+                    // Apply rating filter if selected (preserve movies without details yet; will filter when details arrive)
                     double? minRating = StreamingRegionPreferences.ParseMinUserRating(SelectedRating);
                     if (minRating.HasValue)
                     {
-                        movieList = movieList.Where(m => (m.Details?.UserRating ?? 0) >= minRating.Value).ToList();
+                        movieList = movieList.Where(m => m.Details == null || (m.Details.UserRating ?? 0) >= minRating.Value).ToList();
                     }
 
                     if (Movies == null) Movies = new ObservableCollection<WatchmodeTitle>();
@@ -401,29 +453,28 @@ namespace LumiereMediaPlayer.ViewModels
                     var details = await _watchmodeService.GetDetailsAsync(movie.Id);
                     if (details != null && requestVersion == _contentRequestVersion)
                     {
-                        movie.Details = details;
-                    }
-
-                    // Prune titles that have no streaming availability in the selected region
-                    var sources = await _watchmodeService.GetSourcesAsync(movie.Id.ToString(), SelectedRegion, movie.Title ?? "");
-                    if (sources != null && requestVersion == _contentRequestVersion)
-                    {
-                        var grouped = StreamingProviderHelper.GroupAndFilterSources(sources, SelectedRegion, details ?? movie.Details);
-                        if (!grouped.HasAnySources)
+                        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+                        double? minRating = StreamingRegionPreferences.ParseMinUserRating(SelectedRating);
+                        if (minRating.HasValue && (details.UserRating ?? 0) < minRating.Value)
                         {
-                            if (App.MainWindowInstance?.DispatcherQueue != null)
+                            if (dispatcher != null && !dispatcher.HasThreadAccess)
                             {
-                                App.MainWindowInstance.DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    if (requestVersion == _contentRequestVersion)
-                                    {
-                                        Movies?.Remove(movie);
-                                    }
-                                });
+                                dispatcher.TryEnqueue(() => Movies.Remove(movie));
                             }
                             else
                             {
-                                Movies?.Remove(movie);
+                                Movies.Remove(movie);
+                            }
+                        }
+                        else
+                        {
+                            if (dispatcher != null && !dispatcher.HasThreadAccess)
+                            {
+                                dispatcher.TryEnqueue(() => movie.Details = details);
+                            }
+                            else
+                            {
+                                movie.Details = details;
                             }
                         }
                     }
@@ -537,10 +588,16 @@ namespace LumiereMediaPlayer.ViewModels
 
                 if (requestVersion == _contentRequestVersion)
                 {
+                    double? minRating = StreamingRegionPreferences.ParseMinUserRating(SelectedRating);
+                    if (minRating.HasValue)
+                    {
+                        movieList = movieList.Where(m => m.Details == null || (m.Details.UserRating ?? 0) >= minRating.Value).ToList();
+                    }
+
                     if (Movies == null) Movies = new ObservableCollection<WatchmodeTitle>();
                     Movies.UpdateInPlace(movieList);
-                    CanGoNext = movieList.Count >= 20;
-                    CanGoPrevious = CurrentPage > 1;
+                    CanGoNext = false;
+                    CanGoPrevious = false;
                     _ = LoadMoviesDetailsBackgroundAsync(movieList, requestVersion);
                 }
             }

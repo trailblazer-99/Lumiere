@@ -42,11 +42,11 @@ namespace LumiereMediaPlayer.Helpers
             { "Pluto TV", "300" },
 
             // India (IN)
-            { "JioHotstar", "122" },
-            { "Hotstar", "122" },
+            { "JioHotstar", "447" },
+            { "Hotstar", "447" },
             { "JioCinema", "445" },
-            { "SonyLIV", "381" },
-            { "ZEE5", "378" },
+            { "SonyLIV", "459" },
+            { "ZEE5", "450" },
 
             // United Kingdom (GB)
             { "BBC iPlayer", "108" },

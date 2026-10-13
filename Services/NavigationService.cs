@@ -31,8 +31,18 @@ public class NavigationService : INavigationService
 
     public void Initialize(NavigationView navigationView, Frame frame)
     {
+        if (_navigationView != null)
+        {
+            _navigationView.SelectionChanged -= OnSelectionChanged;
+        }
+
         _navigationView = navigationView;
         _frame = frame;
+
+        if (_navigationView != null)
+        {
+            _navigationView.SelectionChanged += OnSelectionChanged;
+        }
     }
 
     private void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -57,6 +67,13 @@ public class NavigationService : INavigationService
 
     public void NavigateTo(string pageKey, object? parameter = null)
     {
+        var dispatcher = _frame?.DispatcherQueue ?? _navigationView?.DispatcherQueue ?? App.MainDispatcher;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(() => NavigateTo(pageKey, parameter));
+            return;
+        }
+
         if (_frame == null) return;
         if (_isNavigating) return;
 
@@ -68,6 +85,13 @@ public class NavigationService : INavigationService
 
     private void NavigateToType(Type pageType, object? parameter)
     {
+        var dispatcher = _frame?.DispatcherQueue ?? _navigationView?.DispatcherQueue ?? App.MainDispatcher;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(() => NavigateToType(pageType, parameter));
+            return;
+        }
+
         if (_frame == null) return;
 
         if (_frame.CurrentSourcePageType != pageType || parameter != null)
@@ -86,31 +110,27 @@ public class NavigationService : INavigationService
                     transitionInfo = new EntranceNavigationTransitionInfo();
                 }
 
-                _frame.BackStack.Clear();
                 _frame.Navigate(pageType, parameter, transitionInfo);
 
                 if (_navigationView != null)
                 {
-                    _navigationView.DispatcherQueue?.TryEnqueue(() =>
+                    try
                     {
-                        try
+                        if (IsStreamingSection(pageType))
                         {
-                            if (IsStreamingSection(pageType))
+                            _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
+                            _navigationView.IsPaneOpen = false;
+                            if (_navigationView.AutoSuggestBox != null)
                             {
-                                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
-                                _navigationView.IsPaneOpen = false;
-                                if (_navigationView.AutoSuggestBox != null)
-                                {
-                                    _navigationView.AutoSuggestBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-                                }
-                            }
-                            else
-                            {
-                                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                                _navigationView.AutoSuggestBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                             }
                         }
-                        catch { }
-                    });
+                        else
+                        {
+                            _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+                        }
+                    }
+                    catch { }
                 }
             }
             catch (Exception ex)
@@ -126,6 +146,13 @@ public class NavigationService : INavigationService
 
     public void GoBack()
     {
+        var dispatcher = _frame?.DispatcherQueue ?? _navigationView?.DispatcherQueue ?? App.MainDispatcher;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(() => GoBack());
+            return;
+        }
+
         if (_frame != null && _frame.CanGoBack)
         {
             _frame.GoBack();

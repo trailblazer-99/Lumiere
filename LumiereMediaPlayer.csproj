@@ -5,6 +5,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>LumiereMediaPlayer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Square44x44Logo.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
@@ -56,9 +57,53 @@
     <Content Include="Assets\Wide310x150Logo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="Assets\LumiereIcon.png" />
+    <Content Include="Assets\LumiereIcon.ico" />
+    <Content Include="Assets\Square44x44Logo.ico" />
     <Content Include="Assets\Lumiere1.png" />
     <Content Include="Assets\Lumiere2.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink_small.png" />
   </ItemGroup>
+
+  <ItemDefinitionGroup>
+    <Content>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemDefinitionGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
@@ -126,5 +171,9 @@
     <None Update="appsettings.json.example">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LumiereMediaPlayer.Tests" />
   </ItemGroup>
 </Project>

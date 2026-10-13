@@ -1,5 +1,5 @@
 ﻿# Lumiere Media Player - Codebase Health Report
-**Generated:** 2026-10-05 13:44:07  
+**Generated:** 2026-10-13 16:52:52  
 **Overall Status:** PASSED - ALL SYSTEMS HEALTHY  
 
 ### Summary Metrics
@@ -24,9 +24,9 @@
 | Memory | ViewModel Event Lifecycle: QueueViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: SettingsViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: StreamingDetailsViewModel (Stateless/No Events) | PASS | - | - |
-| Memory | ViewModel Event Lifecycle: StreamingMoviesViewModel (Stateless/No Events) | PASS | - | - |
+| Memory | ViewModel Event Lifecycle: StreamingMoviesViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: StreamingMusicViewModel (Stateless/No Events) | PASS | - | - |
-| Memory | ViewModel Event Lifecycle: StreamingTvShowsViewModel (Stateless/No Events) | PASS | - | - |
+| Memory | ViewModel Event Lifecycle: StreamingTvShowsViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: VideoViewModel | PASS | - | - |
 | Memory | GlassContainer visual decoupling on disposal | PASS | - | - |
 | Memory | Composition Shadow recycling teardown in Pages/StreamingMoviesPage.xaml.cs | PASS | - | - |

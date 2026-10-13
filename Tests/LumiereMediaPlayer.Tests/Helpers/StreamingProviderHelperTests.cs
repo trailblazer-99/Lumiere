@@ -164,5 +164,69 @@ namespace LumiereMediaPlayer.Tests.Helpers
             Assert.AreEqual("primevideo", nativeUri.Scheme);
             Assert.IsTrue(nativeUri.ToString().Contains("q=Ted Lasso") || nativeUri.ToString().Contains("q=Ted%20Lasso"));
         }
+
+        [TestMethod]
+        public void IsDisneyOrStarWarsTitle_IdentifiesDisneyAndMandalorianContent()
+        {
+            var mandalorianGrogu = new WatchmodeDetails { Title = "Star Wars: The Mandalorian and Grogu" };
+            Assert.IsTrue(StreamingProviderHelper.IsDisneyOrStarWarsTitle(mandalorianGrogu));
+
+            var mandalorianSeries = new WatchmodeDetails { Title = "The Mandalorian" };
+            Assert.IsTrue(StreamingProviderHelper.IsDisneyOrStarWarsTitle(mandalorianSeries));
+
+            var studioDetails = new WatchmodeDetails
+            {
+                Title = "Unknown Project",
+                StudioNames = new List<string> { "Lucasfilm Ltd." }
+            };
+            Assert.IsTrue(StreamingProviderHelper.IsDisneyOrStarWarsTitle(studioDetails));
+
+            var networkDetails = new WatchmodeDetails
+            {
+                Title = "Another Show",
+                NetworkNames = new List<string> { "Disney+" }
+            };
+            Assert.IsTrue(StreamingProviderHelper.IsDisneyOrStarWarsTitle(networkDetails));
+
+            var unrelated = new WatchmodeDetails { Title = "Breaking Bad" };
+            Assert.IsFalse(StreamingProviderHelper.IsDisneyOrStarWarsTitle(unrelated));
+        }
+
+        [TestMethod]
+        public void GroupAndFilterSources_SynthesizesJioHotstar_ForDisneyTitlesInIndia()
+        {
+            var details = new WatchmodeDetails
+            {
+                Title = "The Mandalorian and Grogu",
+                StudioNames = new List<string> { "Lucasfilm Ltd." }
+            };
+
+            // Upstream Watchmode only returned US/GB purchase sources
+            var sources = new List<WatchmodeSource>
+            {
+                new() { SourceId = 349, Name = "AppleTV", Type = "buy", Region = "GB", Format = "4K" },
+                new() { SourceId = 24, Name = "Amazon", Type = "buy", Region = "US", Format = "HD" }
+            };
+
+            var indianGrouped = StreamingProviderHelper.GroupAndFilterSources(sources, "IN", details);
+
+            Assert.IsTrue(indianGrouped.HasAnySources, "Indian users must receive streaming sources for Mandalorian");
+            Assert.AreEqual(1, indianGrouped.SubscriptionSources.Count);
+            var hotstarSub = indianGrouped.SubscriptionSources[0];
+            Assert.AreEqual("JioHotstar", hotstarSub.Name);
+            Assert.AreEqual("IN", hotstarSub.Region);
+            Assert.AreEqual("sub", hotstarSub.Type);
+            Assert.IsTrue(hotstarSub.WebUrl?.Contains("hotstar.com/in/explore?search_query=") == true);
+        }
+
+        [TestMethod]
+        public void GetNativeUri_WhenHotstarSearchUrl_RoutesToHotstarScheme()
+        {
+            var nativeUri = StreamingRouter.GetNativeUri("https://www.hotstar.com/in/explore?search_query=Mandalorian");
+
+            Assert.IsNotNull(nativeUri);
+            Assert.AreEqual("hotstar", nativeUri.Scheme);
+            Assert.IsTrue(nativeUri.ToString().Contains("q=Mandalorian"));
+        }
     }
 }

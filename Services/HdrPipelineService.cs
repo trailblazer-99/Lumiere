@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Management;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
@@ -66,6 +67,8 @@ public sealed class HdrPipelineService : IHdrPipelineService
     /// <see cref="HdrContentFormat.None"/>.
     /// </summary>
     private bool _detectionComplete;
+    private string _lastLoggedPipelineSummary = "";
+    private static string _lastLoggedToneMapSummary = "";
 
     // ── Track change monitoring ──────────────────────────────────────
     private MediaPlaybackItem? _monitoredItem;
@@ -159,6 +162,16 @@ public sealed class HdrPipelineService : IHdrPipelineService
             // Perform non-blocking WMI scan to detect dual-GPU hybrid graphics setups
             // (e.g. integrated AMD Radeon + discrete Nvidia RTX/GTX).
             _ = EnsureGpuEnvironmentDetectedAsync();
+
+            // React to playback state changes (pause/play/stop) to boost or restore brightness
+            if (_playbackStateChangedHandler == null)
+            {
+                _playbackStateChangedHandler = (_, _) =>
+                {
+                    UpdateBrightnessOverride();
+                };
+                AppServices.Playback.StateChanged += _playbackStateChangedHandler;
+            }
 
             Debug.WriteLine("[HDR] Initialized — display tracking via AdvancedColorDisplayManager");
         }
@@ -296,28 +309,99 @@ public sealed class HdrPipelineService : IHdrPipelineService
         try
         {
             // Layer 0 — Direct container and file metadata inspection
-            string? sourcePath = AppServices.Playback.CurrentTrack?.SourcePath;
+            var currentTrack = AppServices.Playback.CurrentTrack;
+            if (currentTrack != null)
+            {
+                if (!string.IsNullOrEmpty(currentTrack.HdrFormat) && !currentTrack.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (currentTrack.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                        currentTrack.HdrFormat.Contains("DV", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: Dolby Vision from CurrentTrack.HdrFormat ({currentTrack.HdrFormat})");
+                        return HdrContentFormat.DolbyVision;
+                    }
+                    if (currentTrack.HdrFormat.Contains("HLG", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: HLG from CurrentTrack.HdrFormat ({currentTrack.HdrFormat})");
+                        return HdrContentFormat.Hlg;
+                    }
+                    if (currentTrack.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: HDR10 from CurrentTrack.HdrFormat ({currentTrack.HdrFormat})");
+                        return HdrContentFormat.Hdr10;
+                    }
+                }
+            }
+
+            string? sourcePath = currentTrack?.SourcePath;
             if (!string.IsNullOrEmpty(sourcePath))
             {
                 string fName = System.IO.Path.GetFileName(sourcePath);
                 var containerTracks = MediaTrackFormatHelper.GetContainerTracks(sourcePath);
                 var vTrack = containerTracks.Find(t => t.TrackType == 1);
 
-                if (fName.Contains("DV", StringComparison.OrdinalIgnoreCase) ||
-                    fName.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) ||
-                    fName.Contains("DolbyVision", StringComparison.OrdinalIgnoreCase) ||
-                    (vTrack != null && vTrack.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase)))
+                if (vTrack != null && !string.IsNullOrEmpty(vTrack.HdrFormat))
+                {
+                    if (vTrack.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                        vTrack.HdrFormat.Contains("DV", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: Dolby Vision from container video track ({vTrack.HdrFormat})");
+                        SyncCurrentTrackHdr(currentTrack, "Dolby Vision", vTrack);
+                        return HdrContentFormat.DolbyVision;
+                    }
+                    if (vTrack.HdrFormat.Contains("HLG", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: HLG from container video track ({vTrack.HdrFormat})");
+                        SyncCurrentTrackHdr(currentTrack, "HLG", vTrack);
+                        return HdrContentFormat.Hlg;
+                    }
+                    if (vTrack.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[HDR] Detected: HDR10 from container video track ({vTrack.HdrFormat})");
+                        SyncCurrentTrackHdr(currentTrack, "HDR10", vTrack);
+                        return HdrContentFormat.Hdr10;
+                    }
+                }
+
+                if (vTrack != null)
+                {
+                    if (vTrack.TransferCharacteristics == 16)
+                    {
+                        Debug.WriteLine("[HDR] Detected: HDR10 from container transfer function ST 2084 / PQ");
+                        SyncCurrentTrackHdr(currentTrack, "HDR10", vTrack);
+                        return HdrContentFormat.Hdr10;
+                    }
+                    if (vTrack.TransferCharacteristics == 18)
+                    {
+                        Debug.WriteLine("[HDR] Detected: HLG from container transfer function ARIB STD-B67");
+                        SyncCurrentTrackHdr(currentTrack, "HLG", vTrack);
+                        return HdrContentFormat.Hlg;
+                    }
+                    if (vTrack.ColorPrimaries == 9 && (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10))
+                    {
+                        Debug.WriteLine("[HDR] Detected: HDR10 from container BT.2020 10-bit primaries");
+                        SyncCurrentTrackHdr(currentTrack, "HDR10", vTrack);
+                        return HdrContentFormat.Hdr10;
+                    }
+                }
+
+                if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])") ||
+                    (vTrack != null && (vTrack.CodecId.Equals("dvh1", StringComparison.OrdinalIgnoreCase) ||
+                                        vTrack.CodecId.Equals("dvhe", StringComparison.OrdinalIgnoreCase) ||
+                                        vTrack.CodecId.Equals("dovi", StringComparison.OrdinalIgnoreCase) ||
+                                        vTrack.CodecId.Contains("DOLBY_VISION", StringComparison.OrdinalIgnoreCase) ||
+                                        vTrack.CodecId.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase) ||
+                                        vTrack.CodecId.Contains("DOVI", StringComparison.OrdinalIgnoreCase))))
                 {
                     Debug.WriteLine("[HDR] Detected: Dolby Vision from container/filename");
+                    SyncCurrentTrackHdr(currentTrack, "Dolby Vision", vTrack);
                     return HdrContentFormat.DolbyVision;
                 }
 
-                if (fName.Contains("HDR", StringComparison.OrdinalIgnoreCase) ||
-                    fName.Contains("10bit", StringComparison.OrdinalIgnoreCase) ||
-                    fName.Contains("ST2084", StringComparison.OrdinalIgnoreCase) ||
-                    fName.Contains("BT2020", StringComparison.OrdinalIgnoreCase))
+                if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG|ST2084|ST-2084|BT2020|BT\.2020)(?:$|[\s._\-\])+])"))
                 {
                     Debug.WriteLine("[HDR] Detected: HDR10 from container/filename");
+                    SyncCurrentTrackHdr(currentTrack, "HDR10", vTrack);
                     return HdrContentFormat.Hdr10;
                 }
             }
@@ -331,6 +415,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
                     props.Subtype.Contains("DOLBY", StringComparison.OrdinalIgnoreCase))
                 {
                     Debug.WriteLine("[HDR] Detected: Dolby Vision");
+                    SyncCurrentTrackHdr(currentTrack, "Dolby Vision", null);
                     return HdrContentFormat.DolbyVision;
                 }
 
@@ -344,11 +429,13 @@ public sealed class HdrPipelineService : IHdrPipelineService
                     if (tf == 15)
                     {
                         Debug.WriteLine("[HDR] Detected: HDR10 (PQ/ST2084)");
+                        SyncCurrentTrackHdr(currentTrack, "HDR10", null);
                         return HdrContentFormat.Hdr10;
                     }
                     if (tf == 16)
                     {
                         Debug.WriteLine("[HDR] Detected: HLG");
+                        SyncCurrentTrackHdr(currentTrack, "HLG", null);
                         return HdrContentFormat.Hlg;
                     }
                 }
@@ -359,6 +446,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
                     out var primValue) && primValue is uint prims && prims == 9)
                 {
                     Debug.WriteLine("[HDR] Inferred HDR10 from BT.2020 primaries");
+                    SyncCurrentTrackHdr(currentTrack, "HDR10", null);
                     return HdrContentFormat.Hdr10;
                 }
 
@@ -367,10 +455,13 @@ public sealed class HdrPipelineService : IHdrPipelineService
                     props.Subtype.Contains("HDR", StringComparison.OrdinalIgnoreCase))
                 {
                     Debug.WriteLine($"[HDR] Detected HDR from subtype: {props.Subtype}");
+                    SyncCurrentTrackHdr(currentTrack, "HDR10", null);
                     return HdrContentFormat.Hdr10;
                 }
 
                 // Layer 5 — HEVC/VP9 Main10 profile (MPEG-2 profile GUID, value 2)
+                // Note: Main10 alone indicates 10-bit color depth, not High Dynamic Range.
+                // Standard 10-bit SDR videos (e.g. anime or SDR Blu-ray encodes) must not be flagged as HDR.
                 if (props.Properties.TryGetValue(
                     new Guid("e2724bb8-e676-4806-b4b2-a8d6efb44ccd"),
                     out var profileVal) && profileVal is uint profile &&
@@ -381,8 +472,15 @@ public sealed class HdrPipelineService : IHdrPipelineService
                      props.Subtype.Contains("35363248", StringComparison.OrdinalIgnoreCase)) &&
                     profile == 2)
                 {
-                    Debug.WriteLine("[HDR] Inferred HDR10 from HEVC/VP9 10-bit profile");
-                    return HdrContentFormat.Hdr10;
+                    bool hasHdrCharacteristics = (props.Properties.TryGetValue(new Guid("dbfbe4d7-0740-4ee0-8192-850AB0E21935"), out var pv) && pv is uint p && p == 9) ||
+                                                 (props.Properties.TryGetValue(new Guid("93B7BE49-B4B2-4F40-A66E-C13B5F8E4E82"), out var tv) && tv is uint t && (t == 15 || t == 16));
+
+                    if (hasHdrCharacteristics)
+                    {
+                        Debug.WriteLine("[HDR] Inferred HDR10 from HEVC/VP9 10-bit profile with BT.2020/HDR metadata");
+                        SyncCurrentTrackHdr(currentTrack, "HDR10", null);
+                        return HdrContentFormat.Hdr10;
+                    }
                 }
             }
         }
@@ -394,6 +492,23 @@ public sealed class HdrPipelineService : IHdrPipelineService
         // All layers exhausted — content is SDR.
         Debug.WriteLine("[HDR] Content format: SDR (no HDR metadata found)");
         return HdrContentFormat.None;
+    }
+
+    private static void SyncCurrentTrackHdr(MediaItem? currentTrack, string hdrFormat, ContainerTrackInfo? vTrack)
+    {
+        if (currentTrack == null) return;
+        if (string.IsNullOrEmpty(currentTrack.HdrFormat) || currentTrack.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase))
+        {
+            currentTrack.HdrFormat = hdrFormat;
+        }
+        if (vTrack != null && (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10))
+        {
+            currentTrack.BitDepth = $"{Math.Max(vTrack.BitDepth, vTrack.VideoBitDepth)}-bit";
+        }
+        else if (hdrFormat != "SDR" && (string.IsNullOrEmpty(currentTrack.BitDepth) || currentTrack.BitDepth == "8-bit"))
+        {
+            currentTrack.BitDepth = "10-bit";
+        }
     }
 
     // ── Pipeline configuration ────────────────────────────────────────
@@ -487,9 +602,14 @@ public sealed class HdrPipelineService : IHdrPipelineService
             IsHdrStreamingCapableOnly = AppServices.DisplayManager.IsHdrStreamingCapableOnly
         };
 
-        Debug.WriteLine($"[HDR] Pipeline — active={_hdrActive}, " +
-                        $"content={_contentFormat}, display={_displayCapability} (Profile={AppServices.DisplayManager.ActiveDisplayProfile}), " +
-                        $"dualGpu={_isDualGpuPresent}, toneMap={settings.ToneMappingMode}, peak={AppServices.DisplayManager.MaxLuminanceInNits:F0} nits");
+        string currentSummary = $"{_hdrActive}|{_contentFormat}|{_displayCapability}|{settings.ToneMappingMode}|{AppServices.DisplayManager.MaxLuminanceInNits:F0}";
+        if (currentSummary != _lastLoggedPipelineSummary)
+        {
+            _lastLoggedPipelineSummary = currentSummary;
+            Debug.WriteLine($"[HDR] Pipeline — active={_hdrActive}, " +
+                            $"content={_contentFormat}, display={_displayCapability} (Profile={AppServices.DisplayManager.ActiveDisplayProfile}), " +
+                            $"dualGpu={_isDualGpuPresent}, toneMap={settings.ToneMappingMode}, peak={AppServices.DisplayManager.MaxLuminanceInNits:F0} nits");
+        }
 
         HdrStateChanged?.Invoke(this, args);
     }
@@ -614,7 +734,12 @@ public sealed class HdrPipelineService : IHdrPipelineService
                 catch { }
             }
 
-            Debug.WriteLine($"[HDR Display-Adaptive ToneMapping] Profile: {displayProfile}, Screen Peak: {peakNits:F0} nits, White: {sdrWhiteNits:F0} nits, Mode: '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}, Format={contentFormat}) across {item.VideoTracks.Count} video tracks");
+            string toneSummary = $"{displayProfile}|{peakNits:F0}|{sdrWhiteNits:F0}|{mode}|{toneMapOperatorIndex}|{isHdrActive}|{contentFormat}";
+            if (toneSummary != _lastLoggedToneMapSummary)
+            {
+                _lastLoggedToneMapSummary = toneSummary;
+                Debug.WriteLine($"[HDR Display-Adaptive ToneMapping] Profile: {displayProfile}, Screen Peak: {peakNits:F0} nits, White: {sdrWhiteNits:F0} nits, Mode: '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}, Format={contentFormat}) across {item.VideoTracks.Count} video tracks");
+            }
         }
         catch (Exception ex)
         {
@@ -622,8 +747,11 @@ public sealed class HdrPipelineService : IHdrPipelineService
         }
     }
 
-    private BrightnessOverrideHelper? _brightnessOverride;
+    private readonly BrightnessOverrideHelper _brightnessOverride = new();
     private bool _isAppFullscreen;
+    private bool _isVideoPageActive;
+    private bool _isSuspended;
+    private EventHandler? _playbackStateChangedHandler;
 
     public void SetFullscreenState(bool isFullscreen)
     {
@@ -631,29 +759,64 @@ public sealed class HdrPipelineService : IHdrPipelineService
         UpdateBrightnessOverride();
     }
 
+    public void SetVideoPageActive(bool isActive)
+    {
+        if (_isVideoPageActive != isActive)
+        {
+            _isVideoPageActive = isActive;
+            Debug.WriteLine($"[HDR Brightness] VideoPageActive changed to {isActive}");
+            UpdateBrightnessOverride();
+        }
+    }
+
+    public void SetSuspended(bool isSuspended)
+    {
+        if (_isSuspended != isSuspended)
+        {
+            _isSuspended = isSuspended;
+            Debug.WriteLine($"[HDR Brightness] Suspended changed to {isSuspended}");
+            UpdateBrightnessOverride();
+        }
+    }
+
     private void UpdateBrightnessOverride()
     {
         try
         {
-            bool isContentHdr = _contentFormat != HdrContentFormat.None;
-            bool shouldBoost = (_hdrActive || (_isAppFullscreen && isContentHdr)) && AppServices.Settings.Current.AutoBoostHdrBrightness;
+            var settings = AppServices.Settings.Current;
+            var currentTrack = AppServices.Playback.CurrentTrack;
+            bool isVideo = currentTrack is { IsVideo: true };
+            bool isPlaying = AppServices.Playback.IsPlaying;
+
+            // Detect HDR format from inspected content format OR track metadata
+            bool isContentHdr = _contentFormat != HdrContentFormat.None ||
+                               (currentTrack != null && !string.IsNullOrEmpty(currentTrack.HdrFormat) && !currentTrack.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase));
+
+            // Real-time fullscreen check combining cached state and window presenter
+            bool isFullscreen = _isAppFullscreen ||
+                                (App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+
+            // Display HDR boost only when user is viewing video (on VideoPage or Fullscreen)
+            bool isVideoViewVisible = isFullscreen || _isVideoPageActive;
+
+            // In fullscreen mode, boost whenever HDR content is playing with auto-boost enabled (or forced)
+            bool shouldBoost = isContentHdr
+                               && (isFullscreen || _hdrActive || settings.HdrMode == HdrMode.ForceOn)
+                               && settings.HdrMode != HdrMode.ForceSdr
+                               && settings.AutoBoostHdrBrightness
+                               && isVideo
+                               && isPlaying
+                               && isVideoViewVisible
+                               && !_isSuspended;
 
             if (shouldBoost)
             {
-                if (_brightnessOverride == null)
-                {
-                    _brightnessOverride = new BrightnessOverrideHelper();
-                }
-                _brightnessOverride.TryOverrideToMax(_hwnd);
+                var hwnd = _hwnd != IntPtr.Zero ? _hwnd : (App.MainWindowInstance != null ? WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero);
+                _brightnessOverride.TryOverrideToMax(hwnd);
             }
             else
             {
-                if (_brightnessOverride != null)
-                {
-                    _brightnessOverride.Release();
-                    _brightnessOverride.Dispose();
-                    _brightnessOverride = null; // Recreate next time to capture any manual brightness changes
-                }
+                _brightnessOverride.Release();
             }
         }
         catch (Exception ex)
@@ -676,15 +839,29 @@ public sealed class HdrPipelineService : IHdrPipelineService
         _lastDetectedItem = null; // clear cache so next media gets a fresh detection
         _detectionComplete = false;
 
-        try { _brightnessOverride?.Release(); }
-        catch { }
+        try
+        {
+            _brightnessOverride.Release();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[HDR Brightness] ResetContentState Release error: {ex.Message}");
+        }
 
-        try { _brightnessOverride?.Dispose(); }
-        catch { }
+        if (_lastLoggedPipelineSummary != "RESET")
+        {
+            _lastLoggedPipelineSummary = "RESET";
+            _lastLoggedToneMapSummary = "";
+            Debug.WriteLine("[HDR] Content state reset");
+        }
+    }
 
-        _brightnessOverride = null; // prevent use of disposed instance
-
-        Debug.WriteLine("[HDR] Content state reset");
+    /// <summary>
+    /// Waits for any pending background brightness restore operations to complete.
+    /// </summary>
+    public void WaitForPendingBrightnessRestore(TimeSpan timeout)
+    {
+        _brightnessOverride.WaitForPendingRestore(timeout);
     }
 }
 

@@ -40,7 +40,7 @@ public class QueueManager : IQueueManager
                     _currentIndex = (_items.Count == 0) ? -1 : Math.Clamp(value, 0, _items.Count - 1);
                 }
             }
-            QueueChanged?.Invoke(this, EventArgs.Empty);
+            RaiseQueueChanged();
         }
     }
 
@@ -75,7 +75,7 @@ public class QueueManager : IQueueManager
                     _repeatMode = value;
                 }
             }
-            QueueChanged?.Invoke(this, EventArgs.Empty);
+            RaiseQueueChanged();
         }
     }
 
@@ -107,6 +107,19 @@ public class QueueManager : IQueueManager
 
     public event EventHandler? QueueChanged;
 
+    private void RaiseQueueChanged()
+    {
+        var dispatcher = App.MainDispatcher;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(() => QueueChanged?.Invoke(this, EventArgs.Empty));
+        }
+        else
+        {
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     public void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
     {
         lock (_syncRoot)
@@ -118,7 +131,7 @@ public class QueueManager : IQueueManager
             }
             _currentIndex = _items.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _items.Count - 1);
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void Add(MediaItem item)
@@ -132,7 +145,7 @@ public class QueueManager : IQueueManager
                 _currentIndex = 0;
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void RemoveAt(int index)
@@ -155,7 +168,7 @@ public class QueueManager : IQueueManager
                 _currentIndex = Math.Min(_currentIndex, _items.Count - 1);
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void Enqueue(MediaItem item) => Add(item);
@@ -174,7 +187,7 @@ public class QueueManager : IQueueManager
                 _currentIndex = 0;
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void InsertNext(MediaItem item)
@@ -192,7 +205,7 @@ public class QueueManager : IQueueManager
                 _items.Insert(_currentIndex + 1, item);
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void InsertNextRange(IEnumerable<MediaItem> items)
@@ -213,7 +226,7 @@ public class QueueManager : IQueueManager
                 _items.InsertRange(_currentIndex + 1, list);
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public bool MoveNext()
@@ -240,7 +253,7 @@ public class QueueManager : IQueueManager
         }
         if (changed)
         {
-            QueueChanged?.Invoke(this, EventArgs.Empty);
+            RaiseQueueChanged();
         }
         return changed;
     }
@@ -265,7 +278,7 @@ public class QueueManager : IQueueManager
         }
         if (changed)
         {
-            QueueChanged?.Invoke(this, EventArgs.Empty);
+            RaiseQueueChanged();
         }
         return changed;
     }
@@ -277,7 +290,7 @@ public class QueueManager : IQueueManager
             _items.Clear();
             _currentIndex = -1;
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void Shuffle()
@@ -305,7 +318,7 @@ public class QueueManager : IQueueManager
                 }
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void Move(int oldIndex, int newIndex)
@@ -332,7 +345,7 @@ public class QueueManager : IQueueManager
                 _currentIndex++;
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 
     public void Reorder(IEnumerable<MediaItem> items)
@@ -343,15 +356,19 @@ public class QueueManager : IQueueManager
             var current = CurrentTrack;
             _items.Clear();
             _items.AddRange(items);
-            if (current != null)
+            if (_items.Count == 0)
             {
-                int newIndex = _items.IndexOf(current);
-                if (newIndex >= 0)
-                {
-                    _currentIndex = newIndex;
-                }
+                _currentIndex = -1;
+            }
+            else if (current != null && _items.IndexOf(current) is var idx && idx >= 0)
+            {
+                _currentIndex = idx;
+            }
+            else
+            {
+                _currentIndex = _currentIndex >= 0 ? Math.Clamp(_currentIndex, 0, _items.Count - 1) : -1;
             }
         }
-        QueueChanged?.Invoke(this, EventArgs.Empty);
+        RaiseQueueChanged();
     }
 }

@@ -540,6 +540,20 @@
                     </Expander.Content>
                 </Expander>
 
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE71B;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Create Desktop &amp; Start Menu shortcuts"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically create and maintain shortcuts with the current icon theme."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.CreateShellShortcuts, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
                 <Expander x:Name="TransportBarExpander" Style="{StaticResource SettingsExpanderStyle}">
                     <Expander.Header>
                         <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
@@ -619,6 +633,26 @@
                             <ComboBoxItem Content="Bottom Left"/>
                             <ComboBoxItem Content="Bottom Right"/>
                         </ComboBox>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- 5. STREAMING & REGION -->
+            <StackPanel x:Name="StreamingSection" Spacing="4" HorizontalAlignment="Stretch">
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="Streaming &amp; Region"/>
+
+                <!-- Use Location for Region -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE81D;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Use Location for Region"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use Windows location services to automatically detect the streaming region."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.UseLocationForRegion, Mode=TwoWay}"/>
                     </Grid>
                 </Border>
             </StackPanel>
@@ -1228,6 +1262,10 @@
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Check for updates" VerticalAlignment="Center"/>
                                 <InfoBadge Style="{StaticResource AttentionDotInfoBadgeStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" Spacing="4" Visibility="{x:Bind ViewModel.IsNoUpdatesAvailable, Mode=OneWay}" VerticalAlignment="Center">
+                                    <FontIcon Glyph="&#xE73E;" FontSize="11" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                    <TextBlock Text="No Updates" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                </StackPanel>
                             </StackPanel>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"/>
                         </StackPanel>
@@ -1282,7 +1320,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="48"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="0" Width="48" Height="48" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Top" Margin="0,2,0,0" Stretch="Uniform" />
+                        <Image x:Name="SettingsBrandIcon" Grid.Column="0" Width="48" Height="48" UseLayoutRounding="True" Source="ms-appx:///Assets/Icons/Lumiere_Dark_Blue_small.png" VerticalAlignment="Top" Margin="0,2,0,0" Stretch="Uniform" />
                         <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Top">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="Lumi&#232;re Media Player"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Version 1.0  •  Built with WinUI 3 &amp; .NET 10" Margin="0,0,0,8"/>

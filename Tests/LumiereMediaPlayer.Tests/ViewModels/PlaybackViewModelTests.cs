@@ -85,4 +85,17 @@ public class PlaybackViewModelTests
         Assert.IsTrue(vm.IsShuffleEnabled);
         Assert.AreEqual(PlaybackRepeatMode.All, vm.RepeatMode);
     }
+
+    [TestMethod]
+    public void PlaybackViewModel_Stop_CallsSessionStop_AndResetsState()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new System.Collections.Generic.List<MediaItem>());
+        var vm = new PlaybackViewModel(mockSession.Object);
+
+        vm.Stop();
+
+        mockSession.Verify(s => s.Stop(), Times.Once);
+        Assert.IsFalse(vm.IsVideoPlayerActive);
+    }
 }

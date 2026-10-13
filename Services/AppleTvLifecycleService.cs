@@ -45,6 +45,11 @@ public interface IAppleTvLifecycleService : IDisposable
     /// Determines whether Apple TV currently has an active, visible, or minimized window.
     /// </summary>
     bool IsAppleTvRunningWithWindow();
+
+    /// <summary>
+    /// Flushes any pending background tracking sessions and ensures clean teardown on application exit.
+    /// </summary>
+    void FlushLifecycleOnExit();
 }
 
 /// <summary>
@@ -345,72 +350,89 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
 
     private async Task MonitorSessionAsync(CancellationToken token)
     {
-        AntiGravityLogger.Log("[AppleTvLifecycle] Initiated Apple TV launch detection session.");
-        bool processEverSeen = false;
-        var startTime = DateTime.UtcNow;
-        var spinUpTimeout = TimeSpan.FromSeconds(30);
-
-        // Phase 1: Wait up to 30 seconds for Apple TV process or window to appear
-        while (!token.IsCancellationRequested && (DateTime.UtcNow - startTime) < spinUpTimeout)
+        try
         {
-            if (IsAppleTvRunningWithWindow() || IsAppleTvProcessAlive())
-            {
-                processEverSeen = true;
-                AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV process detected. Active window monitoring started.");
-                break;
-            }
+            AntiGravityLogger.Log("[AppleTvLifecycle] Initiated Apple TV launch detection session.");
+            bool processEverSeen = false;
+            var startTime = DateTime.UtcNow;
+            var spinUpTimeout = TimeSpan.FromSeconds(30);
 
-            try
+            // Phase 1: Wait up to 30 seconds for Apple TV process or window to appear
+            while (!token.IsCancellationRequested && (DateTime.UtcNow - startTime) < spinUpTimeout)
             {
-                await Task.Delay(1000, token);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
-
-        if (!processEverSeen)
-        {
-            AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV was not detected within spin-up window. Checking for orphaned agents...");
-            CleanupIfOrphaned();
-            _isTrackingActive = false;
-            return;
-        }
-
-        // Phase 2: Active session monitoring
-        int consecutiveClosedCount = 0;
-
-        while (!token.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(2000, token);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            bool isWindowOpen = IsAppleTvRunningWithWindow();
-            bool isProcessAlive = IsAppleTvProcessAlive();
-
-            if (!isWindowOpen || !isProcessAlive)
-            {
-                consecutiveClosedCount++;
-                // Require 2 consecutive polling cycles (~4s) to ensure sustained closure
-                if (consecutiveClosedCount >= 2)
+                if (IsAppleTvRunningWithWindow() || IsAppleTvProcessAlive())
                 {
-                    AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV window closed or process exited. Initiating remnant disposal...");
-                    CleanupAppleTvRemnants(force: false);
-                    _isTrackingActive = false;
+                    processEverSeen = true;
+                    AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV process detected. Active window monitoring started.");
                     break;
                 }
+
+                try
+                {
+                    await Task.Delay(1000, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                if (token.IsCancellationRequested) return;
             }
-            else
+
+            if (!processEverSeen)
             {
-                consecutiveClosedCount = 0;
+                AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV was not detected within spin-up window. Checking for orphaned agents...");
+                CleanupIfOrphaned();
+                _isTrackingActive = false;
+                return;
             }
+
+            // Phase 2: Active session monitoring
+            int consecutiveClosedCount = 0;
+
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(2000, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                if (token.IsCancellationRequested) return;
+
+                bool isWindowOpen = IsAppleTvRunningWithWindow();
+                bool isProcessAlive = IsAppleTvProcessAlive();
+
+                if (!isWindowOpen || !isProcessAlive)
+                {
+                    consecutiveClosedCount++;
+                    // Require 2 consecutive polling cycles (~4s) to ensure sustained closure
+                    if (consecutiveClosedCount >= 2)
+                    {
+                        AntiGravityLogger.Log("[AppleTvLifecycle] Apple TV window closed or process exited. Initiating remnant disposal...");
+                        CleanupAppleTvRemnants(force: false);
+                        _isTrackingActive = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    consecutiveClosedCount = 0;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Clean cancellation
+        }
+        catch (Exception ex)
+        {
+            AntiGravityLogger.Log($"[AppleTvLifecycle] MonitorSessionAsync error: {ex.Message}");
+        }
+        finally
+        {
+            _isTrackingActive = false;
         }
     }
 
@@ -465,7 +487,7 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
                                 try
                                 {
                                     proc.Kill(entireProcessTree: true);
-                                    proc.WaitForExit(1500);
+                                    proc.WaitForExit(50);
                                 }
                                 catch (Exception ex)
                                 {
@@ -525,6 +547,27 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
                 _isTrackingActive = false;
             }
         }
+    }
+
+    /// <summary>
+    /// Flushes any pending background tracking sessions and ensures clean teardown on application exit.
+    /// Cancels background tracking loops immediately and offloads remnant process scanning to a thread pool task
+    /// so the UI closing thread is never stalled.
+    /// </summary>
+    public void FlushLifecycleOnExit()
+    {
+        Dispose();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                CleanupIfOrphaned();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AppleTvLifecycle] FlushLifecycleOnExit error: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>

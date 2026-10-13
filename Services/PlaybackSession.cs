@@ -69,11 +69,11 @@ public sealed class PlaybackSession : IPlaybackSession
                     }
 
                     System.IO.File.AppendAllText(logPath, line);
-
                 }
-
-                catch { }
-
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PlaybackSession.Log] Error: {ex.Message}");
+                }
             }
 
         });
@@ -106,6 +106,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
+    private readonly object _queueLock = new();
     private readonly List<MediaItem> _queue;
 
     private int _currentIndex;
@@ -160,11 +161,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
-    public PlaybackSession(IEnumerable<MediaItem> initialQueue)
+    public PlaybackSession(IEnumerable<MediaItem>? initialQueue = null)
 
     {
 
-        _queue = initialQueue.ToList();
+        lock (_queueLock)
+        {
+            _queue = initialQueue?.ToList() ?? new List<MediaItem>();
+        }
 
         _currentIndex = -1;
 
@@ -249,16 +253,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
         try
-
         {
-
             AppServices.Settings.Current.SleepTimerMinutes = 0;
-
             AppServices.Settings.Current.SleepAtEndOfTrack = false;
-
         }
-
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"Resetting sleep timer in constructor failed: {ex.Message}");
+        }
 
     }
 
@@ -274,7 +276,16 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
-    public IReadOnlyList<MediaItem> Queue => _queue;
+    public IReadOnlyList<MediaItem> Queue
+    {
+        get
+        {
+            lock (_queueLock)
+            {
+                return _queue.ToList();
+            }
+        }
+    }
 
 
 
@@ -284,13 +295,37 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public int CurrentIndex => _currentIndex;
 
+    public bool IsPlaying
+    {
+        get
+        {
+            try
+            {
+                var session = _mediaPlayer?.PlaybackSession;
+                return session != null && IsActivePlaybackState(session.PlaybackState);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
-
-    public bool IsPlaying => IsActivePlaybackState(_mediaPlayer.PlaybackSession.PlaybackState);
-
-
-
-    public double PositionSeconds => _mediaPlayer.PlaybackSession.Position.TotalSeconds;
+    public double PositionSeconds
+    {
+        get
+        {
+            if (CurrentTrack == null) return 0.0;
+            try
+            {
+                return _mediaPlayer?.PlaybackSession?.Position.TotalSeconds ?? 0.0;
+            }
+            catch
+            {
+                return 0.0;
+            }
+        }
+    }
 
 
 
@@ -368,7 +403,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 {
 
-                    try { _externalAudioPlayer.IsMuted = value; } catch { }
+                    try { _externalAudioPlayer.IsMuted = value; } catch (Exception ex) { Log($"Muting external player error: {ex.Message}"); }
 
                 }
 
@@ -541,103 +576,58 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     private void ApplyShuffleState()
-
     {
-
-        if (_queue.Count <= 1) return;
-
-
-
-        var currentItem = CurrentTrack;
-
-        if (_isShuffleEnabled)
-
+        lock (_queueLock)
         {
+            if (_queue.Count <= 1) return;
 
-            if (_unshuffledQueue == null)
-
+            var currentItem = CurrentTrack;
+            if (_isShuffleEnabled)
             {
-
-                _unshuffledQueue = new List<MediaItem>(_queue);
-
-            }
-
-
-
-            var itemsToShuffle = _queue.Where(item => item != currentItem).ToList();
-
-            var rng = new Random();
-
-            int n = itemsToShuffle.Count;
-
-            while (n > 1)
-
-            {
-
-                n--;
-
-                int k = rng.Next(n + 1);
-
-                (itemsToShuffle[k], itemsToShuffle[n]) = (itemsToShuffle[n], itemsToShuffle[k]);
-
-            }
-
-
-
-            _queue.Clear();
-
-            if (currentItem != null)
-
-            {
-
-                _queue.Add(currentItem);
-
-                _queue.AddRange(itemsToShuffle);
-
-                _currentIndex = 0;
-
-            }
-
-            else
-
-            {
-
-                _queue.AddRange(itemsToShuffle);
-
-                _currentIndex = _queue.Count > 0 ? 0 : -1;
-
-            }
-
-        }
-
-        else
-
-        {
-
-            if (_unshuffledQueue != null)
-
-            {
-
-                _queue.Clear();
-
-                _queue.AddRange(_unshuffledQueue);
-
-                _unshuffledQueue = null;
-
-                if (currentItem != null)
-
+                if (_unshuffledQueue == null)
                 {
-
-                    int foundIndex = _queue.IndexOf(currentItem);
-
-                    _currentIndex = foundIndex >= 0 ? foundIndex : 0;
-
+                    _unshuffledQueue = new List<MediaItem>(_queue);
                 }
 
+                var itemsToShuffle = _queue.Where(item => item != currentItem).ToList();
+                var rng = new Random();
+                int n = itemsToShuffle.Count;
+                while (n > 1)
+                {
+                    n--;
+                    int k = rng.Next(n + 1);
+                    (itemsToShuffle[k], itemsToShuffle[n]) = (itemsToShuffle[n], itemsToShuffle[k]);
+                }
+
+                _queue.Clear();
+                if (currentItem != null)
+                {
+                    _queue.Add(currentItem);
+                    _queue.AddRange(itemsToShuffle);
+                    _currentIndex = 0;
+                }
+                else
+                {
+                    _queue.AddRange(itemsToShuffle);
+                    _currentIndex = _queue.Count > 0 ? 0 : -1;
+                }
             }
+            else
+            {
+                if (_unshuffledQueue != null)
+                {
+                    _queue.Clear();
+                    _queue.AddRange(_unshuffledQueue);
+                    _unshuffledQueue = null;
 
+                    if (currentItem != null)
+                    {
+                        int foundIndex = _queue.IndexOf(currentItem);
+                        _currentIndex = foundIndex >= 0 ? foundIndex : 0;
+                    }
+                }
+            }
         }
-
     }
 
 
@@ -664,7 +654,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
             }
 
-            catch { }
+            catch (Exception ex)
+            {
+                Log($"Disposing external player error: {ex.Message}");
+            }
 
             _externalAudioPlayer = null;
 
@@ -714,28 +707,28 @@ public sealed class PlaybackSession : IPlaybackSession
 
             player.Source = MediaSource.CreateFromStorageFile(file);
 
-            player.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
-
-
-
-            if (_mediaPlayer.Source is MediaPlaybackItem item)
-
+            try
             {
-
-                item.AudioTracks.SelectedIndex = -1;
-
+                if (_mediaPlayer?.PlaybackSession != null && player.PlaybackSession != null)
+                {
+                    player.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Syncing external audio player position failed: {ex.Message}");
             }
 
-
+            if (_mediaPlayer?.Source is MediaPlaybackItem item)
+            {
+                item.AudioTracks.SelectedIndex = -1;
+            }
 
             _externalAudioPlayer = player;
 
-            if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
-
+            if (IsPlaying)
             {
-
                 _externalAudioPlayer.Play();
-
             }
 
         }
@@ -819,100 +812,63 @@ public sealed class PlaybackSession : IPlaybackSession
         {
 
             try
-
             {
-
                 CleanupPlaybackSource(_preloadedNextSource);
-
             }
-
-            catch { }
-
+            catch (Exception ex)
+            {
+                Log($"Cleaning up preloaded next source error: {ex.Message}");
+            }
             _preloadedNextSource = null;
-
             _preloadedTrackId = null;
-
         }
 
         return System.Threading.Interlocked.Increment(ref _playbackRequestVersion);
-
     }
-
-
 
     private bool IsCurrentPlaybackRequest(int requestVersion) =>
-
         requestVersion == System.Threading.Volatile.Read(ref _playbackRequestVersion);
 
-
-
     private static void SaveLastPlayedTrack(MediaItem track)
-
     {
-
         try
-
         {
-
             if (!AppServices.Settings.Current.RememberLastPlayedTrack)
-
             {
-
                 return;
-
             }
 
-
-
             var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-
             localSettings.Values["LastPlayedTrackId"] = track.Id;
-
         }
-
-        catch { }
-
+        catch (Exception ex)
+        {
+            Log($"SaveLastPlayedTrack error: {ex.Message}");
+        }
     }
 
-
-
     private static double GetResumePositionSeconds(MediaItem track)
-
     {
-
         try
-
         {
-
             if (!AppServices.Settings.Current.ResumePlaybackPosition ||
-
                 !AppServices.Settings.Current.RememberPlaybackPositionPerTrack)
-
             {
-
                 return 0;
-
             }
-
-
 
             var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-
             if (localSettings.Values["TrackPos_" + track.Id] is double pos &&
-
                 pos > 0 &&
-
                 pos < track.Duration.TotalSeconds - 5)
-
             {
-
                 return pos;
-
             }
-
         }
-
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"GetResumePositionSeconds error: {ex.Message}");
+        }
 
 
 
@@ -935,117 +891,65 @@ public sealed class PlaybackSession : IPlaybackSession
         _isChangingSource = true;
 
         try
-
         {
-
             try
-
             {
-
-                if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
-
+                if (_mediaPlayer.PlaybackSession?.PlaybackState == MediaPlaybackState.Playing)
                 {
-
                     _mediaPlayer.Pause();
-
                 }
-
             }
-
-            catch { }
-
-
-
-            if (_currentPlaybackSource != null)
-
+            catch (Exception ex)
             {
-
-                CleanupPlaybackSource(_currentPlaybackSource);
-
-                _currentPlaybackSource = null;
-
+                Log($"Pausing media player error: {ex.Message}");
             }
 
-            _mediaPlayer.Source = null;
-
+            _currentPlaybackSource = null;
         }
-
-        catch { }
-
-
+        catch (Exception ex)
+        {
+            Log($"Resetting current playback source error: {ex.Message}");
+        }
 
         var track = CurrentTrack;
-
         if (track is null)
-
         {
-
             _isChangingSource = false;
-
             RaiseStateChanged();
-
             return;
-
         }
-
-
 
         _selectedSubtitleTrackIndex = -1;
 
-
-
         if (saveLastPlayed)
-
         {
-
             SaveLastPlayedTrack(track);
-
         }
 
-
-
         if (!track.IsVideo)
-
         {
-
             try
-
             {
-
                 _prefetchCts?.Cancel();
-
                 _prefetchCts = null;
-
             }
-
-            catch { }
-
-
+            catch (Exception ex)
+            {
+                Log($"Canceling prefetch CTS error: {ex.Message}");
+            }
 
             lock (VideoThumbnailCacheLock)
-
             {
-
                 _videoThumbnailCache.Clear();
-
             }
 
-
-
             lock (_compositionLock)
-
             {
-
                 if (_activeComposition != null)
-
                 {
-
-                    try { _activeComposition.Clips.Clear(); } catch { }
-
+                    try { _activeComposition.Clips.Clear(); } catch (Exception ex) { Log($"Clearing active composition clips error: {ex.Message}"); }
                     _activeComposition = null;
-
                 }
-
             }
 
 
@@ -1149,53 +1053,48 @@ public sealed class PlaybackSession : IPlaybackSession
             var targetPos = GetResumePositionSeconds(track);
 
             if (targetPos > 0)
-
             {
-
                 Log($"LoadCurrentTrackSourceAsync: Resuming at {targetPos}s");
-
-                _mediaPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(targetPos);
-
+                try
+                {
+                    if (_mediaPlayer?.PlaybackSession != null)
+                    {
+                        _mediaPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(targetPos);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"LoadCurrentTrackSourceAsync: Failed to set resume position: {ex.Message}");
+                }
             }
 
 
 
             if (startPlayback)
-
             {
-
                 Log("LoadCurrentTrackSourceAsync: Calling Play()");
-
-                _mediaPlayer.Play();
-
+                _mediaPlayer?.Play();
             }
 
-
-
             // Run audio effects and equalizer matching asynchronously without delaying playback start
-
-            _ = Task.Run(() =>
-
+            _ = Task.Run(async () =>
             {
-
-                try { _ = RunAiEqualizerMatcherAsync(track); } catch { }
-
+                try { await RunAiEqualizerMatcherAsync(track); } catch (Exception ex) { Log($"RunAiEqualizerMatcherAsync error: {ex.Message}"); }
             });
 
             ApplyAudioEffects();
 
-
-
-            AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer);
-
-
+            if (_mediaPlayer != null)
+            {
+                AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer);
+            }
 
             if (saveLastPlayed)
-
             {
-
-                _ = AppServices.History.AddToHistoryAsync(track);
-
+                _ = Task.Run(async () =>
+                {
+                    try { await AppServices.History.AddToHistoryAsync(track); } catch (Exception ex) { Log($"AddToHistoryAsync error: {ex.Message}"); }
+                });
             }
 
         }
@@ -1216,7 +1115,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 _ = AppServices.History.RemoveFromHistoryAsync(track);
 
-                _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
+                lock (_queueLock)
+                {
+                    _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
+                }
 
             }
 
@@ -1236,97 +1138,63 @@ public sealed class PlaybackSession : IPlaybackSession
 
     {
 
-        Log("OnMediaPlayerMediaOpened triggered.");
-
-        _isChangingSource = false;
-
-        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+        try
 
         {
 
-            if (CurrentTrack != null)
+            Log("OnMediaPlayerMediaOpened triggered.");
+
+            _isChangingSource = false;
+
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
 
             {
 
-                bool trackChanged = false;
-
-                var naturalDuration = sender.PlaybackSession.NaturalDuration;
-
-                Log($"OnMediaPlayerMediaOpened: CurrentTrack={CurrentTrack.Title}, naturalDuration={naturalDuration}");
-
-                if (naturalDuration.TotalSeconds > 0 && CurrentTrack.Duration != naturalDuration)
+                try
 
                 {
 
-                    CurrentTrack.Duration = naturalDuration;
-
-                    trackChanged = true;
-
-                }
-
-
-
-                if (CurrentTrack.IsVideo)
-
-                {
-
-                    var w = sender.PlaybackSession.NaturalVideoWidth;
-
-                    var h = sender.PlaybackSession.NaturalVideoHeight;
-
-                    if (w > 0 && h > 0)
+                    if (CurrentTrack != null)
 
                     {
 
-                        var resStr = $"{w}x{h}";
+                        bool trackChanged = false;
 
-                        if (CurrentTrack.Resolution != resStr)
+                        var naturalDuration = sender.PlaybackSession?.NaturalDuration ?? TimeSpan.Zero;
+
+                        Log($"OnMediaPlayerMediaOpened: CurrentTrack={CurrentTrack.Title}, naturalDuration={naturalDuration}");
+
+                        if (naturalDuration.TotalSeconds > 0 && CurrentTrack.Duration != naturalDuration)
 
                         {
 
-                            CurrentTrack.Resolution = resStr;
+                            CurrentTrack.Duration = naturalDuration;
 
                             trackChanged = true;
 
                         }
 
-                    }
 
 
-
-                    if (sender.Source is MediaPlaybackItem mpi && mpi.VideoTracks.Count > 0)
-
-                    {
-
-                        try
+                        if (CurrentTrack.IsVideo)
 
                         {
 
-                            var selectedIndex = mpi.VideoTracks.SelectedIndex >= 0 ? mpi.VideoTracks.SelectedIndex : 0;
+                            var w = sender.PlaybackSession?.NaturalVideoWidth ?? 0;
 
-                            var vTrack = mpi.VideoTracks[selectedIndex];
+                            var h = sender.PlaybackSession?.NaturalVideoHeight ?? 0;
 
-                            var encProps = vTrack.GetEncodingProperties();
-
-                            if (encProps != null)
+                            if (w > 0 && h > 0)
 
                             {
 
-                                if (CurrentTrack.Bitrate == 0 && encProps.Bitrate > 0)
+                                var resStr = $"{w}x{h}";
+
+                                if (CurrentTrack.Resolution != resStr)
 
                                 {
 
-                                    CurrentTrack.Bitrate = encProps.Bitrate;
-
-                                    trackChanged = true;
-
-                                }
-
-                                if (CurrentTrack.FrameRate == 0 && encProps.FrameRate != null && encProps.FrameRate.Denominator > 0)
-
-                                {
-
-                                    CurrentTrack.FrameRate = (double)encProps.FrameRate.Numerator / encProps.FrameRate.Denominator;
+                                    CurrentTrack.Resolution = resStr;
 
                                     trackChanged = true;
 
@@ -1334,101 +1202,158 @@ public sealed class PlaybackSession : IPlaybackSession
 
                             }
 
+
+
+                            if (sender.Source is MediaPlaybackItem mpi && mpi.VideoTracks.Count > 0)
+
+                            {
+
+                                try
+
+                                {
+
+                                    var selectedIndex = mpi.VideoTracks.SelectedIndex >= 0 ? mpi.VideoTracks.SelectedIndex : 0;
+
+                                    var vTrack = mpi.VideoTracks[selectedIndex];
+
+                                    var encProps = vTrack.GetEncodingProperties();
+
+                                    if (encProps != null)
+
+                                    {
+
+                                        if (CurrentTrack.Bitrate == 0 && encProps.Bitrate > 0)
+
+                                        {
+
+                                            CurrentTrack.Bitrate = encProps.Bitrate;
+
+                                            trackChanged = true;
+
+                                        }
+
+                                        if (CurrentTrack.FrameRate == 0 && encProps.FrameRate != null && encProps.FrameRate.Denominator > 0)
+
+                                        {
+
+                                            CurrentTrack.FrameRate = (double)encProps.FrameRate.Numerator / encProps.FrameRate.Denominator;
+
+                                            trackChanged = true;
+
+                                        }
+
+                                    }
+
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log($"Reading track video properties error: {ex.Message}");
+                                }
+                            }
+
+                            if (CurrentTrack.FileSize == 0 && !string.IsNullOrEmpty(CurrentTrack.SourcePath) && File.Exists(CurrentTrack.SourcePath))
+                            {
+                                try
+                                {
+                                    CurrentTrack.FileSize = new FileInfo(CurrentTrack.SourcePath).Length;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log($"Reading track file size error: {ex.Message}");
+                                }
+                            }
+
+
+
+                            if (CurrentTrack.Bitrate == 0 && CurrentTrack.FileSize > 0 && CurrentTrack.Duration.TotalSeconds > 0)
+
+                            {
+
+                                CurrentTrack.Bitrate = (uint)((CurrentTrack.FileSize * 8) / CurrentTrack.Duration.TotalSeconds);
+
+                                trackChanged = true;
+
+                            }
+
                         }
 
-                        catch { }
-
-                    }
 
 
-
-                    if (CurrentTrack.FileSize == 0 && !string.IsNullOrEmpty(CurrentTrack.SourcePath) && File.Exists(CurrentTrack.SourcePath))
-
-                    {
-
-                        try
+                        if (trackChanged)
 
                         {
 
-                            CurrentTrack.FileSize = new FileInfo(CurrentTrack.SourcePath).Length;
+                            RaiseStateChanged();
 
                         }
 
-                        catch { }
+
+
+                        // Ensure deep container and HDR metadata is scanned
+
+                        _ = MediaMetadataScanner.ScanMetadataAsync(CurrentTrack);
+
+
+
+                        if (CurrentTrack.IsVideo)
+
+                        {
+
+                            PrefetchVideoThumbnails(CurrentTrack);
+
+                        }
 
                     }
 
 
 
-                    if (CurrentTrack.Bitrate == 0 && CurrentTrack.FileSize > 0 && CurrentTrack.Duration.TotalSeconds > 0)
+                    // Configure the HDR pipeline for the newly opened media.
+
+                    // This runs for both windowed and fullscreen playback.
+
+                    try
 
                     {
 
-                        CurrentTrack.Bitrate = (uint)((CurrentTrack.FileSize * 8) / CurrentTrack.Duration.TotalSeconds);
+                        MediaPlaybackItem? item = null;
 
-                        trackChanged = true;
+                        if (sender.Source is MediaPlaybackItem mpi) item = mpi;
+
+                        else if (sender.Source is MediaPlaybackList mpl) item = mpl.CurrentItem;
+
+                        AppServices.HdrPipeline.ConfigurePipeline(sender, item);
+
+                    }
+
+                    catch (Exception ex)
+
+                    {
+
+                        System.Diagnostics.Debug.WriteLine($"[HDR] PlaybackSession pipeline config failed: {ex.Message}");
 
                     }
 
                 }
 
-
-
-                if (trackChanged)
+                catch (Exception ex)
 
                 {
 
-                    RaiseStateChanged();
+                    Log($"OnMediaPlayerMediaOpened UI task error: {ex.Message}");
 
                 }
 
+            });
 
+        }
 
-                // Ensure deep container and HDR metadata is scanned
+        catch (Exception ex)
 
-                _ = MediaMetadataScanner.ScanMetadataAsync(CurrentTrack);
+        {
 
+            Log($"OnMediaPlayerMediaOpened error: {ex.Message}");
 
-
-                if (CurrentTrack.IsVideo)
-
-                {
-
-                    PrefetchVideoThumbnails(CurrentTrack);
-
-                }
-
-            }
-
-
-
-            // Configure the HDR pipeline for the newly opened media.
-
-            // This runs for both windowed and fullscreen playback.
-
-            try
-
-            {
-
-                MediaPlaybackItem? item = null;
-
-                if (sender.Source is MediaPlaybackItem mpi) item = mpi;
-
-                else if (sender.Source is MediaPlaybackList mpl) item = mpl.CurrentItem;
-
-                AppServices.HdrPipeline.ConfigurePipeline(sender, item);
-
-            }
-
-            catch (Exception ex)
-
-            {
-
-                System.Diagnostics.Debug.WriteLine($"[HDR] PlaybackSession pipeline config failed: {ex.Message}");
-
-            }
-
-        });
+        }
 
     }
 
@@ -1515,25 +1440,19 @@ public sealed class PlaybackSession : IPlaybackSession
                 return;
 
             }
-
+        }
+        catch (Exception ex)
+        {
+            Log($"Checking near-end position failed: {ex.Message}");
         }
 
-        catch { }
-
-
-
-        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
-
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        dispatcher?.TryEnqueue(() =>
         {
-
             if (_isChangingSource || !IsCurrentPlaybackRequest(endedVersion) || CurrentTrack?.Id != endedTrack.Id)
-
             {
-
                 Log("OnMediaPlayerMediaEnded: Ignored inside DispatcherQueue because source changed or request version mutated.");
-
                 return;
-
             }
 
 
@@ -1580,36 +1499,24 @@ public sealed class PlaybackSession : IPlaybackSession
 
             // For standalone video items or non-looping queues
 
+            int queueCount;
+            lock (_queueLock) { queueCount = _queue.Count; }
+
             if (endedTrack.IsVideo && RepeatMode == PlaybackRepeatMode.Off)
-
             {
-
-                if (_queue.Count <= 1 || _currentIndex >= _queue.Count - 1)
-
+                if (queueCount <= 1 || _currentIndex >= queueCount - 1)
                 {
-
                     Log("OnMediaPlayerMediaEnded: Video finished at end of queue. Stopping.");
-
                     Stop();
-
                     return;
-
                 }
-
             }
 
-
-
-            if (RepeatMode == PlaybackRepeatMode.Off && _currentIndex >= _queue.Count - 1)
-
+            if (RepeatMode == PlaybackRepeatMode.Off && _currentIndex >= queueCount - 1)
             {
-
                 Log("OnMediaPlayerMediaEnded: Reached end of queue with RepeatMode Off. Stopping.");
-
                 Stop();
-
                 return;
-
             }
 
 
@@ -1644,47 +1551,67 @@ public sealed class PlaybackSession : IPlaybackSession
 
     {
 
-        Log($"OnMediaPlayerStateChanged triggered. State={sender.PlaybackState}");
-
-        if (_externalAudioPlayer != null)
+        try
 
         {
 
-            try
+            var state = sender.PlaybackState;
+
+            Log($"OnMediaPlayerStateChanged triggered. State={state}");
+
+            if (_externalAudioPlayer != null)
 
             {
 
-                if (sender.PlaybackState == MediaPlaybackState.Playing && _externalAudioPlayer.PlaybackSession.PlaybackState != MediaPlaybackState.Playing)
+                try
 
                 {
 
-                    _externalAudioPlayer.Play();
+                    if (state == MediaPlaybackState.Playing && _externalAudioPlayer.PlaybackSession.PlaybackState != MediaPlaybackState.Playing)
 
+                    {
+
+                        _externalAudioPlayer.Play();
+
+                    }
+
+                    else if (state == MediaPlaybackState.Paused && _externalAudioPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
+
+                    {
+
+                        _externalAudioPlayer.Pause();
+
+                    }
                 }
-
-                else if (sender.PlaybackState == MediaPlaybackState.Paused && _externalAudioPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
-
+                catch (Exception ex)
                 {
-
-                    _externalAudioPlayer.Pause();
-
+                    Log($"Syncing external player state error: {ex.Message}");
                 }
-
             }
 
-            catch { }
+            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+            dispatcher?.TryEnqueue(() =>
+            {
+                try
+                {
+                    UpdateDisplayRequestState();
+                    RaiseStateChanged();
+                }
+                catch (Exception ex)
+                {
+                    Log($"State change UI update error: {ex.Message}");
+                }
+            });
 
         }
 
-        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+        catch (Exception ex)
 
         {
 
-            UpdateDisplayRequestState();
+            Log($"OnMediaPlayerStateChanged handled error: {ex.Message}");
 
-            RaiseStateChanged();
-
-        });
+        }
 
     }
 
@@ -1847,81 +1774,47 @@ public sealed class PlaybackSession : IPlaybackSession
                 Log($"CreatePlaybackSourceAsync direct load failed: {ex.Message}. Attempting fallback.");
 
                 if (mediaSource != null)
-
                 {
-
-                    try { mediaSource.Reset(); mediaSource.Dispose(); } catch { }
-
+                    try { mediaSource.Reset(); mediaSource.Dispose(); } catch (Exception resetEx) { Log($"Resetting mediaSource failed: {resetEx.Message}"); }
                     mediaSource = null;
-
                 }
-
-
 
                 try
-
                 {
-
                     var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
-
                     mediaSource = MediaSource.CreateFromStorageFile(storageFile);
-
                 }
-
                 catch (Exception fallbackEx)
-
                 {
-
                     Log($"CreatePlaybackSourceAsync: Fallback failed: {fallbackEx.Message}\n{fallbackEx.StackTrace}");
-
                     System.Diagnostics.Debug.WriteLine($"Fallback load failed: {fallbackEx.Message}");
-
                     return null;
-
                 }
-
             }
-
         }
 
-
-
         if (mediaSource != null)
-
         {
-
             var playbackItem = new MediaPlaybackItem(mediaSource);
-
             playbackItem.TimedMetadataTracksChanged += (sender, args) =>
-
             {
-
                 if (args.CollectionChange == Windows.Foundation.Collections.CollectionChange.ItemInserted)
-
                 {
-
-                    App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
-
+                    var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+                    dispatcher?.TryEnqueue(() =>
                     {
-
                         try
-
                         {
-
                             AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer);
-
                         }
-
-                        catch { }
-
+                        catch (Exception ex)
+                        {
+                            Log($"ApplyCaptionsPreference on track change error: {ex.Message}");
+                        }
                     });
-
                 }
-
             };
-
             return playbackItem;
-
         }
 
 
@@ -2008,25 +1901,23 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
-                        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
-
+                        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+                        dispatcher?.TryEnqueue(() =>
                         {
-
                             try
-
                             {
-
                                 mediaSource.ExternalTimedTextSources.Add(timedTextSource);
-
                             }
-
-                            catch { }
-
+                            catch (Exception ex)
+                            {
+                                Log($"Adding external timed text source failed: {ex.Message}");
+                            }
                         });
-
                     }
-
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Log($"Processing subtitle file failed: {ex.Message}");
+                    }
 
                 }
 
@@ -2177,25 +2068,15 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     public void TogglePlayPause()
-
     {
-
-        if (_mediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
-
+        if (IsPlaying)
         {
-
             Pause();
-
         }
-
         else
-
         {
-
             Play();
-
         }
-
     }
 
 
@@ -2205,15 +2086,14 @@ public sealed class PlaybackSession : IPlaybackSession
     {
 
         if (_mediaPlayer.Source != null)
-
         {
-
             _mediaPlayer.Play();
-
             _externalAudioPlayer?.Play();
-
+            if (_crossfadeCheckTimer != null && !_crossfadeCheckTimer.IsRunning)
+            {
+                _crossfadeCheckTimer.Start();
+            }
             UpdateDisplayRequestState();
-
         }
 
     }
@@ -2221,21 +2101,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     public void Pause()
-
     {
-
         if (_mediaPlayer.Source != null)
-
         {
-
             _mediaPlayer.Pause();
-
             _externalAudioPlayer?.Pause();
-
+            SaveCurrentResumePosition();
             UpdateDisplayRequestState();
-
         }
-
     }
 
 
@@ -2251,18 +2124,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     public async Task PlayTrackAsync(MediaItem track)
-
     {
-
         try
-
         {
-
-            try
-
-            {
-
-                if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath) && !File.Exists(track.SourcePath))
+            if (!string.IsNullOrEmpty(track.SourcePath) && Path.IsPathRooted(track.SourcePath) && !File.Exists(track.SourcePath))
 
                 {
 
@@ -2272,96 +2137,75 @@ public sealed class PlaybackSession : IPlaybackSession
 
                     _ = AppServices.History.RemoveFromHistoryAsync(track);
 
-                    _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
-
-                    if (_queue.Count > 0)
-
+                    MediaItem? nextTrackToPlay = null;
+                    lock (_queueLock)
                     {
-
-                        if (_currentIndex >= _queue.Count) _currentIndex = 0;
-
-                        PlayTrack(_queue[_currentIndex]);
-
+                        _queue.RemoveAll(t => t.Id == track.Id || t.SourcePath == track.SourcePath);
+                        if (_queue.Count > 0)
+                        {
+                            if (_currentIndex >= _queue.Count) _currentIndex = 0;
+                            nextTrackToPlay = _queue[_currentIndex];
+                        }
                     }
 
+                    if (nextTrackToPlay != null)
+                    {
+                        PlayTrack(nextTrackToPlay);
+                    }
                     else
-
                     {
-
                         CurrentTrack = null;
-
                         _currentIndex = -1;
-
                         RaiseStateChanged();
-
                     }
-
                     return;
-
                 }
-
-
 
                 var requestVersion = BeginPlaybackRequest();
 
-                var index = _queue.FindIndex(t => t.Equals(track) || t.Id == track.Id);
-
-                if (index >= 0)
-
+                lock (_queueLock)
                 {
-
-                    _currentIndex = index;
-
-                }
-
-                else
-
-                {
-
-                    if (track.IsVideo)
-
+                    var index = _queue.FindIndex(t => t.Equals(track) || t.Id == track.Id);
+                    if (index >= 0)
                     {
-
-                        var libVideos = MediaLibraryService.VideoTracks;
-
-                        var libIndex = libVideos.ToList().FindIndex(t => t.Equals(track) || t.Id == track.Id);
-
-                        if (libIndex >= 0)
-
-                        {
-
-                            _queue.Clear();
-
-                            _queue.AddRange(libVideos);
-
-                            _currentIndex = libIndex;
-
-                        }
-
-                        else
-
-                        {
-
-                            _queue.Clear();
-
-                            _queue.Add(track);
-
-                            _currentIndex = 0;
-
-                        }
-
+                        _currentIndex = index;
                     }
-
                     else
-
                     {
-
-                        _queue.Add(track);
-
-                        _currentIndex = _queue.Count - 1;
-
+                        if (track.IsVideo)
+                        {
+                            var libVideos = MediaLibraryService.VideoTracks;
+                            var libIndex = libVideos.ToList().FindIndex(t => t.Equals(track) || t.Id == track.Id);
+                            if (libIndex >= 0)
+                            {
+                                _queue.Clear();
+                                _queue.AddRange(libVideos);
+                                _currentIndex = libIndex;
+                            }
+                            else
+                            {
+                                _queue.Clear();
+                                _queue.Add(track);
+                                _currentIndex = 0;
+                            }
+                        }
+                        else
+                        {
+                            var libAudio = MediaLibraryService.AudioTracks;
+                            var libIndex = libAudio.ToList().FindIndex(t => t.Equals(track) || t.Id == track.Id);
+                            if (libIndex >= 0)
+                            {
+                                _queue.Clear();
+                                _queue.AddRange(libAudio);
+                                _currentIndex = libIndex;
+                            }
+                            else
+                            {
+                                _queue.Add(track);
+                                _currentIndex = _queue.Count - 1;
+                            }
+                        }
                     }
-
                 }
 
 
@@ -2379,13 +2223,7 @@ public sealed class PlaybackSession : IPlaybackSession
             {
 
                 Log($"PlayTrack error: {ex.Message}");
-
             }
-
-        }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
     }
 
 
@@ -2443,857 +2281,544 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     public async Task SetQueueAsync(IEnumerable<MediaItem> items, int startIndex = 0)
-
     {
-
         try
-
         {
+            var requestVersion = BeginPlaybackRequest();
 
-            try
-
-            {
-
-                var requestVersion = BeginPlaybackRequest();
-
-                _unshuffledQueue = null;
-
-                _queue.Clear();
-
-                _queue.AddRange(items);
-
-                _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
-
-                CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
-
-
-
-                if (_isShuffleEnabled && _queue.Count > 1)
-
+                lock (_queueLock)
                 {
+                    _unshuffledQueue = null;
+                    _queue.Clear();
+                    _queue.AddRange(items);
+                    _currentIndex = _queue.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _queue.Count - 1);
+                    CurrentTrack = _currentIndex >= 0 ? _queue[_currentIndex] : null;
 
-                    ApplyShuffleState();
-
+                    if (_isShuffleEnabled && _queue.Count > 1)
+                    {
+                        ApplyShuffleState();
+                    }
                 }
-
-
 
                 if (CurrentTrack is not null)
-
                 {
-
                     await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
-
                     return;
-
                 }
-
                 else
-
                 {
-
-                    if (_currentPlaybackSource != null)
-
+                    _currentPlaybackSource = null;
+                    try
                     {
-
-                        CleanupPlaybackSource(_currentPlaybackSource);
-
-                        _currentPlaybackSource = null;
-
+                        _mediaPlayer.Pause();
+                        if (_mediaPlayer.PlaybackSession?.CanSeek == true)
+                        {
+                            _mediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
+                        }
                     }
-
-                    _mediaPlayer.Source = null;
-
+                    catch (Exception ex) { Log($"Pausing _mediaPlayer failed: {ex.Message}"); }
                 }
-
-
 
                 RaiseStateChanged();
-
             }
-
             catch (Exception ex)
-
             {
-
                 Log($"SetQueue error: {ex.Message}");
-
             }
-
-        }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
     }
-
-
 
     public void AddToQueue(MediaItem track)
-
     {
-
-        _queue.Add(track);
-
-        _unshuffledQueue?.Add(track);
-
+        lock (_queueLock)
+        {
+            _queue.Add(track);
+            _unshuffledQueue?.Add(track);
+        }
         RaiseStateChanged();
-
     }
 
-
-
     public void RemoveFromQueueAt(int index)
-
     {
-
-        if (index < 0 || index >= _queue.Count)
-
+        int count;
+        int nextIndexToPlay = -1;
+        lock (_queueLock)
         {
-
-            return;
-
-        }
-
-
-
-        var removedItem = _queue[index];
-
-        _unshuffledQueue?.Remove(removedItem);
-
-        _queue.RemoveAt(index);
-
-
-
-        if (_queue.Count == 0)
-
-        {
-
-            _currentIndex = -1;
-
-            CurrentTrack = null;
-
-            if (_currentPlaybackSource != null)
-
+            if (index < 0 || index >= _queue.Count)
             {
-
-                CleanupPlaybackSource(_currentPlaybackSource);
-
-                _currentPlaybackSource = null;
-
+                return;
             }
 
-            _mediaPlayer.Source = null;
+            var removedItem = _queue[index];
+            _unshuffledQueue?.Remove(removedItem);
+            _queue.RemoveAt(index);
+            count = _queue.Count;
 
+            if (count == 0)
+            {
+                _currentIndex = -1;
+                CurrentTrack = null;
+            }
+            else if (index < _currentIndex)
+            {
+                _currentIndex--;
+            }
+            else if (index == _currentIndex)
+            {
+                _currentIndex = Math.Min(_currentIndex, _queue.Count - 1);
+                nextIndexToPlay = _currentIndex;
+            }
         }
 
-        else if (index < _currentIndex)
-
+        if (count == 0)
         {
-
-            _currentIndex--;
-
+            _currentPlaybackSource = null;
+            try
+            {
+                _mediaPlayer.Pause();
+                if (_mediaPlayer.PlaybackSession?.CanSeek == true)
+                {
+                    _mediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
+                }
+            }
+            catch (Exception ex) { Log($"Pausing mediaPlayer in RemoveFromQueueAt failed: {ex.Message}"); }
         }
-
-        else if (index == _currentIndex)
-
+        else if (nextIndexToPlay >= 0)
         {
-
-            _currentIndex = Math.Min(_currentIndex, _queue.Count - 1);
-
-            PlayQueueItemAt(_currentIndex);
-
-            return; // PlayQueueItemAt will fire StateChanged
-
+            PlayQueueItemAt(nextIndexToPlay);
+            return;
         }
-
-
 
         RaiseStateChanged();
-
     }
 
 
 
     public void MoveQueueItem(int oldIndex, int newIndex)
-
     {
-
-        if (oldIndex < 0 || oldIndex >= _queue.Count || newIndex < 0 || newIndex >= _queue.Count || oldIndex == newIndex)
-
+        lock (_queueLock)
         {
+            if (oldIndex < 0 || oldIndex >= _queue.Count || newIndex < 0 || newIndex >= _queue.Count || oldIndex == newIndex)
+            {
+                return;
+            }
 
-            return;
+            var item = _queue[oldIndex];
+            _queue.RemoveAt(oldIndex);
+            _queue.Insert(newIndex, item);
 
+            if (_currentIndex == oldIndex)
+            {
+                _currentIndex = newIndex;
+            }
+            else if (oldIndex < _currentIndex && newIndex >= _currentIndex)
+            {
+                _currentIndex--;
+            }
+            else if (oldIndex > _currentIndex && newIndex <= _currentIndex)
+            {
+                _currentIndex++;
+            }
         }
-
-
-
-        var item = _queue[oldIndex];
-
-        _queue.RemoveAt(oldIndex);
-
-        _queue.Insert(newIndex, item);
-
-
-
-        if (_currentIndex == oldIndex)
-
-        {
-
-            _currentIndex = newIndex;
-
-        }
-
-        else if (oldIndex < _currentIndex && newIndex >= _currentIndex)
-
-        {
-
-            _currentIndex--;
-
-        }
-
-        else if (oldIndex > _currentIndex && newIndex <= _currentIndex)
-
-        {
-
-            _currentIndex++;
-
-        }
-
-
 
         RaiseStateChanged();
-
     }
-
-
 
     public void ReorderQueue(IEnumerable<MediaItem> items)
-
     {
-
         if (items == null) return;
-
         var currentTrack = CurrentTrack;
-
-        _queue.Clear();
-
-        _queue.AddRange(items);
-
-        if (currentTrack != null)
-
+        lock (_queueLock)
         {
-
-            int newIndex = _queue.FindIndex(t => t.Id == currentTrack.Id || (!string.IsNullOrEmpty(t.SourcePath) && t.SourcePath == currentTrack.SourcePath));
-
-            if (newIndex >= 0)
-
+            _queue.Clear();
+            _queue.AddRange(items);
+            if (currentTrack != null)
             {
-
-                _currentIndex = newIndex;
-
+                int newIndex = _queue.FindIndex(t => t.Id == currentTrack.Id || (!string.IsNullOrEmpty(t.SourcePath) && t.SourcePath == currentTrack.SourcePath));
+                if (newIndex >= 0)
+                {
+                    _currentIndex = newIndex;
+                }
             }
-
         }
 
         RaiseStateChanged();
-
     }
-
-
 
     public void Enqueue(MediaItem track)
-
     {
-
         if (track == null) return;
-
-        _queue.Add(track);
-
-        _unshuffledQueue?.Add(track);
-
+        lock (_queueLock)
+        {
+            _queue.Add(track);
+            _unshuffledQueue?.Add(track);
+        }
         RaiseStateChanged();
-
     }
-
-
 
     public void EnqueueRange(IEnumerable<MediaItem> tracks)
-
     {
-
         if (tracks == null) return;
-
         var list = tracks.ToList();
-
         if (list.Count == 0) return;
-
-        _queue.AddRange(list);
-
-        _unshuffledQueue?.AddRange(list);
-
+        lock (_queueLock)
+        {
+            _queue.AddRange(list);
+            _unshuffledQueue?.AddRange(list);
+        }
         RaiseStateChanged();
-
     }
-
-
 
     public void PlayNext(MediaItem track)
-
     {
-
         if (track == null) return;
-
-        if (_queue.Count == 0 || _currentIndex < 0)
-
+        bool shouldPlayDirect;
+        lock (_queueLock)
         {
-
-            PlayTrack(track);
-
-            return;
-
+            shouldPlayDirect = _queue.Count == 0 || _currentIndex < 0;
+            if (!shouldPlayDirect)
+            {
+                _queue.Insert(_currentIndex + 1, track);
+                _unshuffledQueue?.Add(track);
+            }
         }
 
-        _queue.Insert(_currentIndex + 1, track);
-
-        _unshuffledQueue?.Add(track);
+        if (shouldPlayDirect)
+        {
+            PlayTrack(track);
+            return;
+        }
 
         RaiseStateChanged();
-
     }
-
-
 
     public void PlayNextRange(IEnumerable<MediaItem> tracks)
-
     {
-
         if (tracks == null) return;
-
         var list = tracks.ToList();
-
         if (list.Count == 0) return;
-
-        if (_queue.Count == 0 || _currentIndex < 0)
-
+        bool shouldSetQueue;
+        lock (_queueLock)
         {
-
-            SetQueue(list, 0);
-
-            return;
-
+            shouldSetQueue = _queue.Count == 0 || _currentIndex < 0;
+            if (!shouldSetQueue)
+            {
+                _queue.InsertRange(_currentIndex + 1, list);
+                _unshuffledQueue?.AddRange(list);
+            }
         }
 
-        _queue.InsertRange(_currentIndex + 1, list);
-
-        _unshuffledQueue?.AddRange(list);
+        if (shouldSetQueue)
+        {
+            SetQueue(list, 0);
+            return;
+        }
 
         RaiseStateChanged();
-
     }
-
-
 
     public void PlayQueueItemAt(int index)
-
     {
-
         _ = PlayQueueItemAtAsync(index);
-
     }
 
-
-
     public async Task PlayQueueItemAtAsync(int index)
-
     {
-
         try
-
         {
-
-            try
-
+            lock (_queueLock)
             {
-
                 if (index < 0 || index >= _queue.Count)
-
                 {
-
                     return;
-
                 }
 
-
-
-                var requestVersion = BeginPlaybackRequest();
-
                 _currentIndex = index;
-
                 CurrentTrack = _queue[_currentIndex];
-
-
-
-                await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
-
             }
 
-            catch (Exception ex)
-
-            {
-
-                Log($"PlayQueueItemAt error: {ex.Message}");
-
-            }
-
+            var requestVersion = BeginPlaybackRequest();
+            await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: true, saveLastPlayed: true);
         }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
+        catch (Exception ex)
+        {
+            Log($"PlayQueueItemAt error: {ex.Message}");
+        }
     }
 
 
 
     public void Previous()
-
     {
-
-        if (_queue.Count == 0)
-
+        int count;
+        lock (_queueLock) { count = _queue.Count; }
+        if (count == 0)
         {
-
             return;
-
         }
 
-
-
-        if (PositionSeconds > 3.0 || _queue.Count == 1)
-
+        if (PositionSeconds > 3.0 || count == 1)
         {
-
             Seek(0);
-
             Play();
-
             return;
-
         }
-
-
 
         if (_currentIndex > 0)
-
         {
-
             PlayQueueItemAt(_currentIndex - 1);
-
         }
-
         else if (RepeatMode == PlaybackRepeatMode.All)
-
         {
-
-            PlayQueueItemAt(_queue.Count - 1);
-
+            PlayQueueItemAt(count - 1);
         }
-
         else
-
         {
-
             Seek(0);
-
             Play();
-
         }
-
     }
 
-
-
     public void Next()
-
     {
-
-        if (_queue.Count == 0)
-
+        int count;
+        lock (_queueLock) { count = _queue.Count; }
+        if (count == 0)
         {
-
             return;
-
         }
-
-
 
         if (RepeatMode == PlaybackRepeatMode.One)
-
         {
-
             Seek(0);
-
             Play();
-
             return;
-
         }
 
-
-
-        if (_currentIndex < _queue.Count - 1)
-
+        if (_currentIndex < count - 1)
         {
-
             PlayQueueItemAt(_currentIndex + 1);
-
         }
-
         else if (RepeatMode == PlaybackRepeatMode.All)
-
         {
-
             PlayQueueItemAt(0);
-
         }
-
         else
-
         {
-
             Stop();
-
         }
-
     }
 
 
 
     public void Seek(double seconds)
-
     {
-
-        if (CurrentTrack is null) return;
-
-
-
-        double maxDuration = _mediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
-
-        if (maxDuration <= 0) maxDuration = CurrentTrack.Duration.TotalSeconds;
-
-        if (maxDuration <= 0) maxDuration = 100; // fallback
-
-
-
-        var targetTime = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, maxDuration));
-
-        _mediaPlayer.PlaybackSession.Position = targetTime;
-
-        if (_externalAudioPlayer != null)
-
-        {
-
-            try
-
-            {
-
-                _externalAudioPlayer.PlaybackSession.Position = targetTime;
-
-            }
-
-            catch { }
-
-        }
+        if (CurrentTrack is null || !double.IsFinite(seconds)) return;
 
         try
-
         {
+            var session = _mediaPlayer?.PlaybackSession;
+            if (session == null || !session.CanSeek) return;
 
-            if (AppServices.Settings.Current.ResumePlaybackPosition)
+            double maxDuration = 0;
+            try { maxDuration = session.NaturalDuration.TotalSeconds; } catch (Exception ex) { Log($"Getting NaturalDuration in Seek failed: {ex.Message}"); }
+            if ((!double.IsFinite(maxDuration) || maxDuration <= 0) && CurrentTrack != null) maxDuration = CurrentTrack.Duration.TotalSeconds;
+            if (!double.IsFinite(maxDuration) || maxDuration <= 0) maxDuration = 100; // fallback
 
+            var targetTime = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, maxDuration));
+            session.Position = targetTime;
+
+            if (_externalAudioPlayer != null)
             {
-
-                var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-
-                localSettings.Values["TrackPos_" + CurrentTrack.Id] = PositionSeconds;
-
+                try
+                {
+                    if (_externalAudioPlayer.PlaybackSession?.CanSeek == true)
+                    {
+                        _externalAudioPlayer.PlaybackSession.Position = targetTime;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"Syncing external audio player in Seek failed: {ex.Message}");
+                }
             }
 
+            // Do not invoke RaiseStateChanged() here.
+            // Calling RaiseStateChanged() on every seek tick forces a complete UI/Queue rebuild,
+            // image reloads, and invokes NavigateForTrack/UpdateLayoutForVideoMode during scrubbing.
         }
-
-        catch { }
-
-        RaiseStateChanged();
-
+        catch (Exception ex)
+        {
+            Log($"[PlaybackSession] Seek error: {ex.Message}");
+        }
     }
 
-
+    public void SaveCurrentResumePosition()
+    {
+        try
+        {
+            if (AppServices.Settings.Current.ResumePlaybackPosition && CurrentTrack != null && !string.IsNullOrEmpty(CurrentTrack.Id))
+            {
+                var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+                localSettings.Values["TrackPos_" + CurrentTrack.Id] = PositionSeconds;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Saving resume position failed: {ex.Message}");
+        }
+    }
 
     public void SetVolume(double volume)
-
     {
-
         Volume = volume;
-
         if (_externalAudioPlayer != null)
-
         {
-
-            try { _externalAudioPlayer.Volume = _volume / 100.0; } catch { }
-
+            try { _externalAudioPlayer.Volume = _volume / 100.0; } catch (Exception ex) { Log($"Setting external player volume failed: {ex.Message}"); }
         }
 
         // Do not invoke StateChanged here. It forces a complete UI/Queue rebuild and Image reload on every slider tick.
-
     }
 
 
 
     public void Stop()
-
     {
-
         BeginPlaybackRequest();
 
+        // Save resume position immediately while CurrentTrack and PositionSeconds are still intact
+        SaveCurrentResumePosition();
+
         try
-
         {
-
             _prefetchCts?.Cancel();
-
             _prefetchCts?.Dispose();
-
             _prefetchCts = null;
-
         }
-
-        catch { }
-
-
+        catch (Exception ex)
+        {
+            Log($"Canceling prefetch CTS in Stop failed: {ex.Message}");
+        }
 
         lock (VideoThumbnailCacheLock)
-
         {
-
             _videoThumbnailCache.Clear();
-
         }
-
-
 
         lock (_compositionLock)
-
         {
-
-            if (_activeComposition != null)
-
-            {
-
-                try { _activeComposition.Clips.Clear(); } catch { }
-
-                _activeComposition = null;
-
-            }
-
+            _activeComposition = null;
         }
 
-
-
         try
-
         {
-
             if (_externalAudioPlayer != null)
-
             {
-
+                var extPlayer = _externalAudioPlayer;
+                _externalAudioPlayer = null;
+                _externalAudioTrackPath = null;
                 try
-
                 {
-
-                    _externalAudioPlayer.Pause();
-
-                    _externalAudioPlayer.Source = null;
-
-                    _externalAudioPlayer.Dispose();
-
+                    extPlayer.Pause();
+                }
+                catch (Exception ex)
+                {
+                    Log($"Pausing external player in Stop failed: {ex.Message}");
                 }
 
-                catch { }
-
-                _externalAudioPlayer = null;
-
-                _externalAudioTrackPath = null;
-
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        extPlayer.Source = null;
+                        extPlayer.Dispose();
+                    }
+                    catch { }
+                });
             }
 
-
-
-            _mediaPlayer.Pause();
-
-            if (_currentPlaybackSource != null)
-
+            try
             {
-
-                CleanupPlaybackSource(_currentPlaybackSource);
-
-                _currentPlaybackSource = null;
-
+                _mediaPlayer.Pause();
             }
-
-            _mediaPlayer.Source = null;
-
+            catch (Exception ex)
+            {
+                Log($"Pausing mediaPlayer in Stop failed: {ex.Message}");
+            }
         }
-
-        catch { }
-
-
+        catch (Exception ex)
+        {
+            Log($"Stopping players failed: {ex.Message}");
+        }
 
         CurrentTrack = null;
-
         _currentIndex = -1;
-
-
-
-        if (_preloadedNextSource != null)
-
-        {
-
-            CleanupPlaybackSource(_preloadedNextSource);
-
-            _preloadedNextSource = null;
-
-            _preloadedTrackId = null;
-
-        }
-
-
+        _currentPlaybackSource = null;
 
         if (_crossfadeCheckTimer != null)
-
         {
-
             _crossfadeCheckTimer.Stop();
-
-            _crossfadeCheckTimer = null;
-
         }
-
-
 
         if (_sleepCheckTimer != null)
-
         {
-
             _sleepCheckTimer.Stop();
-
             _sleepCheckTimer = null;
-
         }
 
-
-
-        AppServices.HdrPipeline.ResetContentState();
-
-
+        try { AppServices.HdrPipeline.ResetContentState(); } catch (Exception ex) { Log($"ResetContentState in Stop failed: {ex.Message}"); }
 
         UpdateDisplayRequestState();
-
         RaiseStateChanged();
 
-
-
-        // Release native Media Foundation / Direct3D COM pipelines immediately and flush working set
-
-        try
-
+        if (_preloadedNextSource != null)
         {
-
-            MemoryTrimHelper.TrimWorkingSet();
-
+            _preloadedNextSource = null;
+            _preloadedTrackId = null;
         }
-
-        catch { }
-
     }
 
 
 
     private async Task RestoreLastPlayedTrackAsync()
-
     {
-
         try
-
         {
-
-            try
-
+            if (!AppServices.Settings.Current.RememberLastPlayedTrack)
             {
-
-                if (!AppServices.Settings.Current.RememberLastPlayedTrack)
-
-                {
-
-                    return;
-
-                }
-
-
-
-                var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-
-                if (localSettings.Values["LastPlayedTrackId"] is string trackId)
-
-                {
-
-                    var track = MediaLibraryService.AllTracks.FirstOrDefault(t => t.Id == trackId);
-
-                    if (track != null)
-
-                    {
-
-                        var index = _queue.FindIndex(t => t.Id == track.Id);
-
-                        if (index >= 0)
-
-                        {
-
-                            _currentIndex = index;
-
-                        }
-
-                        else
-
-                        {
-
-                            _queue.Add(track);
-
-                            _currentIndex = _queue.Count - 1;
-
-                        }
-
-
-
-                        CurrentTrack = track;
-
-
-
-                        var requestVersion = BeginPlaybackRequest();
-
-                        await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: false, saveLastPlayed: false);
-
-                    }
-
-                }
-
+                return;
             }
 
-            catch { }
+            var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+            if (localSettings.Values["LastPlayedTrackId"] is string trackId)
+            {
+                var track = MediaLibraryService.AllTracks.FirstOrDefault(t => t.Id == trackId);
+                if (track != null)
+                {
+                    lock (_queueLock)
+                    {
+                        var index = _queue.FindIndex(t => t.Id == track.Id);
+                        if (index >= 0)
+                        {
+                            _currentIndex = index;
+                        }
+                        else
+                        {
+                            _queue.Add(track);
+                            _currentIndex = _queue.Count - 1;
+                        }
+                    }
 
+                    CurrentTrack = track;
+
+                    var requestVersion = BeginPlaybackRequest();
+                    await LoadCurrentTrackSourceAsync(requestVersion, startPlayback: false, saveLastPlayed: false);
+                }
+            }
         }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
+        catch (Exception ex)
+        {
+            Log($"RestoreLastPlayedTrackAsync error: {ex.Message}");
+        }
     }
 
 
@@ -3318,29 +2843,27 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
-        if (_currentPlaybackSource != null)
+        try
 
         {
 
-            CleanupPlaybackSource(_currentPlaybackSource);
+            _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
 
-            _currentPlaybackSource = null;
+            _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
 
+            _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
+
+            _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
+            try { _mediaPlayer.Pause(); } catch { }
         }
-
-
-
-        if (_preloadedNextSource != null)
-
+        catch (Exception ex)
         {
-
-            CleanupPlaybackSource(_preloadedNextSource);
-
-            _preloadedNextSource = null;
-
-            _preloadedTrackId = null;
-
+            Log($"Dispose unhooking media player events failed: {ex.Message}");
         }
+
+        _currentPlaybackSource = null;
+        _preloadedNextSource = null;
+        _preloadedTrackId = null;
 
 
 
@@ -3378,27 +2901,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
         }
 
-        catch { }
-
-
-
-        try
-
+        catch (Exception ex)
         {
-
-            _mediaPlayer.MediaEnded -= OnMediaPlayerMediaEnded;
-
-            _mediaPlayer.MediaOpened -= OnMediaPlayerMediaOpened;
-
-            _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
-
-            _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
-
-            _mediaPlayer.Source = null;
-
+            Log($"Dispose cancelling prefetch token failed: {ex.Message}");
         }
-
-        catch { }
 
 
 
@@ -3418,7 +2924,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
         }
 
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"Dispose releasing display request failed: {ex.Message}");
+        }
 
 
 
@@ -3446,7 +2955,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
         }
 
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"Dispose disposing media players failed: {ex.Message}");
+        }
 
     }
 
@@ -3521,24 +3033,13 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     private async Task RunAiEqualizerMatcherAsync(MediaItem track)
-
     {
-
         try
-
         {
-
             var settings = AppServices.Settings.Current;
-
             if (!settings.AiEqualizerMatcherEnabled) return;
 
-
-
-            try
-
-            {
-
-                string genre = track.Genre ?? string.Empty;
+            string genre = track.Genre ?? string.Empty;
 
                 string title = track.Title ?? string.Empty;
 
@@ -3623,77 +3124,47 @@ public sealed class PlaybackSession : IPlaybackSession
                             matchedPreset = apiResult;
 
                         }
-
                     }
-
-                    catch { }
-
+                    catch (Exception ex)
+                    {
+                        Log($"AiAssistantService.CategorizeEqualizerAsync failed: {ex.Message}");
+                    }
                 }
-
-
 
                 // Drop if track changed while categorizing
-
                 if (CurrentTrack != track)
-
                 {
-
                     return;
-
                 }
-
-
 
                 // Only apply if AI/heuristic found a specific match — never reset user's preset to Flat
-
                 if (matchedPreset != EqualizerPreset.Flat && settings.Equalizer != matchedPreset)
-
                 {
-
                     Log($"AI Equalizer Matcher: Autodetected and changed EQ preset to '{matchedPreset}' for track '{title}'");
-
                     App.MainDispatcher?.TryEnqueue(() =>
-
                     {
-
                         if (CurrentTrack == track)
-
                         {
-
                             AppServices.SettingsViewModel.SelectedEqualizer = matchedPreset;
-
                         }
-
                     });
-
                 }
-
-            }
-
-            catch (Exception ex)
-
-            {
-
-                Log($"RunAiEqualizerMatcher error: {ex.Message}");
-
-            }
-
         }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
+        catch (Exception ex)
+        {
+            Log($"RunAiEqualizerMatcher error: {ex.Message}");
+        }
     }
 
 
 
     private int GetNextTrackIndex()
-
     {
-
-        if (_queue.Count == 0) return -1;
-
-        return (_currentIndex + 1) % _queue.Count;
-
+        lock (_queueLock)
+        {
+            if (_queue.Count == 0) return -1;
+            return (_currentIndex + 1) % _queue.Count;
+        }
     }
 
 
@@ -3715,25 +3186,27 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
         if (_transitionPlayer != null)
-
         {
-
+            var transPlayer = _transitionPlayer;
+            _transitionPlayer = null;
             try
-
             {
-
-                _transitionPlayer.Pause();
-
-                _transitionPlayer.Source = null;
-
-                _transitionPlayer.Dispose();
-
+                transPlayer.Pause();
+            }
+            catch (Exception ex)
+            {
+                Log($"CancelActiveTransition pausing transition player failed: {ex.Message}");
             }
 
-            catch { }
-
-            _transitionPlayer = null;
-
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    transPlayer.Source = null;
+                    transPlayer.Dispose();
+                }
+                catch { }
+            });
         }
 
 
@@ -3746,55 +3219,44 @@ public sealed class PlaybackSession : IPlaybackSession
 
         }
 
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"CancelActiveTransition resetting volume failed: {ex.Message}");
+        }
 
     }
 
 
 
     private async Task InitiateCrossfadeAsync(int nextIndex)
-
     {
+        if (_isCrossfading) return;
+
+        MediaItem? nextTrack = null;
+        lock (_queueLock)
+        {
+            if (nextIndex >= 0 && nextIndex < _queue.Count)
+            {
+                nextTrack = _queue[nextIndex];
+            }
+        }
+        if (nextTrack == null) return;
+
+        Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
+
+        // Bypass crossfader for Video formats since headless MediaPlayers break the hardware rendering pipeline
+        if (CurrentTrack?.IsVideo == true || nextTrack.IsVideo)
+        {
+            _currentIndex = nextIndex;
+            CurrentTrack = nextTrack;
+            PlayTrack(nextTrack);
+            return;
+        }
 
         try
-
         {
-
-            if (_isCrossfading) return;
-
-
-
-            var nextTrack = _queue[nextIndex];
-
-            Log($"InitiateCrossfade: Starting crossfade from current track to '{nextTrack.Title}'");
-
-
-
-            // Bypass crossfader for Video formats since headless MediaPlayers break the hardware rendering pipeline
-
-            if (CurrentTrack?.IsVideo == true || nextTrack.IsVideo)
-
-            {
-
-                _currentIndex = nextIndex;
-
-                CurrentTrack = nextTrack;
-
-                PlayTrack(nextTrack);
-
-                return;
-
-            }
-
-
-
-            try
-
-            {
-
-                var requestVersion = BeginPlaybackRequest();
-
-                _isCrossfading = true;
+            var requestVersion = BeginPlaybackRequest();
+            _isCrossfading = true;
 
 
 
@@ -3812,11 +3274,23 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 _transitionPlayer.Source = _mediaPlayer.Source;
 
-                _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+                try
+                {
+                    if (_mediaPlayer?.PlaybackSession != null && _transitionPlayer?.PlaybackSession != null)
+                    {
+                        _transitionPlayer.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"Syncing transition player position failed: {ex.Message}");
+                }
 
-                _transitionPlayer.Volume = _mediaPlayer.Volume;
-
-                _transitionPlayer.Play();
+                if (_mediaPlayer != null && _transitionPlayer != null)
+                {
+                    _transitionPlayer.Volume = _mediaPlayer.Volume;
+                    _transitionPlayer.Play();
+                }
 
 
 
@@ -3854,11 +3328,12 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 {
 
-                    _mediaPlayer.Source = nextSource;
-
-                    _mediaPlayer.Volume = 0.0;
-
-                    _mediaPlayer.Play();
+                    if (_mediaPlayer != null)
+                    {
+                        _mediaPlayer.Source = nextSource;
+                        _mediaPlayer.Volume = 0.0;
+                        _mediaPlayer.Play();
+                    }
 
 
 
@@ -3874,7 +3349,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
                     int steps = durationMs / intervalMs;
 
-                    double initialTransitionVolume = _transitionPlayer.Volume;
+                    double initialTransitionVolume = _transitionPlayer?.Volume ?? (Volume / 100.0);
 
                     double finalTargetVolume = Volume / 100.0;
 
@@ -3914,7 +3389,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
                             _transitionPlayer.Volume = Math.Clamp(initialTransitionVolume * (1.0 - progress), 0.0, 1.0);
 
-                            _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
+                            if (_mediaPlayer != null)
+                            {
+                                _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
+                            }
 
 
 
@@ -3959,109 +3437,87 @@ public sealed class PlaybackSession : IPlaybackSession
                 CancelActiveTransition();
 
                 Log($"InitiateCrossfade exception: {ex.Message}");
-
             }
-
-        }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
     }
 
 
 
     private void OnCrossfadeCheckTimerTick(object sender, object e)
-
     {
-
-        if (!IsPlaying) return; // Rule 5: conserve CPU/battery when paused
-
-        var settings = AppServices.Settings.Current;
-
-        var track = CurrentTrack;
-
-        if (track == null || _isChangingSource || _isCrossfading) return;
-
-
-
-        double pos = PositionSeconds;
-
-        double dur = _mediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
-
-
-
-        if (dur <= 0) return;
-
-
-
-        int nextIndex = GetNextTrackIndex();
-
-        if (nextIndex >= 0 && nextIndex < _queue.Count)
-
+        try
         {
+            if (!IsPlaying) return; // Rule 5: conserve CPU/battery when paused
 
-            var nextTrack = _queue[nextIndex];
+            var settings = AppServices.Settings.Current;
+            var track = CurrentTrack;
+            if (track == null || _isChangingSource || _isCrossfading) return;
 
-            if (_preloadedTrackId != nextTrack.Id && pos >= dur * 0.8)
-
+            double pos = PositionSeconds;
+            double dur = 0;
+            try
             {
+                dur = _mediaPlayer?.PlaybackSession?.NaturalDuration.TotalSeconds ?? 0;
+            }
+            catch (Exception ex)
+            {
+                Log($"Reading NaturalDuration in OnCrossfadeCheckTimerTick failed: {ex.Message}");
+            }
 
-                _preloadedTrackId = nextTrack.Id;
+            if (dur <= 0) return;
 
-                _ = Task.Run(async () =>
-
+            int nextIndex = GetNextTrackIndex();
+            MediaItem? nextTrack = null;
+            lock (_queueLock)
+            {
+                if (nextIndex >= 0 && nextIndex < _queue.Count)
                 {
-
-                    try
-
-                    {
-
-                        var src = await CreatePlaybackSourceAsync(nextTrack);
-
-                        if (nextTrack.Id == _preloadedTrackId)
-
-                        {
-
-                            _preloadedNextSource = src;
-
-                            Log($"Pre-loaded next track '{nextTrack.Title}' for gapless playback.");
-
-                        }
-
-                    }
-
-                    catch (Exception ex)
-
-                    {
-
-                        Log($"Preload failed: {ex.Message}");
-
-                    }
-
-                });
-
+                    nextTrack = _queue[nextIndex];
+                }
             }
 
-        }
-
-
-
-        if (settings.CrossfadeEnabled && !track.IsVideo && nextIndex >= 0 && nextIndex < _queue.Count)
-
-        {
-
-            double fadeThreshold = dur - settings.CrossfadeDuration;
-
-            if (pos >= fadeThreshold && fadeThreshold > 0)
-
+            if (nextTrack != null)
             {
-
-                _ = InitiateCrossfadeAsync(nextIndex);
-
+                if (_preloadedTrackId != nextTrack.Id && pos >= dur * 0.8)
+                {
+                    _preloadedTrackId = nextTrack.Id;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var src = await CreatePlaybackSourceAsync(nextTrack);
+                            if (nextTrack.Id == _preloadedTrackId)
+                            {
+                                _preloadedNextSource = src;
+                                Log($"Pre-loaded next track '{nextTrack.Title}' for gapless playback.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Preload failed: {ex.Message}");
+                        }
+                    });
+                }
             }
 
-        }
+            bool canCrossfade = false;
+            lock (_queueLock)
+            {
+                canCrossfade = nextIndex >= 0 && nextIndex < _queue.Count;
+            }
 
+            if (settings.CrossfadeEnabled && !track.IsVideo && canCrossfade)
+            {
+                double fadeThreshold = dur - settings.CrossfadeDuration;
+                if (pos >= fadeThreshold && fadeThreshold > 0)
+                {
+                    _ = InitiateCrossfadeAsync(nextIndex);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"OnCrossfadeCheckTimerTick error: {ex.Message}");
+        }
     }
 
 
@@ -4141,93 +3597,68 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     private void OnSleepCheckTimerTick(object sender, object e)
-
     {
-
-        var settings = AppServices.Settings.Current;
-
-        if (settings.SleepTimerMinutes <= 0 && !settings.SleepAtEndOfTrack)
-
+        try
         {
+            var settings = AppServices.Settings.Current;
+            if (settings.SleepTimerMinutes <= 0 && !settings.SleepAtEndOfTrack)
+            {
+                _sleepCheckTimer?.Stop();
+                return;
+            }
 
-            _sleepCheckTimer?.Stop();
-
-            return;
-
+            if (_sleepExpireTime.HasValue && DateTime.Now >= _sleepExpireTime.Value)
+            {
+                Log("Sleep Timer expired. Stopping playback.");
+                _sleepExpireTime = null;
+                StartSleepTimer(0, false);
+                _ = FadeOutAndStopAsync();
+            }
         }
-
-
-
-        if (_sleepExpireTime.HasValue && DateTime.Now >= _sleepExpireTime.Value)
-
+        catch (Exception ex)
         {
-
-            Log("Sleep Timer expired. Stopping playback.");
-
-            _sleepExpireTime = null;
-
-            StartSleepTimer(0, false);
-
-            _ = FadeOutAndStopAsync();
-
+            Log($"OnSleepCheckTimerTick error: {ex.Message}");
         }
-
     }
 
 
 
     private async Task FadeOutAndStopAsync()
-
     {
-
         try
-
         {
-
             try
-
             {
-
                 double startVol = _mediaPlayer.Volume;
-
                 int steps = 20;
-
                 int intervalMs = 100;
-
                 for (int i = 0; i <= steps; i++)
-
                 {
-
                     double factor = 1.0 - ((double)i / steps);
-
                     _mediaPlayer.Volume = Math.Clamp(startVol * factor, 0.0, 1.0);
-
                     await Task.Delay(intervalMs);
-
                 }
-
             }
-
-            catch { }
-
-
+            catch (Exception ex)
+            {
+                Log($"FadeOut volume ramp error: {ex.Message}");
+            }
 
             Stop();
 
             try
-
             {
-
                 _mediaPlayer.Volume = Volume / 100.0;
-
             }
-
-            catch { }
-
+            catch (Exception ex)
+            {
+                Log($"Restoring volume after FadeOut error: {ex.Message}");
+            }
         }
-
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
-
+        catch (Exception ex)
+        {
+            Log($"FadeOutAndStopAsync error: {ex.Message}");
+        }
     }
 
 
@@ -4300,6 +3731,20 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
+    public void CancelThumbnailPrefetch()
+    {
+        try
+        {
+            _prefetchCts?.Cancel();
+            _prefetchCts?.Dispose();
+            _prefetchCts = null;
+        }
+        catch (Exception ex)
+        {
+            Log($"CancelThumbnailPrefetch error: {ex.Message}");
+        }
+    }
+
     public void PrefetchVideoThumbnails(MediaItem track)
 
     {
@@ -4308,7 +3753,15 @@ public sealed class PlaybackSession : IPlaybackSession
 
         {
 
-            try { _prefetchCts.Cancel(); _prefetchCts.Dispose(); } catch { }
+            try
+            {
+                _prefetchCts.Cancel();
+                _prefetchCts.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log($"PrefetchVideoThumbnails cancelling previous token error: {ex.Message}");
+            }
 
         }
 
@@ -4336,7 +3789,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
             {
 
-                try { _activeComposition.Clips.Clear(); } catch { }
+                try
+                {
+                    _activeComposition.Clips.Clear();
+                }
+                catch (Exception ex)
+                {
+                    Log($"Clearing active composition clips failed: {ex.Message}");
+                }
 
                 _activeComposition = null;
 
@@ -4367,9 +3827,7 @@ public sealed class PlaybackSession : IPlaybackSession
             {
 
                 // Defer thumbnail prefetching slightly so initial playback begins with zero disk I/O contention
-
-                await Task.Delay(1500, token);
-
+                await Task.Delay(1500);
                 if (token.IsCancellationRequested) return;
 
 
@@ -4414,7 +3872,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
                         {
 
-                            try { composition.Clips.Clear(); } catch { }
+                            try
+                            {
+                                composition.Clips.Clear();
+                            }
+                            catch (Exception ex)
+                            {
+                                Log($"Clearing composition clips on cancellation failed: {ex.Message}");
+                            }
 
                             composition = null;
 
@@ -4447,36 +3912,30 @@ public sealed class PlaybackSession : IPlaybackSession
                             {
 
                                 App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-
                                 {
-
-                                    using (thumb)
-
+                                    try
                                     {
-
-                                        try
-
+                                        using (thumb)
                                         {
-
                                             var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-
                                             await bitmap.SetSourceAsync(thumb);
-
                                             AddCachedThumbnail(TimeSpan.Zero, bitmap);
-
                                         }
-
-                                        catch { }
-
                                     }
-
+                                    catch (Exception ex)
+                                    {
+                                        Log($"Setting initial thumbnail source failed: {ex.Message}");
+                                    }
                                 });
 
                             }
 
                         }
 
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            Log($"Getting initial thumbnail failed: {ex.Message}");
+                        }
 
 
 
@@ -4537,53 +3996,29 @@ public sealed class PlaybackSession : IPlaybackSession
                             // Pause background prefetch immediately if the user is hovering or seeking
 
                             while (_hasInteractiveThumbnailRequest && !token.IsCancellationRequested)
-
                             {
-
-                                await Task.Delay(150, token);
-
+                                await Task.Delay(150);
                             }
-
-
 
                             if (token.IsCancellationRequested) break;
 
-
-
                             double sec = sampleTimes[i];
-
                             var time = TimeSpan.FromSeconds(sec);
 
-
-
                             try
-
                             {
-
                                 if (token.IsCancellationRequested) break;
 
-
-
                                 Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
-
-                                await _thumbnailGate.WaitAsync(token);
-
+                                await _thumbnailGate.WaitAsync();
                                 try
-
                                 {
-
                                     if (token.IsCancellationRequested) break;
-
                                     stream = await composition.GetThumbnailAsync(time, 160, 90, Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
-
                                 }
-
                                 finally
-
                                 {
-
                                     _thumbnailGate.Release();
-
                                 }
 
 
@@ -4601,113 +4036,80 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
                                 if (stream != null)
-
                                 {
-
                                     bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-
                                     {
-
-                                        using (stream)
-
+                                        try
                                         {
-
-                                            try
-
+                                            using (stream)
                                             {
-
                                                 if (token.IsCancellationRequested) return;
 
-
-
                                                 var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-
                                                 await bitmap.SetSourceAsync(stream);
-
                                                 AddCachedThumbnail(time, bitmap);
-
                                             }
-
-                                            catch { }
-
                                         }
-
+                                        catch (Exception ex)
+                                        {
+                                            Log($"Rendering thumbnail at {time} failed: {ex.Message}");
+                                        }
                                     }) ?? false;
 
-
-
                                     if (!enqueued)
-
                                     {
-
                                         stream.Dispose();
-
                                     }
-
                                 }
-
+                            }
+                            catch (Exception ex)
+                            {
+                                Log($"Generating thumbnail at {time} failed: {ex.Message}");
                             }
 
-                            catch { }
-
-
-
-                            await Task.Delay(150, token);
-
+                            await Task.Delay(150);
+                            if (token.IsCancellationRequested) break;
                         }
-
                     }
-
                 }
-
-                catch
-
+                catch (OperationCanceledException)
                 {
-
-                    // Fallback for MKV / other formats: extract shell video thumbnail
-
-                    try
-
+                    // Cancellation requested - stop prefetch loop gracefully
+                }
+                catch (Exception ex)
+                {
+                    Log($"MediaComposition prefetch failed, falling back to shell thumbnail: {ex.Message}");
+                    // Fallback for MKV / other formats: extract shell video thumbnail only if not cancelled
+                    if (!token.IsCancellationRequested)
                     {
-
-                        var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
-
-                        if (thumb != null && !token.IsCancellationRequested)
-
+                        try
                         {
-
-                            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-
+                            var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
+                            if (thumb != null && !token.IsCancellationRequested)
                             {
-
-                                using (thumb)
-
+                                App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
                                 {
-
                                     try
-
                                     {
-
-                                        var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-
-                                        await bitmap.SetSourceAsync(thumb);
-
-                                        AddCachedThumbnail(TimeSpan.Zero, bitmap);
-
+                                        using (thumb)
+                                        {
+                                            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
+                                            await bitmap.SetSourceAsync(thumb);
+                                            AddCachedThumbnail(TimeSpan.Zero, bitmap);
+                                        }
                                     }
-
-                                    catch { }
-
-                                }
-
-                            });
-
+                                    catch (Exception ex)
+                                    {
+                                        Log($"Setting fallback thumbnail source failed: {ex.Message}");
+                                    }
+                                });
+                            }
                         }
-
+                        catch (Exception fallbackEx)
+                        {
+                            Log($"Getting fallback thumbnail failed: {fallbackEx.Message}");
+                        }
                     }
-
-                    catch { }
-
                 }
 
                 finally
@@ -4728,7 +4130,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
                     }
 
-                    try { composition?.Clips.Clear(); } catch { }
+                    try
+                    {
+                        composition?.Clips.Clear();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Clearing composition clips in finally failed: {ex.Message}");
+                    }
 
                     composition = null;
 
@@ -4766,7 +4175,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 }
 
-                try { composition?.Clips.Clear(); } catch { }
+                try
+                {
+                    composition?.Clips.Clear();
+                }
+                catch (Exception ex)
+                {
+                    Log($"Clearing composition clips in outer finally failed: {ex.Message}");
+                }
 
                 composition = null;
 
@@ -4911,89 +4327,16 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     private void CleanupPlaybackSource(IMediaPlaybackSource? source)
-
     {
-
         if (source == null) return;
 
-
-
-        try
-
-        {
-
-            MediaSource? mediaSource = null;
-
-            if (source is MediaPlaybackItem playbackItem)
-
-            {
-
-                mediaSource = playbackItem.Source;
-
-            }
-
-            else if (source is MediaSource directSource)
-
-            {
-
-                mediaSource = directSource;
-
-            }
-
-
-
-            if (mediaSource != null)
-
-            {
-
-                try
-
-                {
-
-                    if (mediaSource.CustomProperties.TryGetValue("ActiveStreams", out var streamsObj) &&
-
-                        streamsObj is List<IDisposable> streams)
-
-                    {
-
-                        foreach (var stream in streams)
-
-                        {
-
-                            try { stream.Dispose(); } catch { }
-
-                        }
-
-                        streams.Clear();
-
-                    }
-
-                }
-
-                catch { }
-
-
-
-                try { mediaSource.Reset(); } catch { }
-
-                try { mediaSource.Dispose(); } catch { }
-
-            }
-
-
-
-            if (source is IDisposable disposableSource)
-
-            {
-
-                try { disposableSource.Dispose(); } catch { }
-
-            }
-
-        }
-
-        catch { }
-
+        // In WinRT / CsWinRT, MediaPlaybackItem and MediaSource are reference-counted COM objects.
+        // Explicitly calling IClosable.Close() (.Dispose()) while Media Foundation's asynchronous
+        // pipeline is unbinding causes E_ABORT (0x80004004) in combase.dll and Access Violations (0xC0000005).
+        // Furthermore, abruptly closing underlying stream handles while decoder threads are reading
+        // triggers unmanaged fail-fast stowed exceptions (0xC000027B).
+        // By allowing the CLR Garbage Collector and native COM reference count to reclaim them,
+        // cleanup proceeds safely without tearing down native pipelines.
     }
 
 }

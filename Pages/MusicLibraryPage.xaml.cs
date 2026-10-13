@@ -15,12 +15,76 @@ public sealed partial class MusicLibraryPage : Page
 {
     public MusicLibraryViewModel ViewModel { get; } = AppServices.MusicLibraryViewModel;
     private string? _initialSearchQuery;
+    private DataTemplate? _wideTrackTemplate;
+    private DataTemplate? _compactTrackTemplate;
+    private bool _isCompactLayout = false;
 
     public MusicLibraryPage()
     {
         InitializeComponent();
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
-        this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
+        this.Loaded += (s, e) =>
+        {
+            ComboBoxHelper.ApplyBackdropToVisualTree(this);
+            UpdateLayoutForWidth(this.ActualWidth);
+            DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                UpdateLayoutForWidth(this.ActualWidth);
+            });
+        };
+        this.SizeChanged += OnPageSizeChanged;
+    }
+
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateLayoutForWidth(e.NewSize.Width);
+    }
+
+    private void UpdateLayoutForWidth(double width)
+    {
+        if (width <= 0)
+        {
+            width = this.ActualWidth;
+            if (width <= 0 && PageContent != null) width = PageContent.ActualWidth;
+            if (width <= 0 && App.MainWindowInstance?.ContentFrame != null) width = App.MainWindowInstance.ContentFrame.ActualWidth;
+            if (width <= 0 && App.MainWindowInstance != null) width = App.MainWindowInstance.Bounds.Width;
+            if (width <= 0) return;
+        }
+        bool shouldBeCompact = width <= 720;
+        bool shouldBeNarrowHeader = width < 960;
+
+        VisualStateManager.GoToState(this, shouldBeNarrowHeader ? "NarrowHeader" : "WideHeader", true);
+
+        _wideTrackTemplate ??= (DataTemplate)Resources["WideTrackTemplate"];
+        _compactTrackTemplate ??= (DataTemplate)Resources["CompactTrackTemplate"];
+
+        if (_isCompactLayout != shouldBeCompact || TrackListView.ItemTemplate == null)
+        {
+            _isCompactLayout = shouldBeCompact;
+            TrackListView.ItemTemplate = shouldBeCompact ? _compactTrackTemplate : _wideTrackTemplate;
+        }
+
+        if (HeaderColArtist != null && HeaderColAlbum != null && HeaderColTime != null)
+        {
+            if (shouldBeCompact)
+            {
+                HeaderColArtist.Width = new GridLength(0);
+                HeaderColAlbum.Width = new GridLength(0);
+                HeaderColTime.Width = GridLength.Auto;
+                if (HeaderArtistText != null) HeaderArtistText.Visibility = Visibility.Collapsed;
+                if (HeaderAlbumText != null) HeaderAlbumText.Visibility = Visibility.Collapsed;
+                if (HeaderTitleText != null) HeaderTitleText.Text = "TRACK";
+            }
+            else
+            {
+                HeaderColArtist.Width = new GridLength(180);
+                HeaderColAlbum.Width = new GridLength(180);
+                HeaderColTime.Width = new GridLength(70);
+                if (HeaderArtistText != null) HeaderArtistText.Visibility = Visibility.Visible;
+                if (HeaderAlbumText != null) HeaderAlbumText.Visibility = Visibility.Visible;
+                if (HeaderTitleText != null) HeaderTitleText.Text = "TITLE";
+            }
+        }
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -81,6 +145,11 @@ public sealed partial class MusicLibraryPage : Page
         }
 
         UpdateEmptyState();
+        UpdateLayoutForWidth(this.ActualWidth);
+        DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            UpdateLayoutForWidth(this.ActualWidth);
+        });
         PageContent.Opacity = 1.0;
         try
         {

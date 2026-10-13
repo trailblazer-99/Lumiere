@@ -28,7 +28,6 @@
                     <SolidColorBrush x:Key="SelectionRibbonBackground" Color="{ThemeResource SystemColorWindowColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
-            <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -45,7 +44,7 @@
             <ThemeShadow />
         </Border.Shadow>
 
-        <Grid VerticalAlignment="Center" ColumnSpacing="24">
+        <Grid x:Name="RibbonGrid" VerticalAlignment="Center" ColumnSpacing="24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -92,7 +91,7 @@
             </StackPanel>
 
             <!-- Right: Fluent Action Buttons -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <StackPanel x:Name="ActionButtonsPanel" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <!-- Play Button (Accent Solid Button) -->
                 <Button
                     x:Name="PlayButton"
@@ -125,7 +124,7 @@
                     helpers:SpringAnimationHelper.HoverScale="1.05">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon Glyph="&#xE898;" FontSize="16" />
-                        <TextBlock Text="Play next" FontSize="13" />
+                        <TextBlock x:Name="PlayNextText" Text="Play next" FontSize="13" />
                     </StackPanel>
                 </Button>
 
@@ -142,7 +141,7 @@
                     helpers:SpringAnimationHelper.HoverScale="1.05">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon Glyph="&#xE8E5;" FontSize="16" />
-                        <TextBlock Text="Queue" FontSize="13" />
+                        <TextBlock x:Name="QueueText" Text="Queue" FontSize="13" />
                     </StackPanel>
                 </Button>
 
@@ -159,7 +158,7 @@
                     helpers:SpringAnimationHelper.HoverScale="1.05">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon Glyph="&#xE710;" FontSize="16" />
-                        <TextBlock Text="Add to" FontSize="13" />
+                        <TextBlock x:Name="AddToPlaylistText" Text="Add to" FontSize="13" />
                     </StackPanel>
                 </Button>
 
@@ -176,7 +175,7 @@
                     helpers:SpringAnimationHelper.HoverScale="1.05">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon Glyph="&#xE711;" FontSize="16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
-                        <TextBlock Text="Remove" FontSize="13" />
+                        <TextBlock x:Name="RemoveText" Text="Remove" FontSize="13" />
                     </StackPanel>
                 </Button>
 
@@ -193,7 +192,7 @@
                     helpers:SpringAnimationHelper.HoverScale="1.05">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon Glyph="&#xE946;" FontSize="16" />
-                        <TextBlock Text="Properties" FontSize="13" />
+                        <TextBlock x:Name="PropertiesText" Text="Properties" FontSize="13" />
                     </StackPanel>
                 </Button>
             </StackPanel>

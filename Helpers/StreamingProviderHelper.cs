@@ -59,6 +59,53 @@ namespace LumiereMediaPlayer.Helpers
                                                 clean.StartsWith(t, StringComparison.OrdinalIgnoreCase));
         }
 
+        public static bool IsDisneyOrStarWarsTitle(WatchmodeDetails? details, List<WatchmodeSource>? allSources = null)
+        {
+            if (details == null && (allSources == null || allSources.Count == 0)) return false;
+
+            if (details != null)
+            {
+                if (details.NetworkNames?.Any(n => n != null && (
+                    n.Contains("disney", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("lucasfilm", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("marvel", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("star wars", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("hotstar", StringComparison.OrdinalIgnoreCase))) == true)
+                    return true;
+
+                if (details.StudioNames?.Any(s => s != null && (
+                    s.Contains("disney", StringComparison.OrdinalIgnoreCase) ||
+                    s.Contains("lucasfilm", StringComparison.OrdinalIgnoreCase) ||
+                    s.Contains("marvel", StringComparison.OrdinalIgnoreCase) ||
+                    s.Contains("pixar", StringComparison.OrdinalIgnoreCase) ||
+                    s.Contains("star wars", StringComparison.OrdinalIgnoreCase))) == true)
+                    return true;
+
+                string clean = details.Title?.Trim() ?? "";
+                if (clean.Contains("Mandalorian", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Star Wars", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Ahsoka", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Andor", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Obi-Wan", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Boba Fett", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Loki", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("WandaVision", StringComparison.OrdinalIgnoreCase) ||
+                    clean.Contains("Grogu", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            if (allSources != null && allSources.Any(s => s.Name != null &&
+                (s.Name.Contains("Disney", StringComparison.OrdinalIgnoreCase) ||
+                 s.Name.Contains("Hotstar", StringComparison.OrdinalIgnoreCase))))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         public static int GetProviderPriority(WatchmodeSource source, WatchmodeDetails? details, string? region = null)
         {
             if (source == null || string.IsNullOrEmpty(source.Name)) return 100;
@@ -77,14 +124,15 @@ namespace LumiereMediaPlayer.Helpers
                 bool isPrime = (details.NetworkNames?.Any(n => n.Contains("amazon", StringComparison.OrdinalIgnoreCase) || n.Contains("prime", StringComparison.OrdinalIgnoreCase)) ?? false) ||
                                (details.StudioNames?.Any(s => s.Contains("amazon", StringComparison.OrdinalIgnoreCase) || s.Contains("prime", StringComparison.OrdinalIgnoreCase)) ?? false);
                 bool isDisney = (details.NetworkNames?.Any(n => n.Contains("disney", StringComparison.OrdinalIgnoreCase)) ?? false) ||
-                                (details.StudioNames?.Any(s => s.Contains("disney", StringComparison.OrdinalIgnoreCase)) ?? false);
+                                (details.StudioNames?.Any(s => s.Contains("disney", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                                IsDisneyOrStarWarsTitle(details, null);
                 bool isMax = (details.NetworkNames?.Any(n => n.Contains("hbo", StringComparison.OrdinalIgnoreCase) || n.Contains("max", StringComparison.OrdinalIgnoreCase)) ?? false) ||
                              (details.StudioNames?.Any(s => s.Contains("hbo", StringComparison.OrdinalIgnoreCase) || s.Contains("max", StringComparison.OrdinalIgnoreCase)) ?? false);
 
                 if (isApple && lower.Contains("apple")) return 0;
                 if (isNetflix && lower.Contains("netflix")) return 0;
                 if (isPrime && (lower.Contains("prime") || lower.Contains("amazon"))) return 0;
-                if (isDisney && lower.Contains("disney")) return 0;
+                if (isDisney && (lower.Contains("disney") || lower.Contains("hotstar"))) return 0;
                 if (isMax && (lower.Contains("max") || lower.Contains("hbo"))) return 0;
             }
 
@@ -460,6 +508,33 @@ namespace LumiereMediaPlayer.Helpers
                         Name = "Apple TV+",
                         Type = "sub",
                         Region = regionKey,
+                        WebUrl = targetUrl,
+                        Format = "4K"
+                    });
+                }
+            }
+
+            // Synthesize JioHotstar source for Disney / Star Wars / Marvel titles in India
+            if (string.Equals(regionKey, "IN", StringComparison.OrdinalIgnoreCase) && IsDisneyOrStarWarsTitle(details, sources))
+            {
+                bool hasDirectHotstarSub = regionalSources.Any(s =>
+                    s.Name != null &&
+                    s.Name.Contains("Hotstar", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(s.Type, "sub", StringComparison.OrdinalIgnoreCase));
+
+                if (!hasDirectHotstarSub)
+                {
+                    string cleanTitle = details?.Title?.Trim() ?? "";
+                    string targetUrl = !string.IsNullOrWhiteSpace(cleanTitle)
+                        ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(cleanTitle)}"
+                        : "https://www.hotstar.com";
+
+                    regionalSources.Add(new WatchmodeSource
+                    {
+                        SourceId = 447,
+                        Name = "JioHotstar",
+                        Type = "sub",
+                        Region = "IN",
                         WebUrl = targetUrl,
                         Format = "4K"
                     });

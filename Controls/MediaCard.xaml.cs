@@ -205,7 +205,7 @@ public sealed partial class MediaCard : UserControl
     private DropShadow? _dropShadow;
     private SpriteVisual? _shadowVisual;
     private ExpressionAnimation? _bindSizeAnimation;
-    private CompositionClip? _imageClip;
+    private CompositionGeometricClip? _imageClip;
 
     public MediaCard()
     {
@@ -249,9 +249,14 @@ public sealed partial class MediaCard : UserControl
             {
                 if (PosterImageElement != null)
                 {
-                    var visual = ElementCompositionPreview.GetElementVisual(PosterImageElement);
-                    if (visual != null) visual.Clip = null;
+                    try
+                    {
+                        var visual = ElementCompositionPreview.GetElementVisual(PosterImageElement);
+                        if (visual != null) visual.Clip = null;
+                    }
+                    catch { }
                 }
+                try { _imageClip.Geometry?.Dispose(); } catch { }
                 try { _imageClip.Dispose(); } catch { }
                 _imageClip = null;
             }
@@ -287,7 +292,12 @@ public sealed partial class MediaCard : UserControl
             float h = (float)(CardHeight > 0 ? CardHeight : 168);
             if (w <= 0 || h <= 0) return;
 
-            var oldClip = _imageClip;
+            if (_imageClip != null && _imageClip.Geometry is Microsoft.UI.Composition.CompositionRoundedRectangleGeometry existingGeom)
+            {
+                existingGeom.Size = new System.Numerics.Vector2(w, h);
+                return;
+            }
+
             var clip = compositor.CreateGeometricClip();
             var geom = compositor.CreateRoundedRectangleGeometry();
             geom.Size = new System.Numerics.Vector2(w, h);
@@ -295,7 +305,6 @@ public sealed partial class MediaCard : UserControl
             clip.Geometry = geom;
             visual.Clip = clip;
             _imageClip = clip;
-            try { oldClip?.Dispose(); } catch { }
         }
         catch { }
     }
@@ -322,6 +331,16 @@ public sealed partial class MediaCard : UserControl
             {
                 try { _shadowVisual.Dispose(); } catch { }
                 _shadowVisual = null;
+            }
+            if (_springAnimation != null)
+            {
+                try { _springAnimation.Dispose(); } catch { }
+                _springAnimation = null;
+            }
+            if (_liftSpringAnimation != null)
+            {
+                try { _liftSpringAnimation.Dispose(); } catch { }
+                _liftSpringAnimation = null;
             }
         }
         catch { }
@@ -357,22 +376,38 @@ public sealed partial class MediaCard : UserControl
         catch { }
     }
 
-    private void AnimateShadow(double targetOpacity, float targetOffsetZ)
+    private void AnimateShadow(double targetOpacity, float targetOffsetZ, float targetBlurRadius = 16f)
     {
         if (_dropShadow == null) return;
         try
         {
+            if (!ThemeHelper.IsAnimationEnabled)
+            {
+                _dropShadow.Opacity = (float)targetOpacity;
+                _dropShadow.Offset = new System.Numerics.Vector3(0, targetOffsetZ / 2, targetOffsetZ);
+                _dropShadow.BlurRadius = targetBlurRadius;
+                return;
+            }
+
             var compositor = _dropShadow.Compositor;
+            var easing = compositor.CreateCubicBezierEasingFunction(
+                new System.Numerics.Vector2(0.2f, 0.0f),
+                new System.Numerics.Vector2(0.0f, 1.0f));
 
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-            opacityAnim.InsertKeyFrame(1.0f, (float)targetOpacity);
+            opacityAnim.InsertKeyFrame(1.0f, (float)targetOpacity, easing);
             opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
             _dropShadow.StartAnimation("Opacity", opacityAnim);
 
             var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, targetOffsetZ / 2, targetOffsetZ));
+            offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, targetOffsetZ / 2, targetOffsetZ), easing);
             offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
             _dropShadow.StartAnimation("Offset", offsetAnim);
+
+            var blurAnim = compositor.CreateScalarKeyFrameAnimation();
+            blurAnim.InsertKeyFrame(1.0f, targetBlurRadius, easing);
+            blurAnim.Duration = TimeSpan.FromMilliseconds(200);
+            _dropShadow.StartAnimation("BlurRadius", blurAnim);
         }
         catch { }
     }
@@ -504,7 +539,7 @@ public sealed partial class MediaCard : UserControl
         bool isFullscreen = mainWindow?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
         if (!isFullscreen)
         {
-            int dwellMs = (previewControl != null && previewControl.IsPreviewActive) ? 180 : 300;
+            int dwellMs = (previewControl != null && previewControl.IsPreviewActive) ? 50 : 300;
             if (_previewDwellTimer == null)
             {
                 _previewDwellTimer = new DispatcherTimer();
@@ -530,8 +565,12 @@ public sealed partial class MediaCard : UserControl
                 return;
             }
 
+            // Immediately notify preview control to cancel exit grace timer from any previously hovered card
+            previewControl?.CancelExitGraceTimer();
+
             AnimateScale(1.03);
-            AnimateShadow(0.55, 12f);
+            AnimateHoverLift(-3.5f);
+            AnimateShadow(0.55, 12f, 24f);
 
             if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
 
@@ -578,6 +617,11 @@ public sealed partial class MediaCard : UserControl
                     return;
                 }
 
+                if (previewControl?.IsPreviewActive == true)
+                {
+                    previewControl.CancelExitGraceTimer();
+                }
+
                 if (_previewDwellTimer?.IsEnabled != true && (previewControl == null || !previewControl.IsPreviewActive || !ReferenceEquals(previewControl.ActiveSourceCard, this)))
                 {
                     TryStartPreviewDwell();
@@ -606,42 +650,146 @@ public sealed partial class MediaCard : UserControl
                 return;
             }
 
-            if (previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
+            if (previewControl != null)
+            {
+                if (ReferenceEquals(previewControl.ActiveSourceCard, this))
+                {
+                    previewControl.OnSourceCardPointerExited(this);
+                }
+                else if (previewControl.IsPreviewActive)
+                {
+                    // Pointer left this card before dwell completed; restart exit grace timer for active preview
+                    previewControl.StartExitGraceTimer();
+                }
+            }
+
+            AnimateScale(1.0);
+            AnimateHoverLift(0.0f);
+            AnimateShadow(0.0, 4f, 16f);
+        }
+        catch { }
+    }
+
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true) return;
+
+            AnimateScale(0.97);
+            AnimateHoverLift(1.0f);
+            AnimateShadow(0.35, 6f, 12f);
+        }
+        catch { }
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true) return;
+
+            bool isInside = false;
+            try
+            {
+                var pt = e.GetCurrentPoint(this).Position;
+                isInside = pt.X >= 0 && pt.X <= ActualWidth && pt.Y >= 0 && pt.Y <= ActualHeight;
+            }
+            catch { }
+
+            if (isInside && _isHovered)
+            {
+                AnimateScale(1.03);
+                AnimateHoverLift(-3.5f);
+                AnimateShadow(0.55, 12f, 24f);
+            }
+            else
+            {
+                AnimateScale(1.0);
+                AnimateHoverLift(0.0f);
+                AnimateShadow(0.0, 4f, 16f);
+            }
+        }
+        catch { }
+    }
+
+    private void OnPointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            _isHovered = false;
+            _isDwellSuppressedUntilExit = false;
+            _previewDwellTimer?.Stop();
+
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded != true && previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
             {
                 previewControl.OnSourceCardPointerExited(this);
             }
 
             AnimateScale(1.0);
-            AnimateShadow(0.0, 4f);
+            AnimateHoverLift(0.0f);
+            AnimateShadow(0.0, 4f, 16f);
+        }
+        catch { }
+    }
+
+    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        try
+        {
+            _isHovered = false;
+            _isDwellSuppressedUntilExit = false;
+            _previewDwellTimer?.Stop();
+
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded != true && previewControl != null && ReferenceEquals(previewControl.ActiveSourceCard, this))
+            {
+                previewControl.OnSourceCardPointerExited(this);
+            }
+
+            AnimateScale(1.0);
+            AnimateHoverLift(0.0f);
+            AnimateShadow(0.0, 4f, 16f);
         }
         catch { }
     }
 
     private void OnPreviewDwellTimerTick(object? sender, object e)
     {
-        _previewDwellTimer?.Stop();
-        if (_isDwellSuppressedUntilExit) return;
-        if (IsScrollActive)
+        try
         {
-            // If scroll was active right when timer ticked, retry shortly once scroll settles
-            if (_previewDwellTimer != null)
+            _previewDwellTimer?.Stop();
+            if (_isDwellSuppressedUntilExit) return;
+            if (IsScrollActive)
             {
-                _previewDwellTimer.Interval = TimeSpan.FromMilliseconds(120);
-                _previewDwellTimer.Start();
+                // If scroll was active right when timer ticked, retry shortly once scroll settles
+                if (_previewDwellTimer != null)
+                {
+                    _previewDwellTimer.Interval = TimeSpan.FromMilliseconds(120);
+                    _previewDwellTimer.Start();
+                }
+                return;
             }
-            return;
+            if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+            var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
+            if (previewControl?.IsExpanded == true) return;
+            var mediaItem = GetAssociatedMediaItem();
+            if (_isHovered && mediaItem?.IsVideo == true && AppServices.Settings.Current.EnableHoverVideoPreview)
+            {
+                previewControl?.ShowPreview(this, mediaItem);
+            }
         }
-        if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
-        var previewControl = App.MainWindowInstance?.VideoHoverPreviewControl;
-        if (previewControl?.IsExpanded == true) return;
-        var mediaItem = GetAssociatedMediaItem();
-        if (_isHovered && mediaItem?.IsVideo == true && AppServices.Settings.Current.EnableHoverVideoPreview)
+        catch (Exception ex)
         {
-            previewControl?.ShowPreview(this, mediaItem);
+            System.Diagnostics.Debug.WriteLine($"[MediaCard] OnPreviewDwellTimerTick exception: {ex.Message}");
         }
     }
 
     private SpringVector3NaturalMotionAnimation? _springAnimation;
+    private SpringVector3NaturalMotionAnimation? _liftSpringAnimation;
 
     private void AnimateScale(double targetScale)
     {
@@ -652,14 +800,23 @@ public sealed partial class MediaCard : UserControl
             var selectionVisual = SelectionBorder != null ? ElementCompositionPreview.GetElementVisual(SelectionBorder) : null;
             if (artVisual == null) return;
 
-            var centerPoint = new System.Numerics.Vector3(
-                (float)(AlbumArtBackground.ActualWidth / 2),
-                (float)(AlbumArtBackground.ActualHeight / 2),
-                0);
+            float w = (float)(AlbumArtBackground.ActualWidth > 0 ? AlbumArtBackground.ActualWidth : CardWidth);
+            float h = (float)(AlbumArtBackground.ActualHeight > 0 ? AlbumArtBackground.ActualHeight : CardHeight);
+            var centerPoint = new System.Numerics.Vector3(w / 2f, h / 2f, 0f);
             artVisual.CenterPoint = centerPoint;
             if (selectionVisual != null)
             {
                 selectionVisual.CenterPoint = centerPoint;
+            }
+
+            if (!ThemeHelper.IsAnimationEnabled)
+            {
+                artVisual.Scale = new System.Numerics.Vector3((float)targetScale, (float)targetScale, 1.0f);
+                if (selectionVisual != null)
+                {
+                    selectionVisual.Scale = new System.Numerics.Vector3((float)targetScale, (float)targetScale, 1.0f);
+                }
+                return;
             }
 
             var compositor = artVisual.Compositor;
@@ -669,14 +826,55 @@ public sealed partial class MediaCard : UserControl
             {
                 _springAnimation = compositor.CreateSpringVector3Animation();
                 _springAnimation.Target = "Scale";
-                _springAnimation.DampingRatio = 0.65f;
+                _springAnimation.DampingRatio = 0.68f;
                 _springAnimation.Period = TimeSpan.FromMilliseconds(160);
             }
 
-            _springAnimation.FinalValue = new System.Numerics.Vector3((float)targetScale);
+            _springAnimation.FinalValue = new System.Numerics.Vector3((float)targetScale, (float)targetScale, 1.0f);
 
             artVisual.StartAnimation("Scale", _springAnimation);
             selectionVisual?.StartAnimation("Scale", _springAnimation);
+        }
+        catch { }
+    }
+
+    private void AnimateHoverLift(float targetLiftY)
+    {
+        if (AlbumArtBackground == null) return;
+        try
+        {
+            ElementCompositionPreview.SetIsTranslationEnabled(AlbumArtBackground, true);
+            if (SelectionBorder != null)
+            {
+                ElementCompositionPreview.SetIsTranslationEnabled(SelectionBorder, true);
+            }
+
+            var artVisual = ElementCompositionPreview.GetElementVisual(AlbumArtBackground);
+            var selectionVisual = SelectionBorder != null ? ElementCompositionPreview.GetElementVisual(SelectionBorder) : null;
+            if (artVisual == null) return;
+
+            if (!ThemeHelper.IsAnimationEnabled)
+            {
+                artVisual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, targetLiftY, 0));
+                selectionVisual?.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, targetLiftY, 0));
+                return;
+            }
+
+            var compositor = artVisual.Compositor;
+            if (compositor == null) return;
+
+            if (_liftSpringAnimation == null)
+            {
+                _liftSpringAnimation = compositor.CreateSpringVector3Animation();
+                _liftSpringAnimation.Target = "Translation";
+                _liftSpringAnimation.DampingRatio = 0.68f;
+                _liftSpringAnimation.Period = TimeSpan.FromMilliseconds(160);
+            }
+
+            _liftSpringAnimation.FinalValue = new System.Numerics.Vector3(0, targetLiftY, 0);
+
+            artVisual.StartAnimation("Translation", _liftSpringAnimation);
+            selectionVisual?.StartAnimation("Translation", _liftSpringAnimation);
         }
         catch { }
     }

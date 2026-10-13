@@ -83,7 +83,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             return results ?? new List<WatchmodeTitle>();
         }
 
-        private (int tmdbId, string? mediaType) ResolveTmdbId(int id)
+        private (int? tmdbId, string? mediaType) ResolveTmdbId(int id)
         {
             if (IdMap.TryGetValue(id, out var ids))
             {
@@ -93,7 +93,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                     return (cleaned.Value, ids.Type);
                 }
             }
-            return (id, null);
+            return (null, null);
         }
 
         public async Task<WatchmodeDetails?> GetDetailsAsync(int watchmodeId)
@@ -103,10 +103,14 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                var res = JsonSerializer.Deserialize<WatchmodeDetails>(response, _jsonOptions);
-                if (res != null && (!string.IsNullOrEmpty(res.Title) || res.Id > 0))
+                if (!string.IsNullOrWhiteSpace(response))
                 {
-                    return res;
+                    var res = JsonSerializer.Deserialize<WatchmodeDetails>(response, _jsonOptions);
+                    if (res != null && (!string.IsNullOrEmpty(res.Title) || res.Id > 0))
+                    {
+                        CacheId(res.Id > 0 ? res.Id : watchmodeId, (res.ImdbId, res.TmdbId?.ToString(), res.Type));
+                        return res;
+                    }
                 }
             }
             catch (Exception ex)
@@ -114,38 +118,41 @@ namespace LumiereMediaPlayer.Services.Streaming
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetDetails Error: {ex.Message}");
             }
 
-            // Fallback: If Watchmode fails or ID is a TMDB ID, query TMDB for details
+            // Fallback: If Watchmode fails and we have a mapped TMDB ID, query TMDB for details
             try
             {
                 var (tmdbId, knownType) = ResolveTmdbId(watchmodeId);
-
-                if (knownType == "tv" || knownType == "tv_series" || knownType == "tv_miniseries")
+                if (tmdbId.HasValue && tmdbId.Value > 0)
                 {
-                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
-                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                    int tid = tmdbId.Value;
+                    if (knownType == "tv" || knownType == "tv_series" || knownType == "tv_miniseries")
                     {
-                        return tvDetails.MapToWatchmodeDetails();
+                        var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tid}");
+                        if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                        {
+                            return tvDetails.MapToWatchmodeDetails();
+                        }
                     }
-                }
-                else if (knownType == "movie")
-                {
-                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tmdbId}");
-                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                    else if (knownType == "movie")
                     {
-                        return movieDetails.MapToWatchmodeDetails();
+                        var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tid}");
+                        if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                        {
+                            return movieDetails.MapToWatchmodeDetails();
+                        }
                     }
-                }
-                else
-                {
-                    var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tmdbId}");
-                    if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                    else
                     {
-                        return movieDetails.MapToWatchmodeDetails();
-                    }
-                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
-                    if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
-                    {
-                        return tvDetails.MapToWatchmodeDetails();
+                        var movieDetails = await QueryTmdbAsync<TmdbMovieDetails>($"movie/{tid}");
+                        if (movieDetails != null && !string.IsNullOrEmpty(movieDetails.Title))
+                        {
+                            return movieDetails.MapToWatchmodeDetails();
+                        }
+                        var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tid}");
+                        if (tvDetails != null && !string.IsNullOrEmpty(tvDetails.Name))
+                        {
+                            return tvDetails.MapToWatchmodeDetails();
+                        }
                     }
                 }
             }
@@ -313,18 +320,21 @@ namespace LumiereMediaPlayer.Services.Streaming
                         var searchUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field={searchField}&search_value={parsedTmdbId}{searchTypeParam}";
 
                         var response = await HttpHelper.GetStringAsync(searchServicePath, searchUrl);
-                        var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
-                        if (searchResponse?.TitleResults != null && searchResponse.TitleResults.Count > 0)
+                        if (!string.IsNullOrWhiteSpace(response))
                         {
-                            var match = searchResponse.TitleResults.FirstOrDefault(r => r.TmdbId == parsedTmdbId)
-                                        ?? searchResponse.TitleResults.FirstOrDefault(r =>
-                                            (mediaType == "tv" && (r.Type == "tv_series" || r.Type == "tv" || r.Type == "tv_miniseries")) ||
-                                            (mediaType == "movie" && r.Type == "movie"));
-
-                            if (match != null && match.Id > 0 && (match.TmdbId == parsedTmdbId || !match.TmdbId.HasValue))
+                            var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
+                            if (searchResponse?.TitleResults != null && searchResponse.TitleResults.Count > 0)
                             {
-                                CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
-                                return match.Id;
+                                var match = searchResponse.TitleResults.FirstOrDefault(r => r.TmdbId == parsedTmdbId)
+                                            ?? searchResponse.TitleResults.FirstOrDefault(r =>
+                                                (mediaType == "tv" && (r.Type == "tv_series" || r.Type == "tv" || r.Type == "tv_miniseries")) ||
+                                                (mediaType == "movie" && r.Type == "movie"));
+
+                                if (match != null && match.Id > 0 && (match.TmdbId == parsedTmdbId || !match.TmdbId.HasValue))
+                                {
+                                    CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
+                                    return match.Id;
+                                }
                             }
                         }
                     }
@@ -345,17 +355,20 @@ namespace LumiereMediaPlayer.Services.Streaming
                         var imdbUrl = $"{BaseUrl}/search/?apiKey={ApiKey}&search_field=imdb_id&search_value={externalIds.ImdbId}";
 
                         var imdbResponse = await HttpHelper.GetStringAsync(imdbServicePath, imdbUrl);
-                        var imdbSearchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(imdbResponse, _jsonOptions);
-                        if (imdbSearchResponse?.TitleResults != null && imdbSearchResponse.TitleResults.Count > 0)
+                        if (!string.IsNullOrWhiteSpace(imdbResponse))
                         {
-                            var match = imdbSearchResponse.TitleResults.FirstOrDefault(r =>
-                                string.Equals(r.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase))
-                                ?? imdbSearchResponse.TitleResults[0];
-
-                            if (match != null && match.Id > 0 && (string.Equals(match.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase) || match.TmdbId == parsedTmdbId))
+                            var imdbSearchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(imdbResponse, _jsonOptions);
+                            if (imdbSearchResponse?.TitleResults != null && imdbSearchResponse.TitleResults.Count > 0)
                             {
-                                CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
-                                return match.Id;
+                                var match = imdbSearchResponse.TitleResults.FirstOrDefault(r =>
+                                    string.Equals(r.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase))
+                                    ?? imdbSearchResponse.TitleResults[0];
+
+                                if (match != null && match.Id > 0 && (string.Equals(match.ImdbId, externalIds.ImdbId, StringComparison.OrdinalIgnoreCase) || match.TmdbId == parsedTmdbId))
+                                {
+                                    CacheId(match.Id, (match.ImdbId, match.TmdbId?.ToString() ?? parsedTmdbId.ToString(), match.Type ?? mediaType));
+                                    return match.Id;
+                                }
                             }
                         }
                     }
@@ -402,6 +415,9 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
             if (string.IsNullOrEmpty(region)) region = "us";
 
+            string targetRegionUpper = (!string.IsNullOrEmpty(region) ? region : "US").ToUpperInvariant();
+            List<WatchmodeSource>? watchmodeSources = null;
+
             int watchmodeIdToUse = await ResolveWatchmodeIdAsync(titleId, title);
 
             if (watchmodeIdToUse > 0)
@@ -411,10 +427,18 @@ namespace LumiereMediaPlayer.Services.Streaming
                 try
                 {
                     var response = await HttpHelper.GetStringAsync(servicePath, url);
-                    var sources = JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions);
-                    if (sources != null && sources.Count > 0)
+                    if (!string.IsNullOrWhiteSpace(response))
                     {
-                        return sources;
+                        var sources = JsonSerializer.Deserialize<List<WatchmodeSource>>(response, _jsonOptions);
+                        if (sources != null && sources.Count > 0)
+                        {
+                            bool hasTargetRegion = sources.Any(s => string.Equals(s.Region, targetRegionUpper, StringComparison.OrdinalIgnoreCase));
+                            if (hasTargetRegion)
+                            {
+                                return sources;
+                            }
+                            watchmodeSources = sources;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -423,53 +447,133 @@ namespace LumiereMediaPlayer.Services.Streaming
                 }
             }
 
-            // Fallback directly to TMDB API for watch providers when Watchmode is empty or unavailable
+            // Fallback directly to TMDB API for watch providers when Watchmode lacks target region or is unavailable
             int parsedTmdbId = -1;
             string knownMediaType = "";
 
-            if (titleId.StartsWith("tmdb_tv-"))
+            if (titleId.StartsWith("tmdb_tv-", StringComparison.OrdinalIgnoreCase))
             {
                 int.TryParse(titleId.Substring(8), out parsedTmdbId);
                 knownMediaType = "tv";
             }
-            else if (titleId.StartsWith("tmdb_movie-"))
+            else if (titleId.StartsWith("tmdb_movie-", StringComparison.OrdinalIgnoreCase))
             {
                 int.TryParse(titleId.Substring(11), out parsedTmdbId);
                 knownMediaType = "movie";
             }
+            else if (titleId.StartsWith("tmdb_", StringComparison.OrdinalIgnoreCase))
+            {
+                int.TryParse(titleId.Substring(5), out parsedTmdbId);
+            }
 
-            if (int.TryParse(titleId, out int watchmodeId) || parsedTmdbId != -1)
+            int numericId = 0;
+            if (int.TryParse(titleId, out int parsedNumeric))
+            {
+                numericId = parsedNumeric;
+            }
+            else if (watchmodeIdToUse > 0)
+            {
+                numericId = watchmodeIdToUse;
+            }
+
+            if (numericId > 0 || parsedTmdbId != -1 || !string.IsNullOrWhiteSpace(title))
             {
                 try
                 {
                     int tmdbId = parsedTmdbId;
                     string mediaType = knownMediaType;
 
-                    if (tmdbId == -1)
+                    if (tmdbId == -1 && numericId > 0)
                     {
-                        var (resTmdbId, resMediaType) = ResolveTmdbId(watchmodeId);
-                        tmdbId = resTmdbId;
-                        mediaType = (resMediaType == "tv" || resMediaType == "tv_series" || resMediaType == "tv_miniseries") ? "tv" : "movie";
+                        var (resTmdbId, resMediaType) = ResolveTmdbId(numericId);
+                        if (resTmdbId.HasValue)
+                        {
+                            tmdbId = resTmdbId.Value;
+                            mediaType = (resMediaType == "tv" || resMediaType == "tv_series" || resMediaType == "tv_miniseries") ? "tv" : "movie";
+                        }
+                    }
+
+                    // Fallback to TMDB multi-search if tmdbId is still unknown and title is available
+                    if (tmdbId == -1 && !string.IsNullOrWhiteSpace(title))
+                    {
+                        try
+                        {
+                            var searchResp = await QueryTmdbAsync<TmdbResponse<TmdbMedia>>($"search/multi?query={Uri.EscapeDataString(title)}");
+                            var match = searchResp?.Results?.FirstOrDefault(m =>
+                                (string.Equals(m.MediaType, "movie", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(m.MediaType, "tv", StringComparison.OrdinalIgnoreCase)) &&
+                                m.Id > 0);
+                            if (match != null)
+                            {
+                                tmdbId = match.Id;
+                                mediaType = !string.IsNullOrEmpty(match.MediaType) ? match.MediaType : (!string.IsNullOrEmpty(match.Title) ? "movie" : "tv");
+                                if (numericId > 0)
+                                {
+                                    CacheId(numericId, (null, tmdbId.ToString(), mediaType));
+                                }
+                            }
+                        }
+                        catch { }
                     }
 
                     if (tmdbId != -1)
                     {
+                        if (string.IsNullOrEmpty(mediaType)) mediaType = "movie";
                         var providerData = await QueryTmdbAsync<TmdbProviderResponse>($"{mediaType}/{tmdbId}/watch/providers");
                         if (providerData == null && string.IsNullOrEmpty(knownMediaType))
                         {
                             // Try TV if movie failed and we didn't explicitly know the type
+                            mediaType = "tv";
                             providerData = await QueryTmdbAsync<TmdbProviderResponse>($"tv/{tmdbId}/watch/providers");
                         }
                         if (providerData?.Results != null)
                         {
                             var regionalSources = new List<WatchmodeSource>();
-                            string targetRegionCode = (!string.IsNullOrEmpty(region) ? region : "US").ToUpperInvariant();
-                            if (providerData.Results.TryGetValue(targetRegionCode, out var regionalObj) && regionalObj != null)
+                            if (providerData.Results.TryGetValue(targetRegionUpper, out var regionalObj) && regionalObj != null)
                             {
-                                regionalSources.AddRange(regionalObj.MapToWatchmodeSources(targetRegionCode, title));
+                                regionalSources.AddRange(regionalObj.MapToWatchmodeSources(targetRegionUpper, title));
                             }
+
+                            // Special handling for India (IN): Disney+ titles are exclusively on JioHotstar
+                            if (string.Equals(targetRegionUpper, "IN", StringComparison.OrdinalIgnoreCase))
+                            {
+                                bool hasHotstarAlready = regionalSources.Any(s => s.Name != null && s.Name.Contains("Hotstar", StringComparison.OrdinalIgnoreCase));
+                                if (!hasHotstarAlready)
+                                {
+                                    bool hasGlobalDisneyPlus = providerData.Results.Values.Any(r =>
+                                        r?.Flatrate?.Any(p => p.ProviderId == 337 || (p.ProviderName?.Contains("Disney", StringComparison.OrdinalIgnoreCase) ?? false)) == true);
+
+                                    if (hasGlobalDisneyPlus)
+                                    {
+                                        regionalSources.Add(new WatchmodeSource
+                                        {
+                                            SourceId = 447,
+                                            Name = "JioHotstar",
+                                            Type = "sub",
+                                            Region = "IN",
+                                            WebUrl = !string.IsNullOrWhiteSpace(title)
+                                                ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(title)}"
+                                                : "https://www.hotstar.com",
+                                            Format = "4K"
+                                        });
+                                    }
+                                }
+                            }
+
                             if (regionalSources.Count > 0)
                             {
+                                if (watchmodeSources != null && watchmodeSources.Count > 0)
+                                {
+                                    var combined = new List<WatchmodeSource>(regionalSources);
+                                    foreach (var ws in watchmodeSources)
+                                    {
+                                        if (!string.Equals(ws.Region, targetRegionUpper, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            combined.Add(ws);
+                                        }
+                                    }
+                                    return combined;
+                                }
                                 return regionalSources;
                             }
                         }
@@ -479,6 +583,11 @@ namespace LumiereMediaPlayer.Services.Streaming
                 {
                     System.Diagnostics.Debug.WriteLine($"TMDB GetSources Fallback Error: {fallbackEx.Message}");
                 }
+            }
+
+            if (watchmodeSources != null && watchmodeSources.Count > 0)
+            {
+                return watchmodeSources;
             }
 
             return new List<WatchmodeSource>();
@@ -491,28 +600,32 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<List<WatchmodeSeason>>(response, _jsonOptions) ?? new List<WatchmodeSeason>();
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    var seasons = JsonSerializer.Deserialize<List<WatchmodeSeason>>(response, _jsonOptions);
+                    if (seasons != null && seasons.Count > 0) return seasons;
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetSeasons Error: {ex.Message}");
+            }
 
-                // Fallback directly to TMDB API for seasons when Watchmode is unavailable
-                if (IdMap.TryGetValue(watchmodeId, out var ids))
+            // Fallback directly to TMDB API for seasons when Watchmode is unavailable
+            if (IdMap.TryGetValue(watchmodeId, out var ids))
+            {
+                var tmdbIdOpt = GetCleanTmdbId(ids.TmdbId);
+                if (tmdbIdOpt.HasValue)
                 {
-                    var tmdbIdOpt = GetCleanTmdbId(ids.TmdbId);
-                    if (tmdbIdOpt.HasValue)
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbIdOpt.Value}");
+                    if (tvDetails != null)
                     {
-                        var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbIdOpt.Value}");
-                        if (tvDetails != null)
-                        {
-                            return tvDetails.MapToWatchmodeSeasons();
-                        }
+                        return tvDetails.MapToWatchmodeSeasons();
                     }
                 }
-
-                return new List<WatchmodeSeason>();
             }
+
+            return new List<WatchmodeSeason>();
         }
 
         public async Task<List<WatchmodeEpisode>> GetEpisodesAsync(int watchmodeId)
@@ -522,41 +635,45 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<List<WatchmodeEpisode>>(response, _jsonOptions) ?? new List<WatchmodeEpisode>();
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    var episodes = JsonSerializer.Deserialize<List<WatchmodeEpisode>>(response, _jsonOptions);
+                    if (episodes != null && episodes.Count > 0) return episodes;
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetEpisodes Error: {ex.Message}");
+            }
 
-                // Fallback directly to TMDB API for episodes when Watchmode is unavailable
-                if (IdMap.TryGetValue(watchmodeId, out var ids))
+            // Fallback directly to TMDB API for episodes when Watchmode is unavailable
+            if (IdMap.TryGetValue(watchmodeId, out var ids))
+            {
+                var tmdbIdOpt = GetCleanTmdbId(ids.TmdbId);
+                if (tmdbIdOpt.HasValue)
                 {
-                    var tmdbIdOpt = GetCleanTmdbId(ids.TmdbId);
-                    if (tmdbIdOpt.HasValue)
+                    int tmdbId = tmdbIdOpt.Value;
+                    var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
+                    if (tvDetails?.Seasons != null)
                     {
-                        int tmdbId = tmdbIdOpt.Value;
-                        var tvDetails = await QueryTmdbAsync<TmdbTvDetails>($"tv/{tmdbId}");
-                        if (tvDetails?.Seasons != null)
+                        var allEpisodes = new List<WatchmodeEpisode>();
+                        foreach (var s in tvDetails.Seasons)
                         {
-                            var allEpisodes = new List<WatchmodeEpisode>();
-                            foreach (var s in tvDetails.Seasons)
+                            if (s.SeasonNumber > 0)
                             {
-                                if (s.SeasonNumber > 0)
+                                var seasonDetails = await QueryTmdbAsync<TmdbSeasonDetailsResponse>($"tv/{tmdbId}/season/{s.SeasonNumber}");
+                                if (seasonDetails != null)
                                 {
-                                    var seasonDetails = await QueryTmdbAsync<TmdbSeasonDetailsResponse>($"tv/{tmdbId}/season/{s.SeasonNumber}");
-                                    if (seasonDetails != null)
-                                    {
-                                        allEpisodes.AddRange(seasonDetails.MapToWatchmodeEpisodes());
-                                    }
+                                    allEpisodes.AddRange(seasonDetails.MapToWatchmodeEpisodes());
                                 }
                             }
-                            if (allEpisodes.Count > 0) return allEpisodes;
                         }
+                        if (allEpisodes.Count > 0) return allEpisodes;
                     }
                 }
-
-                return new List<WatchmodeEpisode>();
             }
+
+            return new List<WatchmodeEpisode>();
         }
 
         public async Task<List<WatchmodeCastCrew>> GetCastCrewAsync(int watchmodeId, int? tmdbId = null, string? mediaType = null)
@@ -590,10 +707,13 @@ namespace LumiereMediaPlayer.Services.Streaming
                 try
                 {
                     var response = await HttpHelper.GetStringAsync(servicePath, url);
-                    var list = JsonSerializer.Deserialize<List<WatchmodeCastCrew>>(response, _jsonOptions);
-                    if (list != null && list.Count > 0)
+                    if (!string.IsNullOrWhiteSpace(response))
                     {
-                        return list;
+                        var list = JsonSerializer.Deserialize<List<WatchmodeCastCrew>>(response, _jsonOptions);
+                        if (list != null && list.Count > 0)
+                        {
+                            return list;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -603,7 +723,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
 
             // 3. Fallback: If watchmodeId itself might be a TMDB ID (e.g. from fallback navigation)
-            if (watchmodeId > 0 && !resolvedTmdbId.HasValue)
+            if (watchmodeId > 0 && watchmodeId < 2_000_000 && !resolvedTmdbId.HasValue)
             {
                 bool isTv = resolvedType is "tv" or "tv_series" or "tv_miniseries";
                 var tmdbCredits = await QueryTmdbAsync<TmdbCreditsResponse>($"{(isTv ? "tv" : "movie")}/{watchmodeId}/credits");
@@ -624,19 +744,20 @@ namespace LumiereMediaPlayer.Services.Streaming
             return new List<WatchmodeCastCrew>();
         }
 
-        public async Task<WatchmodeChangesResponse> GetChangesAsync(string startDate, string endDate)
+        public async Task<WatchmodeChangesResponse?> GetChangesAsync(string startDate, string endDate)
         {
             var servicePath = $"watchmode/changes/?startDate={startDate}&endDate={endDate}";
             var url = $"{BaseUrl}/changes/?apiKey={ApiKey}&startDate={startDate}&endDate={endDate}";
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                return JsonSerializer.Deserialize<WatchmodeChangesResponse>(response, _jsonOptions) ?? new WatchmodeChangesResponse();
+                if (string.IsNullOrWhiteSpace(response)) return null;
+                return JsonSerializer.Deserialize<WatchmodeChangesResponse>(response, _jsonOptions);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Watchmode GetChanges Error (Gracefully Caught): {ex.Message}");
-                return new WatchmodeChangesResponse();
+                return null;
             }
         }
 
@@ -651,6 +772,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeTitle>();
                 var searchResponse = JsonSerializer.Deserialize<WatchmodeSearchResponse>(response, _jsonOptions);
                 var results = new List<WatchmodeTitle>();
                 if (searchResponse?.TitleResults != null)
@@ -680,6 +802,7 @@ namespace LumiereMediaPlayer.Services.Streaming
         private async Task<List<WatchmodeTitle>> FetchTitleListAsync(string servicePath, string url)
         {
             var response = await HttpHelper.GetStringAsync(servicePath, url);
+            if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeTitle>();
             var data = JsonSerializer.Deserialize<WatchmodeListResponse>(response, _jsonOptions);
             var list = data?.Titles ?? new List<WatchmodeTitle>();
             foreach (var title in list)
@@ -696,6 +819,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeTitle>();
                 var results = JsonSerializer.Deserialize<List<WatchmodeTitle>>(response, _jsonOptions);
                 if (results != null && results.Count > 0)
                 {
@@ -733,6 +857,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeProviderInfo>();
                 return JsonSerializer.Deserialize<List<WatchmodeProviderInfo>>(response, _jsonOptions) ?? new List<WatchmodeProviderInfo>();
             }
             catch (Exception ex)
@@ -749,6 +874,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return null;
                 return JsonSerializer.Deserialize<WatchmodeScores>(response, _jsonOptions);
             }
             catch (Exception ex)
@@ -765,6 +891,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeRelease>();
                 return JsonSerializer.Deserialize<List<WatchmodeRelease>>(response, _jsonOptions) ?? new List<WatchmodeRelease>();
             }
             catch (Exception ex)
@@ -781,39 +908,42 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
-                var raw = JsonSerializer.Deserialize<WatchmodePersonRawResponse>(response, _jsonOptions);
-                if (raw != null)
+                if (!string.IsNullOrWhiteSpace(response))
                 {
-                    var details = new WatchmodePersonDetails
+                    var raw = JsonSerializer.Deserialize<WatchmodePersonRawResponse>(response, _jsonOptions);
+                    if (raw != null)
                     {
-                        Id = raw.Id,
-                        FullName = raw.FullName ?? fullName,
-                        HeadshotUrl = raw.HeadshotUrl
-                    };
-
-                    if (raw.KnownFor != null && raw.KnownFor.Count > 0)
-                    {
-                        var idsToFetch = raw.KnownFor.Take(20).ToList();
-                        var tasks = idsToFetch.Select(id => GetDetailsAsync(id));
-                        var results = await Task.WhenAll(tasks);
-                        foreach (var res in results)
+                        var details = new WatchmodePersonDetails
                         {
-                            if (res != null && !string.IsNullOrEmpty(res.Title))
+                            Id = raw.Id,
+                            FullName = raw.FullName ?? fullName,
+                            HeadshotUrl = raw.HeadshotUrl
+                        };
+
+                        if (raw.KnownFor != null && raw.KnownFor.Count > 0)
+                        {
+                            var idsToFetch = raw.KnownFor.Take(20).ToList();
+                            var tasks = idsToFetch.Select(id => GetDetailsAsync(id));
+                            var results = await Task.WhenAll(tasks);
+                            foreach (var res in results)
                             {
-                                details.KnownFor.Add(new WatchmodeTitle
+                                if (res != null && !string.IsNullOrEmpty(res.Title))
                                 {
-                                    Id = res.Id,
-                                    Title = res.Title,
-                                    Year = res.Year,
-                                    Type = res.Type,
-                                    ImdbId = res.ImdbId,
-                                    TmdbId = res.TmdbId,
-                                    JsonPosterUrl = res.DisplayPoster
-                                });
+                                    details.KnownFor.Add(new WatchmodeTitle
+                                    {
+                                        Id = res.Id,
+                                        Title = res.Title,
+                                        Year = res.Year,
+                                        Type = res.Type,
+                                        ImdbId = res.ImdbId,
+                                        TmdbId = res.TmdbId,
+                                        JsonPosterUrl = res.DisplayPoster
+                                    });
+                                }
                             }
                         }
+                        return details;
                     }
-                    return details;
                 }
             }
             catch (Exception ex)
@@ -845,6 +975,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeNetwork>();
                 return JsonSerializer.Deserialize<List<WatchmodeNetwork>>(response, _jsonOptions) ?? new List<WatchmodeNetwork>();
             }
             catch (Exception ex)
@@ -861,6 +992,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeGenre>();
                 return JsonSerializer.Deserialize<List<WatchmodeGenre>>(response, _jsonOptions) ?? new List<WatchmodeGenre>();
             }
             catch (Exception ex)
@@ -881,12 +1013,16 @@ namespace LumiereMediaPlayer.Services.Streaming
         {
             string servicePath = $"tmdb/{endpoint}";
             string url = $"https://api.tmdb.org/3/{endpoint}";
-            if (url.Contains("?")) url += "&api_key=";
-            else url += "?api_key=";
+            string? tmdbKey = ConfigService.Config?.TmdbApiKey;
+            if (!string.IsNullOrWhiteSpace(tmdbKey))
+            {
+                url += url.Contains('?') ? $"&api_key={tmdbKey}" : $"?api_key={tmdbKey}";
+            }
 
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return default;
                 return JsonSerializer.Deserialize<T>(response, _jsonOptions);
             }
             catch (Exception ex)

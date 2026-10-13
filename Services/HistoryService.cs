@@ -13,6 +13,8 @@ namespace LumiereMediaPlayer.Services
     {
         private const int MaxHistoryItems = 50;
         private static readonly string HistoryFilePath = GetHistoryFilePath();
+        private readonly object _collectionLock = new();
+        private static readonly System.Threading.SemaphoreSlim _fileLock = new(1, 1);
 
         private static string GetHistoryFilePath()
         {
@@ -20,11 +22,12 @@ namespace LumiereMediaPlayer.Services
             {
                 return Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "playback_history.json");
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] LocalFolder access failed, using fallback: {ex.Message}");
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 var dir = Path.Combine(appData, "LumiereMediaPlayer");
-                try { Directory.CreateDirectory(dir); } catch { }
+                try { Directory.CreateDirectory(dir); } catch (Exception dirEx) { System.Diagnostics.Debug.WriteLine($"[HistoryService] CreateDirectory failed: {dirEx.Message}"); }
                 return Path.Combine(dir, "playback_history.json");
             }
         }
@@ -35,11 +38,28 @@ namespace LumiereMediaPlayer.Services
 
         public async Task LoadHistoryAsync()
         {
-            if (File.Exists(HistoryFilePath))
+            string? json = null;
+            await _fileLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (File.Exists(HistoryFilePath))
+                {
+                    json = await File.ReadAllTextAsync(HistoryFilePath).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] Read HistoryFilePath error: {ex.Message}");
+            }
+            finally
+            {
+                _fileLock.Release();
+            }
+
+            if (!string.IsNullOrEmpty(json))
             {
                 try
                 {
-                    var json = await File.ReadAllTextAsync(HistoryFilePath);
                     var loaded = JsonSerializer.Deserialize<MediaItem[]>(json);
                     if (loaded != null)
                     {
@@ -60,42 +80,67 @@ namespace LumiereMediaPlayer.Services
                             item.IsSelected = false;
                         }
 
+                        var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+                        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+
                         void Populate()
                         {
-                            RecentlyPlayed.UpdateInPlace(validItems);
-                            IsLoaded = true;
-                            HistoryLoaded?.Invoke(this, EventArgs.Empty);
+                            try
+                            {
+                                lock (_collectionLock)
+                                {
+                                    RecentlyPlayed.UpdateInPlace(validItems);
+                                }
+                                IsLoaded = true;
+                                HistoryLoaded?.Invoke(this, EventArgs.Empty);
+                                tcs.TrySetResult(true);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[HistoryService] Populate error: {ex.Message}");
+                                tcs.TrySetResult(false);
+                            }
                         }
 
-                        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
-                        if (dispatcher != null && !dispatcher.HasThreadAccess)
+                        if (dispatcher?.HasThreadAccess == true)
                         {
-                            dispatcher.TryEnqueue(Populate);
+                            Populate();
+                        }
+                        else if (dispatcher != null)
+                        {
+                            if (!dispatcher.TryEnqueue(Populate))
+                            {
+                                tcs.TrySetResult(false);
+                            }
                         }
                         else
                         {
                             Populate();
                         }
 
+                        try { await tcs.Task; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Populate await error: {ex.Message}"); }
+
                         if (validItems.Length != loaded.Length)
                         {
                             await SaveHistoryAsync();
                         }
+                        return;
                     }
                     else
                     {
                         MarkLoaded();
+                        return;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] LoadHistoryAsync error: {ex.Message}");
                     MarkLoaded();
+                    return;
                 }
             }
-            else
-            {
-                MarkLoaded();
-            }
+
+            MarkLoaded();
         }
 
         private void MarkLoaded()
@@ -121,34 +166,53 @@ namespace LumiereMediaPlayer.Services
         {
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
             var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
-            var dispatched = dispatcher?.TryEnqueue(() =>
+
+            void Action()
             {
                 try
                 {
-                    var toRemove = RecentlyPlayed
-                        .Where(item => !string.IsNullOrEmpty(item.SourcePath) && Path.IsPathRooted(item.SourcePath) && !File.Exists(item.SourcePath))
-                        .ToList();
+                    List<MediaItem> toRemove;
+                    lock (_collectionLock)
+                    {
+                        toRemove = RecentlyPlayed
+                            .Where(item => !string.IsNullOrEmpty(item.SourcePath) && Path.IsPathRooted(item.SourcePath) && !File.Exists(item.SourcePath))
+                            .ToList();
 
-                    if (toRemove.Count > 0)
-                    {
-                        foreach (var item in toRemove)
+                        if (toRemove.Count > 0)
                         {
-                            RecentlyPlayed.Remove(item);
+                            foreach (var item in toRemove)
+                            {
+                                try { RecentlyPlayed.Remove(item); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove missing item failed: {ex.Message}"); }
+                            }
                         }
-                        tcs.TrySetResult(true);
                     }
-                    else
-                    {
-                        tcs.TrySetResult(false);
-                    }
+
+                    tcs.TrySetResult(toRemove.Count > 0);
                 }
                 catch (Exception ex)
                 {
-                    tcs.TrySetException(ex);
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveMissingItemsAsync error: {ex.Message}");
+                    tcs.TrySetResult(false);
                 }
-            });
+            }
 
-            if (dispatched == true)
+            if (dispatcher?.HasThreadAccess == true)
+            {
+                Action();
+            }
+            else if (dispatcher != null)
+            {
+                if (!dispatcher.TryEnqueue(Action))
+                {
+                    tcs.TrySetResult(false);
+                }
+            }
+            else
+            {
+                Action();
+            }
+
+            try
             {
                 bool removed = await tcs.Task;
                 if (removed)
@@ -156,17 +220,37 @@ namespace LumiereMediaPlayer.Services
                     await SaveHistoryAsync();
                 }
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveMissingItemsAsync await error: {ex.Message}");
+            }
         }
 
         public async Task SaveHistoryAsync()
         {
             try
             {
-                var items = RecentlyPlayed.ToArray();
-                var json = JsonSerializer.Serialize(items);
-                await File.WriteAllTextAsync(HistoryFilePath, json);
+                MediaItem[] items;
+                lock (_collectionLock)
+                {
+                    items = RecentlyPlayed.ToArray();
+                }
+
+                await _fileLock.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    var json = JsonSerializer.Serialize(items);
+                    await File.WriteAllTextAsync(HistoryFilePath, json).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _fileLock.Release();
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] SaveHistoryAsync error: {ex.Message}");
+            }
         }
 
         public async Task AddToHistoryAsync(MediaItem item)
@@ -178,44 +262,51 @@ namespace LumiereMediaPlayer.Services
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
             var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
 
-            Action mutation = () =>
+            void Mutation()
             {
                 try
                 {
-                    var existing = RecentlyPlayed.FirstOrDefault(x => x.Id == item.Id || x.SourcePath == item.SourcePath);
-                    if (existing != null)
+                    lock (_collectionLock)
                     {
-                        RecentlyPlayed.Remove(existing);
-                    }
+                        var existing = RecentlyPlayed.FirstOrDefault(x => x.Id == item.Id || x.SourcePath == item.SourcePath);
+                        if (existing != null)
+                        {
+                            try { RecentlyPlayed.Remove(existing); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove existing failed: {ex.Message}"); }
+                        }
 
-                    RecentlyPlayed.Insert(0, item);
+                        try { RecentlyPlayed.Insert(0, item); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Insert item failed: {ex.Message}"); }
 
-                    while (RecentlyPlayed.Count > MaxHistoryItems)
-                    {
-                        RecentlyPlayed.RemoveAt(RecentlyPlayed.Count - 1);
+                        while (RecentlyPlayed.Count > MaxHistoryItems)
+                        {
+                            try { RecentlyPlayed.RemoveAt(RecentlyPlayed.Count - 1); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Trim item failed: {ex.Message}"); break; }
+                        }
                     }
                     tcs.TrySetResult(true);
                 }
                 catch (Exception ex)
                 {
-                    tcs.TrySetException(ex);
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] AddToHistoryAsync mutation error: {ex.Message}");
+                    tcs.TrySetResult(false);
                 }
-            };
+            }
 
             if (dispatcher?.HasThreadAccess == true)
             {
-                mutation();
+                Mutation();
             }
             else if (dispatcher != null)
             {
-                dispatcher.TryEnqueue(() => mutation());
+                if (!dispatcher.TryEnqueue(Mutation))
+                {
+                    tcs.TrySetResult(false);
+                }
             }
             else
             {
-                tcs.TrySetResult(false);
+                Mutation();
             }
 
-            try { await tcs.Task; } catch { }
+            try { await tcs.Task; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] AddToHistoryAsync await error: {ex.Message}"); }
             await SaveHistoryAsync();
         }
 
@@ -226,48 +317,54 @@ namespace LumiereMediaPlayer.Services
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
             var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
 
-            Action mutation = () =>
+            void Mutation()
             {
                 try
                 {
-                    var matches = RecentlyPlayed.Where(x =>
-                        (!string.IsNullOrEmpty(item.Id) && x.Id == item.Id) ||
-                        (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
-                        (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, item.Title, StringComparison.OrdinalIgnoreCase) &&
-                         (string.IsNullOrEmpty(item.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, item.Artist, StringComparison.OrdinalIgnoreCase))))
-                        .ToList();
-
                     bool removed = false;
-                    foreach (var m in matches)
+                    lock (_collectionLock)
                     {
-                        RecentlyPlayed.Remove(m);
-                        removed = true;
-                    }
+                        var matches = RecentlyPlayed.Where(x =>
+                            (!string.IsNullOrEmpty(item.Id) && x.Id == item.Id) ||
+                            (!string.IsNullOrEmpty(item.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, item.Title, StringComparison.OrdinalIgnoreCase) &&
+                             (string.IsNullOrEmpty(item.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, item.Artist, StringComparison.OrdinalIgnoreCase))))
+                            .ToList();
 
-                    if (!removed)
-                    {
-                        removed = RecentlyPlayed.Remove(item);
+                        foreach (var m in matches)
+                        {
+                            try { if (RecentlyPlayed.Remove(m)) removed = true; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove match failed: {ex.Message}"); }
+                        }
+
+                        if (!removed)
+                        {
+                            try { removed = RecentlyPlayed.Remove(item); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove item fallback failed: {ex.Message}"); }
+                        }
                     }
 
                     tcs.TrySetResult(removed);
                 }
                 catch (Exception ex)
                 {
-                    tcs.TrySetException(ex);
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveFromHistoryAsync mutation error: {ex.Message}");
+                    tcs.TrySetResult(false);
                 }
-            };
+            }
 
             if (dispatcher?.HasThreadAccess == true)
             {
-                mutation();
+                Mutation();
             }
             else if (dispatcher != null)
             {
-                dispatcher.TryEnqueue(() => mutation());
+                if (!dispatcher.TryEnqueue(Mutation))
+                {
+                    tcs.TrySetResult(false);
+                }
             }
             else
             {
-                tcs.TrySetResult(false);
+                Mutation();
             }
 
             try
@@ -278,7 +375,10 @@ namespace LumiereMediaPlayer.Services
                     await SaveHistoryAsync();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveFromHistoryAsync await error: {ex.Message}");
+            }
         }
 
         public async Task RemoveRangeFromHistoryAsync(IEnumerable<MediaItem> items)
@@ -290,29 +390,31 @@ namespace LumiereMediaPlayer.Services
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
             var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
 
-            Action mutation = () =>
+            void Mutation()
             {
                 try
                 {
                     bool anyRemoved = false;
-                    foreach (var it in list)
+                    lock (_collectionLock)
                     {
-                        var matches = RecentlyPlayed.Where(x =>
-                            (!string.IsNullOrEmpty(it.Id) && x.Id == it.Id) ||
-                            (!string.IsNullOrEmpty(it.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, it.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
-                            (!string.IsNullOrEmpty(it.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, it.Title, StringComparison.OrdinalIgnoreCase) &&
-                             (string.IsNullOrEmpty(it.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, it.Artist, StringComparison.OrdinalIgnoreCase))))
-                            .ToList();
-
-                        foreach (var m in matches)
+                        foreach (var it in list)
                         {
-                            RecentlyPlayed.Remove(m);
-                            anyRemoved = true;
-                        }
+                            var matches = RecentlyPlayed.Where(x =>
+                                (!string.IsNullOrEmpty(it.Id) && x.Id == it.Id) ||
+                                (!string.IsNullOrEmpty(it.SourcePath) && !string.IsNullOrEmpty(x.SourcePath) && string.Equals(x.SourcePath, it.SourcePath, StringComparison.OrdinalIgnoreCase)) ||
+                                (!string.IsNullOrEmpty(it.Title) && !string.IsNullOrEmpty(x.Title) && string.Equals(x.Title, it.Title, StringComparison.OrdinalIgnoreCase) &&
+                                 (string.IsNullOrEmpty(it.Artist) || string.IsNullOrEmpty(x.Artist) || string.Equals(x.Artist, it.Artist, StringComparison.OrdinalIgnoreCase))))
+                                .ToList();
 
-                        if (matches.Count == 0)
-                        {
-                            if (RecentlyPlayed.Remove(it)) anyRemoved = true;
+                            foreach (var m in matches)
+                            {
+                                try { if (RecentlyPlayed.Remove(m)) anyRemoved = true; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove range match failed: {ex.Message}"); }
+                            }
+
+                            if (matches.Count == 0)
+                            {
+                                try { if (RecentlyPlayed.Remove(it)) anyRemoved = true; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] Remove range item fallback failed: {ex.Message}"); }
+                            }
                         }
                     }
 
@@ -320,21 +422,25 @@ namespace LumiereMediaPlayer.Services
                 }
                 catch (Exception ex)
                 {
-                    tcs.TrySetException(ex);
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveRangeFromHistoryAsync mutation error: {ex.Message}");
+                    tcs.TrySetResult(false);
                 }
-            };
+            }
 
             if (dispatcher?.HasThreadAccess == true)
             {
-                mutation();
+                Mutation();
             }
             else if (dispatcher != null)
             {
-                dispatcher.TryEnqueue(() => mutation());
+                if (!dispatcher.TryEnqueue(Mutation))
+                {
+                    tcs.TrySetResult(false);
+                }
             }
             else
             {
-                tcs.TrySetResult(false);
+                Mutation();
             }
 
             try
@@ -345,7 +451,10 @@ namespace LumiereMediaPlayer.Services
                     await SaveHistoryAsync();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistoryService] RemoveRangeFromHistoryAsync await error: {ex.Message}");
+            }
         }
 
         public async Task ClearHistoryAsync()
@@ -353,33 +462,40 @@ namespace LumiereMediaPlayer.Services
             var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
             var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
 
-            Action mutation = () =>
+            void Mutation()
             {
                 try
                 {
-                    RecentlyPlayed.Clear();
+                    lock (_collectionLock)
+                    {
+                        RecentlyPlayed.Clear();
+                    }
                     tcs.TrySetResult(true);
                 }
                 catch (Exception ex)
                 {
-                    tcs.TrySetException(ex);
+                    System.Diagnostics.Debug.WriteLine($"[HistoryService] ClearHistoryAsync mutation error: {ex.Message}");
+                    tcs.TrySetResult(false);
                 }
-            };
+            }
 
             if (dispatcher?.HasThreadAccess == true)
             {
-                mutation();
+                Mutation();
             }
             else if (dispatcher != null)
             {
-                dispatcher.TryEnqueue(() => mutation());
+                if (!dispatcher.TryEnqueue(Mutation))
+                {
+                    tcs.TrySetResult(false);
+                }
             }
             else
             {
-                tcs.TrySetResult(false);
+                Mutation();
             }
 
-            try { await tcs.Task; } catch { }
+            try { await tcs.Task; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoryService] ClearHistoryAsync await error: {ex.Message}"); }
             await SaveHistoryAsync();
         }
     }

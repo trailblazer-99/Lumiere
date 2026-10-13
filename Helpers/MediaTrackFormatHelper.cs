@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Globalization;
 using Windows.Media.Core;
@@ -25,6 +26,11 @@ public class ContainerTrackInfo
     public bool IsVisualImpaired;
     public bool IsForced;
     public bool IsDefault;
+    public string HdrFormat = "";
+    public int VideoBitDepth = 0;
+    public int TransferCharacteristics = 0;
+    public int ColorPrimaries = 0;
+    public int MatrixCoefficients = 0;
 }
 
 /// <summary>
@@ -89,6 +95,10 @@ public static class MediaTrackFormatHelper
         if (ext is ".mkv" or ".webm" or ".mka")
         {
             tracks = ParseMkvTracks(path);
+        }
+        else if (ext is ".mp4" or ".m4v" or ".mov")
+        {
+            tracks = ParseMp4Tracks(path);
         }
 
         lock (CacheLock)
@@ -514,9 +524,23 @@ public static class MediaTrackFormatHelper
                     break;
                 case 0x86: // CodecID
                     t.CodecId = Encoding.ASCII.GetString(buf, pos, (int)len).TrimEnd('\0');
+                    if (t.CodecId.Equals("dvh1", StringComparison.OrdinalIgnoreCase) ||
+                        t.CodecId.Equals("dvhe", StringComparison.OrdinalIgnoreCase) ||
+                        t.CodecId.Equals("dovi", StringComparison.OrdinalIgnoreCase) ||
+                        t.CodecId.Contains("DOLBY_VISION", StringComparison.OrdinalIgnoreCase) ||
+                        t.CodecId.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase) ||
+                        t.CodecId.Contains("DOVI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        t.HdrFormat = "Dolby Vision";
+                    }
                     break;
                 case 0x536E: // Name
                     t.Name = Encoding.UTF8.GetString(buf, pos, (int)len).TrimEnd('\0');
+                    if (t.TrackType == 1 && (t.Name.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) ||
+                                             Regex.IsMatch(t.Name, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])")))
+                    {
+                        t.HdrFormat = "Dolby Vision";
+                    }
                     break;
                 case 0x22B59C: // Language
                     t.Language = Encoding.ASCII.GetString(buf, pos, (int)len).TrimEnd('\0');
@@ -578,8 +602,184 @@ public static class MediaTrackFormatHelper
                         t.FrameRate = 1_000_000_000.0 / defDur;
                     }
                     break;
+                case 0x55B0: // Colour element
+                    ParseColourInternal(buf, pos, elemEnd, t);
+                    break;
             }
             pos = elemEnd;
+        }
+    }
+
+    private static void ParseColourInternal(byte[] buf, int start, int end, ContainerTrackInfo t)
+    {
+        int pos = start;
+        while (pos < end)
+        {
+            int elemId = ReadId(buf, ref pos);
+            if (elemId == 0) break;
+            long len = ReadVInt(buf, ref pos);
+            if (len < 0) break;
+            int elemEnd = (int)Math.Min(end, pos + len);
+
+            switch (elemId)
+            {
+                case 0x55B1: // MatrixCoefficients
+                    t.MatrixCoefficients = (int)ReadUint(buf, pos, (int)len);
+                    break;
+                case 0x55B2: // BitsPerChannel
+                    int bpc = (int)ReadUint(buf, pos, (int)len);
+                    if (bpc > 0)
+                    {
+                        t.BitDepth = bpc;
+                        t.VideoBitDepth = bpc;
+                    }
+                    break;
+                case 0x55B7: // Primaries (9 = BT.2020)
+                    t.ColorPrimaries = (int)ReadUint(buf, pos, (int)len);
+                    break;
+                case 0x55BA: // TransferCharacteristics (16 = SMPTE ST 2084 / PQ, 18 = ARIB STD-B67 / HLG)
+                    t.TransferCharacteristics = (int)ReadUint(buf, pos, (int)len);
+                    break;
+            }
+            pos = elemEnd;
+        }
+
+        if (t.TransferCharacteristics == 16)
+        {
+            t.HdrFormat = (t.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase) ||
+                           t.Name.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                           Regex.IsMatch(t.Name, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])"))
+                ? "Dolby Vision"
+                : "HDR10";
+        }
+        else if (t.TransferCharacteristics == 18)
+        {
+            t.HdrFormat = "HLG";
+        }
+        else if (t.ColorPrimaries == 9 && (t.BitDepth >= 10 || t.VideoBitDepth >= 10))
+        {
+            t.HdrFormat = "HDR10";
+        }
+    }
+
+    private static List<ContainerTrackInfo> ParseMp4Tracks(string path)
+    {
+        var list = new List<ContainerTrackInfo>();
+        try
+        {
+            using var fs = File.OpenRead(path);
+            long fileLen = fs.Length;
+            if (fileLen < 16) return list;
+
+            int bufLen = (int)Math.Min(fileLen, 4 * 1024 * 1024);
+            byte[] buf = System.Buffers.ArrayPool<byte>.Shared.Rent(bufLen);
+            try
+            {
+                int read = fs.Read(buf, 0, bufLen);
+                ScanMp4Buffer(buf, read, list);
+
+                if (list.Count == 0 && fileLen > bufLen)
+                {
+                    long tailPos = Math.Max(0, fileLen - bufLen);
+                    fs.Seek(tailPos, SeekOrigin.Begin);
+                    read = fs.Read(buf, 0, bufLen);
+                    ScanMp4Buffer(buf, read, list);
+                }
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buf);
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static void ScanMp4Buffer(byte[] buf, int read, List<ContainerTrackInfo> list)
+    {
+        bool foundVideo = false;
+        var videoTrack = new ContainerTrackInfo { TrackType = 1 };
+
+        // Search for 'colr' box
+        for (int i = 0; i <= read - 14; i++)
+        {
+            if (buf[i] == 'c' && buf[i + 1] == 'o' && buf[i + 2] == 'l' && buf[i + 3] == 'r')
+            {
+                if (buf[i + 4] == 'n' && buf[i + 5] == 'c' && buf[i + 6] == 'l' && (buf[i + 7] == 'x' || buf[i + 7] == 'c'))
+                {
+                    int prim = (buf[i + 8] << 8) | buf[i + 9];
+                    int tf = (buf[i + 10] << 8) | buf[i + 11];
+                    int mat = (buf[i + 12] << 8) | buf[i + 13];
+
+                    videoTrack.ColorPrimaries = prim;
+                    videoTrack.TransferCharacteristics = tf;
+                    videoTrack.MatrixCoefficients = mat;
+
+                    if (tf == 16)
+                    {
+                        videoTrack.HdrFormat = "HDR10";
+                        videoTrack.BitDepth = 10;
+                        videoTrack.VideoBitDepth = 10;
+                    }
+                    else if (tf == 18)
+                    {
+                        videoTrack.HdrFormat = "HLG";
+                        videoTrack.BitDepth = 10;
+                        videoTrack.VideoBitDepth = 10;
+                    }
+                    else if (prim == 9 && tf != 1 && tf != 13)
+                    {
+                        videoTrack.HdrFormat = "HDR10";
+                        videoTrack.BitDepth = 10;
+                        videoTrack.VideoBitDepth = 10;
+                    }
+                    foundVideo = true;
+                    break;
+                }
+            }
+        }
+
+        // Search for Dolby Vision sample entries and configuration boxes (4-byte FourCC codes: dvh1, dvhe, dva1, dvav, dav1, dvcC, dvvC)
+        for (int i = 0; i <= read - 4; i++)
+        {
+            if ((buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'h' && (buf[i + 3] == '1' || buf[i + 3] == 'e')) ||
+                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'a' && (buf[i + 3] == '1' || buf[i + 3] == 'v')) ||
+                (buf[i] == 'd' && buf[i + 1] == 'a' && buf[i + 2] == 'v' && buf[i + 3] == '1') ||
+                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C') ||
+                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'v' && buf[i + 3] == 'C'))
+            {
+                videoTrack.CodecId = "dvh1";
+                videoTrack.HdrFormat = "Dolby Vision";
+                videoTrack.BitDepth = 10;
+                videoTrack.VideoBitDepth = 10;
+                foundVideo = true;
+                break;
+            }
+        }
+
+        // Search for HEVC 'hvcC'
+        if (videoTrack.BitDepth < 10)
+        {
+            for (int i = 0; i <= read - 8; i++)
+            {
+                if (buf[i] == 'h' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C')
+                {
+                    int profile = buf[i + 5] & 0x1F;
+                    if (profile == 2) // Main 10
+                    {
+                        videoTrack.BitDepth = 10;
+                        videoTrack.VideoBitDepth = 10;
+                        videoTrack.CodecId = "hev1";
+                        foundVideo = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (foundVideo)
+        {
+            list.Add(videoTrack);
         }
     }
 

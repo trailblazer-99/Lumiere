@@ -18,52 +18,69 @@ namespace LumiereMediaPlayer.Services.Streaming
 
                 if (watchmodeItems.Count == 0) return;
 
+                if (HttpHelper.IsRateLimited)
+                {
+                    System.Diagnostics.Debug.WriteLine("WatchmodeSyncService: Proxy rate limited. Skipping sync.");
+                    return;
+                }
+
                 // 1. Try querying the /changes/ endpoint for the last 2 days
                 string startDate = DateTime.Today.AddDays(-2).ToString("yyyyMMdd");
                 string endDate = DateTime.Today.ToString("yyyyMMdd");
 
                 var changesResponse = await _watchmodeService.GetChangesAsync(startDate, endDate);
 
-                bool syncSuccess = false;
-                if (changesResponse?.Changes != null && changesResponse.Changes.Count > 0)
+                if (changesResponse != null)
                 {
-                    bool libraryModified = false;
-                    foreach (var item in watchmodeItems)
+                    // Changes endpoint was queried successfully
+                    if (changesResponse.Changes != null && changesResponse.Changes.Count > 0)
                     {
-                        if (int.TryParse(item.Id, out int watchmodeId))
+                        bool libraryModified = false;
+                        foreach (var item in watchmodeItems)
                         {
-                            var matchedChange = changesResponse.Changes.FirstOrDefault(c => c.Id == watchmodeId);
-                            if (matchedChange != null)
+                            if (int.TryParse(item.Id, out int watchmodeId))
                             {
-                                // Fetch updated details
-                                var details = await _watchmodeService.GetDetailsAsync(watchmodeId);
-                                if (details != null)
+                                var matchedChange = changesResponse.Changes.FirstOrDefault(c => c.Id == watchmodeId);
+                                if (matchedChange != null)
                                 {
-                                    item.Title = details.Title ?? item.Title;
-                                    item.PosterUrl = details.DisplayPoster ?? item.PosterUrl;
-                                    item.Subtitle = details.Year?.ToString() ?? item.Subtitle;
-                                    libraryModified = true;
+                                    if (HttpHelper.IsRateLimited) break;
+                                    var details = await _watchmodeService.GetDetailsAsync(watchmodeId);
+                                    if (details != null)
+                                    {
+                                        item.Title = details.Title ?? item.Title;
+                                        item.PosterUrl = details.DisplayPoster ?? item.PosterUrl;
+                                        item.Subtitle = details.Year?.ToString() ?? item.Subtitle;
+                                        libraryModified = true;
+                                    }
                                 }
                             }
                         }
+
+                        if (libraryModified)
+                        {
+                            AppServices.StreamingLibrary.Save();
+                        }
                     }
 
-                    if (libraryModified)
-                    {
-                        AppServices.StreamingLibrary.Save();
-                    }
-                    syncSuccess = true;
+                    // Successfully synchronized via /changes/
+                    return;
                 }
 
-                // 2. Fallback: If changes endpoint was empty/failed (e.g. 401 Unauthorized), 
+                // 2. Fallback: If changes endpoint was unavailable (e.g. 401/404) and NOT rate limited,
                 // run a lightweight, sequential details-sync for local cache items.
-                if (!syncSuccess)
+                if (!HttpHelper.IsRateLimited)
                 {
                     System.Diagnostics.Debug.WriteLine("WatchmodeSyncService: Changes endpoint unavailable. Falling back to lightweight direct sync.");
                     bool libraryModified = false;
 
                     foreach (var item in watchmodeItems)
                     {
+                        if (HttpHelper.IsRateLimited)
+                        {
+                            System.Diagnostics.Debug.WriteLine("WatchmodeSyncService: Rate limit encountered during direct sync. Aborting remaining items.");
+                            break;
+                        }
+
                         if (int.TryParse(item.Id, out int watchmodeId))
                         {
                             var details = await _watchmodeService.GetDetailsAsync(watchmodeId);

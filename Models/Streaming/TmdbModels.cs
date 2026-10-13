@@ -21,6 +21,9 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("id")]
         public int Id { get; set; }
 
+        [JsonPropertyName("media_type")]
+        public string? MediaType { get; set; }
+
         [JsonPropertyName("title")]
         public string? Title { get; set; }
 

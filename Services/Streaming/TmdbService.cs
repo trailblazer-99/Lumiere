@@ -92,6 +92,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return null;
                 return JsonSerializer.Deserialize<TmdbEpisode>(response, _jsonOptions);
             }
             catch (Exception ex)
@@ -109,6 +110,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<TmdbPerson>();
                 var data = JsonSerializer.Deserialize<TmdbResponse<TmdbPerson>>(response, _jsonOptions);
                 return data?.Results ?? new List<TmdbPerson>();
             }
@@ -125,6 +127,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<TmdbMedia>();
                 var data = JsonSerializer.Deserialize<TmdbPersonCreditsResponse>(response, _jsonOptions);
                 if (data == null) return new List<TmdbMedia>();
 
@@ -151,6 +154,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<TmdbMedia>();
                 var data = JsonSerializer.Deserialize<TmdbPersonCreditsResponse>(response, _jsonOptions);
                 if (data == null) return new List<TmdbMedia>();
 
@@ -185,6 +189,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             {
                 var region = !string.IsNullOrEmpty(targetRegion) ? targetRegion : await AntiGravityLocationEngine.GetCountryCodeAsync();
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return null;
                 var data = JsonSerializer.Deserialize<TmdbProviderResponse>(response, _jsonOptions);
 
                 if (data?.Results != null)
@@ -224,6 +229,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<TmdbGenre>();
                 var data = JsonSerializer.Deserialize<TmdbGenreResponse>(response, _jsonOptions);
                 return data?.Genres ?? new List<TmdbGenre>();
             }
@@ -241,6 +247,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return null;
                 return JsonSerializer.Deserialize<TmdbCreditsResponse>(response, _jsonOptions);
             }
             catch (Exception ex)
@@ -261,6 +268,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<TmdbMedia>();
                 var data = JsonSerializer.Deserialize<TmdbResponse<TmdbMedia>>(response, _jsonOptions);
                 return data?.Results ?? new List<TmdbMedia>();
             }

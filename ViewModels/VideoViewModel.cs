@@ -73,7 +73,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string DisplayCapabilityLabel { get; set; } = "SDR Display";
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
-    public Visibility HdrBadgeVisibility => VisibilityHelper.FromBoolean(ShowHdrBadge && IsHdrActive);
+    public Visibility HdrBadgeVisibility => VisibilityHelper.FromBoolean(ShowHdrBadge && (IsHdrActive || (HdrContentLabel != "SDR" && !string.IsNullOrWhiteSpace(HdrContentLabel))));
     public Visibility OverlayVisibility => VisibilityHelper.FromBoolean(ShowNoSourceOverlay);
     public Visibility PlayerVisibility => VisibilityHelper.FromBoolean(!ShowNoSourceOverlay);
 
@@ -137,6 +137,10 @@ public partial class VideoViewModel : ObservableObject, IDisposable
                 bool modified = await PopulateTmdbDataAsync(item);
                 if (modified) anyModified = true;
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VideoViewModel] Error populating TMDb data for {item.Title}: {ex.Message}");
+            }
             finally
             {
                 _tmdbSemaphore.Release();
@@ -190,7 +194,10 @@ public partial class VideoViewModel : ObservableObject, IDisposable
                     return modified;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VideoViewModel] TMDb series lookup failed for {item.Title}: {ex.Message}");
+            }
             return false;
         }
 
@@ -269,28 +276,42 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         picker.FileTypeFilter.Add(".mov");
         picker.FileTypeFilter.Add(".wmv");
 
-        var files = await picker.PickMultipleFilesAsync();
-        if (files != null && files.Count > 0)
+        try
         {
-            foreach (var file in files)
+            var files = await picker.PickMultipleFilesAsync();
+            if (files != null && files.Count > 0)
             {
-                var props = await file.GetBasicPropertiesAsync();
-                var item = new MediaItem
+                foreach (var file in files)
                 {
-                    Id = Guid.NewGuid().ToString(),
-                    Title = file.DisplayName,
-                    SourcePath = file.Path,
-                    Kind = MediaKind.Video,
-                    FileSize = (long)props.Size,
-                    DateCreated = props.ItemDate.DateTime,
-                    DateAdded = DateTime.Now,
-                    IsFolder = false,
-                    FileExtension = file.FileType
-                };
-                await MediaLibraryService.AddTrackAsync(item);
-                _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
+                    try
+                    {
+                        var props = await file.GetBasicPropertiesAsync();
+                        var item = new MediaItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Title = file.DisplayName,
+                            SourcePath = file.Path,
+                            Kind = MediaKind.Video,
+                            FileSize = (long)props.Size,
+                            DateCreated = props.ItemDate.DateTime,
+                            DateAdded = DateTime.Now,
+                            IsFolder = false,
+                            FileExtension = file.FileType
+                        };
+                        await MediaLibraryService.AddTrackAsync(item);
+                        _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(item);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[VideoViewModel] Error reading file {file?.Path}: {ex.Message}");
+                    }
+                }
+                await MediaLibraryService.SaveLibraryAsync();
             }
-            await MediaLibraryService.SaveLibraryAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoViewModel] AddFilesAsync error: {ex.Message}");
         }
     }
 
@@ -458,37 +479,44 @@ public partial class VideoViewModel : ObservableObject, IDisposable
 
     private void OnHdrStateChanged(object? sender, HdrStateChangedEventArgs e)
     {
-        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+        void UpdateState()
         {
             IsHdrActive = e.IsHdrActive;
             HdrContentLabel = AppServices.HdrPipeline.ContentFormatLabel;
             DisplayCapabilityLabel = AppServices.HdrPipeline.DisplayCapabilityLabel;
             ShowHdrBadge = AppServices.Settings.Current.ShowHdrBadge;
             OnPropertyChanged(nameof(HdrBadgeVisibility));
-        });
+        }
+
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(UpdateState);
+        }
+        else
+        {
+            UpdateState();
+        }
     }
 
     public string? CurrentPosterUrl => CurrentVideo?.PosterUrl;
 
     private void SyncFromPlayback()
     {
-        if (_playback.IsVideoPlayerActive)
+        if (_playback.IsVideoPlayerActive && _playback.CurrentTrack is { IsVideo: true } track)
         {
-            if (_playback.CurrentTrack is { IsVideo: true } track)
+            if (CurrentVideo != track)
             {
-                if (CurrentVideo != track)
-                {
-                    CurrentVideo = track;
-                }
-                IsPlaying = _playback.IsPlaying;
-                OverlayTitle = track.Title;
-                OverlaySubtitle = track.Artist;
-                ShowNoSourceOverlay = string.IsNullOrWhiteSpace(track.SourcePath);
-                OnPropertyChanged(nameof(HasSource));
-                OnPropertyChanged(nameof(OverlayVisibility));
-                OnPropertyChanged(nameof(PlayerVisibility));
-                OnPropertyChanged(nameof(CurrentPosterUrl));
+                CurrentVideo = track;
             }
+            IsPlaying = _playback.IsPlaying;
+            OverlayTitle = track.Title;
+            OverlaySubtitle = track.Artist;
+            ShowNoSourceOverlay = string.IsNullOrWhiteSpace(track.SourcePath);
+            OnPropertyChanged(nameof(HasSource));
+            OnPropertyChanged(nameof(OverlayVisibility));
+            OnPropertyChanged(nameof(PlayerVisibility));
+            OnPropertyChanged(nameof(CurrentPosterUrl));
             return;
         }
 

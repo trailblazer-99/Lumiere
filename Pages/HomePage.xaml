@@ -53,6 +53,10 @@
                                     <Setter Target="OpenFileButton.HorizontalAlignment" Value="Left" />
                                     <Setter Target="OpenFileButton.Margin" Value="0,16,0,0" />
                                     <Setter Target="GreetingPanel.(Grid.ColumnSpan)" Value="2" />
+                                    <Setter Target="PageContent.Margin" Value="16,0,16,24" />
+                                    <Setter Target="HomeBrandIcon.Width" Value="48" />
+                                    <Setter Target="HomeBrandIcon.Height" Value="48" />
+                                    <Setter Target="GreetingText.FontSize" Value="22" />
                                 </VisualState.Setters>
                             </VisualState>
                         </VisualStateGroup>
@@ -60,7 +64,7 @@
 
                     <!-- App Logo & Greeting Brand Section -->
                     <StackPanel x:Name="GreetingPanel" Grid.Column="0" Grid.Row="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                        <Image Width="64" Height="64" Source="ms-appx:///Assets/LumiereIcon.png" VerticalAlignment="Center" Stretch="Uniform" />
+                        <Image x:Name="HomeBrandIcon" Width="64" Height="64" UseLayoutRounding="True" Source="ms-appx:///Assets/Icons/Lumiere_Dark_Blue_small.png" VerticalAlignment="Center" Stretch="Uniform" />
                         <StackPanel Spacing="4" VerticalAlignment="Center">
                             <TextBlock
                                 x:Name="GreetingText"
@@ -159,8 +163,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
                             <Button Style="{StaticResource AccentButtonStyle}" Click="OnOpenFileMenuItemClick" AutomationProperties.Name="Open file" ToolTipService.ToolTip="Open file">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE8E5;" FontSize="16"/>
-                                    <TextBlock Text="Open file"/>
+                                    <FontIcon Glyph="&#xE8E5;" FontSize="16" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                    <TextBlock Text="Open file" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                 </StackPanel>
                             </Button>
                             <Button Style="{StaticResource DefaultButtonStyle}" Click="OnOpenFolderMenuItemClick" AutomationProperties.Name="Open folder" ToolTipService.ToolTip="Open folder">

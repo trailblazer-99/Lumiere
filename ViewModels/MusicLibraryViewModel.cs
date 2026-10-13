@@ -56,9 +56,7 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         MediaLibraryService.LibraryChanged -= _libraryChangedHandler;
-        _searchCts?.Cancel();
-        _searchCts?.Dispose();
-        _searchCts = null;
+        _searchVersion++;
     }
 
     private async Task PopulateMusicMetadataAsync()
@@ -148,6 +146,13 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
 
     public void ApplySortAndFilter()
     {
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(ApplySortAndFilter);
+            return;
+        }
+
         var sourceTracks = MediaLibraryService.AudioTracks.AsEnumerable();
 
         if (!string.Equals(SelectedGenre, "All", StringComparison.OrdinalIgnoreCase))
@@ -181,32 +186,32 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(Tracks));
     }
 
-    private System.Threading.CancellationTokenSource? _searchCts;
+    private int _searchVersion;
 
     public async Task SearchLibraryAsync(string query, bool useAi, bool debounce = true)
     {
-        _searchCts?.Cancel();
-        var cts = new System.Threading.CancellationTokenSource();
-        _searchCts = cts;
+        int version = ++_searchVersion;
 
         _currentSearchQuery = query ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(query))
         {
-            ApplySortAndFilter();
+            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(ApplySortAndFilter);
+            }
+            else
+            {
+                ApplySortAndFilter();
+            }
             return;
         }
 
         if (debounce && useAi)
         {
-            try
-            {
-                await Task.Delay(250, cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+            await Task.Delay(250);
+            if (version != _searchVersion) return;
         }
 
         if (useAi)
@@ -216,7 +221,7 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
             try
             {
                 filtered = await AiAssistantService.SemanticSearchAsync(query, sourceTracks);
-                if (cts.IsCancellationRequested) return;
+                if (version != _searchVersion) return;
             }
             catch (Exception ex)
             {
@@ -224,7 +229,7 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
                 filtered = new List<MediaItem>();
             }
 
-            if (!cts.IsCancellationRequested)
+            if (version == _searchVersion)
             {
                 App.MainDispatcher?.TryEnqueue(() =>
                 {
@@ -286,12 +291,44 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
             AppServices.Settings.AddLibraryFolder(folder.Path);
             MediaLibraryService.StartWatchingDirectory(folder.Path);
 
-            var files = Directory.GetFiles(folder.Path, "*.*", SearchOption.AllDirectories)
-                .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase));
+            List<string> files;
+            try
+            {
+                files = await Task.Run(() =>
+                {
+                    try
+                    {
+                        var options = new EnumerationOptions
+                        {
+                            IgnoreInaccessible = true,
+                            RecurseSubdirectories = true,
+                            ReturnSpecialDirectories = false
+                        };
+                        return Directory.EnumerateFiles(folder.Path, "*.*", options)
+                            .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                    }
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] UnauthorizedAccess in AddFolderAsync: {ex.Message}");
+                        return new List<string>();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] Error enumerating folder in AddFolderAsync: {ex.Message}");
+                        return new List<string>();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] Task.Run failed in AddFolderAsync: {ex.Message}");
+                files = new List<string>();
+            }
 
             foreach (var file in files)
             {

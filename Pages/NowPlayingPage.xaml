@@ -104,7 +104,7 @@
                         <Grid CornerRadius="{StaticResource LargeCornerRadius}">
                             <FontIcon
                                 FontSize="96"
-                                Foreground="White"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                 Glyph="&#xE8D6;"
                                 HorizontalAlignment="Center"
                                 Opacity="0.85"

@@ -23,10 +23,10 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
-            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FA1E1E22" />
-            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FA1E1E22" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FA24242A" />
+            <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBorderBrush" Color="#2AFFFFFF" />
@@ -191,10 +191,10 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#60FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#30FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#18000000" />
-            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#F4F8F8FC" />
-            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#F4F8F8FC" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#F4F8F8FC" />
+            <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#28000000" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#F4F8F8FC" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBorderBrush" Color="#28000000" />
@@ -359,10 +359,10 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
-            <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#E8222228" />
-            <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#E8222228" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#E8222228" />
+            <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#48FFFFFF" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#E8222228" />
             <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBorderBrush" Color="#48FFFFFF" />
@@ -697,10 +697,6 @@
     <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{ThemeResource SystemAccentColor}" />
     <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{ThemeResource SystemAccentColor}" />
 
-    <!-- Fallback Flyout, MenuFlyout & ComboBox Surface Brushes -->
-    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
 
     <!-- ═══════════════════════════════════════════════════════════════
          GLOBAL TRANSIENT FLYOUT & POPUP STYLES (FLUENT 2)
@@ -790,7 +786,7 @@
     <x:Double x:Key="TransportBarHeight">112</x:Double>
     <x:Double x:Key="PagePadding">24</x:Double>
     <Thickness x:Key="PageContentMargin">32,48,32,24</Thickness>
-    <Thickness x:Key="PageContentMarginNarrow">16,16,16,16</Thickness>
+    <Thickness x:Key="PageContentMarginNarrow">16,44,16,16</Thickness>
     <Thickness x:Key="SectionSpacingMargin">0,0,0,32</Thickness>
 
     <!-- ═══════════════════════════════════════════════════════════════
@@ -936,7 +932,6 @@
         <Setter Property="CornerRadius" Value="18" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="primitives:AutoSuggestBoxHelper.KeepInteriorCornersSquare" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="AutoSuggestBox">
@@ -972,6 +967,7 @@
 
                         <Popup x:Name="SuggestionsPopup" ShouldConstrainToRootBounds="False">
                             <Border x:Name="SuggestionsContainer"
+                                    RequestedTheme="{Binding ActualTheme, RelativeSource={RelativeSource Mode=TemplatedParent}}"
                                     Margin="0,6,0,0"
                                     Padding="{ThemeResource AutoSuggestListMargin}"
                                     BorderThickness="{ThemeResource AutoSuggestListBorderThemeThickness}"
@@ -993,6 +989,17 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Shared theme-adaptive search suggestion item template for streaming pages -->
+    <DataTemplate x:Key="StreamingSearchSuggestionItemTemplate">
+        <Grid Padding="6,6" HorizontalAlignment="Stretch">
+            <TextBlock Text="{Binding}"
+                       Style="{StaticResource BodyStrongTextStyle}"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" />
+        </Grid>
+    </DataTemplate>
 
     <Style x:Key="SettingsActionButtonStyle" TargetType="Button">
         <Setter Property="MinHeight" Value="32" />
@@ -1222,6 +1229,20 @@
                                         </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonTranslation" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="PressedShadow" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.1" />
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContentBackground" Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Transparent" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource TextFillColorDisabledBrush}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
                     </Grid>
@@ -1281,6 +1302,14 @@
                                         <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="0.94" Duration="0:0:0.05" />
                                         <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="0.94" Duration="0:0:0.05" />
                                         <DoubleAnimation Storyboard.TargetName="InnerCircle" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.05" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="InnerCircle" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0:0:0.1" />
+                                        <DoubleAnimation Storyboard.TargetName="OuterRing" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0:0:0.1" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>

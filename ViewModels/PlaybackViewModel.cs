@@ -9,6 +9,7 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
 {
     private readonly IPlaybackSession _session;
     private readonly EventHandler _stateChangedHandler;
+    private bool _isSyncing;
 
     [ObservableProperty] public partial MediaItem? CurrentTrack { get; set; }
 
@@ -42,7 +43,10 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
         {
             SelectedAspectRatio = AppServices.Settings.Current.DefaultAspectRatio;
         }
-        catch { }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PlaybackViewModel] Could not read DefaultAspectRatio: {ex.Message}");
+        }
 
         SyncFromSession();
     }
@@ -81,7 +85,11 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void Stop() => _session.Stop();
 
-    public void Seek(double seconds) => _session.Seek(seconds);
+    public void Seek(double seconds)
+    {
+        PositionSeconds = seconds;
+        _session.Seek(seconds);
+    }
 
     public void SetVolume(double volume)
     {
@@ -92,11 +100,13 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
 
     partial void OnVolumeChanged(double value)
     {
+        if (_isSyncing) return;
         _session.SetVolume(value);
     }
 
     partial void OnIsMutedChanged(bool value)
     {
+        if (_isSyncing) return;
         _session.IsMuted = value;
     }
 
@@ -139,27 +149,31 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
 
     private void SyncFromSession()
     {
-        if (CurrentTrack != _session.CurrentTrack)
+        _isSyncing = true;
+        try
         {
-            CurrentTrack = _session.CurrentTrack;
-        }
-        else
-        {
-            OnPropertyChanged(nameof(CurrentTrack)); // Force update in case properties like Duration mutated in-place
-        }
+            if (CurrentTrack != _session.CurrentTrack)
+            {
+                CurrentTrack = _session.CurrentTrack;
+            }
 
-        IsPlaying = _session.IsPlaying;
-        PositionSeconds = _session.PositionSeconds;
-        Volume = _session.Volume;
-        IsMuted = _session.IsMuted;
-        IsShuffleEnabled = _session.IsShuffleEnabled;
-        RepeatMode = _session.RepeatMode;
-        Queue = _session.Queue.ToList();
+            IsPlaying = _session.IsPlaying;
+            PositionSeconds = _session.PositionSeconds;
+            Volume = _session.Volume;
+            IsMuted = _session.IsMuted;
+            IsShuffleEnabled = _session.IsShuffleEnabled;
+            RepeatMode = _session.RepeatMode;
+            Queue = _session.Queue.ToList();
 
-        bool isVideo = CurrentTrack != null && CurrentTrack.IsVideo;
-        if (IsVideoPlayerActive != isVideo)
+            bool isVideo = CurrentTrack != null && CurrentTrack.IsVideo;
+            if (IsVideoPlayerActive != isVideo)
+            {
+                IsVideoPlayerActive = isVideo;
+            }
+        }
+        finally
         {
-            IsVideoPlayerActive = isVideo;
+            _isSyncing = false;
         }
     }
 }

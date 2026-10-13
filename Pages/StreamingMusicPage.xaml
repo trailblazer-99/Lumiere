@@ -41,7 +41,14 @@
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Search artists, songs, playlists..." TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchQuerySubmitted" Width="260" CornerRadius="8" Height="32">
+                                    <AutoSuggestBox x:Name="SearchBox"
+                                                    Style="{StaticResource PillAutoSuggestBoxStyle}"
+                                                    ItemTemplate="{StaticResource StreamingSearchSuggestionItemTemplate}"
+                                                    PlaceholderText="Search artists, songs, playlists..."
+                                                    TextChanged="OnSearchTextChanged"
+                                                    SuggestionChosen="OnSearchSuggestionChosen"
+                                                    QuerySubmitted="OnSearchQuerySubmitted"
+                                                    Width="260" Height="32">
                                         <AutoSuggestBox.QueryIcon>
                                             <AnimatedIcon x:Name="SearchAnimatedIcon">
                                                 <AnimatedIcon.Source>

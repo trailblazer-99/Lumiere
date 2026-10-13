@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
+using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Controls;
 
@@ -32,6 +33,7 @@ public class GlassContainer : ContentControl, IDisposable
     private PointLight? _specularLight;
     private CompositionPropertySet? _pointerPropSet;
     private ExpressionAnimation? _lightOffsetAnimation;
+    private CompositionColorBrush? _fallbackBrush;
     private bool _isDisposed;
 
     public static readonly DependencyProperty BlurRadiusProperty =
@@ -209,6 +211,8 @@ public class GlassContainer : ContentControl, IDisposable
     private void UpdateVisualSizes(Windows.Foundation.Size size)
     {
         var newSize = new Vector2((float)size.Width, (float)size.Height);
+        if (_backdropVisual != null && _backdropVisual.Size == newSize) return;
+
         if (_backdropVisual != null) _backdropVisual.Size = newSize;
         if (_tintVisual != null) _tintVisual.Size = newSize;
         if (_rootContainerVisual != null) _rootContainerVisual.Size = newSize;
@@ -221,25 +225,40 @@ public class GlassContainer : ContentControl, IDisposable
 
         try
         {
-            var radius = (float)GlassCornerRadius.TopLeft;
-            var geom = _compositor.CreateRoundedRectangleGeometry();
-            geom.Size = _backdropVisual.Size;
-            geom.CornerRadius = new Vector2(radius, radius);
+            var size = _backdropVisual.Size;
+            if (size.X <= 0 || size.Y <= 0) return;
 
-            var oldBackdropClip = _backdropVisual.Clip;
-            var clip = _compositor.CreateGeometricClip(geom);
-            _backdropVisual.Clip = clip;
-            try { oldBackdropClip?.Dispose(); } catch { }
+            var radius = (float)GlassCornerRadius.TopLeft;
+
+            if (_backdropVisual.Clip is CompositionGeometricClip existingBackdropClip &&
+                existingBackdropClip.Geometry is CompositionRoundedRectangleGeometry existingBackdropGeom)
+            {
+                existingBackdropGeom.Size = size;
+                existingBackdropGeom.CornerRadius = new Vector2(radius, radius);
+            }
+            else
+            {
+                var geom = _compositor.CreateRoundedRectangleGeometry();
+                geom.Size = size;
+                geom.CornerRadius = new Vector2(radius, radius);
+                _backdropVisual.Clip = _compositor.CreateGeometricClip(geom);
+            }
 
             if (_tintVisual != null)
             {
-                var tintGeom = _compositor.CreateRoundedRectangleGeometry();
-                tintGeom.Size = _backdropVisual.Size;
-                tintGeom.CornerRadius = new Vector2(radius, radius);
-                
-                var oldTintClip = _tintVisual.Clip;
-                _tintVisual.Clip = _compositor.CreateGeometricClip(tintGeom);
-                try { oldTintClip?.Dispose(); } catch { }
+                if (_tintVisual.Clip is CompositionGeometricClip existingTintClip &&
+                    existingTintClip.Geometry is CompositionRoundedRectangleGeometry existingTintGeom)
+                {
+                    existingTintGeom.Size = size;
+                    existingTintGeom.CornerRadius = new Vector2(radius, radius);
+                }
+                else
+                {
+                    var tintGeom = _compositor.CreateRoundedRectangleGeometry();
+                    tintGeom.Size = size;
+                    tintGeom.CornerRadius = new Vector2(radius, radius);
+                    _tintVisual.Clip = _compositor.CreateGeometricClip(tintGeom);
+                }
             }
         }
         catch (Exception ex)
@@ -259,9 +278,14 @@ public class GlassContainer : ContentControl, IDisposable
                 ? Windows.UI.Color.FromArgb((byte)(TintOpacity * 255), 255, 255, 255)
                 : Windows.UI.Color.FromArgb((byte)(TintOpacity * 255), 18, 20, 26);
 
-            var oldBrush = _tintVisual.Brush;
-            _tintVisual.Brush = _compositor.CreateColorBrush(baseColor);
-            try { oldBrush?.Dispose(); } catch { }
+            if (_tintVisual.Brush is CompositionColorBrush existingBrush)
+            {
+                existingBrush.Color = baseColor;
+            }
+            else
+            {
+                _tintVisual.Brush = _compositor.CreateColorBrush(baseColor);
+            }
         }
         catch (Exception ex)
         {
@@ -283,9 +307,14 @@ public class GlassContainer : ContentControl, IDisposable
                 ? Windows.UI.Color.FromArgb((byte)(targetAlpha * 255), 245, 248, 255)
                 : Windows.UI.Color.FromArgb((byte)(targetAlpha * 255), 10, 12, 18);
 
-            var oldBrush = _tintVisual.Brush;
-            _tintVisual.Brush = _compositor.CreateColorBrush(color);
-            try { oldBrush?.Dispose(); } catch { }
+            if (_tintVisual.Brush is CompositionColorBrush existingBrush)
+            {
+                existingBrush.Color = color;
+            }
+            else
+            {
+                _tintVisual.Brush = _compositor.CreateColorBrush(color);
+            }
         }
         catch (Exception ex)
         {
@@ -295,7 +324,7 @@ public class GlassContainer : ContentControl, IDisposable
 
     public void SetVelocityBlur(float velocityDelta)
     {
-        if (_effectBrush == null) return;
+        if (_effectBrush == null || !ThemeHelper.IsAnimationEnabled) return;
         try
         {
             float dynamicBlur = (float)Math.Clamp(BlurRadius + Math.Abs(velocityDelta) * 0.15f, BlurRadius, 64.0);
@@ -329,10 +358,8 @@ public class GlassContainer : ContentControl, IDisposable
             if (args.WindowActivationState == WindowActivationState.Deactivated)
             {
                 // Drop live backdrop sampling to static fallback color to conserve GPU fill rate when inactive
-                var fallback = _compositor.CreateColorBrush(Windows.UI.Color.FromArgb(200, 20, 22, 28));
-                var oldBrush = _backdropVisual.Brush;
-                _backdropVisual.Brush = fallback;
-                if (oldBrush != _effectBrush) try { oldBrush?.Dispose(); } catch { }
+                _fallbackBrush ??= _compositor.CreateColorBrush(Windows.UI.Color.FromArgb(200, 20, 22, 28));
+                _backdropVisual.Brush = _fallbackBrush;
                 if (_specularLight != null) _specularLight.Intensity = 0.0f;
             }
             else
@@ -354,6 +381,11 @@ public class GlassContainer : ContentControl, IDisposable
         {
             try
             {
+                if (!ThemeHelper.IsAnimationEnabled)
+                {
+                    _specularLight.Intensity = 1.0f;
+                    return;
+                }
                 var anim = _compositor.CreateScalarKeyFrameAnimation();
                 anim.InsertKeyFrame(1.0f, 1.0f);
                 anim.Duration = TimeSpan.FromMilliseconds(200);
@@ -369,6 +401,11 @@ public class GlassContainer : ContentControl, IDisposable
         {
             try
             {
+                if (!ThemeHelper.IsAnimationEnabled)
+                {
+                    _specularLight.Intensity = 0.45f;
+                    return;
+                }
                 var anim = _compositor.CreateScalarKeyFrameAnimation();
                 anim.InsertKeyFrame(1.0f, 0.45f);
                 anim.Duration = TimeSpan.FromMilliseconds(400);
@@ -439,9 +476,14 @@ public class GlassContainer : ContentControl, IDisposable
         {
             ElementCompositionPreview.SetElementChildVisual(this, null);
 
-            _specularLight?.StopAnimation("Offset");
-            _specularLight?.Dispose();
-            _specularLight = null;
+            if (_specularLight != null)
+            {
+                try { _specularLight.StopAnimation("Offset"); } catch { }
+                try { _specularLight.StopAnimation("Intensity"); } catch { }
+                try { _specularLight.Targets.RemoveAll(); } catch { }
+                _specularLight.Dispose();
+                _specularLight = null;
+            }
 
             _lightOffsetAnimation?.Dispose();
             _lightOffsetAnimation = null;
@@ -452,14 +494,35 @@ public class GlassContainer : ContentControl, IDisposable
             _effectBrush?.Dispose();
             _effectBrush = null;
 
+            _fallbackBrush?.Dispose();
+            _fallbackBrush = null;
+
             _backdropBrush?.Dispose();
             _backdropBrush = null;
 
-            _backdropVisual?.Dispose();
-            _backdropVisual = null;
+            if (_backdropVisual != null)
+            {
+                if (_backdropVisual.Clip is CompositionGeometricClip bgClip)
+                {
+                    try { bgClip.Geometry?.Dispose(); } catch { }
+                    try { bgClip.Dispose(); } catch { }
+                    _backdropVisual.Clip = null;
+                }
+                _backdropVisual.Dispose();
+                _backdropVisual = null;
+            }
 
-            _tintVisual?.Dispose();
-            _tintVisual = null;
+            if (_tintVisual != null)
+            {
+                if (_tintVisual.Clip is CompositionGeometricClip tintClip)
+                {
+                    try { tintClip.Geometry?.Dispose(); } catch { }
+                    try { tintClip.Dispose(); } catch { }
+                    _tintVisual.Clip = null;
+                }
+                _tintVisual.Dispose();
+                _tintVisual = null;
+            }
 
             _rootContainerVisual?.Dispose();
             _rootContainerVisual = null;

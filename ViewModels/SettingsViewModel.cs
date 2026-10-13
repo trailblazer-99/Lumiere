@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Services.Streaming;
 
 namespace LumiereMediaPlayer.ViewModels;
 
@@ -52,6 +53,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
     [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
     [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
+    [ObservableProperty] public partial bool UseLocationForRegion { get; set; }
+    [ObservableProperty] public partial bool CreateShellShortcuts { get; set; }
 
     // ── Controls & Interface ───────────────────────────────────────
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
@@ -108,6 +111,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public partial bool IsUpdateAvailable { get; set; }
     [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
     [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsNoUpdatesAvailable { get; set; }
 
     // ── Folders ────────────────────────────────────────────────────
     [ObservableProperty] public partial IReadOnlyList<string> LibraryFolders { get; set; } = [];
@@ -177,14 +181,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (info.IsUpdateAvailable)
         {
             IsUpdateAvailable = true;
+            IsNoUpdatesAvailable = false;
             UpdateStatusText = $"Update available: v{info.LatestVersion} (Current: v{info.CurrentVersion})";
             LatestVersion = info.LatestVersion;
             _downloadUri = info.DownloadUri;
         }
-        else if (!string.IsNullOrEmpty(info.LatestVersion))
+        else if (info.CheckSucceeded || !string.IsNullOrEmpty(info.LatestVersion))
         {
             IsUpdateAvailable = false;
-            UpdateStatusText = $"You're on the latest version (v{info.CurrentVersion}).";
+            IsNoUpdatesAvailable = true;
+            UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
         }
     }
 
@@ -242,6 +248,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         if (IsCheckingForUpdates) return;
         IsCheckingForUpdates = true;
+        IsNoUpdatesAvailable = false;
         UpdateStatusText = "Checking for updates...";
         IsUpdateAvailable = false;
 
@@ -253,21 +260,32 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             {
                 ApplyUpdateInfo(info);
             }
+            else if (info.CheckSucceeded)
+            {
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+            }
             else if (!string.IsNullOrEmpty(info.LatestVersion))
             {
-                UpdateStatusText = $"You're on the latest version (v{info.CurrentVersion}).";
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
             }
             else if (!string.IsNullOrEmpty(info.CurrentVersion))
             {
-                UpdateStatusText = $"Current version: v{info.CurrentVersion}. Unable to reach update server.";
+                IsNoUpdatesAvailable = false;
+                UpdateStatusText = $"Unable to reach update server (Current version: v{info.CurrentVersion}).";
             }
             else
             {
+                IsNoUpdatesAvailable = false;
                 UpdateStatusText = "Failed to check for updates. Try again later.";
             }
         }
         catch (Exception ex)
         {
+            IsNoUpdatesAvailable = false;
             UpdateStatusText = $"Update check failed: {ex.Message}";
         }
         finally
@@ -649,6 +667,34 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnUseLocationForRegionChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.UseLocationForRegion = value;
+            _settingsService.Save();
+            if (value)
+            {
+                _ = LocationRegionService.Instance.StartMonitoringAsync();
+            }
+            else
+            {
+                LocationRegionService.Instance.StopMonitoring();
+            }
+        }
+    }
+
+    partial void OnCreateShellShortcutsChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.CreateShellShortcuts = value;
+        _settingsService.Save();
+        if (value)
+        {
+            AppIconHelper.UpdateAppIcon();
+        }
+    }
+
     // Controls & Interface
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
 
@@ -675,30 +721,45 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             // Prompt Windows Hello verification to confirm authentication before enabling
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
-                var hwnd = App.MainWindowInstance != null ? WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero;
-                var result = await WindowsHelloHelper.RequestVerificationAsync(hwnd, "Verify your identity to enable Lumière App Lock");
-
-                App.MainDispatcher?.TryEnqueue(() =>
+                try
                 {
-                    if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                    var hwnd = App.MainWindowInstance != null ? WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero;
+                    var result = await WindowsHelloHelper.RequestVerificationAsync(hwnd, "Verify your identity to enable Lumière App Lock");
+
+                    App.MainDispatcher?.TryEnqueue(() =>
                     {
-                        _settingsService.Current.EnableAppLock = true;
-                        _settingsService.Save();
-                        WindowsHelloStatusText = "App Lock is active. Authentication is required to unlock Lumière.";
-                    }
-                    else
+                        if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                        {
+                            _settingsService.Current.EnableAppLock = true;
+                            _settingsService.Save();
+                            WindowsHelloStatusText = "App Lock is active. Authentication is required to unlock Lumière.";
+                        }
+                        else
+                        {
+                            // Failed or cancelled - revert toggle
+                            _isSyncing = true;
+                            EnableAppLock = false;
+                            _isSyncing = false;
+                            _settingsService.Current.EnableAppLock = false;
+                            _settingsService.Save();
+                            WindowsHelloStatusText = result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Canceled
+                                ? "Authentication canceled. App Lock remains off."
+                                : "Authentication failed. App Lock could not be enabled.";
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    App.MainDispatcher?.TryEnqueue(() =>
                     {
-                        // Failed or cancelled - revert toggle
                         _isSyncing = true;
                         EnableAppLock = false;
                         _isSyncing = false;
                         _settingsService.Current.EnableAppLock = false;
                         _settingsService.Save();
-                        WindowsHelloStatusText = result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Canceled
-                            ? "Authentication canceled. App Lock remains off."
-                            : "Authentication failed. App Lock could not be enabled.";
-                    }
-                });
+                        WindowsHelloStatusText = $"Authentication error: {ex.Message}";
+                    });
+                }
             });
         }
         else
@@ -979,6 +1040,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
         AcrylicTransportBar = c.AcrylicTransportBar;
         AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;
+        UseLocationForRegion = c.UseLocationForRegion;
+        CreateShellShortcuts = c.CreateShellShortcuts;
 
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;

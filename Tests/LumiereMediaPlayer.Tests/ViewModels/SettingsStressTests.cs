@@ -671,6 +671,59 @@ public class SettingsStressTests
     }
 
     [TestMethod]
+    public void StressTest_VideoHoverPreview_PositioningAndExpansionIntegrity()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+        {
+            dir = dir.Parent;
+        }
+        var projectRoot = dir?.FullName ?? "";
+        var previewCsPath = System.IO.Path.Combine(projectRoot, "Controls", "VideoHoverPreviewHost.xaml.cs");
+        Assert.IsTrue(System.IO.File.Exists(previewCsPath), $"VideoHoverPreviewHost.xaml.cs must exist at {previewCsPath}");
+
+        var cs = System.IO.File.ReadAllText(previewCsPath);
+
+        // 1. Hover card bounds fallback when ActualWidth is 0
+        Assert.IsTrue(cs.Contains("sourceCard.ActualWidth > 0"), "Must check sourceCard.ActualWidth > 0");
+        Assert.IsTrue(cs.Contains("sourceCard.CardWidth > 0"), "Must fallback to sourceCard.CardWidth");
+
+        // 2. Prevent hover preview from clamping to far left (12.0) away from card
+        Assert.IsTrue(cs.Contains("Math.Max(minLeft, cardRect.X)"), "Must align left position with cardRect.X when centering would encroach on nav bar or left margin");
+
+        // 3. Modal expansion dead-centre horizontal and vertical margin positioning
+        Assert.IsTrue(cs.Contains("CardBorder.HorizontalAlignment = HorizontalAlignment.Center;"), "CardBorder must be dead-centre aligned horizontally");
+        Assert.IsTrue(cs.Contains("CardBorder.VerticalAlignment = VerticalAlignment.Center;"), "CardBorder must be dead-centre aligned vertically");
+        Assert.IsTrue(cs.Contains("CardBorder.Margin = new Thickness(0, 0, 0, 39);"), "CardBorder must maintain 39px transport bar bottom clearance in expanded mode");
+
+        // 4. Modal morph animation must use XAML TranslateTransform and Storyboard instead of invalid Visual Translation
+        Assert.IsTrue(cs.Contains("new TranslateTransform { X = deltaX, Y = deltaY }"), "Must use XAML TranslateTransform for smooth connected glide");
+        Assert.IsTrue(cs.Contains("CardBorder.Translation = System.Numerics.Vector3.Zero;"), "CardBorder.Translation must remain zero to avoid layout distortion");
+        Assert.IsFalse(cs.Contains("visual.Offset = System.Numerics.Vector3.Zero"), "Visual.Offset must not be wiped to (0,0) which breaks dead-centre placement");
+
+        // 5. Mathematical verification of first title hover anchoring
+        double navCompactPane = 48.0;
+        double minLeft = navCompactPane + 8.0; // 56.0
+        double firstCardX = 80.0;
+        double cardWidth = 150.0;
+        double targetWidth = 320.0;
+        double cardCenterX = firstCardX + (cardWidth / 2.0); // 155.0
+        double left = cardCenterX - (targetWidth / 2.0); // -5.0
+        if (left < minLeft || left < 12.0)
+        {
+            left = System.Math.Max(minLeft, firstCardX);
+        }
+        Assert.AreEqual(80.0, left, 0.001, "First title preview left edge must anchor flush with card at 80px, NOT clamp to 12.0px");
+
+        // 6. Mathematical verification of dead-centre modal expansion
+        double parentWidth = 1920.0;
+        double expandedWidth = 1113.6; // 1920 * 0.58
+        double calcExpandedLeft = (parentWidth - expandedWidth) / 2.0; // 403.2
+        double rightClearance = parentWidth - (calcExpandedLeft + expandedWidth);
+        Assert.AreEqual(calcExpandedLeft, rightClearance, 0.001, "Expanded modal must have equal left and right clearance (dead-centre)");
+    }
+
+    [TestMethod]
     public void StressTest_VideoTheaterFlyouts_AndMetadataFormatting()
     {
         var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);

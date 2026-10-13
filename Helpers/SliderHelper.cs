@@ -86,17 +86,17 @@ public static class SliderHelper
                 var thumbs = FindChildren<Thumb>(slider);
                 foreach (var thumb in thumbs)
                 {
-                    thumb.Width = thumbDiameter;
-                    thumb.Height = thumbDiameter;
-                    thumb.CornerRadius = cornerRadius;
+                    if (Math.Abs(thumb.Width - thumbDiameter) > 0.01) thumb.Width = thumbDiameter;
+                    if (Math.Abs(thumb.Height - thumbDiameter) > 0.01) thumb.Height = thumbDiameter;
+                    if (thumb.CornerRadius != cornerRadius) thumb.CornerRadius = cornerRadius;
 
                     var borders = FindChildren<Border>(thumb);
                     foreach (var border in borders)
                     {
-                        border.Margin = new Thickness(0);
-                        border.Width = thumbDiameter;
-                        border.Height = thumbDiameter;
-                        border.CornerRadius = cornerRadius;
+                        if (border.Margin != default) border.Margin = new Thickness(0);
+                        if (Math.Abs(border.Width - thumbDiameter) > 0.01) border.Width = thumbDiameter;
+                        if (Math.Abs(border.Height - thumbDiameter) > 0.01) border.Height = thumbDiameter;
+                        if (border.CornerRadius != cornerRadius) border.CornerRadius = cornerRadius;
                     }
                 }
             }

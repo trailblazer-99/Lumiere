@@ -17,6 +17,7 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
+        AppIconHelper.RegisterBrandIcon(HomeBrandIcon);
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         HomeScrollViewer.ViewChanging += (s, e) => Controls.MediaCard.NotifyScrollActivity();
         HomeScrollViewer.ViewChanged += (s, e) => Controls.MediaCard.NotifyScrollActivity();
@@ -32,6 +33,8 @@ public sealed partial class HomePage : Page
     {
         base.OnNavigatedTo(e);
 
+        AppIconHelper.ApplyCurrentIcon(HomeBrandIcon);
+        AppIconHelper.RegisterBrandIcon(HomeBrandIcon);
         SetGreeting();
         UpdateOpenFileButtonVisibility();
 

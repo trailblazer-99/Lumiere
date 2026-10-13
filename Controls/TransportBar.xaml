@@ -97,20 +97,25 @@
 
             <!-- Left: Metadata -->
             <Button
+                x:Name="TrackMetadataButton"
                 Grid.Column="0"
                 Style="{StaticResource CardButtonStyle}"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center"
                 Click="OnTrackClick">
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="12"
+                <Grid
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
                     <Border
                         x:Name="MiniAlbumArt"
+                        Grid.Column="0"
                         Width="48"
                         Height="48"
+                        Margin="0,0,12,0"
                         CornerRadius="{StaticResource SmallCornerRadius}"
                         Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
                         <Grid CornerRadius="{StaticResource SmallCornerRadius}">
@@ -135,7 +140,7 @@
                         </Grid>
                     </Border>
 
-                    <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock
                                 x:Name="TrackTitleText"
@@ -168,7 +173,7 @@
                             Text="Choose something to play"
                             TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Button>
 
             <!-- Center: Playback Buttons -->
@@ -308,6 +313,7 @@
 
             <!-- Right: Subtitles, Volume, PiP, Fullscreen, More -->
             <StackPanel
+                x:Name="RightControlsPanel"
                 Grid.Column="2"
                 HorizontalAlignment="Right"
                 Orientation="Horizontal"
@@ -543,6 +549,30 @@
                              <MenuFlyoutItem x:Name="MenuQueueItem" Text="Open queue" Click="OnQueueClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xEA37;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator x:Name="MenuResponsiveSeparator" Visibility="Collapsed" />
+                            <MenuFlyoutItem x:Name="MenuResponsiveShuffleItem" Text="Shuffle" Click="OnShuffleClick" Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8B1;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="MenuResponsiveRepeatItem" Text="Repeat" Click="OnRepeatClick" Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8EE;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="MenuResponsiveFullscreenItem" Text="Fullscreen" Click="OnFullscreenClick" Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE740;" />
+                                </MenuFlyoutItem.Icon>
+                                <MenuFlyoutItem.KeyboardAccelerators>
+                                    <KeyboardAccelerator Key="F11" />
+                                </MenuFlyoutItem.KeyboardAccelerators>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="MenuResponsivePipItem" Text="Picture in Picture" Click="OnPipClick" Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE93A;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                         </MenuFlyout>

@@ -14,12 +14,280 @@
     mc:Ignorable="d"
     Loaded="OnPageLoaded">
 
+    <Page.Resources>
+        <!-- Wide multi-column desktop track template -->
+        <DataTemplate x:Key="WideTrackTemplate" x:DataType="models:MediaItem">
+            <Grid Padding="16,8" Tapped="OnTrackRowTapped" RightTapped="OnTrackRowRightTapped">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="70" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <!-- Selection Checkbox -->
+                <CheckBox
+                    Grid.Column="0"
+                    IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                    Click="OnTrackCheckBoxClicked"
+                    MinWidth="20"
+                    MinHeight="20"
+                    Padding="0"
+                    Margin="0"
+                    VerticalAlignment="Center"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.1" />
+
+                <Grid Grid.Column="1" ColumnSpacing="12" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border
+                        Grid.Column="0"
+                        Width="32"
+                        Height="32"
+                        CornerRadius="4"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        VerticalAlignment="Center">
+                        <Grid CornerRadius="4">
+                            <FontIcon
+                                FontSize="16"
+                                Glyph="&#xE8D6;"
+                                Opacity="0.5"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                            <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 48), Mode=OneWay}" Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+                    <TextBlock
+                        Grid.Column="1"
+                        FontSize="14"
+                        Text="{x:Bind Title, Mode=OneWay}"
+                        MaxLines="1"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                    <Border
+                        Grid.Column="2"
+                        Margin="8,0,0,0"
+                        Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasLocationRep), Mode=OneWay}"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="8,4"
+                        VerticalAlignment="Center"
+                        ToolTipService.ToolTip="{x:Bind SourcePath, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock
+                                Text="{x:Bind LocationRep, Mode=OneWay}"
+                                FontSize="11"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+                <TextBlock
+                    Grid.Column="2"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind Artist, Mode=OneWay}"
+                    MaxLines="1"
+                    TextTrimming="CharacterEllipsis"
+                    VerticalAlignment="Center" />
+                <TextBlock
+                    Grid.Column="3"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind Album, Mode=OneWay}"
+                    MaxLines="1"
+                    TextTrimming="CharacterEllipsis"
+                    VerticalAlignment="Center" />
+                <TextBlock
+                    Grid.Column="4"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    HorizontalAlignment="Right"
+                    Text="{x:Bind DurationText, Mode=OneWay}"
+                    VerticalAlignment="Center" />
+                <!-- 3-Dot More Options Button -->
+                <Button
+                    Grid.Column="5"
+                    Click="OnTrackMoreClick"
+                    Style="{StaticResource TransportIconButtonStyle}"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    CornerRadius="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="More options"
+                    ToolTipService.ToolTip="More options"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.15">
+                    <FontIcon Glyph="&#xE712;" FontSize="16" />
+                </Button>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Compact 2-line streaming track template for side-window use -->
+        <DataTemplate x:Key="CompactTrackTemplate" x:DataType="models:MediaItem">
+            <Grid Padding="12,8" Tapped="OnTrackRowTapped" RightTapped="OnTrackRowRightTapped">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="36" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="36" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Selection Checkbox -->
+                <CheckBox
+                    Grid.Column="0"
+                    IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                    Click="OnTrackCheckBoxClicked"
+                    MinWidth="20"
+                    MinHeight="20"
+                    Padding="0"
+                    Margin="0"
+                    VerticalAlignment="Center"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.1" />
+
+                <!-- Track details: Artwork + 2-line title/artist -->
+                <Grid Grid.Column="1" ColumnSpacing="10" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Album Art thumbnail -->
+                    <Border
+                        Grid.Column="0"
+                        Width="36"
+                        Height="36"
+                        CornerRadius="4"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        VerticalAlignment="Center">
+                        <Grid CornerRadius="4">
+                            <FontIcon
+                                FontSize="16"
+                                Glyph="&#xE8D6;"
+                                Opacity="0.5"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                            <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 48), Mode=OneWay}" Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+
+                    <!-- 2-line Title & Subtitle -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock
+                            FontSize="14"
+                            FontWeight="Medium"
+                            Text="{x:Bind Title, Mode=OneWay}"
+                            MaxLines="1"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            MaxLines="1"
+                            TextTrimming="CharacterEllipsis">
+                            <Run Text="{x:Bind Artist, Mode=OneWay}" />
+                            <Run Text=" • " />
+                            <Run Text="{x:Bind Album, Mode=OneWay}" />
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Duration -->
+                <TextBlock
+                    Grid.Column="2"
+                    FontSize="13"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,0"
+                    Text="{x:Bind DurationText, Mode=OneWay}" />
+
+                <!-- 3-Dot More Options Button -->
+                <Button
+                    Grid.Column="3"
+                    Click="OnTrackMoreClick"
+                    Style="{StaticResource TransportIconButtonStyle}"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    CornerRadius="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="More options"
+                    ToolTipService.ToolTip="More options"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.15">
+                    <FontIcon Glyph="&#xE712;" FontSize="16" />
+                </Button>
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" RowSpacing="20" Opacity="1">
         <Grid.ChildrenTransitions>
             <TransitionCollection>
                 <EntranceThemeTransition />
             </TransitionCollection>
         </Grid.ChildrenTransitions>
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="HeaderLayoutStates">
+                <VisualState x:Name="WideHeader">
+                    <VisualState.Setters>
+                        <Setter Target="PageContent.Margin" Value="{StaticResource PageContentMargin}" />
+                        <Setter Target="HeaderCol0.Width" Value="*" />
+                        <Setter Target="HeaderCol1.Width" Value="Auto" />
+                        <Setter Target="ControlsGrid.(Grid.Row)" Value="0" />
+                        <Setter Target="ControlsGrid.(Grid.Column)" Value="1" />
+                        <Setter Target="ControlsGrid.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="ControlsGrid.Margin" Value="0" />
+                        <Setter Target="TitlePanel.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="ControlCol0.Width" Value="Auto" />
+                        <Setter Target="ControlCol1.Width" Value="Auto" />
+                        <Setter Target="ButtonsScrollViewer.(Grid.Row)" Value="0" />
+                        <Setter Target="ButtonsScrollViewer.(Grid.Column)" Value="0" />
+                        <Setter Target="ButtonsScrollViewer.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.Row)" Value="0" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.Column)" Value="1" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.ColumnSpan)" Value="1" />
+                        <Setter Target="SearchAndFilterGrid.Margin" Value="16,0,0,0" />
+                        <Setter Target="SearchAndFilterGrid.HorizontalAlignment" Value="Left" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="NarrowHeader">
+                    <VisualState.Setters>
+                        <Setter Target="PageContent.Margin" Value="{StaticResource PageContentMarginNarrow}" />
+                        <Setter Target="HeaderCol0.Width" Value="*" />
+                        <Setter Target="HeaderCol1.Width" Value="0" />
+                        <Setter Target="ControlsGrid.(Grid.Row)" Value="1" />
+                        <Setter Target="ControlsGrid.(Grid.Column)" Value="0" />
+                        <Setter Target="ControlsGrid.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="ControlsGrid.Margin" Value="0,12,0,0" />
+                        <Setter Target="ControlsGrid.VerticalAlignment" Value="Top" />
+                        <Setter Target="TitlePanel.(Grid.ColumnSpan)" Value="2" />
+                        
+                        <Setter Target="ControlCol0.Width" Value="*" />
+                        <Setter Target="ControlCol1.Width" Value="*" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.Row)" Value="1" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.Column)" Value="0" />
+                        <Setter Target="SearchAndFilterGrid.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="SearchAndFilterGrid.Margin" Value="0,10,0,0" />
+                        <Setter Target="SearchAndFilterGrid.HorizontalAlignment" Value="Stretch" />
+                        <Setter Target="ButtonsScrollViewer.(Grid.ColumnSpan)" Value="2" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
 
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -34,53 +302,19 @@
                 <RowDefinition x:Name="HeaderRow1" Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="HeaderCol0" Width="*" />
+                <ColumnDefinition x:Name="HeaderCol0" Width="*" MinWidth="180" />
                 <ColumnDefinition x:Name="HeaderCol1" Width="Auto" />
             </Grid.ColumnDefinitions>
-
-            <VisualStateManager.VisualStateGroups>
-                <VisualStateGroup x:Name="HeaderLayoutStates">
-                    <VisualState x:Name="WideHeader">
-                        <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="641" />
-                        </VisualState.StateTriggers>
-                    </VisualState>
-                    <VisualState x:Name="NarrowHeader">
-                        <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="0" />
-                        </VisualState.StateTriggers>
-                        <VisualState.Setters>
-                            <Setter Target="HeaderCol0.Width" Value="*" />
-                            <Setter Target="HeaderCol1.Width" Value="*" />
-                            <Setter Target="ControlsGrid.(Grid.Row)" Value="1" />
-                            <Setter Target="ControlsGrid.(Grid.Column)" Value="0" />
-                            <Setter Target="ControlsGrid.(Grid.ColumnSpan)" Value="2" />
-                            <Setter Target="ControlsGrid.Margin" Value="0,16,0,0" />
-                            <Setter Target="TitlePanel.(Grid.ColumnSpan)" Value="2" />
-                            
-                            <Setter Target="ControlCol0.Width" Value="*" />
-                            <Setter Target="ControlCol1.Width" Value="*" />
-                            <Setter Target="SearchBox.(Grid.Row)" Value="1" />
-                            <Setter Target="SearchBox.(Grid.Column)" Value="0" />
-                            <Setter Target="SearchBox.(Grid.ColumnSpan)" Value="2" />
-                            <Setter Target="SearchBox.Margin" Value="0,12,0,0" />
-                            <Setter Target="SearchBox.Width" Value="340" />
-                            <Setter Target="SearchBox.HorizontalAlignment" Value="Left" />
-                            <Setter Target="ButtonsPanel.(Grid.ColumnSpan)" Value="2" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateManager.VisualStateGroups>
 
             <StackPanel x:Name="TitlePanel" Grid.Column="0" Grid.Row="0" Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE8D6;" FontSize="24" VerticalAlignment="Center"/>
                     <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Music library" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Browse all tracks in your collection." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Browse all tracks in your collection." MaxLines="1" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
             
-            <Grid x:Name="ControlsGrid" Grid.Column="1" Grid.Row="0" VerticalAlignment="Center">
+            <Grid x:Name="ControlsGrid" Grid.Column="1" Grid.Row="0" VerticalAlignment="Top">
                 <Grid.RowDefinitions>
                     <RowDefinition x:Name="ControlRow0" Height="Auto" />
                     <RowDefinition x:Name="ControlRow1" Height="Auto" />
@@ -90,43 +324,63 @@
                     <ColumnDefinition x:Name="ControlCol1" Width="Auto" />
                 </Grid.ColumnDefinitions>
                 
-                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" Grid.Column="0" Grid.Row="0">
-                    <Button Command="{x:Bind ViewModel.AddFolderCommand}" AutomationProperties.Name="Add Folder" ToolTipService.ToolTip="Add folder to library">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE8B7;" FontSize="16" />
-                            <TextBlock Text="Add Folder" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{x:Bind ViewModel.AddFilesCommand}" AutomationProperties.Name="Add Files" ToolTipService.ToolTip="Add files to library">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE8E5;" FontSize="16" />
-                            <TextBlock Text="Add Files" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{x:Bind ViewModel.RefreshCommand}" AutomationProperties.Name="Refresh" ToolTipService.ToolTip="Refresh library and update unavailable titles">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE72C;" FontSize="16" />
-                            <TextBlock Text="Refresh" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{x:Bind ViewModel.PlayTrackCommand}"
-                            CommandParameter="{x:Bind TrackListView.SelectedItem, Mode=OneWay}"
-                            Style="{StaticResource AccentButtonStyle}"
-                            AutomationProperties.Name="Play selected"
-                            ToolTipService.ToolTip="Play selected track">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE768;" FontSize="16" />
-                            <TextBlock Text="Play selected" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="16,0,0,0" VerticalAlignment="Center">
+                <ScrollViewer
+                    x:Name="ButtonsScrollViewer"
+                    Grid.Column="0"
+                    Grid.Row="0"
+                    HorizontalScrollBarVisibility="Hidden"
+                    HorizontalScrollMode="Enabled"
+                    VerticalScrollBarVisibility="Disabled"
+                    VerticalScrollMode="Disabled">
+                    <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8">
+                        <Button Command="{x:Bind ViewModel.AddFolderCommand}" AutomationProperties.Name="Add Folder" ToolTipService.ToolTip="Add folder to library">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8B7;" FontSize="16" />
+                                <TextBlock Text="Add Folder" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{x:Bind ViewModel.AddFilesCommand}" AutomationProperties.Name="Add Files" ToolTipService.ToolTip="Add files to library">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="16" />
+                                <TextBlock Text="Add Files" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{x:Bind ViewModel.RefreshCommand}" AutomationProperties.Name="Refresh" ToolTipService.ToolTip="Refresh library and update unavailable titles">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16" />
+                                <TextBlock Text="Refresh" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{x:Bind ViewModel.PlayTrackCommand}"
+                                CommandParameter="{x:Bind TrackListView.SelectedItem, Mode=OneWay}"
+                                Style="{StaticResource AccentButtonStyle}"
+                                AutomationProperties.Name="Play selected"
+                                ToolTipService.ToolTip="Play selected track">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE768;" FontSize="16" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                <TextBlock Text="Play selected" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid x:Name="SearchAndFilterGrid" Grid.Column="1" Grid.Row="0" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <AutoSuggestBox x:Name="SearchBox"
-                                    Width="240"
+                                    Grid.Column="0"
+                                    MinWidth="90"
+                                    HorizontalAlignment="Stretch"
                                     PlaceholderText="Search collection..."
                                     TextChanged="OnSearchBoxTextChanged"
                                     QuerySubmitted="OnSearchBoxQuerySubmitted"
-                                    CornerRadius="4">
+                                    CornerRadius="4"
+                                    VerticalAlignment="Center">
                         <AutoSuggestBox.QueryIcon>
                             <AnimatedIcon x:Name="SearchAnimatedIcon">
                                 <AnimatedIcon.Source>
@@ -139,22 +393,43 @@
                         </AutoSuggestBox.QueryIcon>
                     </AutoSuggestBox>
                     <ComboBox
-                        Width="150"
+                        Grid.Column="1"
+                        MinWidth="100"
+                        MaxWidth="140"
+                        Margin="8,0,0,0"
                         Header="Sort By"
                         ItemsSource="{x:Bind ViewModel.SortOptions}"
                         SelectedItem="{x:Bind ViewModel.SelectedSort, Mode=TwoWay}"
                         VerticalAlignment="Center"
                         helpers:ComboBoxHelper.FollowBackdrop="True" />
-                    <ToggleButton x:Name="AiSearchToggle" Checked="OnAiSearchToggleChecked" Unchecked="OnAiSearchToggleUnchecked" AutomationProperties.Name="Toggle AI Semantic Search" ToolTipService.ToolTip="Toggle AI Semantic Search" Height="32" Width="32" Padding="0" VerticalAlignment="Center">
+                    <ToggleButton x:Name="AiSearchToggle"
+                                  Grid.Column="2"
+                                  Margin="8,0,0,0"
+                                  Checked="OnAiSearchToggleChecked"
+                                  Unchecked="OnAiSearchToggleUnchecked"
+                                  AutomationProperties.Name="Toggle AI Semantic Search"
+                                  ToolTipService.ToolTip="Toggle AI Semantic Search"
+                                  Height="32"
+                                  Width="32"
+                                  Padding="0"
+                                  VerticalAlignment="Center">
                         <FontIcon FontSize="16" Glyph="&#xED37;" x:Name="AiSearchIcon" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
                     </ToggleButton>
-                    <Button x:Name="SaveAiPlaylistButton" Click="OnSaveAiPlaylistClick" AutomationProperties.Name="Save Playlist" ToolTipService.ToolTip="Save Search Results as AI Playlist" Height="32" Visibility="Collapsed" VerticalAlignment="Center">
+                    <Button x:Name="SaveAiPlaylistButton"
+                            Grid.Column="3"
+                            Margin="8,0,0,0"
+                            Click="OnSaveAiPlaylistClick"
+                            AutomationProperties.Name="Save Playlist"
+                            ToolTipService.ToolTip="Save Search Results as AI Playlist"
+                            Height="32"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontSize="16" Glyph="&#xE8F4;"/>
                             <TextBlock Text="Save Playlist" FontSize="12"/>
                         </StackPanel>
                     </Button>
-                </StackPanel>
+                </Grid>
             </Grid>
         </Grid>
 
@@ -196,23 +471,26 @@
                 DoubleTapped="OnTrackDoubleTapped"
                 IsItemClickEnabled="True"
                 ItemsSource="{x:Bind ViewModel.Tracks, Mode=OneWay}"
+                ItemTemplate="{StaticResource WideTrackTemplate}"
                 SelectionMode="Single">
 
                 <ListView.Header>
                     <Grid
+                        x:Name="TrackListHeaderGrid"
                         Padding="16,12"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="0,0,0,1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="70" />
-                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition x:Name="HeaderColCheck" Width="40" />
+                            <ColumnDefinition x:Name="HeaderColTitle" Width="*" />
+                            <ColumnDefinition x:Name="HeaderColArtist" Width="180" />
+                            <ColumnDefinition x:Name="HeaderColAlbum" Width="180" />
+                            <ColumnDefinition x:Name="HeaderColTime" Width="70" />
+                            <ColumnDefinition x:Name="HeaderColMore" Width="40" />
                         </Grid.ColumnDefinitions>
                         <CheckBox
                             x:Name="HeaderSelectAllCheckBox"
+                            Grid.Column="0"
                             Checked="OnHeaderSelectAllChecked"
                             Unchecked="OnHeaderSelectAllUnchecked"
                             MinWidth="20"
@@ -221,120 +499,17 @@
                             Margin="0"
                             ToolTipService.ToolTip="Select all"
                             VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource TrackListHeaderTextStyle}" Text="TITLE" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource TrackListHeaderTextStyle}" Text="ARTIST" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource TrackListHeaderTextStyle}" Text="ALBUM" />
+                        <TextBlock x:Name="HeaderTitleText" Grid.Column="1" Style="{StaticResource TrackListHeaderTextStyle}" Text="TITLE" />
+                        <TextBlock x:Name="HeaderArtistText" Grid.Column="2" Style="{StaticResource TrackListHeaderTextStyle}" Text="ARTIST" />
+                        <TextBlock x:Name="HeaderAlbumText" Grid.Column="3" Style="{StaticResource TrackListHeaderTextStyle}" Text="ALBUM" />
                         <TextBlock
+                            x:Name="HeaderTimeText"
                             Grid.Column="4"
                             Style="{StaticResource TrackListHeaderTextStyle}"
                             HorizontalAlignment="Right"
                             Text="TIME" />
                     </Grid>
                 </ListView.Header>
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="models:MediaItem">
-                        <Grid Padding="16,8" Tapped="OnTrackRowTapped" RightTapped="OnTrackRowRightTapped">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="40" />
-                            </Grid.ColumnDefinitions>
-                            <!-- Selection Checkbox -->
-                            <CheckBox
-                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
-                                Click="OnTrackCheckBoxClicked"
-                                MinWidth="20"
-                                MinHeight="20"
-                                Padding="0"
-                                Margin="0"
-                                VerticalAlignment="Center"
-                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
-                                helpers:SpringAnimationHelper.HoverScale="1.1" />
-
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
-                                <Border
-                                    Width="32"
-                                    Height="32"
-                                    CornerRadius="4"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                                    VerticalAlignment="Center">
-                                    <Grid CornerRadius="4">
-                                        <FontIcon
-                                            FontSize="16"
-                                            Glyph="&#xE8D6;"
-                                            Opacity="0.5"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center" />
-                                        <Image Source="{x:Bind helpers:ImageBindHelper.SafeImageFromUrl(PosterUrl, 48), Mode=OneWay}" Stretch="UniformToFill" />
-                                    </Grid>
-                                </Border>
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <TextBlock
-                                        FontSize="14"
-                                        Text="{x:Bind Title, Mode=OneWay}"
-                                        VerticalAlignment="Center" />
-                                    <Border
-                                        Visibility="{x:Bind helpers:VisibilityHelper.FromBoolean(HasLocationRep), Mode=OneWay}"
-                                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="8,4"
-                                        VerticalAlignment="Center"
-                                        ToolTipService.ToolTip="{x:Bind SourcePath, Mode=OneWay}">
-                                        <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <FontIcon Glyph="&#xE8B7;" FontSize="16" VerticalAlignment="Center" />
-                                            <TextBlock
-                                                Text="{x:Bind LocationRep, Mode=OneWay}"
-                                                FontSize="12"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                            </StackPanel>
-                            <TextBlock
-                                Grid.Column="2"
-                                FontSize="14"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="{x:Bind Artist, Mode=OneWay}"
-                                VerticalAlignment="Center" />
-                            <TextBlock
-                                Grid.Column="3"
-                                FontSize="14"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="{x:Bind Album, Mode=OneWay}"
-                                VerticalAlignment="Center" />
-                            <TextBlock
-                                Grid.Column="4"
-                                FontSize="14"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                HorizontalAlignment="Right"
-                                Text="{x:Bind DurationText, Mode=OneWay}"
-                                VerticalAlignment="Center" />
-                            <!-- 3-Dot More Options Button -->
-                            <Button
-                                Grid.Column="5"
-                                Click="OnTrackMoreClick"
-                                Style="{StaticResource TransportIconButtonStyle}"
-                                Width="32"
-                                Height="32"
-                                Padding="0"
-                                CornerRadius="16"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                AutomationProperties.Name="More options"
-                                ToolTipService.ToolTip="More options"
-                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
-                                helpers:SpringAnimationHelper.HoverScale="1.15">
-                                <FontIcon Glyph="&#xE712;" FontSize="16" />
-                            </Button>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
             </ListView>
         </Border>
 
@@ -352,7 +527,7 @@
         <!-- Floating Selection Action Ribbon -->
         <controls:SelectionRibbon
             x:Name="MusicSelectionRibbon"
-            Grid.Row="1"
+            Grid.Row="2"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
             Margin="0,0,0,16"

@@ -27,5 +27,7 @@ public interface IHdrPipelineService
     HdrContentFormat DetectContentFormat(MediaPlaybackItem? item);
     void ConfigurePipeline(MediaPlayer player, MediaPlaybackItem? item);
     void SetFullscreenState(bool isFullscreen);
+    void SetVideoPageActive(bool isActive);
+    void SetSuspended(bool isSuspended);
     void ResetContentState();
 }

@@ -675,9 +675,19 @@ namespace LumiereMediaPlayer.Models.Streaming
                     }
                     else if (providerName.Contains("disney", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = !string.IsNullOrEmpty(title)
-                            ? $"https://www.disneyplus.com/search?q={Uri.EscapeDataString(title)}"
-                            : "https://www.disneyplus.com";
+                        if (string.Equals(regionCode, "IN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            providerName = "JioHotstar";
+                            webUrl = !string.IsNullOrEmpty(title)
+                                ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(title)}"
+                                : "https://www.hotstar.com";
+                        }
+                        else
+                        {
+                            webUrl = !string.IsNullOrEmpty(title)
+                                ? $"https://www.disneyplus.com/search?q={Uri.EscapeDataString(title)}"
+                                : "https://www.disneyplus.com";
+                        }
                     }
                     else if (providerName.Contains("max", StringComparison.OrdinalIgnoreCase) || providerName.Contains("hbo", StringComparison.OrdinalIgnoreCase))
                     {
@@ -717,8 +727,9 @@ namespace LumiereMediaPlayer.Models.Streaming
                     }
                     else if (providerName.Contains("hotstar", StringComparison.OrdinalIgnoreCase))
                     {
+                        providerName = "JioHotstar";
                         webUrl = !string.IsNullOrEmpty(title)
-                            ? $"https://www.hotstar.com/in/explore?searchQuery={Uri.EscapeDataString(title)}"
+                            ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(title)}"
                             : "https://www.hotstar.com";
                     }
                     else if (providerName.Contains("jio", StringComparison.OrdinalIgnoreCase))
@@ -727,10 +738,18 @@ namespace LumiereMediaPlayer.Models.Streaming
                             ? $"https://www.jiocinema.com/search/{Uri.EscapeDataString(title)}"
                             : "https://www.jiocinema.com";
                     }
+
+                    int resolvedSourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++;
+                    if (string.Equals(regionCode, "IN", StringComparison.OrdinalIgnoreCase) &&
+                        (p.ProviderId == 2336 || p.ProviderId == 122 || providerName.Contains("hotstar", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        resolvedSourceId = 447;
+                    }
+
                     results.Add(new WatchmodeSource
                     {
-                        SourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++,
-                        Name = p.ProviderName ?? "Unknown",
+                        SourceId = resolvedSourceId,
+                        Name = providerName,
                         Type = type,
                         Region = regionCode.ToUpperInvariant(),
                         WebUrl = webUrl,

@@ -31,6 +31,12 @@ public static class AppServices
     public static SettingsService Settings
         => App.Services.GetRequiredService<SettingsService>();
 
+    public static ConfigService Config
+        => App.Services.GetRequiredService<ConfigService>();
+
+    public static IConfigService ConfigService
+        => App.Services.GetRequiredService<IConfigService>();
+
     /// <summary>Singleton HDR pipeline service. Call Initialize() after the main window is ready.</summary>
     public static HdrPipelineService HdrPipeline
         => App.Services.GetRequiredService<HdrPipelineService>();
@@ -102,4 +108,8 @@ public static class AppServices
     private static readonly Lazy<StreamingMusicViewModel> _streamingMusicViewModel = new(()
         => App.Services.GetRequiredService<StreamingMusicViewModel>());
     public static StreamingMusicViewModel StreamingMusicViewModel => _streamingMusicViewModel.Value;
+
+    private static readonly Lazy<StreamingDetailsViewModel> _streamingDetailsViewModel = new(()
+        => App.Services.GetRequiredService<StreamingDetailsViewModel>());
+    public static StreamingDetailsViewModel StreamingDetailsViewModel => _streamingDetailsViewModel.Value;
 }

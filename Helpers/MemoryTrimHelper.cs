@@ -20,14 +20,8 @@ public static class MemoryTrimHelper
             // 1. Trim LRU bitmap caches in ImageBindHelper
             ImageBindHelper.TrimCaches();
 
-            // 2. Full generational collection with finalizers to release COM RCWs and unmanaged buffers
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-
-            // 3. Reclaim unreferenced and clean physical memory pages from the process working set
-            using var process = Process.GetCurrentProcess();
-            SetProcessWorkingSetSize(process.Handle, (IntPtr)(-1), (IntPtr)(-1));
+            // 2. Optimized, non-blocking collection without forced compaction or working set eviction
+            GC.Collect(1, GCCollectionMode.Optimized, blocking: false);
         }
         catch { }
     }
@@ -48,6 +42,10 @@ public static class MemoryTrimHelper
                     await Task.Delay(delayMs).ConfigureAwait(false);
                 }
                 TrimWorkingSet();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MemoryTrimHelper] error: {ex.Message}");
             }
             finally
             {

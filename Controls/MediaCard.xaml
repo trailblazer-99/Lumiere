@@ -11,6 +11,10 @@
     PointerEntered="OnPointerEntered"
     PointerMoved="OnPointerMoved"
     PointerExited="OnPointerExited"
+    PointerPressed="OnPointerPressed"
+    PointerReleased="OnPointerReleased"
+    PointerCanceled="OnPointerCanceled"
+    PointerCaptureLost="OnPointerCaptureLost"
     RightTapped="OnCardRightTapped">
 
     <StackPanel Spacing="8">

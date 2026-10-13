@@ -58,25 +58,74 @@ public static class SpringAnimationHelper
     public static int GetPeriodMilliseconds(DependencyObject obj) => (int)obj.GetValue(PeriodMillisecondsProperty);
     public static void SetPeriodMilliseconds(DependencyObject obj, int value) => obj.SetValue(PeriodMillisecondsProperty, value);
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, FrameworkElement> _iconCache = new();
+
     private static void OnEnableHoverSpringChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is FrameworkElement element)
         {
+            DetachHoverSpringHandlers(element);
+
             if ((bool)e.NewValue)
             {
-                element.PointerEntered += OnElementPointerEntered;
-                element.PointerExited += OnElementPointerExited;
-                element.PointerPressed += OnElementPointerPressed;
-                element.PointerReleased += OnElementPointerReleased;
-                element.PointerCanceled += OnElementPointerReleased;
+                AttachHoverSpringHandlers(element);
+                element.Unloaded -= OnElementUnloaded;
+                element.Unloaded += OnElementUnloaded;
             }
             else
             {
-                element.PointerEntered -= OnElementPointerEntered;
-                element.PointerExited -= OnElementPointerExited;
-                element.PointerPressed -= OnElementPointerPressed;
-                element.PointerReleased -= OnElementPointerReleased;
-                element.PointerCanceled -= OnElementPointerReleased;
+                element.Unloaded -= OnElementUnloaded;
+            }
+        }
+    }
+
+    private static void AttachHoverSpringHandlers(FrameworkElement element)
+    {
+        element.PointerEntered += OnElementPointerEntered;
+        element.PointerExited += OnElementPointerExited;
+        element.PointerPressed += OnElementPointerPressed;
+        element.PointerReleased += OnElementPointerReleased;
+        element.PointerCanceled += OnElementPointerCanceled;
+        element.PointerCaptureLost += OnElementPointerCaptureLost;
+        if (element is Control ctrl)
+        {
+            ctrl.IsEnabledChanged += OnElementIsEnabledChanged;
+        }
+    }
+
+    private static void DetachHoverSpringHandlers(FrameworkElement element)
+    {
+        element.PointerEntered -= OnElementPointerEntered;
+        element.PointerExited -= OnElementPointerExited;
+        element.PointerPressed -= OnElementPointerPressed;
+        element.PointerReleased -= OnElementPointerReleased;
+        element.PointerCanceled -= OnElementPointerCanceled;
+        element.PointerCaptureLost -= OnElementPointerCaptureLost;
+        if (element is Control ctrl)
+        {
+            ctrl.IsEnabledChanged -= OnElementIsEnabledChanged;
+        }
+    }
+
+    private static void OnElementUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            DetachHoverSpringHandlers(element);
+            element.Loaded -= OnElementLoaded;
+            element.Loaded += OnElementLoaded;
+        }
+    }
+
+    private static void OnElementLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            element.Loaded -= OnElementLoaded;
+            if (GetEnableHoverSpring(element))
+            {
+                DetachHoverSpringHandlers(element);
+                AttachHoverSpringHandlers(element);
             }
         }
     }
@@ -85,21 +134,60 @@ public static class SpringAnimationHelper
     {
         if (d is FrameworkElement element)
         {
+            DetachItemIconSpringHandlers(element);
+
             if ((bool)e.NewValue)
             {
-                element.PointerEntered += OnItemIconPointerEntered;
-                element.PointerExited += OnItemIconPointerExited;
-                element.PointerPressed += OnItemIconPointerPressed;
-                element.PointerReleased += OnItemIconPointerReleased;
-                element.PointerCanceled += OnItemIconPointerReleased;
+                AttachItemIconSpringHandlers(element);
+                element.Unloaded -= OnItemIconElementUnloaded;
+                element.Unloaded += OnItemIconElementUnloaded;
             }
             else
             {
-                element.PointerEntered -= OnItemIconPointerEntered;
-                element.PointerExited -= OnItemIconPointerExited;
-                element.PointerPressed -= OnItemIconPointerPressed;
-                element.PointerReleased -= OnItemIconPointerReleased;
-                element.PointerCanceled -= OnItemIconPointerReleased;
+                element.Unloaded -= OnItemIconElementUnloaded;
+            }
+        }
+    }
+
+    private static void AttachItemIconSpringHandlers(FrameworkElement element)
+    {
+        element.PointerEntered += OnItemIconPointerEntered;
+        element.PointerExited += OnItemIconPointerExited;
+        element.PointerPressed += OnItemIconPointerPressed;
+        element.PointerReleased += OnItemIconPointerReleased;
+        element.PointerCanceled += OnItemIconPointerCanceled;
+        element.PointerCaptureLost += OnItemIconPointerCaptureLost;
+    }
+
+    private static void DetachItemIconSpringHandlers(FrameworkElement element)
+    {
+        element.PointerEntered -= OnItemIconPointerEntered;
+        element.PointerExited -= OnItemIconPointerExited;
+        element.PointerPressed -= OnItemIconPointerPressed;
+        element.PointerReleased -= OnItemIconPointerReleased;
+        element.PointerCanceled -= OnItemIconPointerCanceled;
+        element.PointerCaptureLost -= OnItemIconPointerCaptureLost;
+    }
+
+    private static void OnItemIconElementUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            DetachItemIconSpringHandlers(element);
+            element.Loaded -= OnItemIconElementLoaded;
+            element.Loaded += OnItemIconElementLoaded;
+        }
+    }
+
+    private static void OnItemIconElementLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            element.Loaded -= OnItemIconElementLoaded;
+            if (GetEnableItemIconSpring(element))
+            {
+                DetachItemIconSpringHandlers(element);
+                AttachItemIconSpringHandlers(element);
             }
         }
     }
@@ -140,10 +228,48 @@ public static class SpringAnimationHelper
     {
         if (sender is FrameworkElement element)
         {
-            float hoverScale = (float)GetHoverScale(element);
+            bool isInside = false;
+            try
+            {
+                var pt = e.GetCurrentPoint(element).Position;
+                isInside = pt.X >= 0 && pt.X <= element.ActualWidth && pt.Y >= 0 && pt.Y <= element.ActualHeight;
+            }
+            catch { }
+
+            float targetScale = isInside ? (float)GetHoverScale(element) : 1.0f;
             float damping = (float)GetDampingRatio(element);
             int periodMs = GetPeriodMilliseconds(element);
-            AnimateSpringScale(element, hoverScale, damping, periodMs);
+            AnimateSpringScale(element, targetScale, damping, periodMs);
+        }
+    }
+
+    private static void OnElementPointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            float damping = (float)GetDampingRatio(element);
+            int periodMs = GetPeriodMilliseconds(element);
+            AnimateSpringScale(element, 1.0f, damping, periodMs);
+        }
+    }
+
+    private static void OnElementPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            float damping = (float)GetDampingRatio(element);
+            int periodMs = GetPeriodMilliseconds(element);
+            AnimateSpringScale(element, 1.0f, damping, periodMs);
+        }
+    }
+
+    private static void OnElementIsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element is Control ctrl && !ctrl.IsEnabled)
+        {
+            float damping = (float)GetDampingRatio(element);
+            int periodMs = GetPeriodMilliseconds(element);
+            AnimateSpringScale(element, 1.0f, damping, periodMs);
         }
     }
 
@@ -200,11 +326,51 @@ public static class SpringAnimationHelper
             var icon = FindIconElement(parent);
             if (icon != null)
             {
+                bool isInside = false;
+                if (parent is FrameworkElement fe)
+                {
+                    try
+                    {
+                        var pt = e.GetCurrentPoint(fe).Position;
+                        isInside = pt.X >= 0 && pt.X <= fe.ActualWidth && pt.Y >= 0 && pt.Y <= fe.ActualHeight;
+                    }
+                    catch { }
+                }
+
                 float hoverScale = (float)GetHoverScale(parent);
                 if (Math.Abs(hoverScale - 1.05) < 0.001) hoverScale = 1.18f;
+                float targetScale = isInside ? hoverScale : 1.0f;
                 float damping = (float)GetDampingRatio(parent);
                 int periodMs = GetPeriodMilliseconds(parent);
-                AnimateSpringScale(icon, hoverScale, damping, periodMs);
+                AnimateSpringScale(icon, targetScale, damping, periodMs);
+            }
+        }
+    }
+
+    private static void OnItemIconPointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is DependencyObject parent)
+        {
+            var icon = FindIconElement(parent);
+            if (icon != null)
+            {
+                float damping = (float)GetDampingRatio(parent);
+                int periodMs = GetPeriodMilliseconds(parent);
+                AnimateSpringScale(icon, 1.0f, damping, periodMs);
+            }
+        }
+    }
+
+    private static void OnItemIconPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is DependencyObject parent)
+        {
+            var icon = FindIconElement(parent);
+            if (icon != null)
+            {
+                float damping = (float)GetDampingRatio(parent);
+                int periodMs = GetPeriodMilliseconds(parent);
+                AnimateSpringScale(icon, 1.0f, damping, periodMs);
             }
         }
     }
@@ -213,40 +379,59 @@ public static class SpringAnimationHelper
     {
         if (parent == null) return null;
 
+        if (_iconCache.TryGetValue(parent, out var cached) && cached != null)
+        {
+            return cached;
+        }
+
         int count = VisualTreeHelper.GetChildrenCount(parent);
         for (int i = 0; i < count; i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
             if (child is FontIcon || child is SymbolIcon || child is AnimatedIcon || child is PathIcon || child is ImageIcon || child is Image)
             {
-                return child as FrameworkElement;
+                var found = child as FrameworkElement;
+                if (found != null)
+                {
+                    _iconCache.AddOrUpdate(parent, found);
+                }
+                return found;
             }
 
             var nested = FindIconElement(child);
-            if (nested != null) return nested;
+            if (nested != null)
+            {
+                _iconCache.AddOrUpdate(parent, nested);
+                return nested;
+            }
         }
 
         return null;
     }
 
-    public static void AnimateSpringScale(FrameworkElement element, float targetScale, float dampingRatio = 0.6f, int periodMilliseconds = 150)
+    public static void AnimateSpringScale(FrameworkElement element, float targetScale, float dampingRatio = 0.68f, int periodMilliseconds = 160)
     {
         try
         {
             var visual = ElementCompositionPreview.GetElementVisual(element);
             if (visual == null) return;
 
-            visual.CenterPoint = new Vector3(
-                (float)(element.ActualWidth / 2),
-                (float)(element.ActualHeight / 2),
-                0f);
+            float w = (float)(element.ActualWidth > 0 ? element.ActualWidth : element.RenderSize.Width);
+            float h = (float)(element.ActualHeight > 0 ? element.ActualHeight : element.RenderSize.Height);
+            visual.CenterPoint = new Vector3(w / 2f, h / 2f, 0f);
+
+            if (!ThemeHelper.IsAnimationEnabled)
+            {
+                visual.Scale = new Vector3(targetScale, targetScale, 1.0f);
+                return;
+            }
 
             var compositor = visual.Compositor;
             if (compositor == null) return;
 
             var springAnimation = compositor.CreateSpringVector3Animation();
             springAnimation.Target = "Scale";
-            springAnimation.FinalValue = new Vector3(targetScale);
+            springAnimation.FinalValue = new Vector3(targetScale, targetScale, 1.0f);
             springAnimation.DampingRatio = dampingRatio;
             springAnimation.Period = TimeSpan.FromMilliseconds(periodMilliseconds);
 
@@ -280,6 +465,25 @@ public static class SpringAnimationHelper
     {
         try
         {
+            if (!ThemeHelper.IsAnimationEnabled)
+            {
+                if (toggleButton != null)
+                {
+                    var btnVisual = ElementCompositionPreview.GetElementVisual(toggleButton);
+                    if (btnVisual != null) btnVisual.Scale = Vector3.One;
+                }
+                if (icon != null)
+                {
+                    var iconVisual = ElementCompositionPreview.GetElementVisual(icon);
+                    if (iconVisual != null)
+                    {
+                        iconVisual.Scale = Vector3.One;
+                        iconVisual.RotationAngleInDegrees = 0.0f;
+                    }
+                }
+                return;
+            }
+
             if (toggleButton != null)
             {
                 var btnVisual = ElementCompositionPreview.GetElementVisual(toggleButton);
@@ -369,54 +573,24 @@ public static class SpringAnimationHelper
     }
 
     /// <summary>
-    /// Configures a cascading accordion push-down ExpressionAnimation across a vertical stack of buttons.
-    /// When any button scales up on hover, all buttons beneath it dynamically translate downward
-    /// on the compositor thread relative to the scale and translation of the button above.
+    /// Configures spring scaling animations on hover across a stack of buttons.
     /// </summary>
-    /// <param name="buttons">The ordered vertical list of buttons (from top to bottom).</param>
-    /// <param name="step">The translation displacement multiplier (defaults to 50, matching the expression formula).</param>
+    /// <param name="buttons">The ordered vertical list of buttons.</param>
+    /// <param name="step">The translation displacement multiplier.</param>
     /// <param name="hoverScale">Hover scale factor for spring animation (defaults to 1.08).</param>
     public static void SetupStackedAccordionButtons(IReadOnlyList<FrameworkElement> buttons, float step = 50f, float hoverScale = 1.08f)
     {
-        if (buttons == null || buttons.Count < 2) return;
+        if (buttons == null || buttons.Count == 0) return;
 
         try
         {
-            var firstVisual = ElementCompositionPreview.GetElementVisual(buttons[0]);
-            var compositor = firstVisual?.Compositor;
-            if (compositor == null) return;
-
-            // 1. Enable translation and set up hover spring scaling on each button
             for (int i = 0; i < buttons.Count; i++)
             {
                 var btn = buttons[i];
                 if (btn == null) continue;
 
-                ElementCompositionPreview.SetIsTranslationEnabled(btn, true);
-
                 SetHoverScale(btn, hoverScale);
                 SetEnableHoverSpring(btn, true);
-            }
-
-            // 2. Animate the translation of each button relative to the scale and translation of the button above
-            for (int i = 1; i < buttons.Count; i++)
-            {
-                var aboveBtn = buttons[i - 1];
-                var currentBtn = buttons[i];
-                if (aboveBtn == null || currentBtn == null) continue;
-
-                var aboveVisual = ElementCompositionPreview.GetElementVisual(aboveBtn);
-                var currentVisual = ElementCompositionPreview.GetElementVisual(currentBtn);
-                if (aboveVisual == null || currentVisual == null) continue;
-
-                var anim = compositor.CreateExpressionAnimation();
-                anim.Expression = $"(above.Scale.Y - 1) * {step:F0} + above.Translation.Y % ({step:F0} * index)";
-                anim.Target = "Translation.Y";
-
-                anim.SetExpressionReferenceParameter("above", aboveVisual);
-                anim.SetScalarParameter("index", (float)i);
-
-                currentVisual.StartAnimation("Translation.Y", anim);
             }
         }
         catch (Exception ex)

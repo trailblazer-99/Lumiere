@@ -58,7 +58,14 @@ public partial class QueueViewModel : ObservableObject, IDisposable
 
     private void RefreshQueue()
     {
-        var newEntries = _playback.Queue
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(RefreshQueue);
+            return;
+        }
+
+        var newEntries = _playback.Session.Queue
             .Select((track, index) => new QueueEntry
             {
                 Track = track,

@@ -12,5 +12,8 @@ namespace LumiereMediaPlayer.Models
         // Spotify API Credentials (Optional)
         public string? SpotifyClientId { get; set; }
         public string? SpotifyClientSecret { get; set; }
+
+        // TMDB API Credentials (Optional)
+        public string? TmdbApiKey { get; set; }
     }
 }

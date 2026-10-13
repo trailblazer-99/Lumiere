@@ -94,4 +94,12 @@ public class AppleTvLifecycleServiceTests
         service.Dispose();
         // Clean teardown with no hanging tasks or exceptions
     }
+
+    [TestMethod]
+    public void FlushLifecycleOnExit_ExecutesSafely_WithoutBlocking()
+    {
+        using var service = new AppleTvLifecycleService();
+        service.FlushLifecycleOnExit();
+        // Clean non-blocking flush
+    }
 }

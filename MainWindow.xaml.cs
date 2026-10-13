@@ -48,7 +48,7 @@ public sealed partial class MainWindow : Window
     private bool _isVideoFrameCaptureInProgress;
     private bool _isCleanedUp;
     private int _videoTapClickCount = 0;
-    private System.Threading.CancellationTokenSource? _videoTapCts;
+    private int _videoTapVersion = 0;
     private int _edgeSeekStreak = 0;
     private bool? _lastEdgeSeekForward = null;
     private DateTime _lastEdgeSeekTime = DateTime.MinValue;
@@ -86,7 +86,7 @@ public sealed partial class MainWindow : Window
 
     private void NotifyActivityInFullscreen()
     {
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen || _expectedPresenterKind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
             if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
@@ -108,13 +108,41 @@ public sealed partial class MainWindow : Window
     private static extern bool IsZoomed(nint hWnd);
 
     [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hWnd);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    private const uint WM_GETMINMAXINFO = 0x0024;
+
+    [DllImport("user32.dll")]
     private static extern bool ShowWindow(nint hWnd, int nCmdShow);
 
+    private const int SW_HIDE = 0;
     private const int SW_SHOWNORMAL = 1;
     private const int SW_SHOW = 5;
     private const int SW_MAXIMIZE = 3;
     private const int WM_SIZE = 0x0005;
     private const nuint SIZE_RESTORED = 0;
+    private const nuint SIZE_MINIMIZED = 1;
     private const nuint SIZE_MAXIMIZED = 2;
 
     [DllImport("comctl32.dll", SetLastError = true)]
@@ -127,16 +155,93 @@ public sealed partial class MainWindow : Window
     private static extern bool RemoveWindowSubclass(nint hWnd, SUBCLASSPROC pfnSubclass, nuint uIdSubclass);
 
     private const uint WM_NCDESTROY = 0x0082;
+    private const uint WM_SYSCOMMAND = 0x0112;
+    private const nuint SC_MINIMIZE = 0xF020;
+    private const uint WM_NCHITTEST = 0x0084;
+    private const uint WM_NCLBUTTONDOWN = 0x00A1;
+    private const uint WM_NCLBUTTONUP = 0x00A2;
+    private const nuint HTCLIENT = 1;
+    private const nuint HTCAPTION = 2;
+    private const nuint HTSYSMENU = 3;
+    private const nuint HTMINBUTTON = 8;
+    private const nuint HTMAXBUTTON = 9;
+    private const nuint HTCLOSE = 20;
+    private const int SW_MINIMIZE = 6;
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hWnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(nint hWnd, uint Msg, nuint wParam, nint lParam);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate nint SUBCLASSPROC(nint hWnd, uint uMsg, nuint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData);
 
     private const int WM_SETTINGCHANGE = 0x001A;
     private const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+    private const uint WM_GETICON = 0x007F;
+    private const uint WM_DPICHANGED = 0x02E0;
+    private const nuint ICON_SMALL = 0;
+    private const nuint ICON_BIG = 1;
+    private const nuint ICON_SMALL2 = 2;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+    private static extern nint GetWindowLongPtr64(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+    private static extern int GetWindowLong32(nint hWnd, int nIndex);
+
+    private static nint GetWindowLongPtr(nint hWnd, int nIndex) =>
+        IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : (nint)GetWindowLong32(hWnd, nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+    private static extern nint SetWindowLongPtr64(nint hWnd, int nIndex, nint dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+    private static extern int SetWindowLong32(nint hWnd, int nIndex, int dwNewLong);
+
+    private static nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong) =>
+        IntPtr.Size == 8 ? SetWindowLongPtr64(hWnd, nIndex, dwNewLong) : (nint)SetWindowLong32(hWnd, nIndex, (int)dwNewLong);
+
+    private const int GWL_STYLE = -16;
+    private const uint WS_MINIMIZEBOX = 0x00020000;
+    private const uint WS_MAXIMIZEBOX = 0x00010000;
+    private const uint WS_SYSMENU = 0x00080000;
 
     private SUBCLASSPROC? _subclassProc;
     private nint _subclassHwnd;
     private bool _isRestoringBounds;
+    private bool _wasMaximized = false;
+    private bool _wasMaximizedBeforeFullscreen = false;
+    private bool _isMinimizing = false;
     private EventHandler? _settingsChangedHandler;
     private bool _isCloseFinalized = false;
     private readonly System.Threading.SemaphoreSlim _fullscreenLock = new(1, 1);
@@ -173,7 +278,197 @@ public sealed partial class MainWindow : Window
                 return DefSubclassProc(hWnd, uMsg, wParam, lParam);
             }
 
-            if (uMsg == WM_SETTINGCHANGE || uMsg == WM_DWMCOLORIZATIONCOLORCHANGED)
+            if (uMsg == WM_GETICON)
+            {
+                if (wParam == ICON_BIG)
+                {
+                    nint hBig = AppIconHelper.CurrentBigHIcon;
+                    if (hBig != nint.Zero) return hBig;
+                }
+                else if (wParam == ICON_SMALL || wParam == ICON_SMALL2)
+                {
+                    nint hSmall = AppIconHelper.CurrentSmallHIcon;
+                    if (hSmall != nint.Zero) return hSmall;
+                }
+            }
+            else if (uMsg == WM_NCHITTEST)
+            {
+                var defHit = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                if (defHit == (nint)HTMINBUTTON || defHit == (nint)HTMAXBUTTON || defHit == (nint)HTCLOSE)
+                {
+                    return defHit;
+                }
+
+                bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+                bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
+                if (isFullScreen || isPip)
+                {
+                    return defHit;
+                }
+
+                short screenX = unchecked((short)(lParam.ToInt64() & 0xFFFF));
+                short screenY = unchecked((short)((lParam.ToInt64() >> 16) & 0xFFFF));
+
+                bool isMaximized = IsZoomed(hWnd) ||
+                    (AppWindow?.Presenter is OverlappedPresenter opPresenter &&
+                     opPresenter.State == OverlappedPresenterState.Maximized);
+
+                uint dpi = GetDpiForWindow(hWnd);
+                float scale = dpi > 0 ? (float)dpi / 96f : 1.0f;
+                int captionHeight = (int)Math.Round(48.0 * scale);
+                int rightInset = AppWindow?.TitleBar != null ? AppWindow.TitleBar.RightInset : 0;
+                if (rightInset <= 0)
+                {
+                    rightInset = (int)Math.Round(140.0 * scale);
+                }
+
+                int captionRight;
+                int captionTop;
+
+                if (isMaximized)
+                {
+                    MONITORINFO mi = new MONITORINFO();
+                    mi.cbSize = Marshal.SizeOf<MONITORINFO>();
+                    nint hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                    if (hMon != nint.Zero && GetMonitorInfo(hMon, ref mi))
+                    {
+                        captionRight = mi.rcWork.Right;
+                        captionTop = mi.rcWork.Top;
+                    }
+                    else
+                    {
+                        GetWindowRect(hWnd, out RECT wr);
+                        int frameOffset = (int)Math.Round(8.0 * scale);
+                        captionRight = wr.Right - frameOffset;
+                        captionTop = wr.Top + frameOffset;
+                    }
+
+                    if (screenY < captionTop) screenY = (short)captionTop;
+                    if (screenX > captionRight) screenX = (short)captionRight;
+                }
+                else
+                {
+                    GetWindowRect(hWnd, out RECT wr);
+                    captionRight = wr.Right;
+                    captionTop = wr.Top;
+                }
+
+                int captionBottom = captionTop + captionHeight;
+                int captionLeft = captionRight - rightInset;
+
+                if (screenY >= captionTop && screenY < captionBottom &&
+                    screenX >= captionLeft && screenX <= captionRight)
+                {
+                    int buttonWidth = rightInset / 3;
+                    if (buttonWidth > 0)
+                    {
+                        int minButtonRight = captionLeft + buttonWidth;
+                        int maxButtonRight = captionLeft + 2 * buttonWidth;
+
+                        if (screenX < minButtonRight)
+                        {
+                            return (nint)HTMINBUTTON;
+                        }
+                        else if (screenX < maxButtonRight)
+                        {
+                            return (nint)HTMAXBUTTON;
+                        }
+                        else
+                        {
+                            return (nint)HTCLOSE;
+                        }
+                    }
+                }
+
+                return defHit;
+            }
+            else if (uMsg == WM_NCLBUTTONDOWN)
+            {
+                if (wParam == (nuint)HTMINBUTTON)
+                {
+                    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                }
+            }
+            else if (uMsg == WM_NCLBUTTONUP)
+            {
+                if (wParam == (nuint)HTMINBUTTON)
+                {
+                    if (AppWindow?.Presenter is OverlappedPresenter op &&
+                        op.State != OverlappedPresenterState.Minimized)
+                    {
+                        _isMinimizing = true;
+                        try
+                        {
+                            op.Minimize();
+                            return 0;
+                        }
+                        catch { }
+                        finally
+                        {
+                            _isMinimizing = false;
+                        }
+                    }
+                    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                }
+            }
+            else if (uMsg == WM_SYSCOMMAND)
+            {
+                nuint cmd = wParam & 0xFFF0;
+                if (cmd == SC_MINIMIZE)
+                {
+                    if (!_isMinimizing && AppWindow?.Presenter is OverlappedPresenter op &&
+                        op.State != OverlappedPresenterState.Minimized)
+                    {
+                        _isMinimizing = true;
+                        try
+                        {
+                            op.Minimize();
+                            return 0;
+                        }
+                        catch { }
+                        finally
+                        {
+                            _isMinimizing = false;
+                        }
+                    }
+                    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                }
+            }
+            else if (uMsg == WM_GETMINMAXINFO)
+            {
+                var ret = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                if (lParam != nint.Zero && !IsIconic(hWnd))
+                {
+                    try
+                    {
+                        var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+                        uint dpi = GetDpiForWindow(hWnd);
+                        float scale = dpi > 0 ? (float)dpi / 96f : 1.0f;
+
+                        bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
+                        int minTrackWidth = (int)((isPip ? 240 : 320) * scale);
+                        int minTrackHeight = (int)((isPip ? 160 : 200) * scale);
+
+                        if (mmi.ptMinTrackSize.X < minTrackWidth)
+                            mmi.ptMinTrackSize.X = minTrackWidth;
+                        if (mmi.ptMinTrackSize.Y < minTrackHeight)
+                            mmi.ptMinTrackSize.Y = minTrackHeight;
+
+                        Marshal.StructureToPtr(mmi, lParam, false);
+                    }
+                    catch { }
+                }
+                return ret;
+            }
+            else if (uMsg == WM_DPICHANGED)
+            {
+                DispatcherQueue?.TryEnqueue(() =>
+                {
+                    UpdateTitleBarInsets();
+                    AppIconHelper.UpdateAppIcon(this);
+                });
+            }
+            else if (uMsg == WM_SETTINGCHANGE || uMsg == WM_DWMCOLORIZATIONCOLORCHANGED)
             {
                 if (AppServices.Settings.Current.AccentColor == AccentColorOption.SystemDefault)
                 {
@@ -181,18 +476,37 @@ public sealed partial class MainWindow : Window
                     {
                         ThemeHelper.InvalidateSystemAccentCache();
                         ThemeHelper.ApplyAccentColor(AccentColorOption.SystemDefault);
+                        AppIconHelper.UpdateAppIcon(this);
                     });
                 }
             }
             else if (uMsg == WM_SIZE)
             {
-                if (wParam == SIZE_RESTORED && !_isRestoringBounds && !_isClosingAnimated)
+                if (wParam == SIZE_MINIMIZED)
                 {
+                    _isMinimizing = false;
+                    try { AppServices.HdrPipeline.SetSuspended(true); } catch { }
+                }
+                else if (wParam == SIZE_MAXIMIZED)
+                {
+                    _wasMaximized = true;
+                    _isMinimizing = false;
+                    try { AppServices.HdrPipeline.SetSuspended(false); } catch { }
+                }
+                else if (wParam == SIZE_RESTORED && _wasMaximized && !_isRestoringBounds && !_isClosingAnimated)
+                {
+                    _wasMaximized = false;
+                    _isMinimizing = false;
+                    try { AppServices.HdrPipeline.SetSuspended(false); } catch { }
                     if (Environment.OSVersion.Version.Build >= 22000)
                     {
                         uint cornerPreference = DWMWCP_DEFAULT;
                         DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(uint));
                     }
+                }
+                else if (wParam == SIZE_RESTORED)
+                {
+                    try { AppServices.HdrPipeline.SetSuspended(false); } catch { }
                 }
             }
         }
@@ -206,6 +520,12 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
+
+        if (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd))
+        {
+            return;
+        }
+
         if (AppTitleBar != null)
         {
             AppTitleBar.Opacity = args.WindowActivationState == WindowActivationState.Deactivated ? 0.5 : 1.0;
@@ -213,6 +533,12 @@ public sealed partial class MainWindow : Window
 
         if (args.WindowActivationState != WindowActivationState.Deactivated)
         {
+            try
+            {
+                AppIconHelper.RefreshTaskbarIcon(this);
+            }
+            catch { }
+
             try
             {
                 AppleTvLifecycleService.Instance.CheckAndCleanupIfClosed();
@@ -265,6 +591,7 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        App.MainWindowInstance = this;
         InitializeComponent();
 
         GlobalVideoPlayer = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
@@ -282,15 +609,29 @@ public sealed partial class MainWindow : Window
         GlobalVideoPlayer.PointerWheelChanged += OnGlobalVideoPointerWheelChanged;
         FullscreenVideoContainer.PointerMoved += OnFullscreenPointerMoved;
         FloatingVideoContainer = new Microsoft.UI.Xaml.Controls.Grid { Visibility = Visibility.Collapsed, IsHitTestVisible = false };
-        Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FloatingVideoContainer, 2);
+        FloatingVideoContainer.Tapped += (_, _) =>
+        {
+            if (_playback.CurrentTrack is MediaItem track && !(ContentFrame?.Content is VideoPage))
+            {
+                NavigateForTrack(track);
+            }
+        };
+        Microsoft.UI.Xaml.Controls.Grid.SetRow(FloatingVideoContainer, 0);
+        Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FloatingVideoContainer, 1);
         FloatingVideoContainer.Children.Add(GlobalVideoPlayer);
         RootGrid.Children.Insert(RootGrid.Children.IndexOf(FullscreenVideoContainer), FloatingVideoContainer);
+        Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FullscreenVideoContainer, 50);
 
         FullscreenVideoContainer.Children.Remove(FullscreenMetadataOverlay);
         RootGrid.Children.Add(FullscreenMetadataOverlay);
         Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
-        GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
-        AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+        CloseFullscreenMetadataButton.Click += (_, _) => HideMetadataOverlayGlobal();
+        try
+        {
+            GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
+            AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+        }
+        catch { }
         RootGrid.SizeChanged += RootGrid_SizeChanged;
 
         // Add global preview keydown for keyboard controls to intercept hotkeys before focused controls consume them
@@ -349,7 +690,10 @@ public sealed partial class MainWindow : Window
         AppServices.Settings.SettingsChanged += _settingsChangedHandler;
         try { ApplyConfiguredTheme(); } catch { }
         try { UpdateAccentColor(); } catch { }
-        try { UpdateLayoutForPip(AppWindow.Presenter.Kind == AppWindowPresenterKind.CompactOverlay); } catch { }
+        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+        {
+            try { UpdateLayoutForPip(true); } catch { }
+        }
         try { ApplyBackdrop(AppServices.Settings.Current.BackdropType); } catch { }
 
         // Defer non-critical work to after the first frame renders
@@ -360,9 +704,6 @@ public sealed partial class MainWindow : Window
     {
         // Unhook immediately — this is a one-shot handler
         ((FrameworkElement)Content).Loaded -= OnFirstFrameLoaded;
-
-        // Queue panel (only needed when user clicks Queue button)
-        _queueFlyout = CreateQueueFlyout();
 
         // Transport bar sync
         SyncTransportBar();
@@ -410,9 +751,9 @@ public sealed partial class MainWindow : Window
             await Task.Delay(3000);
 
             var info = await UpdateService.CheckForUpdatesAsync();
-            if (info.IsUpdateAvailable)
+            if (info?.IsUpdateAvailable == true)
             {
-                DispatcherQueue.TryEnqueue(() =>
+                DispatcherQueue?.TryEnqueue(() =>
                 {
                     ShowUpdateNotification(info);
                 });
@@ -426,13 +767,17 @@ public sealed partial class MainWindow : Window
 
     public void ShowUpdateNotification(AppUpdateInfo info)
     {
+        if (info == null) return;
         _updateDownloadUri = info.DownloadUri;
-        try { AppServices.SettingsViewModel.ApplyUpdateInfo(info); } catch { }
+        try { AppServices.SettingsViewModel?.ApplyUpdateInfo(info); } catch { }
         if (UpdateInfoBadge != null)
         {
             UpdateInfoBadge.Visibility = Visibility.Visible;
-            ToolTipService.SetToolTip(SettingsNavItem, $"Update available: v{info.LatestVersion} (currently v{info.CurrentVersion})");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings, 1 notification");
+            if (SettingsNavItem != null)
+            {
+                ToolTipService.SetToolTip(SettingsNavItem, $"Update available: v{info.LatestVersion} (currently v{info.CurrentVersion})");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings, 1 notification");
+            }
         }
         SetAppBadgeGlyph();
     }
@@ -442,32 +787,65 @@ public sealed partial class MainWindow : Window
         if (UpdateInfoBadge != null)
         {
             UpdateInfoBadge.Visibility = Visibility.Collapsed;
-            ToolTipService.SetToolTip(SettingsNavItem, null);
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings");
+            if (SettingsNavItem != null)
+            {
+                ToolTipService.SetToolTip(SettingsNavItem, null);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings");
+            }
         }
         ClearAppBadge();
     }
 
+    private static bool _isBadgeNotificationSupported = true;
+
     private void SetAppBadgeGlyph()
     {
+        if (!_isBadgeNotificationSupported) return;
         try
         {
-            BadgeNotificationManager.Current.SetBadgeAsGlyph(BadgeNotificationGlyph.Activity);
+            var manager = BadgeNotificationManager.Current;
+            if (manager != null)
+            {
+                manager.SetBadgeAsGlyph(BadgeNotificationGlyph.Activity);
+            }
+            else
+            {
+                _isBadgeNotificationSupported = false;
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _isBadgeNotificationSupported = false;
         }
         catch (Exception ex)
         {
+            _isBadgeNotificationSupported = false;
             System.Diagnostics.Debug.WriteLine($"[BadgeNotification] SetBadgeAsGlyph failed: {ex.Message}");
         }
     }
 
     private void ClearAppBadge()
     {
+        if (!_isBadgeNotificationSupported) return;
         try
         {
-            BadgeNotificationManager.Current.ClearBadge();
+            var manager = BadgeNotificationManager.Current;
+            if (manager != null)
+            {
+                manager.ClearBadge();
+            }
+            else
+            {
+                _isBadgeNotificationSupported = false;
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _isBadgeNotificationSupported = false;
         }
         catch (Exception ex)
         {
+            _isBadgeNotificationSupported = false;
             System.Diagnostics.Debug.WriteLine($"[BadgeNotification] ClearBadge failed: {ex.Message}");
         }
     }
@@ -488,7 +866,8 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         }
 
-        SetTitleBar(DragRegion);
+        ApplyTitleBarDragRegion();
+        UpdateTitleBarInsets();
 
         try
         {
@@ -497,7 +876,7 @@ public sealed partial class MainWindow : Window
         }
         catch { }
 
-        // Apply DWM attributes (default Windows 11 rounded corners)
+        // Apply DWM attributes (default Windows 11 rounded corners) & ensure min/max/sysmenu styles on HWND
         try
         {
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -505,6 +884,13 @@ public sealed partial class MainWindow : Window
             {
                 uint cornerPreference = DWMWCP_DEFAULT; // Default Windows 11 rounded corner style
                 DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(uint));
+
+                nint currentStyle = GetWindowLongPtr(hwnd, GWL_STYLE);
+                nint requiredStyles = (nint)(WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
+                if ((currentStyle & requiredStyles) != requiredStyles)
+                {
+                    SetWindowLongPtr(hwnd, GWL_STYLE, currentStyle | requiredStyles);
+                }
             }
         }
         catch { }
@@ -512,17 +898,28 @@ public sealed partial class MainWindow : Window
         InitializeSubclassing();
         this.Activated += OnWindowActivated;
 
+        // Set application window icon matching active theme & accent
+        try
+        {
+            if (TitleBarBrandIcon != null) AppIconHelper.RegisterBrandIcon(TitleBarBrandIcon);
+            if (CenteredBrandIcon != null) AppIconHelper.RegisterBrandIcon(CenteredBrandIcon);
+            AppIconHelper.UpdateAppIcon(this);
+        }
+        catch { }
+
         var presenter = AppWindow.Presenter as OverlappedPresenter;
         if (presenter is not null)
         {
             presenter.IsResizable = true;
             presenter.IsMaximizable = true;
+            presenter.IsMinimizable = true;
         }
 
         RestoreWindowBounds();
 
         AppWindow.Closing += OnWindowClosing;
         AppWindow.Changed += OnAppWindowChanged;
+        this.Closed += OnWindowClosed;
     }
 
     private void WireTransportBar()
@@ -545,9 +942,35 @@ public sealed partial class MainWindow : Window
         TransportControls.PreviousRequested += (_, _) => _playback.PreviousCommand.Execute(null);
         TransportControls.NextRequested += (_, _) => _playback.NextCommand.Execute(null);
         TransportControls.ShuffleRequested += (_, _) => _playback.ToggleShuffleCommand.Execute(null);
-        TransportControls.RepeatRequested += (_, _) => _playback.CycleRepeatModeCommand.Execute(null);
-        TransportControls.StopRequested += (_, _) => _playback.Stop();
-        TransportControls.PositionChanged += (_, seconds) => _playback.Seek(seconds);
+        bool _isStoppingPlayback = false;
+        TransportControls.StopRequested += (_, _) =>
+        {
+            if (_isStoppingPlayback) return;
+            _isStoppingPlayback = true;
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
+            {
+                try
+                {
+                    if (AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+                    {
+                        await SetFullScreenModeAsync(false);
+                    }
+                    else if (AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay)
+                    {
+                        TogglePipMode();
+                    }
+                    _playback.Stop();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StopRequested] error: {ex.Message}");
+                }
+                finally
+                {
+                    _isStoppingPlayback = false;
+                }
+            });
+        };
 
         bool _wasPlayingBeforeScrub = false;
         TransportControls.ScrubbingPositionChanged += (_, seconds) =>
@@ -566,6 +989,12 @@ public sealed partial class MainWindow : Window
                 _playback.Session.Play();
                 _wasPlayingBeforeScrub = false;
             }
+            _playback.Session.SaveCurrentResumePosition();
+        };
+        TransportControls.PositionChanged += (_, seconds) =>
+        {
+            _playback.Seek(seconds);
+            _playback.Session.SaveCurrentResumePosition();
         };
         TransportControls.VolumeChanged += (_, volume) => _playback.SetVolume(volume);
         TransportControls.MuteToggled += (_, _) => ToggleMute();
@@ -596,12 +1025,6 @@ public sealed partial class MainWindow : Window
                 {
                     _playback.IsVideoPlayerActive = true;
                 }
-                try
-                {
-                    _playback.Session.MediaPlayer.Play();
-                }
-                catch (System.Runtime.InteropServices.COMException) { }
-
                 NavigateForTrack(track);
             }
         };
@@ -626,6 +1049,7 @@ public sealed partial class MainWindow : Window
                     {
                         op.IsResizable = true;
                         op.IsMaximizable = true;
+                        op.IsMinimizable = true;
                     }
                     try { this.Activate(); } catch { }
                 }
@@ -649,9 +1073,13 @@ public sealed partial class MainWindow : Window
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
+        var overlapped = sender.Presenter as OverlappedPresenter;
+        bool isMinimized = overlapped?.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd));
+        try { AppServices.HdrPipeline.SetSuspended(isMinimized); } catch { }
+
         if (args.DidVisibilityChange)
         {
-            if (!sender.IsVisible)
+            if (!sender.IsVisible || isMinimized)
             {
                 _ = Task.Run(() =>
                 {
@@ -678,8 +1106,15 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        if (isMinimized)
+        {
+            _saveBoundsTimer?.Stop();
+            return;
+        }
+
         if (args.DidSizeChange || args.DidPositionChange)
         {
+            UpdateTitleBarInsets();
             if (!_isRestoringBounds && !_isClosingAnimated)
             {
                 if (_saveBoundsTimer == null)
@@ -701,11 +1136,15 @@ public sealed partial class MainWindow : Window
 
         if (args.DidPresenterChange)
         {
+            UpdateTitleBarInsets();
             _lastPresenterChangeTime = DateTime.UtcNow;
 
             var isPip = sender.Presenter.Kind == AppWindowPresenterKind.CompactOverlay;
-            TransportControls.IsInPipMode = isPip;
-            UpdateLayoutForPip(isPip);
+            if (isPip || _wasInPipMode)
+            {
+                TransportControls.IsInPipMode = isPip;
+                UpdateLayoutForPip(isPip);
+            }
 
             var isFullScreen = sender.Presenter.Kind == AppWindowPresenterKind.FullScreen;
 
@@ -729,74 +1168,98 @@ public sealed partial class MainWindow : Window
                 _expectedPresenterKind = currentKind;
                 return;
             }
-            _expectedPresenterKind = currentKind;
 
             // For genuine external presenter changes (e.g. OS keyboard shortcuts):
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
+            if (isFullScreen)
             {
-                if (isFullScreen)
+                _expectedPresenterKind = AppWindowPresenterKind.FullScreen;
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
                 {
                     await EnterFullscreenAnimatedAsync();
-                }
-                else
+                });
+            }
+            else if (_expectedPresenterKind == AppWindowPresenterKind.FullScreen)
+            {
+                _expectedPresenterKind = currentKind;
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
                 {
                     await ExitFullscreenAnimatedAsync();
-                }
-            });
+                });
+            }
+            else
+            {
+                _expectedPresenterKind = currentKind;
+            }
         }
     }
 
     private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(PlaybackViewModel.Volume))
+        try
         {
-            if (TransportControls.Volume != _playback.Volume)
+            if (e.PropertyName == nameof(PlaybackViewModel.Volume))
             {
-                TransportControls.Volume = _playback.Volume;
+                if (TransportControls.Volume != _playback.Volume)
+                {
+                    TransportControls.Volume = _playback.Volume;
+                }
+                return;
             }
-            return;
-        }
-        else if (e.PropertyName == nameof(PlaybackViewModel.PositionSeconds))
-        {
-            if (TransportControls.Position != _playback.PositionSeconds)
+            else if (e.PropertyName == nameof(PlaybackViewModel.PositionSeconds))
             {
-                TransportControls.Position = _playback.PositionSeconds;
+                if (TransportControls.Position != _playback.PositionSeconds)
+                {
+                    TransportControls.Position = _playback.PositionSeconds;
+                }
+                return;
             }
-            return;
-        }
 
-        if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying))
-        {
-            TransportControls.IsPlaying = _playback.IsPlaying;
-            UpdateMiniPlayPauseIcon();
-            if (_playback.IsPlaying)
+            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying))
             {
-                _positionTimer.Start();
-                if (PlaybackInfoBadge != null) PlaybackInfoBadge.Visibility = Visibility.Visible;
+                TransportControls.IsPlaying = _playback.IsPlaying;
+                UpdateMiniPlayPauseIcon();
+                if (_playback.IsPlaying)
+                {
+                    _positionTimer.Start();
+                    if (PlaybackInfoBadge != null) PlaybackInfoBadge.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    _positionTimer.Stop();
+                    if (PlaybackInfoBadge != null) PlaybackInfoBadge.Visibility = Visibility.Collapsed;
+                }
+                return;
             }
-            else
+
+            if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack)
+                || e.PropertyName == nameof(PlaybackViewModel.PositionSeconds)
+                || e.PropertyName == nameof(PlaybackViewModel.Volume)
+                || e.PropertyName == nameof(PlaybackViewModel.IsMuted)
+                || e.PropertyName == nameof(PlaybackViewModel.IsShuffleEnabled)
+                || e.PropertyName == nameof(PlaybackViewModel.RepeatMode)
+                || e.PropertyName == nameof(PlaybackViewModel.Queue))
             {
-                _positionTimer.Stop();
-                if (PlaybackInfoBadge != null) PlaybackInfoBadge.Visibility = Visibility.Collapsed;
+                SyncTransportBar();
+                try { this.Bindings.Update(); } catch { }
             }
-            return;
+
+            if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack)
+                && _playback.CurrentTrack is MediaItem track)
+            {
+                NavigateForTrack(track);
+            }
+
+            if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack)
+                || e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive)
+                || e.PropertyName == nameof(PlaybackViewModel.VideoStretch)
+                || e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio))
+            {
+                UpdateLayoutForVideoMode();
+            }
         }
-
-        SyncTransportBar();
-        this.Bindings.Update();
-
-        if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack)
-            && _playback.CurrentTrack is MediaItem track)
+        catch (Exception ex)
         {
-            NavigateForTrack(track);
-        }
-
-        if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack)
-            || e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive)
-            || e.PropertyName == nameof(PlaybackViewModel.VideoStretch)
-            || e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio))
-        {
-            UpdateLayoutForVideoMode();
+            System.Diagnostics.Debug.WriteLine($"[OnPlaybackPropertyChanged] Handled: {ex.Message}");
         }
     }
 
@@ -872,44 +1335,55 @@ public sealed partial class MainWindow : Window
 
     private void OnPositionTimerTick(object? sender, object e)
     {
-        if (!_playback.IsPlaying || _playback.CurrentTrack is null)
+        try
         {
-            return;
-        }
-
-        _playback.PositionSeconds = _playback.Session.PositionSeconds;
-
-        if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay && !_isMiniSliderSeeking)
-        {
-            if (MiniPositionSlider != null)
+            var currentTrack = _playback.CurrentTrack;
+            if (!_playback.IsPlaying || currentTrack is null)
             {
-                MiniPositionSlider.Value = Math.Clamp(_playback.PositionSeconds, 0, MiniPositionSlider.Maximum);
+                return;
             }
-            if (MiniPositionText != null)
-            {
-                MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(_playback.PositionSeconds));
-            }
-        }
 
-        var now = DateTime.UtcNow;
-        if (now - _lastPositionSaveTime >= PositionSaveInterval)
-        {
-            try
+            _playback.PositionSeconds = _playback.Session.PositionSeconds;
+
+            if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay && !_isMiniSliderSeeking)
             {
-                if (AppServices.Settings.Current.ResumePlaybackPosition &&
-                    AppServices.Settings.Current.RememberPlaybackPositionPerTrack)
+                if (MiniPositionSlider != null)
                 {
-                    var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
-                    localSettings.Values["TrackPos_" + _playback.CurrentTrack.Id] = _playback.PositionSeconds;
-                    _lastPositionSaveTime = now;
+                    _isProgrammaticMiniSliderChange = true;
+                    MiniPositionSlider.Value = Math.Clamp(_playback.PositionSeconds, 0, MiniPositionSlider.Maximum);
+                    _isProgrammaticMiniSliderChange = false;
+                }
+                if (MiniPositionText != null)
+                {
+                    MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(_playback.PositionSeconds));
                 }
             }
-            catch { }
-        }
 
-        if (_playback.CurrentTrack != null && _playback.CurrentTrack.IsVideo)
+            var now = DateTime.UtcNow;
+            if (now - _lastPositionSaveTime >= PositionSaveInterval)
+            {
+                try
+                {
+                    if (AppServices.Settings.Current.ResumePlaybackPosition &&
+                        AppServices.Settings.Current.RememberPlaybackPositionPerTrack &&
+                        !string.IsNullOrEmpty(currentTrack.Id))
+                    {
+                        var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+                        localSettings.Values["TrackPos_" + currentTrack.Id] = _playback.PositionSeconds;
+                        _lastPositionSaveTime = now;
+                    }
+                }
+                catch { }
+            }
+
+            if (currentTrack.IsVideo)
+            {
+                TriggerVideoFrameCapture();
+            }
+        }
+        catch (Exception ex)
         {
-            TriggerVideoFrameCapture();
+            System.Diagnostics.Debug.WriteLine($"[OnPositionTimerTick] Handled: {ex.Message}");
         }
     }
 
@@ -1002,7 +1476,10 @@ public sealed partial class MainWindow : Window
                 ContentFrame.ForwardStack.Clear();
                 if (pageType != typeof(Pages.VideoPage))
                 {
-                    GlobalVideoPlayer?.SetMediaPlayer(null);
+                    if (FloatingVideoContainer != null)
+                    {
+                        FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                    }
                     MemoryTrimHelper.TrimWorkingSetAsync(300);
                 }
                 ContentFrame.Navigate(pageType, parameter, transitionInfo);
@@ -1246,6 +1723,12 @@ public sealed partial class MainWindow : Window
         if (track.IsVideo)
         {
             _playback.IsVideoPlayerActive = true;
+            if (AppServices.VideoViewModel.CurrentVideo != track)
+            {
+                AppServices.VideoViewModel.CurrentVideo = track;
+            }
+            AppServices.VideoViewModel.ShowNoSourceOverlay = false;
+
             _isNavigating = true;
             try
             {
@@ -1255,7 +1738,15 @@ public sealed partial class MainWindow : Window
             {
                 _isNavigating = false;
             }
-            NavigateTo(typeof(VideoPage));
+
+            if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
+            {
+                NavigateTo(typeof(VideoPage));
+            }
+            else
+            {
+                SyncFloatingVideoPlayer(force: true);
+            }
         }
         else
         {
@@ -2070,6 +2561,10 @@ public sealed partial class MainWindow : Window
     private void OnContentFrameNavigating(object sender, Microsoft.UI.Xaml.Navigation.NavigatingCancelEventArgs e)
     {
         VideoHoverPreview?.ClosePreview();
+        if (e.SourcePageType != typeof(Pages.VideoPage))
+        {
+            try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
+        }
         if (AppServices.Settings.Current.AutoHideTransportBarInStreaming && Services.NavigationService.IsStreamingSection(e.SourcePageType))
         {
             if (TransportControls != null)
@@ -2156,6 +2651,9 @@ public sealed partial class MainWindow : Window
                 _activeVideoPage = vp;
                 _activeVideoPage.VideoPlayerHostLayoutChanged += OnVideoPlayerHostLayoutChanged;
             }
+
+            bool isVideoPage = ContentFrame.Content is VideoPage;
+            try { AppServices.HdrPipeline.SetVideoPageActive(isVideoPage); } catch { }
 
             bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
             bool isStreamingSubPage = ContentFrame.Content is StreamingYouTubePage || ContentFrame.Content is StreamingTwitchPage || ContentFrame.Content is StreamingDetailsPage;
@@ -2270,6 +2768,12 @@ public sealed partial class MainWindow : Window
         UpdateTitleBarLayout();
         UpdateTransportBarVisibility();
         SliderHelper.ApplyCircularThumb(MiniPositionSlider);
+        if (MiniPositionSlider != null)
+        {
+            MiniPositionSlider.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(OnMiniSliderPointerPressed), handledEventsToo: true);
+            MiniPositionSlider.AddHandler(UIElement.PointerReleasedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(OnMiniSliderPointerReleased), handledEventsToo: true);
+            MiniPositionSlider.AddHandler(UIElement.PointerCanceledEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(OnMiniSliderPointerReleased), handledEventsToo: true);
+        }
 
         try
         {
@@ -2412,8 +2916,15 @@ public sealed partial class MainWindow : Window
                 var scopedBatch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
                 scopedBatch.Completed += (s, e) =>
                 {
-                    AppLockOverlay.Visibility = Visibility.Collapsed;
-                    AppLockOverlay.Opacity = 1.0;
+                    try
+                    {
+                        AppLockOverlay.Visibility = Visibility.Collapsed;
+                        AppLockOverlay.Opacity = 1.0;
+                    }
+                    finally
+                    {
+                        scopedBatch.Dispose();
+                    }
                 };
                 visual.StartAnimation("Opacity", fadeAnim);
                 scopedBatch.End();
@@ -2458,15 +2969,16 @@ public sealed partial class MainWindow : Window
             {
                 int width = (int)settings.WindowWidth;
                 int height = (int)settings.WindowHeight;
-                if (width < 320 || height < 240)
+                if (width < 320 || height < 200)
                 {
                     width = 1200;
                     height = 800;
                 }
                 width = Math.Clamp(width, 320, 7680);
-                height = Math.Clamp(height, 240, 4320);
+                height = Math.Clamp(height, 200, 4320);
 
-                AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+                int targetX = -1;
+                int targetY = -1;
 
                 if (settings.WindowPositionX != -1 && settings.WindowPositionY != -1)
                 {
@@ -2475,18 +2987,36 @@ public sealed partial class MainWindow : Window
 
                     if (displayArea != null)
                     {
-                        AppWindow.Move(pt);
+                        targetX = pt.X;
+                        targetY = pt.Y;
                     }
                     else
                     {
                         var primary = Microsoft.UI.Windowing.DisplayArea.Primary;
                         if (primary != null)
                         {
-                            int centeredX = primary.WorkArea.X + (primary.WorkArea.Width - width) / 2;
-                            int centeredY = primary.WorkArea.Y + (primary.WorkArea.Height - height) / 2;
-                            AppWindow.Move(new Windows.Graphics.PointInt32(centeredX, centeredY));
+                            targetX = primary.WorkArea.X + (primary.WorkArea.Width - width) / 2;
+                            targetY = primary.WorkArea.Y + (primary.WorkArea.Height - height) / 2;
                         }
                     }
+                }
+                else
+                {
+                    var primary = Microsoft.UI.Windowing.DisplayArea.Primary;
+                    if (primary != null)
+                    {
+                        targetX = primary.WorkArea.X + (primary.WorkArea.Width - width) / 2;
+                        targetY = primary.WorkArea.Y + (primary.WorkArea.Height - height) / 2;
+                    }
+                }
+
+                if (targetX != -1 && targetY != -1)
+                {
+                    AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(targetX, targetY, width, height));
+                }
+                else
+                {
+                    AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
                 }
 
                 if (hwnd != nint.Zero && Environment.OSVersion.Version.Build >= 22000)
@@ -2508,6 +3038,8 @@ public sealed partial class MainWindow : Window
 
     private void AnimateWindowEntrance()
     {
+        if (AppServices.Settings.Current.ReduceMotion) return;
+
         var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootGrid);
         var compositor = visual?.Compositor;
         if (visual == null || compositor == null) return;
@@ -2529,30 +3061,30 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_isClosingAnimated)
+        // 1. Instant Perceived Close: Hide window immediately so to the user's perception it vanishes with 0ms latency
+        try
         {
-            _isCloseFinalized = true;
-            CleanupBeforeClose();
-            return;
+            if (_subclassHwnd != nint.Zero)
+            {
+                ShowWindow(_subclassHwnd, SW_HIDE);
+            }
+            AppWindow?.Hide();
         }
+        catch { }
 
-        // Save window bounds once before closing animation starts
+        _isCloseFinalized = true;
+
+        // 2. Save window bounds once before closing
         _saveBoundsTimer?.Stop();
         SaveWindowBounds();
+        _isClosingAnimated = true;
 
-        var presenter = AppWindow.Presenter as OverlappedPresenter;
-        bool isMinimized = presenter?.State == OverlappedPresenterState.Minimized;
-        bool skipAnimation = isMinimized || AppServices.Settings.Current.ReduceMotion || !AppWindow.IsVisible;
+        // 3. Non-blocking background cleanup
+        try { AppServices.HdrPipeline.ResetContentState(); } catch { }
+        CleanupBeforeClose();
 
-        if (skipAnimation)
-        {
-            _isCloseFinalized = true;
-            CleanupBeforeClose();
-            return;
-        }
-
-        args.Cancel = true;
-        AnimateWindowExitAndClose();
+        // 4. Clean and swift process termination
+        ScheduleSwiftProcessExit();
     }
 
     private void CleanupBeforeClose()
@@ -2563,20 +3095,46 @@ public sealed partial class MainWindow : Window
         }
 
         _isCleanedUp = true;
+
         try
         {
-            AppleTvLifecycleService.Instance.CleanupIfOrphaned();
-            AppleTvLifecycleService.Instance.Dispose();
+            AppServices.HdrPipeline.ResetContentState();
+            AppServices.HdrPipeline.WaitForPendingBrightnessRestore(TimeSpan.FromMilliseconds(800));
+        }
+        catch { }
+
+        // 1. Cancel background tasks, library scanning, and thumbnail prefetching immediately
+        try
+        {
+            App.CancelBackgroundTasks();
+            MediaLibraryService.CancelScanning();
+            _playback.Session.CancelThumbnailPrefetch();
+        }
+        catch { }
+
+        // 2. Cleanly flush Apple TV lifecycle monitoring in background to never stall the closing thread
+        try
+        {
+            Task.Run(() => AppleTvLifecycleService.Instance.FlushLifecycleOnExit());
         }
         catch { }
 
         RestoreRowDefinitions();
         SetCursorVisibility(true);
+
+        // 3. Stop and unregister all active timers
         _positionTimer.Stop();
         _videoControlsTimer.Stop();
         _miniPlayerInteractionTimer.Stop();
         _saveBoundsTimer?.Stop();
+        _saveBoundsTimer = null;
         _edgeSeekFeedbackTimer?.Stop();
+        _edgeSeekFeedbackTimer = null;
+        _resizePerformanceTimer?.Stop();
+        _resizePerformanceTimer = null;
+        _navPaneResponsivenessTimer?.Stop();
+        _navPaneResponsivenessTimer = null;
+
         _positionTimer.Tick -= OnPositionTimerTick;
         _videoControlsTimer.Tick -= OnVideoControlsTimerTick;
         _miniPlayerInteractionTimer.Tick -= OnMiniPlayerInteractionTimerTick;
@@ -2590,10 +3148,12 @@ public sealed partial class MainWindow : Window
 
         try { AppServices.DisplayManager.AdvancedColorInfoChanged -= OnAdvancedColorInfoChanged; } catch { }
 
+        // 4. Detach media opened handler, but NEVER set GlobalVideoPlayer.SetMediaPlayer(null)!
+        // Calling SetMediaPlayer(null) tears down DirectComposition swapchains on active visual elements
+        // and causes WinUI 3 compositor crashes (COMException 0x80004005) on window close.
         try
         {
             AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened -= OnFullscreenMediaOpened;
-            GlobalVideoPlayer.SetMediaPlayer(null);
         }
         catch { }
 
@@ -2609,6 +3169,19 @@ public sealed partial class MainWindow : Window
         }
         catch { }
 
+        try
+        {
+            AppWindow.Closing -= OnWindowClosing;
+            AppWindow.Changed -= OnAppWindowChanged;
+            this.Closed -= OnWindowClosed;
+            if (RootGrid != null)
+            {
+                RootGrid.SizeChanged -= RootGrid_SizeChanged;
+                RootGrid.PreviewKeyDown -= OnMainWindowKeyDown;
+            }
+        }
+        catch { }
+
         _targetOpacities.Clear();
         AppServices.Playback.Dispose();
         App.ClearWindowReferences();
@@ -2616,54 +3189,43 @@ public sealed partial class MainWindow : Window
 
     private void AnimateWindowExitAndClose()
     {
-        _isClosingAnimated = true;
-
         try
         {
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootGrid);
-            var compositor = visual?.Compositor;
-            if (visual == null || compositor == null)
+            if (_subclassHwnd != nint.Zero)
             {
-                _isCloseFinalized = true;
-                CleanupBeforeClose();
-                try { Close(); } catch { }
-                return;
+                ShowWindow(_subclassHwnd, SW_HIDE);
             }
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(1f, 0f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(300);
-
-            var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-            scaleAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0.9f, 0.9f, 1f));
-            scaleAnimation.Duration = TimeSpan.FromMilliseconds(300);
-
-            var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
-
-            visual.CenterPoint = new System.Numerics.Vector3((float)Math.Max(1, RootGrid.ActualWidth) / 2, (float)Math.Max(1, RootGrid.ActualHeight) / 2, 0);
-            visual.StartAnimation("Opacity", fadeAnimation);
-            visual.StartAnimation("Scale", scaleAnimation);
-
-            batch.Completed += (s, e) =>
-            {
-                DispatcherQueue?.TryEnqueue(() =>
-                {
-                    if (!_isCloseFinalized)
-                    {
-                        _isCloseFinalized = true;
-                        CleanupBeforeClose();
-                        try { Close(); } catch { }
-                    }
-                });
-            };
-            batch.End();
+            AppWindow?.Hide();
         }
-        catch
+        catch { }
+
+        if (!_isCloseFinalized)
         {
             _isCloseFinalized = true;
+            _saveBoundsTimer?.Stop();
+            SaveWindowBounds();
+            _isClosingAnimated = true;
             CleanupBeforeClose();
+            ScheduleSwiftProcessExit();
             try { Close(); } catch { }
         }
+    }
+
+    private int _exitScheduled = 0;
+
+    private void ScheduleSwiftProcessExit()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _exitScheduled, 1) != 0)
+        {
+            return;
+        }
+
+        App.TerminateProcessCleanly();
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        ScheduleSwiftProcessExit();
     }
 
     private bool _wasInPipMode = false;
@@ -2712,10 +3274,6 @@ public sealed partial class MainWindow : Window
             {
                 FloatingVideoContainer.Visibility = Visibility.Collapsed;
             }
-            if (GlobalVideoPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(null);
-            }
 
             SaveAndClearRowDefinitions();
             if (MiniPlayerGrid != null)
@@ -2739,7 +3297,7 @@ public sealed partial class MainWindow : Window
 
             if (MiniVideoPlayer != null)
             {
-                MiniVideoPlayer.SetMediaPlayer(null);
+                MiniVideoPlayer.Visibility = Visibility.Collapsed;
             }
 
             if (MiniPlayerGrid != null)
@@ -2800,14 +3358,14 @@ public sealed partial class MainWindow : Window
                 visual.StopAnimation("Opacity");
                 AppTitleBar.Background = null;
                 AppTitleBar.UpdateLayout();
-                SetTitleBar(DragRegion);
+                ApplyTitleBarDragRegion();
             }
 
             UpdateTitleBarLayout();
 
             if (GlobalVideoPlayer != null && _playback?.Session?.MediaPlayer != null)
             {
-                GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+                try { GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer); } catch { }
             }
 
             if (ContentFrame?.Content is VideoPage vp)
@@ -2822,7 +3380,12 @@ public sealed partial class MainWindow : Window
             UpdateRootGridBackground();
             ForceRefreshNavigationViewLayout();
 
-            try { this.Activate(); } catch { }
+            if (AppWindow?.Presenter is OverlappedPresenter op &&
+                op.State != OverlappedPresenterState.Minimized &&
+                !(_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)))
+            {
+                try { this.Activate(); } catch { }
+            }
 
             // Re-sync floating video layout across multiple ticks as window restore settles
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, async () =>
@@ -2830,7 +3393,7 @@ public sealed partial class MainWindow : Window
                 if (AppTitleBar != null && DragRegion != null && RootGrid?.XamlRoot != null)
                 {
                     AppTitleBar.UpdateLayout();
-                    SetTitleBar(DragRegion);
+                    ApplyTitleBarDragRegion();
                 }
                 SyncFloatingVideoPlayer(force: true);
                 await Task.Delay(80);
@@ -2844,24 +3407,40 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private bool _lastLayoutWasVideoActive = false;
+
     private void UpdateLayoutForVideoMode()
     {
-        if (_isFullscreenTransitioning) return;
-
         bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
         if (isPip) return;
 
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
 
+        if (_isFullscreenTransitioning) return;
+
+        bool wasFullscreenChromeActive =
+            (RootGrid != null && RootGrid.RowDefinitions.Count > 1 && RootGrid.RowDefinitions[1].Height.GridUnitType == GridUnitType.Pixel && RootGrid.RowDefinitions[1].Height.Value == 0)
+            || (TransportControls != null && Grid.GetRow(TransportControls) == 0 && Grid.GetRowSpan(TransportControls) > 1)
+            || (RootNavigationView != null && RootNavigationView.Visibility == Visibility.Collapsed)
+            || (AppTitleBar != null && AppTitleBar.Visibility == Visibility.Collapsed);
+
+        if (!isVideoActive && !_lastLayoutWasVideoActive && !isFullScreen && !wasFullscreenChromeActive)
+        {
+            return;
+        }
+
+        _lastLayoutWasVideoActive = isVideoActive;
+
         if (isVideoActive)
         {
             if (isFullScreen)
             {
+                AppServices.HdrPipeline.SetFullscreenState(true);
                 TransportControls?.SetMiniVideoPlayer(null);
                 if (GlobalVideoPlayer != null && GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
                 {
-                    GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+                    try { GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer); } catch { }
                 }
                 if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Visible;
 
@@ -2873,6 +3452,7 @@ public sealed partial class MainWindow : Window
                 }
                 if (FullscreenVideoContainer != null)
                 {
+                    Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FullscreenVideoContainer, 50);
                     FullscreenVideoContainer.RequestedTheme = ElementTheme.Dark;
                     FullscreenVideoContainer.Visibility = Visibility.Visible;
                     FullscreenVideoContainer.Background = _cachedTransparentBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
@@ -2881,11 +3461,16 @@ public sealed partial class MainWindow : Window
 
                 if (FloatingVideoContainer != null)
                 {
+                    Grid.SetRow(FloatingVideoContainer, 0);
+                    Grid.SetRowSpan(FloatingVideoContainer, 2);
                     FloatingVideoContainer.Margin = new Thickness(0);
                     FloatingVideoContainer.Width = double.NaN;
                     FloatingVideoContainer.Height = double.NaN;
+                    FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                    FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
                     FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Stretch;
                     FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Stretch;
+                    FloatingVideoContainer.CornerRadius = new CornerRadius(0);
                 }
 
                 UpdateFullscreenPlayerLayout();
@@ -2902,6 +3487,7 @@ public sealed partial class MainWindow : Window
             }
             else
             {
+                AppServices.HdrPipeline.SetFullscreenState(false);
                 _videoControlsTimer.Stop();
 
                 if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
@@ -2911,44 +3497,52 @@ public sealed partial class MainWindow : Window
                     FullscreenControlsOverlay.Opacity = 0;
                 }
 
-                RestoreRowDefinitions();
-                MoveTransportControlsToNormalLayout();
-
-                if (RootNavigationView != null)
+                if (wasFullscreenChromeActive)
                 {
-                    RootNavigationView.Visibility = Visibility.Visible;
-                    RootNavigationView.Opacity = 1.0;
-                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
-                    visual.Opacity = 1.0f;
-                    visual.StopAnimation("Opacity");
-                    RootNavigationView.PaneDisplayMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
-                    RootNavigationView.IsPaneVisible = true;
-                    RootNavigationView.IsPaneOpen = IsStreamingSection ? _isStreamingUserExpandedPane : _isNavPaneExpanded;
-                    UpdateNavigationPaneTheming();
-                    if (AppSearchBox != null) AppSearchBox.Visibility = RootNavigationView.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
-                    UpdateTransportBarVisibility();
-                    bool canGoBack = ContentFrame?.CanGoBack ?? false;
-                    RootNavigationView.IsBackEnabled = canGoBack;
-                    RootNavigationView.IsBackButtonVisible = canGoBack
-                        ? NavigationViewBackButtonVisible.Visible
-                        : NavigationViewBackButtonVisible.Collapsed;
-                    RootNavigationView.IsPaneToggleButtonVisible = true;
-                    RootNavigationView.ClearValue(Control.BackgroundProperty);
-                }
+                    RestoreRowDefinitions();
+                    MoveTransportControlsToNormalLayout();
+                    if (FloatingVideoContainer != null)
+                    {
+                        Grid.SetRow(FloatingVideoContainer, 0);
+                        Grid.SetRowSpan(FloatingVideoContainer, 1);
+                    }
 
-                if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
-                if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
-                if (AppTitleBar != null)
-                {
-                    AppTitleBar.Visibility = Visibility.Visible;
-                    AppTitleBar.Opacity = 1.0;
-                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
-                    visual.Opacity = 1.0f;
-                    visual.StopAnimation("Opacity");
-                    AppTitleBar.Background = null;
-                }
+                    if (RootNavigationView != null)
+                    {
+                        RootNavigationView.Visibility = Visibility.Visible;
+                        RootNavigationView.Opacity = 1.0;
+                        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
+                        visual.Opacity = 1.0f;
+                        visual.StopAnimation("Opacity");
+                        RootNavigationView.PaneDisplayMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
+                        RootNavigationView.IsPaneVisible = true;
+                        RootNavigationView.IsPaneOpen = IsStreamingSection ? _isStreamingUserExpandedPane : _isNavPaneExpanded;
+                        UpdateNavigationPaneTheming();
+                        if (AppSearchBox != null) AppSearchBox.Visibility = RootNavigationView.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+                        UpdateTransportBarVisibility();
+                        bool canGoBack = ContentFrame?.CanGoBack ?? false;
+                        RootNavigationView.IsBackEnabled = canGoBack;
+                        RootNavigationView.IsBackButtonVisible = canGoBack
+                            ? NavigationViewBackButtonVisible.Visible
+                            : NavigationViewBackButtonVisible.Collapsed;
+                        RootNavigationView.IsPaneToggleButtonVisible = true;
+                        RootNavigationView.ClearValue(Control.BackgroundProperty);
+                    }
 
-                UpdateRootGridBackground();
+                    if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
+                    if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
+                    if (AppTitleBar != null)
+                    {
+                        AppTitleBar.Visibility = Visibility.Visible;
+                        AppTitleBar.Opacity = 1.0;
+                        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                        visual.Opacity = 1.0f;
+                        visual.StopAnimation("Opacity");
+                        AppTitleBar.Background = null;
+                    }
+
+                    UpdateRootGridBackground();
+                }
 
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                 {
@@ -2972,10 +3566,19 @@ public sealed partial class MainWindow : Window
                     FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
                     FullscreenControlsOverlay.Opacity = 0;
                 }
-                if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Collapsed;
-                if (GlobalVideoPlayer != null && GlobalVideoPlayer.MediaPlayer != null)
+                if (FloatingVideoContainer != null)
                 {
-                    GlobalVideoPlayer.SetMediaPlayer(null);
+                    FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                    FloatingVideoContainer.Clip = null;
+                    Grid.SetRow(FloatingVideoContainer, 0);
+                    Grid.SetRowSpan(FloatingVideoContainer, 1);
+                    FloatingVideoContainer.Width = double.NaN;
+                    FloatingVideoContainer.Height = double.NaN;
+                    FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                    FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                    FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                    FloatingVideoContainer.IsHitTestVisible = false;
+                    Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
                 }
                 TransportControls?.SetMiniVideoPlayer(null);
                 SetFullScreenMode(false);
@@ -2983,16 +3586,25 @@ public sealed partial class MainWindow : Window
             }
 
             TransportControls?.SetMiniVideoPlayer(null);
-            if (FloatingVideoContainer != null) FloatingVideoContainer.Visibility = Visibility.Collapsed;
+            if (FloatingVideoContainer != null)
+            {
+                FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                FloatingVideoContainer.Clip = null;
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 1);
+                FloatingVideoContainer.Width = double.NaN;
+                FloatingVideoContainer.Height = double.NaN;
+                FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                FloatingVideoContainer.IsHitTestVisible = false;
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
+            }
             if (FullscreenVideoContainer != null) FullscreenVideoContainer.Visibility = Visibility.Collapsed;
             if (FullscreenControlsOverlay != null)
             {
                 FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
                 FullscreenControlsOverlay.Opacity = 0;
-            }
-            if (GlobalVideoPlayer != null && GlobalVideoPlayer.MediaPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(null);
             }
 
             if (_isStreamingFullScreen)
@@ -3000,49 +3612,56 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            RestoreRowDefinitions();
-            MoveTransportControlsToNormalLayout();
-
-            if (RootNavigationView != null)
+            if (wasFullscreenChromeActive)
             {
-                RootNavigationView.Visibility = Visibility.Visible;
-                RootNavigationView.Opacity = 1.0;
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
-                visual.Opacity = 1.0f;
-                visual.StopAnimation("Opacity");
-                RootNavigationView.PaneDisplayMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
-                RootNavigationView.IsPaneVisible = true;
-                RootNavigationView.IsPaneOpen = IsStreamingSection ? _isStreamingUserExpandedPane : _isNavPaneExpanded;
-                if (AppSearchBox != null) AppSearchBox.Visibility = RootNavigationView.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+                RestoreRowDefinitions();
+                MoveTransportControlsToNormalLayout();
+
+                if (RootNavigationView != null)
+                {
+                    RootNavigationView.Visibility = Visibility.Visible;
+                    RootNavigationView.Opacity = 1.0;
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(RootNavigationView);
+                    visual.Opacity = 1.0f;
+                    visual.StopAnimation("Opacity");
+                    RootNavigationView.PaneDisplayMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
+                    RootNavigationView.IsPaneVisible = true;
+                    RootNavigationView.IsPaneOpen = IsStreamingSection ? _isStreamingUserExpandedPane : _isNavPaneExpanded;
+                    if (AppSearchBox != null) AppSearchBox.Visibility = RootNavigationView.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+                    UpdateTransportBarVisibility();
+                    ForceRefreshNavigationViewLayout();
+                    bool canGoBack = ContentFrame?.CanGoBack ?? false;
+                    RootNavigationView.IsBackEnabled = canGoBack;
+                    RootNavigationView.IsBackButtonVisible = canGoBack
+                        ? NavigationViewBackButtonVisible.Visible
+                        : NavigationViewBackButtonVisible.Collapsed;
+                    RootNavigationView.IsPaneToggleButtonVisible = true;
+                    RootNavigationView.ClearValue(Control.BackgroundProperty);
+                }
+                if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
+                if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
+                if (AppTitleBar != null)
+                {
+                    AppTitleBar.Visibility = Visibility.Visible;
+                    AppTitleBar.Opacity = 1.0;
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
+                    visual.Opacity = 1.0f;
+                    visual.StopAnimation("Opacity");
+                    AppTitleBar.Background = null;
+                }
+                if (FullscreenControlsOverlay != null)
+                {
+                    FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                    FullscreenControlsOverlay.Opacity = 0;
+                }
+
+                ApplyConfiguredTheme();
+                UpdateRootGridBackground();
+            }
+            else
+            {
                 UpdateTransportBarVisibility();
-                ForceRefreshNavigationViewLayout();
-                bool canGoBack = ContentFrame?.CanGoBack ?? false;
-                RootNavigationView.IsBackEnabled = canGoBack;
-                RootNavigationView.IsBackButtonVisible = canGoBack
-                    ? NavigationViewBackButtonVisible.Visible
-                    : NavigationViewBackButtonVisible.Collapsed;
-                RootNavigationView.IsPaneToggleButtonVisible = true;
-                RootNavigationView.ClearValue(Control.BackgroundProperty);
             }
-            if (ContentFrame != null) ContentFrame.ClearValue(Control.BackgroundProperty);
-            if (VideoBackButton != null) VideoBackButton.Visibility = Visibility.Collapsed;
-            if (AppTitleBar != null)
-            {
-                AppTitleBar.Visibility = Visibility.Visible;
-                AppTitleBar.Opacity = 1.0;
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(AppTitleBar);
-                visual.Opacity = 1.0f;
-                visual.StopAnimation("Opacity");
-                AppTitleBar.Background = null;
-            }
-            if (FullscreenControlsOverlay != null)
-            {
-                FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
-                FullscreenControlsOverlay.Opacity = 0;
-            }
-
-            ApplyConfiguredTheme();
-            UpdateRootGridBackground();
         }
     }
 
@@ -3062,6 +3681,7 @@ public sealed partial class MainWindow : Window
         TransportControls.SetBorderThickness(new Thickness(0));
         TransportControls.SetFullscreenPresentation(true);
         TransportControls.ClearValue(Control.BackgroundProperty);
+        Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(TransportControls, 70);
 
         var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TransportControls);
         visual.Opacity = 1.0f;
@@ -3142,6 +3762,7 @@ public sealed partial class MainWindow : Window
         TransportControls.SetBorderThickness(new Thickness(0, 1, 0, 0));
         TransportControls.SetFullscreenPresentation(false);
         TransportControls.ClearValue(Control.BackgroundProperty);
+        TransportControls.ClearValue(Microsoft.UI.Xaml.Controls.Canvas.ZIndexProperty);
 
         var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(TransportControls);
         visual.Opacity = 1.0f;
@@ -3378,108 +3999,112 @@ public sealed partial class MainWindow : Window
 
     private static void AnimateIconSpinAndBounce(Microsoft.UI.Xaml.Media.CompositeTransform transform, bool fullSpin)
     {
-        var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
-
-        // 1. Rotation animation (Unigram playful spin)
-        var rotateAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(rotateAnim, transform);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(rotateAnim, "Rotation");
-
-        double targetRotation = fullSpin ? 360.0 : 25.0;
-        double overshootRotation = fullSpin ? 380.0 : 32.0;
-        var rotDuration = fullSpin ? TimeSpan.FromMilliseconds(450) : TimeSpan.FromMilliseconds(350);
-
-        rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame
+        try
         {
-            KeyTime = TimeSpan.Zero,
-            Value = 0.0
-        });
+            var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
 
-        if (fullSpin)
-        {
-            rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+            // 1. Rotation animation (Unigram playful spin)
+            var rotateAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(rotateAnim, transform);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(rotateAnim, "Rotation");
+
+            double targetRotation = fullSpin ? 360.0 : 25.0;
+            double overshootRotation = fullSpin ? 380.0 : 32.0;
+            var rotDuration = fullSpin ? TimeSpan.FromMilliseconds(450) : TimeSpan.FromMilliseconds(350);
+
+            rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame
             {
-                KeyTime = TimeSpan.FromMilliseconds(320),
-                Value = overshootRotation,
-                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
+                KeyTime = TimeSpan.Zero,
+                Value = 0.0
             });
-            rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+
+            if (fullSpin)
             {
-                KeyTime = rotDuration,
-                Value = targetRotation,
-                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.3 }
+                rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+                {
+                    KeyTime = TimeSpan.FromMilliseconds(320),
+                    Value = overshootRotation,
+                    EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
+                });
+                rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+                {
+                    KeyTime = rotDuration,
+                    Value = targetRotation,
+                    EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.3 }
+                });
+            }
+            else
+            {
+                // Subtle spring wiggle on hover: 0 -> overshoot -> back to 0
+                rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+                {
+                    KeyTime = TimeSpan.FromMilliseconds(160),
+                    Value = overshootRotation,
+                    EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
+                });
+                rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+                {
+                    KeyTime = rotDuration,
+                    Value = 0.0,
+                    EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.5 }
+                });
+            }
+
+            // 2. Scale bounce animation (ScaleX & ScaleY)
+            var scaleXAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(scaleXAnim, transform);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(scaleXAnim, "ScaleX");
+
+            var scaleYAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(scaleYAnim, transform);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(scaleYAnim, "ScaleY");
+
+            double peakScale = fullSpin ? 1.25 : 1.15;
+            var scaleDuration = fullSpin ? TimeSpan.FromMilliseconds(400) : TimeSpan.FromMilliseconds(320);
+
+            scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 1.0 });
+            scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+            {
+                KeyTime = TimeSpan.FromMilliseconds(140),
+                Value = peakScale,
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CircleEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
             });
+            scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+            {
+                KeyTime = scaleDuration,
+                Value = 1.0,
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.4 }
+            });
+
+            scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 1.0 });
+            scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+            {
+                KeyTime = TimeSpan.FromMilliseconds(140),
+                Value = peakScale,
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CircleEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
+            });
+            scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
+            {
+                KeyTime = scaleDuration,
+                Value = 1.0,
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.4 }
+            });
+
+            storyboard.Children.Add(rotateAnim);
+            storyboard.Children.Add(scaleXAnim);
+            storyboard.Children.Add(scaleYAnim);
+
+            storyboard.Completed += (s, ev) =>
+            {
+                // Reset rotation to 0 cleanly once completed so subsequent interactions start clean
+                transform.Rotation = 0.0;
+                transform.ScaleX = 1.0;
+                transform.ScaleY = 1.0;
+            };
+
+            storyboard.Begin();
         }
-        else
-        {
-            // Subtle spring wiggle on hover: 0 -> overshoot -> back to 0
-            rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-            {
-                KeyTime = TimeSpan.FromMilliseconds(160),
-                Value = overshootRotation,
-                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
-            });
-            rotateAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-            {
-                KeyTime = rotDuration,
-                Value = 0.0,
-                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.5 }
-            });
-        }
-
-        // 2. Scale bounce animation (ScaleX & ScaleY)
-        var scaleXAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(scaleXAnim, transform);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(scaleXAnim, "ScaleX");
-
-        var scaleYAnim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(scaleYAnim, transform);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(scaleYAnim, "ScaleY");
-
-        double peakScale = fullSpin ? 1.25 : 1.15;
-        var scaleDuration = fullSpin ? TimeSpan.FromMilliseconds(400) : TimeSpan.FromMilliseconds(320);
-
-        scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 1.0 });
-        scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-        {
-            KeyTime = TimeSpan.FromMilliseconds(140),
-            Value = peakScale,
-            EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CircleEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
-        });
-        scaleXAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-        {
-            KeyTime = scaleDuration,
-            Value = 1.0,
-            EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.4 }
-        });
-
-        scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 1.0 });
-        scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-        {
-            KeyTime = TimeSpan.FromMilliseconds(140),
-            Value = peakScale,
-            EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CircleEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut }
-        });
-        scaleYAnim.KeyFrames.Add(new Microsoft.UI.Xaml.Media.Animation.EasingDoubleKeyFrame
-        {
-            KeyTime = scaleDuration,
-            Value = 1.0,
-            EasingFunction = new Microsoft.UI.Xaml.Media.Animation.BackEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut, Amplitude = 0.4 }
-        });
-
-        storyboard.Children.Add(rotateAnim);
-        storyboard.Children.Add(scaleXAnim);
-        storyboard.Children.Add(scaleYAnim);
-
-        storyboard.Completed += (s, ev) =>
-        {
-            // Reset rotation to 0 cleanly once completed so subsequent interactions start clean
-            transform.Rotation = 0.0;
-            transform.ScaleX = 1.0;
-            transform.ScaleY = 1.0;
-        };
-
-        storyboard.Begin();
+        catch { }
     }
 
     private void OnRootGridPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -3504,8 +4129,8 @@ public sealed partial class MainWindow : Window
 
     private void OnFullscreenPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-        bool isVideoMode = ContentFrame?.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen || _expectedPresenterKind == AppWindowPresenterKind.FullScreen;
+        bool isVideoMode = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
         if (!isFullScreen || !isVideoMode || _isStreamingFullScreen)
         {
             return;
@@ -3546,7 +4171,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowVideoControls()
     {
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen || _expectedPresenterKind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
             if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
@@ -3592,86 +4217,107 @@ public sealed partial class MainWindow : Window
     {
         if (element == null) return;
 
-        _targetOpacities[element] = targetOpacity;
-
-        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(element);
-        var compositor = visual.Compositor;
-
-        if (AppServices.Settings.Current.ReduceMotion || durationMs <= 0)
+        try
         {
-            visual.StopAnimation("Opacity");
+            _targetOpacities[element] = targetOpacity;
+
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(element);
+            if (visual == null) return;
+            var compositor = visual.Compositor;
+            if (compositor == null) return;
+
+            if (!ThemeHelper.IsAnimationEnabled || durationMs <= 0)
+            {
+                visual.StopAnimation("Opacity");
+                if (targetOpacity > 0.01)
+                {
+                    element.Visibility = Visibility.Visible;
+                    element.Opacity = 1.0;
+                    visual.Opacity = (float)targetOpacity;
+                    element.IsHitTestVisible = true;
+                }
+                else
+                {
+                    element.Visibility = Visibility.Collapsed;
+                    element.Opacity = 0.0;
+                    visual.Opacity = 0f;
+                    element.IsHitTestVisible = false;
+                }
+                return;
+            }
+
             if (targetOpacity > 0.01)
             {
-                element.Visibility = Visibility.Visible;
+                if (element.Visibility == Visibility.Collapsed)
+                {
+                    visual.Opacity = 0f;
+                }
                 element.Opacity = 1.0;
-                visual.Opacity = (float)targetOpacity;
+                element.Visibility = Visibility.Visible;
                 element.IsHitTestVisible = true;
             }
             else
             {
-                element.Visibility = Visibility.Collapsed;
-                element.Opacity = 0.0;
-                visual.Opacity = 0f;
                 element.IsHitTestVisible = false;
             }
-            return;
-        }
 
-        if (targetOpacity > 0.01)
-        {
-            if (element.Visibility == Visibility.Collapsed)
+            var animation = compositor.CreateScalarKeyFrameAnimation();
+            animation.Duration = TimeSpan.FromMilliseconds(durationMs);
+
+            var easing = targetOpacity > 0.01
+                ? compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.0f, 0.0f),
+                    new System.Numerics.Vector2(0.0f, 1.0f)
+                )
+                : compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(1.0f, 0.0f),
+                    new System.Numerics.Vector2(1.0f, 1.0f)
+                );
+
+            animation.InsertKeyFrame(0f, visual.Opacity);
+            animation.InsertKeyFrame(1f, (float)targetOpacity, easing);
+
+            var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+            visual.StartAnimation("Opacity", animation);
+
+            batch.Completed += (s, e) =>
             {
-                visual.Opacity = 0f;
-            }
-            element.Opacity = 1.0;
-            element.Visibility = Visibility.Visible;
-            element.IsHitTestVisible = true;
-        }
-        else
-        {
-            element.IsHitTestVisible = false;
-        }
-
-        var animation = compositor.CreateScalarKeyFrameAnimation();
-        animation.Duration = TimeSpan.FromMilliseconds(durationMs);
-
-        var easing = targetOpacity > 0.01
-            ? compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.0f, 0.0f),
-                new System.Numerics.Vector2(0.0f, 1.0f)
-            )
-            : compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(1.0f, 0.0f),
-                new System.Numerics.Vector2(1.0f, 1.0f)
-            );
-
-        animation.InsertKeyFrame(0f, visual.Opacity);
-        animation.InsertKeyFrame(1f, (float)targetOpacity, easing);
-
-        var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
-        visual.StartAnimation("Opacity", animation);
-
-        batch.Completed += (s, e) =>
-        {
-            element.DispatcherQueue.TryEnqueue(() =>
-            {
-                if (_targetOpacities.TryGetValue(element, out double currentTarget))
+                try
                 {
-                    if (currentTarget <= 0.01)
+                    element.DispatcherQueue?.TryEnqueue(() =>
                     {
-                        element.Visibility = Visibility.Collapsed;
-                        visual.Opacity = 0f;
-                    }
-                    else
-                    {
-                        element.Opacity = 1.0;
-                        element.Visibility = Visibility.Visible;
-                        visual.Opacity = (float)currentTarget;
-                    }
+                        try
+                        {
+                            if (_targetOpacities.TryGetValue(element, out double currentTarget))
+                            {
+                                if (currentTarget <= 0.01)
+                                {
+                                    element.Visibility = Visibility.Collapsed;
+                                    visual.Opacity = 0f;
+                                }
+                                else
+                                {
+                                    element.Opacity = 1.0;
+                                    element.Visibility = Visibility.Visible;
+                                    visual.Opacity = (float)currentTarget;
+                                }
+                            }
+                        }
+                        catch { }
+                    });
                 }
-            });
-        };
-        batch.End();
+                catch { }
+                finally
+                {
+                    try { batch.Dispose(); } catch { }
+                }
+            };
+            batch.End();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FadeElement] error: {ex.Message}");
+        }
     }
 
     public void UpdateTheme()
@@ -3679,6 +4325,14 @@ public sealed partial class MainWindow : Window
         var elementTheme = ThemeHelper.ToElementTheme(AppServices.Settings.Current.Theme);
 
         if (RootGrid != null) RootGrid.RequestedTheme = elementTheme;
+        if (MiniPlayerGrid != null) MiniPlayerGrid.RequestedTheme = elementTheme;
+        if (FullscreenMetadataOverlay != null) FullscreenMetadataOverlay.RequestedTheme = elementTheme;
+
+        _queueFlyout = null;
+        if (_queuePanel != null)
+        {
+            _queuePanel.RequestedTheme = elementTheme;
+        }
 
         UpdateWindowFrameTheme(elementTheme);
         ThemeHelper.ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, elementTheme);
@@ -3686,6 +4340,28 @@ public sealed partial class MainWindow : Window
         VideoHoverPreview?.RefreshBackdropTheming();
         UpdateRootGridBackground();
         UpdateNavigationPaneTheming();
+        UpdateMiniPlayerTheming(elementTheme);
+    }
+
+    private void UpdateMiniPlayerTheming(ElementTheme theme)
+    {
+        if (MiniPlayerGrid == null) return;
+        MiniPlayerGrid.RequestedTheme = theme;
+
+        bool isLight = theme == ElementTheme.Light ||
+            (theme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
+
+        if (MiniAudioHost != null && MiniAudioHost.Visibility == Visibility.Visible)
+        {
+            MiniPlayerGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                isLight ? Windows.UI.Color.FromArgb(255, 248, 248, 252) : Windows.UI.Color.FromArgb(255, 12, 12, 14));
+        }
+
+        if (MiniAudioVignette != null)
+        {
+            MiniAudioVignette.Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                isLight ? Windows.UI.Color.FromArgb(64, 255, 255, 255) : Windows.UI.Color.FromArgb(133, 0, 0, 0));
+        }
     }
 
     private void ApplyConfiguredTheme()
@@ -3799,9 +4475,15 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _isMiniSliderSeeking = false;
+    private bool _isProgrammaticMiniSliderChange = false;
 
     private void UpdateMiniPlayer()
     {
+        if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.CompactOverlay)
+        {
+            return;
+        }
+
         var track = _playback.CurrentTrack;
         if (track != null)
         {
@@ -3820,9 +4502,13 @@ public sealed partial class MainWindow : Window
             {
                 if (MiniVideoPlayer != null)
                 {
-                    MiniVideoPlayer.Visibility = Visibility.Visible;
-                    MiniVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
+                    MiniVideoPlayer.Visibility = Visibility.Collapsed;
                 }
+                if (MiniPlayerGrid != null)
+                {
+                    MiniPlayerGrid.Background = _cachedTransparentBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                }
+                SyncFloatingVideoPlayer();
                 if (MiniAudioHost != null) MiniAudioHost.Visibility = Visibility.Collapsed;
                 if (MiniControlsDimmer != null) MiniControlsDimmer.Visibility = Visibility.Visible;
             }
@@ -3831,11 +4517,23 @@ public sealed partial class MainWindow : Window
                 if (MiniVideoPlayer != null)
                 {
                     MiniVideoPlayer.Visibility = Visibility.Collapsed;
-                    MiniVideoPlayer.SetMediaPlayer(null);
                 }
+                bool isLight = AppServices.Settings.Current.Theme == Models.AppThemeOption.Light ||
+                    (AppServices.Settings.Current.Theme == Models.AppThemeOption.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
+                if (MiniPlayerGrid != null)
+                {
+                    MiniPlayerGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                        isLight ? Windows.UI.Color.FromArgb(255, 248, 248, 252) : Windows.UI.Color.FromArgb(255, 12, 12, 14));
+                }
+                SyncFloatingVideoPlayer();
                 if (MiniAudioHost != null)
                 {
                     MiniAudioHost.Visibility = Visibility.Visible;
+                }
+                if (MiniAudioVignette != null)
+                {
+                    MiniAudioVignette.Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                        isLight ? Windows.UI.Color.FromArgb(64, 255, 255, 255) : Windows.UI.Color.FromArgb(133, 0, 0, 0));
                 }
                 if (MiniAudioArt != null) MiniAudioArt.Source = track.Artwork;
                 if (MiniAudioArtBlurred != null) MiniAudioArtBlurred.Source = track.Artwork;
@@ -3847,10 +4545,19 @@ public sealed partial class MainWindow : Window
                 double duration = track.Duration.TotalSeconds;
                 if (duration <= 0 && _playback.Session.MediaPlayer != null)
                 {
-                    duration = _playback.Session.MediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+                    try
+                    {
+                        duration = _playback.Session.MediaPlayer.PlaybackSession?.NaturalDuration.TotalSeconds ?? 0;
+                    }
+                    catch
+                    {
+                        duration = 0;
+                    }
                 }
+                _isProgrammaticMiniSliderChange = true;
                 MiniPositionSlider.Maximum = Math.Max(1, duration);
                 MiniPositionSlider.Value = Math.Clamp(_playback.PositionSeconds, 0, MiniPositionSlider.Maximum);
+                _isProgrammaticMiniSliderChange = false;
             }
 
             if (MiniPositionText != null)
@@ -3862,7 +4569,14 @@ public sealed partial class MainWindow : Window
                 double duration = track.Duration.TotalSeconds;
                 if (duration <= 0 && _playback.Session.MediaPlayer != null)
                 {
-                    duration = _playback.Session.MediaPlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+                    try
+                    {
+                        duration = _playback.Session.MediaPlayer.PlaybackSession?.NaturalDuration.TotalSeconds ?? 0;
+                    }
+                    catch
+                    {
+                        duration = 0;
+                    }
                 }
                 MiniDurationText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(duration));
             }
@@ -4043,20 +4757,53 @@ public sealed partial class MainWindow : Window
         AnimateWindowExitAndClose();
     }
 
+    private void OnMiniSliderPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _isMiniSliderSeeking = true;
+    }
+
+    private void OnMiniSliderPointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (_isMiniSliderSeeking && MiniPositionSlider != null)
+        {
+            _playback.PositionSeconds = MiniPositionSlider.Value;
+            _playback.Seek(MiniPositionSlider.Value);
+            _playback.Session?.SaveCurrentResumePosition();
+            _isMiniSliderSeeking = false;
+        }
+    }
+
     private void OnMiniSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        if (_isMiniSliderSeeking && MiniPositionText != null)
+        if (_isProgrammaticMiniSliderChange) return;
+
+        if (_isMiniSliderSeeking)
         {
-            MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
+            if (MiniPositionText != null)
+            {
+                MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
+            }
+        }
+        else if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+        {
+            // Discrete click on track in PiP mode
+            _playback.PositionSeconds = e.NewValue;
+            _playback.Seek(e.NewValue);
+            _playback.Session?.SaveCurrentResumePosition();
+            if (MiniPositionText != null)
+            {
+                MiniPositionText.Text = Helpers.TimeFormatting.Format(TimeSpan.FromSeconds(e.NewValue));
+            }
         }
     }
 
     private void OnMiniSliderPointerCaptureLost(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (MiniPositionSlider != null)
+        if (_isMiniSliderSeeking && MiniPositionSlider != null)
         {
             _playback.PositionSeconds = MiniPositionSlider.Value;
             _playback.Seek(MiniPositionSlider.Value);
+            _playback.Session?.SaveCurrentResumePosition();
             _isMiniSliderSeeking = false;
         }
     }
@@ -4220,8 +4967,24 @@ public sealed partial class MainWindow : Window
         NotifyActivityInFullscreen();
         if (_playback.CurrentTrack is null) return;
         double currentPos = _playback.PositionSeconds;
-        double newPos = Math.Clamp(currentPos + seconds, 0, _playback.CurrentTrack.Duration.TotalSeconds);
+        double maxDuration = _playback.CurrentTrack.Duration.TotalSeconds;
+        if (maxDuration <= 0)
+        {
+            try
+            {
+                var natDuration = _playback.Session.MediaPlayer?.PlaybackSession?.NaturalDuration;
+                if (natDuration.HasValue && natDuration.Value.TotalSeconds > 0)
+                {
+                    maxDuration = natDuration.Value.TotalSeconds;
+                }
+            }
+            catch { }
+        }
+        double newPos = maxDuration > 0
+            ? Math.Clamp(currentPos + seconds, 0, maxDuration)
+            : Math.Max(0, currentPos + seconds);
         _playback.Seek(newPos);
+        _playback.Session?.SaveCurrentResumePosition();
     }
     #region Fullscreen Transition Engine (Smooth Breathing & Zero-Stutter)
     internal async void ToggleFullscreen()
@@ -4425,10 +5188,8 @@ public sealed partial class MainWindow : Window
             }
 
             SaveAndClearRowDefinitions();
-            // Do NOT call SetTitleBar(null) - that resets WinUI 3 to the default system title bar,
-            // which causes Windows to render the title bar text at the top of the window.
-            // Keeping SetTitleBar(DragRegion) ensures custom title bar mode stays active with suppressed system chrome.
-            SetTitleBar(DragRegion);
+            // Keeping custom title bar mode active with suppressed system chrome.
+            ApplyTitleBarDragRegion();
         }
         else
         {
@@ -4440,6 +5201,11 @@ public sealed partial class MainWindow : Window
 
             RestoreRowDefinitions();
             MoveTransportControlsToNormalLayout();
+            if (FloatingVideoContainer != null)
+            {
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 1);
+            }
 
             if (FullscreenVideoContainer != null)
             {
@@ -4491,7 +5257,7 @@ public sealed partial class MainWindow : Window
             }
 
             UpdateTitleBarLayout();
-            SetTitleBar(DragRegion);
+            ApplyTitleBarDragRegion();
             UpdateTransportBarVisibility();
         }
     }
@@ -4499,8 +5265,15 @@ public sealed partial class MainWindow : Window
     private async Task EnterFullscreenAnimatedAsync()
     {
         if (_isFullscreenTransitioning) return;
+        var op = AppWindow?.Presenter as OverlappedPresenter;
+        if (op?.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)))
+        {
+            return;
+        }
+        _wasMaximizedBeforeFullscreen = _wasMaximized || (op?.State == OverlappedPresenterState.Maximized);
         _isFullscreenTransitioning = true;
         _expectedPresenterKind = AppWindowPresenterKind.FullScreen;
+        AppServices.HdrPipeline.SetFullscreenState(true);
 
         try
         {
@@ -4519,10 +5292,14 @@ public sealed partial class MainWindow : Window
 
                 if (FloatingVideoContainer != null)
                 {
+                    Grid.SetRow(FloatingVideoContainer, 0);
+                    Grid.SetRowSpan(FloatingVideoContainer, 2);
                     FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(0);
                     FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
                     FloatingVideoContainer.Width = double.NaN;
                     FloatingVideoContainer.Height = double.NaN;
+                    FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                    FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
                     FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
                     FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
                     FloatingVideoContainer.Visibility = Visibility.Visible;
@@ -4530,6 +5307,7 @@ public sealed partial class MainWindow : Window
 
                 if (FullscreenVideoContainer != null)
                 {
+                    Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FullscreenVideoContainer, 50);
                     FullscreenVideoContainer.Visibility = Visibility.Visible;
                     FullscreenVideoContainer.RequestedTheme = ElementTheme.Dark;
                     FullscreenVideoContainer.Background = _cachedTransparentBrush ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
@@ -4537,7 +5315,7 @@ public sealed partial class MainWindow : Window
 
                 UpdateFullscreenPlayerLayout();
                 MoveTransportControlsToFullscreenOverlay();
-                SetTitleBar(DragRegion);
+                ApplyTitleBarDragRegion();
                 SystemBackdrop = null;
 
                 // 3. Smoothly fade out window chrome
@@ -4591,8 +5369,14 @@ public sealed partial class MainWindow : Window
     private async Task ExitFullscreenAnimatedAsync()
     {
         if (_isFullscreenTransitioning) return;
+        var op = AppWindow?.Presenter as OverlappedPresenter;
+        if (op?.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)))
+        {
+            return;
+        }
         _isFullscreenTransitioning = true;
         _expectedPresenterKind = AppWindowPresenterKind.Overlapped;
+        AppServices.HdrPipeline.SetFullscreenState(false);
 
         try
         {
@@ -4622,15 +5406,44 @@ public sealed partial class MainWindow : Window
             // 2. Restore row definitions & move transport controls to normal layout
             RestoreRowDefinitions();
             MoveTransportControlsToNormalLayout();
-            SetTitleBar(DragRegion);
+            if (FloatingVideoContainer != null)
+            {
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 1);
+            }
+            ApplyTitleBarDragRegion();
 
             // 3. Request OS window restore
-            if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
+            if (!(_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)))
             {
-                AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.Overlapped)
+                {
+                    AppWindow?.SetPresenter(AppWindowPresenterKind.Overlapped);
+                }
+
+                if (AppWindow?.Presenter is OverlappedPresenter exitOp &&
+                    exitOp.State != OverlappedPresenterState.Minimized)
+                {
+                    exitOp.IsResizable = true;
+                    exitOp.IsMaximizable = true;
+                    exitOp.IsMinimizable = true;
+
+                    if (_wasMaximizedBeforeFullscreen)
+                    {
+                        exitOp.Maximize();
+                    }
+                    else
+                    {
+                        exitOp.Restore();
+                    }
+                }
             }
 
-            _isStreamingFullScreen = false;
+            if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage)
+            {
+                _isStreamingFullScreen = false;
+                ApplyStreamingFullscreenChrome(false);
+            }
 
             // 4. Restore themes and backdrop
             ApplyConfiguredTheme();
@@ -4701,6 +5514,7 @@ public sealed partial class MainWindow : Window
         {
             _isFullscreenTransitioning = false;
             _isStreamingFullScreen = false;
+            _wasMaximizedBeforeFullscreen = false;
             SetCursorVisibility(true);
 
             // Guarantee hit-test visibility on RootNavigationView and AppTitleBar
@@ -4732,6 +5546,9 @@ public sealed partial class MainWindow : Window
 
     private bool _isNavPaneExpanded = true;
     private bool _isStreamingUserExpandedPane = false;
+    private bool _isUpdatingNavPaneResponsiveness = false;
+    private DispatcherTimer? _navPaneResponsivenessTimer;
+    private double _pendingNavPaneWidth = -1;
     private AppThemeBackdrop? _lastAppliedNavBackdrop;
     private ElementTheme? _lastAppliedNavTheme;
     private SplitView? _rootSplitView;
@@ -4792,6 +5609,9 @@ public sealed partial class MainWindow : Window
         }
         ApplyContentGridEdgeStyling();
         UpdateNavigationPaneTheming();
+
+        if (TitleBarBrandIcon != null) AppIconHelper.RegisterBrandIcon(TitleBarBrandIcon);
+        if (CenteredBrandIcon != null) AppIconHelper.RegisterBrandIcon(CenteredBrandIcon);
     }
 
     private Brush GetNavigationPaneOverlayBrush(AppThemeBackdrop backdrop, ElementTheme theme, bool isLight)
@@ -4932,32 +5752,39 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (IsStreamingSection)
+        if (!_isUpdatingNavPaneResponsiveness)
         {
-            if (!_isNavigating)
+            if (IsStreamingSection)
             {
-                _isStreamingUserExpandedPane = true;
+                if (!_isNavigating)
+                {
+                    _isStreamingUserExpandedPane = true;
+                }
             }
-        }
-        else
-        {
-            _isNavPaneExpanded = true;
+            else
+            {
+                _isNavPaneExpanded = true;
+            }
         }
 
         if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Visible;
         UpdateTitleBarLayout(isPaneOpen: true);
         UpdateNavigationPaneTheming(isPaneOpen: true);
+        SyncFloatingVideoPlayer();
     }
 
     private void OnNavigationPaneClosed(NavigationView sender, object args)
     {
-        if (IsStreamingSection)
+        if (!_isUpdatingNavPaneResponsiveness)
         {
-            _isStreamingUserExpandedPane = false;
-        }
-        else
-        {
-            _isNavPaneExpanded = false;
+            if (IsStreamingSection)
+            {
+                _isStreamingUserExpandedPane = false;
+            }
+            else
+            {
+                _isNavPaneExpanded = false;
+            }
         }
 
         StreamingCompactFlyout?.Hide();
@@ -4969,6 +5796,7 @@ public sealed partial class MainWindow : Window
         if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Collapsed;
         UpdateTitleBarLayout(isPaneOpen: false);
         UpdateNavigationPaneTheming(isPaneOpen: false);
+        SyncFloatingVideoPlayer();
     }
 
     private void OnNavigationPaneOpening(NavigationView sender, object args)
@@ -4980,32 +5808,39 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (IsStreamingSection)
+        if (!_isUpdatingNavPaneResponsiveness)
         {
-            if (!_isNavigating)
+            if (IsStreamingSection)
             {
-                _isStreamingUserExpandedPane = true;
+                if (!_isNavigating)
+                {
+                    _isStreamingUserExpandedPane = true;
+                }
             }
-        }
-        else
-        {
-            _isNavPaneExpanded = true;
+            else
+            {
+                _isNavPaneExpanded = true;
+            }
         }
 
         if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Visible;
         UpdateTitleBarLayout(isPaneOpen: true);
         UpdateNavigationPaneTheming(isPaneOpen: true);
+        SyncFloatingVideoPlayer();
     }
 
     private void OnNavigationPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
     {
-        if (IsStreamingSection)
+        if (!_isUpdatingNavPaneResponsiveness)
         {
-            _isStreamingUserExpandedPane = false;
-        }
-        else
-        {
-            _isNavPaneExpanded = false;
+            if (IsStreamingSection)
+            {
+                _isStreamingUserExpandedPane = false;
+            }
+            else
+            {
+                _isNavPaneExpanded = false;
+            }
         }
 
         StreamingCompactFlyout?.Hide();
@@ -5017,6 +5852,7 @@ public sealed partial class MainWindow : Window
         if (AppSearchBox != null) AppSearchBox.Visibility = Visibility.Collapsed;
         UpdateTitleBarLayout(isPaneOpen: false);
         UpdateNavigationPaneTheming(isPaneOpen: false);
+        SyncFloatingVideoPlayer();
     }
 
     private void OnNavigationDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
@@ -5035,6 +5871,7 @@ public sealed partial class MainWindow : Window
         }
         UpdateTitleBarLayout();
         UpdateNavigationPaneTheming();
+        SyncFloatingVideoPlayer();
     }
 
     private void ForceRefreshNavigationViewLayout()
@@ -5089,6 +5926,7 @@ public sealed partial class MainWindow : Window
     private void UpdateTitleBarLayout(bool? isPaneOpen = null)
     {
         if (RootNavigationView == null) return;
+        UpdateTitleBarInsets();
 
         if (_isStreamingFullScreen || (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen && (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)))
         {
@@ -5123,11 +5961,25 @@ public sealed partial class MainWindow : Window
         if (!open)
         {
             // When menu is collapsed: Show centered title in header, hide pane brand
+            double width = RootGrid?.ActualWidth > 0 ? RootGrid.ActualWidth : 1000.0;
             if (CenteredTitleBrandPanel != null)
             {
-                _targetOpacities[CenteredTitleBrandPanel] = 1.0;
-                CenteredTitleBrandPanel.Visibility = Visibility.Visible;
-                CenteredTitleBrandPanel.Opacity = 1.0;
+                if (width < 420.0)
+                {
+                    _targetOpacities[CenteredTitleBrandPanel] = 0.0;
+                    CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+                    CenteredTitleBrandPanel.Opacity = 0.0;
+                }
+                else
+                {
+                    _targetOpacities[CenteredTitleBrandPanel] = 1.0;
+                    CenteredTitleBrandPanel.Visibility = Visibility.Visible;
+                    CenteredTitleBrandPanel.Opacity = 1.0;
+                    if (CenteredBrandText != null)
+                    {
+                        CenteredBrandText.Visibility = width < 560.0 ? Visibility.Collapsed : Visibility.Visible;
+                    }
+                }
             }
             if (PaneBrandPanel != null)
             {
@@ -5162,6 +6014,48 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void ApplyTitleBarDragRegion()
+    {
+        if (DragRegion != null)
+        {
+            SetTitleBar(DragRegion);
+        }
+        else if (AppTitleBar != null)
+        {
+            SetTitleBar(AppTitleBar);
+        }
+    }
+
+    private void UpdateTitleBarInsets()
+    {
+        if (AppWindowTitleBar.IsCustomizationSupported() && AppWindow?.TitleBar != null && AppTitleBar != null)
+        {
+            double scale = RootGrid?.XamlRoot?.RasterizationScale ?? 1.0;
+            if (scale <= 0) scale = 1.0;
+
+            double rightInsetDips = AppWindow.TitleBar.RightInset / scale;
+            if (AppTitleBarRightPaddingColumn != null)
+            {
+                bool isFullScreen = AppWindow.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+                bool isPip = AppWindow.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
+                if (isFullScreen || isPip)
+                {
+                    AppTitleBarRightPaddingColumn.Width = new GridLength(0);
+                }
+                else
+                {
+                    AppTitleBarRightPaddingColumn.Width = new GridLength(Math.Max(rightInsetDips, 140.0));
+                }
+            }
+
+            double leftInsetDips = AppWindow.TitleBar.LeftInset / scale;
+            if (AppTitleBarLeftPaddingColumn != null)
+            {
+                AppTitleBarLeftPaddingColumn.Width = new GridLength(Math.Max(leftInsetDips, 48.0));
+            }
+        }
+    }
+
     private void OnTransportControlsPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         var pointerPoint = e.GetCurrentPoint(TransportControls);
@@ -5177,7 +6071,8 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (_playback.CurrentTrack is MediaItem track && track.IsVideo)
+            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+            if (!isFullScreen && _playback.CurrentTrack is MediaItem track && track.IsVideo)
             {
                 _playback.IsVideoPlayerActive = true;
                 if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
@@ -5223,6 +6118,7 @@ public sealed partial class MainWindow : Window
             {
                 if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
                 {
+                    FullscreenMetadataOverlay.MaxHeight = Math.Max(100, (RootGrid?.ActualHeight ?? 600) - 160);
                     FullscreenMetadataOverlay.Visibility = Visibility.Visible;
                     var track = AppServices.PlaybackViewModel.CurrentTrack;
                     if (track != null)
@@ -5364,7 +6260,7 @@ public sealed partial class MainWindow : Window
                 }
                 else
                 {
-                    SeekRelative(-10);
+                    SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
                 }
                 e.Handled = true;
                 break;
@@ -5375,7 +6271,7 @@ public sealed partial class MainWindow : Window
                 }
                 else
                 {
-                    SeekRelative(10);
+                    SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
                 }
                 e.Handled = true;
                 break;
@@ -5411,7 +6307,12 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Escape:
-                if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+                if (VideoHoverPreview != null && VideoHoverPreview.Visibility == Visibility.Visible)
+                {
+                    VideoHoverPreview.ClosePreview();
+                    e.Handled = true;
+                }
+                else if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     ToggleFullscreen();
                     e.Handled = true;
@@ -5491,8 +6392,10 @@ public sealed partial class MainWindow : Window
             _lastEdgeSeekForward = isForward;
             _lastEdgeSeekTime = now;
 
-            double stepSeconds = 10.0;
-            double accumulatedSeconds = 10.0 * _edgeSeekStreak;
+            double stepSeconds = isForward
+                ? (AppServices.Settings?.Current?.SkipForwardInterval ?? 10.0)
+                : (AppServices.Settings?.Current?.SkipBackwardInterval ?? 10.0);
+            double accumulatedSeconds = stepSeconds * _edgeSeekStreak;
             double seekSeconds = isForward ? stepSeconds : -stepSeconds;
 
             SeekRelative(seekSeconds);
@@ -5532,7 +6435,7 @@ public sealed partial class MainWindow : Window
 
             // Cancel any pending play/pause single-tap timer
             _videoTapClickCount = 0;
-            _videoTapCts?.Cancel();
+            _videoTapVersion++;
 
             TriggerIncrementalSeek(isRightEdge);
             return true;
@@ -5651,7 +6554,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         _videoTapClickCount = 0;
-        _videoTapCts?.Cancel();
+        _videoTapVersion++;
         ToggleFullscreen();
     }
 
@@ -5665,23 +6568,11 @@ public sealed partial class MainWindow : Window
 
             if (_videoTapClickCount == 1)
             {
-                var cts = new System.Threading.CancellationTokenSource();
-                _videoTapCts = cts;
-                try
-                {
-                    await System.Threading.Tasks.Task.Delay(225, cts.Token);
-                    TogglePlayPause();
-                }
-                catch (System.Threading.Tasks.TaskCanceledException)
-                {
-                }
-                finally
-                {
-                    _videoTapClickCount = 0;
-                    if (_videoTapCts == cts)
-                        _videoTapCts = null;
-                    cts.Dispose();
-                }
+                int tapVersion = ++_videoTapVersion;
+                await System.Threading.Tasks.Task.Delay(225);
+                if (tapVersion != _videoTapVersion) return;
+                _videoTapClickCount = 0;
+                TogglePlayPause();
             }
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
@@ -5771,6 +6662,7 @@ public sealed partial class MainWindow : Window
         }
         if (!AppServices.Settings.Current.EnableSwipeNavigation) return;
         if (_isStreamingFullScreen || ContentFrame?.Content is Pages.StreamingYouTubePage || ContentFrame?.Content is Pages.StreamingTwitchPage) return;
+        if (pt.Position.Y < 48) return;
         if (pt.Properties.IsLeftButtonPressed)
         {
             _swipeStartX = pt.Position.X;
@@ -5828,16 +6720,24 @@ public sealed partial class MainWindow : Window
             var presenter = AppWindow.Presenter as OverlappedPresenter;
             if (presenter != null)
             {
+                if (presenter.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)))
+                {
+                    return;
+                }
+
                 bool isMaximized = presenter.State == OverlappedPresenterState.Maximized ||
                     (_subclassHwnd != nint.Zero && IsZoomed(_subclassHwnd));
                 AppServices.Settings.Current.WindowIsMaximized = isMaximized;
 
                 if (!isMaximized && presenter.State == OverlappedPresenterState.Restored)
                 {
-                    AppServices.Settings.Current.WindowWidth = AppWindow.Size.Width;
-                    AppServices.Settings.Current.WindowHeight = AppWindow.Size.Height;
-                    AppServices.Settings.Current.WindowPositionX = AppWindow.Position.X;
-                    AppServices.Settings.Current.WindowPositionY = AppWindow.Position.Y;
+                    if (AppWindow.Size.Width >= 320 && AppWindow.Size.Height >= 200)
+                    {
+                        AppServices.Settings.Current.WindowWidth = AppWindow.Size.Width;
+                        AppServices.Settings.Current.WindowHeight = AppWindow.Size.Height;
+                        AppServices.Settings.Current.WindowPositionX = AppWindow.Position.X;
+                        AppServices.Settings.Current.WindowPositionY = AppWindow.Position.Y;
+                    }
                 }
 
                 AppServices.Settings.SaveImmediate();
@@ -5859,28 +6759,28 @@ public sealed partial class MainWindow : Window
             // Smartly dismiss metadata overlay if it's visible, and ignore the play/pause toggle for this tap.
             if (HideMetadataOverlayGlobal()) return;
 
+            // If docked in mini player (not on VideoPage and not in fullscreen), clicking must navigate to the video being played on VideoPage!
+            bool isFullscreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+            bool isVideoPage = ContentFrame?.Content is VideoPage;
+            if (!isFullscreen && !isVideoPage)
+            {
+                if (_playback.CurrentTrack is MediaItem track && track.IsVideo)
+                {
+                    NavigateForTrack(track);
+                    return;
+                }
+            }
+
             NotifyActivityInFullscreen();
             _videoTapClickCount++;
 
             if (_videoTapClickCount == 1)
             {
-                var cts = new System.Threading.CancellationTokenSource();
-                _videoTapCts = cts;
-                try
-                {
-                    await System.Threading.Tasks.Task.Delay(225, cts.Token);
-                    TogglePlayPause();
-                }
-                catch (System.Threading.Tasks.TaskCanceledException)
-                {
-                }
-                finally
-                {
-                    _videoTapClickCount = 0;
-                    if (_videoTapCts == cts)
-                        _videoTapCts = null;
-                    cts.Dispose();
-                }
+                int tapVersion = ++_videoTapVersion;
+                await System.Threading.Tasks.Task.Delay(225);
+                if (tapVersion != _videoTapVersion) return;
+                _videoTapClickCount = 0;
+                TogglePlayPause();
             }
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
@@ -5889,12 +6789,24 @@ public sealed partial class MainWindow : Window
     private void OnGlobalVideoDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         e.Handled = true;
+
+        bool isFullscreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        bool isVideoPage = ContentFrame?.Content is VideoPage;
+        if (!isFullscreen && !isVideoPage)
+        {
+            if (_playback.CurrentTrack is MediaItem track && track.IsVideo)
+            {
+                NavigateForTrack(track);
+                return;
+            }
+        }
+
         if (FullscreenVideoContainer != null && TryHandleFullscreenEdgeTap(e.GetPosition(FullscreenVideoContainer)))
         {
             return;
         }
         _videoTapClickCount = 0;
-        _videoTapCts?.Cancel();
+        _videoTapVersion++;
         ToggleFullscreen();
     }
 
@@ -5909,7 +6821,17 @@ public sealed partial class MainWindow : Window
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        var presenter = AppWindow?.Presenter as OverlappedPresenter;
+        if (presenter?.State == OverlappedPresenterState.Minimized || (_subclassHwnd != nint.Zero && IsIconic(_subclassHwnd)) || e.NewSize.Width <= 0 || e.NewSize.Height <= 0)
+        {
+            return;
+        }
+
         VideoHoverPreview?.ClosePreview();
+        if (FullscreenMetadataOverlay != null)
+        {
+            FullscreenMetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 160);
+        }
         bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
         if (isFullScreen)
         {
@@ -5942,7 +6864,7 @@ public sealed partial class MainWindow : Window
 
         if (AppServices.Settings.Current.BackdropType != AppThemeBackdrop.Solid)
         {
-            if (RootGrid != null)
+            if (RootGrid != null && RootGrid.Background == null)
             {
                 RootGrid.Background = ThemeResourceHelper.GetThemeBrush("SolidBackgroundFillColorBaseBrush");
             }
@@ -5950,12 +6872,152 @@ public sealed partial class MainWindow : Window
 
         _resizePerformanceTimer?.Stop();
         _resizePerformanceTimer?.Start();
+
+        UpdateTitleBarInsets();
+        UpdateTitleBarBrandResponsiveness(e.NewSize.Width);
+        double widthDelta = Math.Abs(e.NewSize.Width - e.PreviousSize.Width);
+        ScheduleNavPaneResponsiveness(e.NewSize.Width, immediate: widthDelta > 150.0);
+    }
+
+    private void UpdateTitleBarBrandResponsiveness(double width)
+    {
+        if (CenteredTitleBrandPanel == null || CenteredTitleBrandPanel.Visibility != Visibility.Visible)
+            return;
+
+        if (width < 420.0)
+        {
+            _targetOpacities[CenteredTitleBrandPanel] = 0.0;
+            CenteredTitleBrandPanel.Visibility = Visibility.Collapsed;
+            CenteredTitleBrandPanel.Opacity = 0.0;
+        }
+        else
+        {
+            _targetOpacities[CenteredTitleBrandPanel] = 1.0;
+            CenteredTitleBrandPanel.Visibility = Visibility.Visible;
+            CenteredTitleBrandPanel.Opacity = 1.0;
+            if (CenteredBrandText != null)
+            {
+                CenteredBrandText.Visibility = width < 560.0 ? Visibility.Collapsed : Visibility.Visible;
+            }
+        }
+    }
+
+    private void ScheduleNavPaneResponsiveness(double width, bool immediate = false)
+    {
+        _pendingNavPaneWidth = width;
+
+        if (immediate)
+        {
+            _navPaneResponsivenessTimer?.Stop();
+            ApplyNavPaneResponsiveness(_pendingNavPaneWidth);
+            return;
+        }
+
+        if (_navPaneResponsivenessTimer == null)
+        {
+            _navPaneResponsivenessTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
+            _navPaneResponsivenessTimer.Tick += (s, args) =>
+            {
+                _navPaneResponsivenessTimer.Stop();
+                ApplyNavPaneResponsiveness(_pendingNavPaneWidth);
+            };
+        }
+
+        _navPaneResponsivenessTimer.Stop();
+        _navPaneResponsivenessTimer.Start();
+    }
+
+    private void ApplyNavPaneResponsiveness(double width)
+    {
+        if (RootNavigationView == null || width <= 0) return;
+
+        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        if (isFullScreen) return;
+
+        _isUpdatingNavPaneResponsiveness = true;
+        try
+        {
+            var currentMode = RootNavigationView.PaneDisplayMode;
+
+            // Hysteresis deadband:
+            // Switch to Minimal if < 540; switch away from Minimal if >= 560
+            // Switch to Compact if < 992; switch to Left (wide) if >= 1008
+            NavigationViewPaneDisplayMode targetMode;
+            if (currentMode == NavigationViewPaneDisplayMode.LeftMinimal)
+            {
+                if (width >= 1008.0)
+                    targetMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
+                else if (width >= 560.0)
+                    targetMode = NavigationViewPaneDisplayMode.LeftCompact;
+                else
+                    targetMode = NavigationViewPaneDisplayMode.LeftMinimal;
+            }
+            else if (currentMode == NavigationViewPaneDisplayMode.LeftCompact)
+            {
+                if (width < 540.0)
+                    targetMode = NavigationViewPaneDisplayMode.LeftMinimal;
+                else if (width >= 1008.0)
+                    targetMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
+                else
+                    targetMode = NavigationViewPaneDisplayMode.LeftCompact;
+            }
+            else // Left (wide)
+            {
+                if (width < 540.0)
+                    targetMode = NavigationViewPaneDisplayMode.LeftMinimal;
+                else if (width < 992.0)
+                    targetMode = NavigationViewPaneDisplayMode.LeftCompact;
+                else
+                    targetMode = IsStreamingSection ? NavigationViewPaneDisplayMode.LeftCompact : NavigationViewPaneDisplayMode.Left;
+            }
+
+            if (RootNavigationView.PaneDisplayMode != targetMode)
+            {
+                RootNavigationView.PaneDisplayMode = targetMode;
+            }
+
+            if (targetMode == NavigationViewPaneDisplayMode.LeftMinimal)
+            {
+                if (RootNavigationView.IsPaneOpen)
+                {
+                    RootNavigationView.IsPaneOpen = false;
+                }
+            }
+            else if (targetMode == NavigationViewPaneDisplayMode.LeftCompact)
+            {
+                if (!IsStreamingSection && !_isStreamingUserExpandedPane)
+                {
+                    if (RootNavigationView.IsPaneOpen)
+                    {
+                        RootNavigationView.IsPaneOpen = false;
+                    }
+                }
+            }
+            else // Left mode (Wide desktop)
+            {
+                if (!IsStreamingSection && _isNavPaneExpanded)
+                {
+                    if (!RootNavigationView.IsPaneOpen)
+                    {
+                        RootNavigationView.IsPaneOpen = true;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyNavPaneResponsiveness] Handled: {ex.Message}");
+        }
+        finally
+        {
+            _isUpdatingNavPaneResponsiveness = false;
+        }
     }
 
     private void OnFullscreenVideoContainerSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Prevent the properties flyout from bleeding off the bottom of the screen
-        FullscreenMetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 48); // 24 Top Margin + 24 Bottom Margin
+        // Prevent the properties flyout from bleeding off the bottom of the screen or covering transport controls
+        FullscreenMetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 160); // 64 Top Margin + 96 Bottom Margin
         UpdateFullscreenPlayerLayout();
     }
 
@@ -5965,115 +7027,320 @@ public sealed partial class MainWindow : Window
         OnRootGridKeyDown(sender, e);
     }
 
+    private bool _isSyncingFloatingPlayer;
+
     private void SyncFloatingVideoPlayer(bool force = false)
     {
         if (FloatingVideoContainer == null || GlobalVideoPlayer == null) return;
 
         if (!force && _isFullscreenTransitioning) return;
+        if (_isSyncingFloatingPlayer) return;
 
-        bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
-        bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
-
-        if (isFullScreen)
+        _isSyncingFloatingPlayer = true;
+        try
         {
-            // Fullscreen presentation: poster remains in transport controls overlay, video plays fullscreen
-            TransportControls?.SetMiniVideoPlayer(null);
+            bool isPip = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay;
+            bool isFullScreen = AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
 
-            bool isVideoActiveInFullscreen = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
-            if (!isVideoActiveInFullscreen || _isStreamingFullScreen)
+            if (isFullScreen)
             {
-                if (GlobalVideoPlayer.MediaPlayer != null)
+                FloatingVideoContainer.Clip = null;
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 2);
+                // Fullscreen presentation: poster remains in transport controls overlay, video plays fullscreen
+                TransportControls?.SetMiniVideoPlayer(null);
+
+                bool isVideoActiveInFullscreen = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+                if (!isVideoActiveInFullscreen || _isStreamingFullScreen)
                 {
-                    GlobalVideoPlayer.SetMediaPlayer(null);
-                }
-                FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-                return;
-            }
-
-            if (GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
-            }
-
-            FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(0);
-            FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
-            FloatingVideoContainer.Width = double.NaN;
-            FloatingVideoContainer.Height = double.NaN;
-            FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
-            FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
-            FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-            return;
-        }
-
-        if (isPip) return;
-
-        bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
-        if (!isVideoActive)
-        {
-            TransportControls?.SetMiniVideoPlayer(null);
-            if (GlobalVideoPlayer.MediaPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(null);
-            }
-            FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-            return;
-        }
-
-        if (ContentFrame?.Content is VideoPage vp && vp.FindName("VideoPlayerHost") is Microsoft.UI.Xaml.FrameworkElement host)
-        {
-            // On VideoPage: poster remains in transport bar, video plays on VideoPage host
-            TransportControls?.SetMiniVideoPlayer(null);
-
-            if (GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer);
-            }
-
-            try
-            {
-                if (!host.IsLoaded || host.XamlRoot == null || RootGrid?.XamlRoot == null || host.XamlRoot != RootGrid.XamlRoot ||
-                    host.ActualWidth <= 0 || host.ActualHeight <= 0 || host.Visibility != Microsoft.UI.Xaml.Visibility.Visible)
-                {
-                    FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
+                    {
+                        FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                    }
                     return;
                 }
 
-                var transform = host.TransformToVisual(RootGrid);
-                var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                if (GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
+                {
+                    try { GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer); } catch { }
+                }
 
-                FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8);
-                FloatingVideoContainer.Width = host.ActualWidth;
-                FloatingVideoContainer.Height = host.ActualHeight;
-                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(point.X, point.Y, 0, 0);
-                FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
-                FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
-
-                GlobalVideoPlayer.Width = double.NaN;
-                GlobalVideoPlayer.Height = double.NaN;
-                GlobalVideoPlayer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
-                GlobalVideoPlayer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
-                GlobalVideoPlayer.Stretch = AppServices.PlaybackViewModel.VideoStretch;
-                FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(0);
+                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                FloatingVideoContainer.Width = double.NaN;
+                FloatingVideoContainer.Height = double.NaN;
+                FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
+                FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
+                if (FloatingVideoContainer.Visibility != Visibility.Visible)
+                {
+                    FloatingVideoContainer.Visibility = Visibility.Visible;
+                }
+                return;
             }
-            catch (Exception ex)
+
+            if (isPip)
             {
-                System.Diagnostics.Debug.WriteLine($"[SyncFloatingVideoPlayer] Failed: {ex.Message}");
+                FloatingVideoContainer.Clip = null;
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 2);
+                TransportControls?.SetMiniVideoPlayer(null);
+
+                bool isVideoInPip = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+                if (isVideoInPip)
+                {
+                    if (GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
+                    {
+                        try { GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer); } catch { }
+                    }
+
+                    FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(0);
+                    FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                    FloatingVideoContainer.Width = double.NaN;
+                    FloatingVideoContainer.Height = double.NaN;
+                    FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                    FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                    FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
+                    FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
+                    if (FloatingVideoContainer.Visibility != Visibility.Visible)
+                    {
+                        FloatingVideoContainer.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
+                    {
+                        FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                    }
+                }
+                return;
+            }
+
+            bool isVideoActive = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
+            if (!isVideoActive)
+            {
+                FloatingVideoContainer.Clip = null;
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 1);
+                FloatingVideoContainer.Width = double.NaN;
+                FloatingVideoContainer.Height = double.NaN;
+                FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                FloatingVideoContainer.IsHitTestVisible = false;
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
+                TransportControls?.SetMiniVideoPlayer(null);
+                if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
+                {
+                    FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                }
+                return;
+            }
+
+            if (ContentFrame?.Content is VideoPage vp && vp.FindName("VideoPlayerHost") is Microsoft.UI.Xaml.FrameworkElement host)
+            {
+                // On VideoPage: poster remains in transport bar, video plays on VideoPage host
+                TransportControls?.SetMiniVideoPlayer(null);
+
+                if (GlobalVideoPlayer.MediaPlayer == null && _playback?.Session?.MediaPlayer != null)
+                {
+                    try { GlobalVideoPlayer.SetMediaPlayer(_playback.Session.MediaPlayer); } catch { }
+                }
+
+                try
+                {
+                    if (!host.IsLoaded || host.XamlRoot == null || RootGrid?.XamlRoot == null || host.XamlRoot != RootGrid.XamlRoot ||
+                        host.ActualWidth <= 0 || host.ActualHeight <= 0 || host.Visibility != Microsoft.UI.Xaml.Visibility.Visible)
+                    {
+                        if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
+                        {
+                            FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                        }
+                        FloatingVideoContainer.Clip = null;
+                        return;
+                    }
+
+                    // Strictly constrain Row and RowSpan: In windowed mode, video player must never span into Row 1 (TransportControls)
+                    Grid.SetRow(FloatingVideoContainer, 0);
+                    Grid.SetRowSpan(FloatingVideoContainer, 1);
+                    Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
+
+                    var transform = host.TransformToVisual(RootGrid);
+                    var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+
+                    double posX = Math.Max(0, point.X);
+                    double posY = Math.Max(0, point.Y);
+                    double targetWidth = host.ActualWidth;
+                    double targetHeight = host.ActualHeight;
+
+                    // Clamp targetHeight so it strictly never exceeds Row 0 available height
+                    if (RootGrid.RowDefinitions.Count > 0 && RootGrid.RowDefinitions[0].ActualHeight > 0)
+                    {
+                        double maxAvailableHeight = Math.Max(0, RootGrid.RowDefinitions[0].ActualHeight - posY);
+                        if (targetHeight > maxAvailableHeight)
+                        {
+                            targetHeight = maxAvailableHeight;
+                        }
+                    }
+
+                    // Sizing checks (handling double.NaN correctly)
+                    if (double.IsNaN(FloatingVideoContainer.Width) || Math.Abs(FloatingVideoContainer.Width - targetWidth) > 0.5)
+                    {
+                        FloatingVideoContainer.Width = targetWidth;
+                    }
+                    if (double.IsNaN(FloatingVideoContainer.Height) || Math.Abs(FloatingVideoContainer.Height - targetHeight) > 0.5)
+                    {
+                        FloatingVideoContainer.Height = targetHeight;
+                    }
+                    FloatingVideoContainer.MaxWidth = targetWidth;
+                    FloatingVideoContainer.MaxHeight = targetHeight;
+
+                    if (Math.Abs(FloatingVideoContainer.Margin.Left - posX) > 0.5 ||
+                        Math.Abs(FloatingVideoContainer.Margin.Top - posY) > 0.5 ||
+                        FloatingVideoContainer.Margin.Right != 0 ||
+                        FloatingVideoContainer.Margin.Bottom != 0)
+                    {
+                        FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(posX, posY, 0, 0);
+                    }
+                    if (FloatingVideoContainer.HorizontalAlignment != Microsoft.UI.Xaml.HorizontalAlignment.Left)
+                    {
+                        FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
+                    }
+                    if (FloatingVideoContainer.VerticalAlignment != Microsoft.UI.Xaml.VerticalAlignment.Top)
+                    {
+                        FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
+                    }
+                    FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(8);
+
+                    // Visual Fidelity Optimization: Ensure navigation pane menu items are never buried under FloatingVideoContainer
+                    bool isOverlayOpen = RootNavigationView != null &&
+                        RootNavigationView.DisplayMode != NavigationViewDisplayMode.Expanded &&
+                        (RootNavigationView.IsPaneOpen || _isNavPaneExpanded);
+
+                    if (isOverlayOpen && RootNavigationView != null)
+                    {
+                        double paneWidth = RootNavigationView.OpenPaneLength;
+                        double overlap = Math.Max(0, paneWidth - posX);
+                        if (overlap > 0 && overlap < targetWidth)
+                        {
+                            FloatingVideoContainer.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
+                            {
+                                Rect = new Windows.Foundation.Rect(overlap, 0, Math.Max(0, targetWidth - overlap), targetHeight)
+                            };
+                        }
+                        else if (overlap >= targetWidth)
+                        {
+                            FloatingVideoContainer.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
+                            {
+                                Rect = new Windows.Foundation.Rect(0, 0, 0, 0)
+                            };
+                        }
+                        else
+                        {
+                            FloatingVideoContainer.Clip = null;
+                        }
+                    }
+                    else
+                    {
+                        FloatingVideoContainer.Clip = null;
+                    }
+
+                    GlobalVideoPlayer.Width = double.NaN;
+                    GlobalVideoPlayer.Height = double.NaN;
+                    GlobalVideoPlayer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
+                    GlobalVideoPlayer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
+                    GlobalVideoPlayer.Stretch = AppServices.PlaybackViewModel.VideoStretch;
+                    if (FloatingVideoContainer.Visibility != Visibility.Visible)
+                    {
+                        FloatingVideoContainer.Visibility = Visibility.Visible;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SyncFloatingVideoPlayer] Host transform failed: {ex.Message}");
+                }
+            }
+            else
+            {
+                // Away from VideoPage in windowed mode: route video to the mini player poster placeholder in TransportControls
+                FloatingVideoContainer.Clip = null;
+                var miniHost = TransportControls?.MiniPlayerHost;
+                if (miniHost != null && TransportControls?.Visibility == Visibility.Visible)
+                {
+                    if (_playback?.Session?.MediaPlayer != null)
+                    {
+                        try { TransportControls?.SetMiniVideoPlayer(_playback.Session.MediaPlayer); } catch { }
+                    }
+
+                    if (TransportControls != null && miniHost.IsLoaded && miniHost.XamlRoot != null && RootGrid?.XamlRoot != null &&
+                        miniHost.XamlRoot == RootGrid.XamlRoot && miniHost.ActualWidth > 0 && miniHost.ActualHeight > 0)
+                    {
+                        try
+                        {
+                            Grid.SetRow(FloatingVideoContainer, 0);
+                            Grid.SetRowSpan(FloatingVideoContainer, 2);
+                            Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 100);
+
+                            var transform = miniHost.TransformToVisual(RootGrid);
+                            var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+
+                            double targetWidth = miniHost.ActualWidth;
+                            double targetHeight = miniHost.ActualHeight;
+
+                            FloatingVideoContainer.Width = targetWidth;
+                            FloatingVideoContainer.Height = targetHeight;
+                            FloatingVideoContainer.MaxWidth = targetWidth;
+                            FloatingVideoContainer.MaxHeight = targetHeight;
+                            FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(point.X, point.Y, 0, 0);
+                            FloatingVideoContainer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left;
+                            FloatingVideoContainer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
+                            FloatingVideoContainer.CornerRadius = new Microsoft.UI.Xaml.CornerRadius(4);
+                            FloatingVideoContainer.IsHitTestVisible = true;
+
+                            GlobalVideoPlayer.Width = double.NaN;
+                            GlobalVideoPlayer.Height = double.NaN;
+                            GlobalVideoPlayer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
+                            GlobalVideoPlayer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
+                            GlobalVideoPlayer.Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill;
+
+                            if (FloatingVideoContainer.Visibility != Visibility.Visible)
+                            {
+                                FloatingVideoContainer.Visibility = Visibility.Visible;
+                            }
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[SyncFloatingVideoPlayer] MiniHost transform failed: {ex.Message}");
+                        }
+                    }
+                }
+
+                // Fallback: If mini host is not ready or hidden
+                Grid.SetRow(FloatingVideoContainer, 0);
+                Grid.SetRowSpan(FloatingVideoContainer, 1);
+                FloatingVideoContainer.Width = double.NaN;
+                FloatingVideoContainer.Height = double.NaN;
+                FloatingVideoContainer.MaxWidth = double.PositiveInfinity;
+                FloatingVideoContainer.MaxHeight = double.PositiveInfinity;
+                FloatingVideoContainer.Margin = new Microsoft.UI.Xaml.Thickness(0);
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
+                FloatingVideoContainer.IsHitTestVisible = false;
+                if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
+                {
+                    FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                }
             }
         }
-        else
+        catch (Exception ex)
         {
-            // Away from VideoPage in windowed mode: detach GlobalVideoPlayer, hide floating container,
-            // and play mini video inside the transport bar!
-            if (GlobalVideoPlayer.MediaPlayer != null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(null);
-            }
-            FloatingVideoContainer.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-
-            if (_playback?.Session?.MediaPlayer != null)
-            {
-                TransportControls?.SetMiniVideoPlayer(_playback.Session.MediaPlayer);
-            }
+            System.Diagnostics.Debug.WriteLine($"[SyncFloatingVideoPlayer] Failed: {ex.Message}");
+        }
+        finally
+        {
+            _isSyncingFloatingPlayer = false;
         }
     }
 }

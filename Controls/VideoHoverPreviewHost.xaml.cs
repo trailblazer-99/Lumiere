@@ -35,6 +35,9 @@ public sealed partial class VideoHoverPreviewHost : UserControl
     private Windows.Storage.Streams.IRandomAccessStream? _activeRandomAccessStream;
     private TypedEventHandler<MediaPlayer, object>? _activeMediaOpenedHandler;
     private TypedEventHandler<MediaPlayer, MediaPlayerFailedEventArgs>? _activeMediaFailedHandler;
+    private CancellationTokenSource? _episodesThumbnailCts;
+    private System.ComponentModel.PropertyChangedEventHandler? _playbackViewModelPropertyChangedHandler;
+    private EventHandler? _playbackStateChangedHandler;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -71,6 +74,9 @@ public sealed partial class VideoHoverPreviewHost : UserControl
     private MediaItem? _activePreviewEpisode;
     private MediaItem? _effectiveParentSeries;
     private Storyboard? _activeGlideStoryboard;
+    private DispatcherTimer? _episodeHoverDebounceTimer;
+    private MediaItem? _pendingHoverEpisode;
+    private string? _currentlyLoadedPath;
 
     public bool IsPreviewActive => _activeItem != null && Visibility == Visibility.Visible;
     public bool IsExpanded => _isExpanded;
@@ -129,21 +135,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         _watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _watchdogTimer.Tick += OnWatchdogTimerTick;
 
-        AppServices.PlaybackViewModel.PropertyChanged += (s, e) =>
-        {
-            if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive) && AppServices.PlaybackViewModel.IsVideoPlayerActive)
-            {
-                DispatcherQueue?.TryEnqueue(() => ClosePreview());
-            }
-        };
+        _playbackViewModelPropertyChangedHandler = OnPlaybackViewModelPropertyChanged;
+        AppServices.PlaybackViewModel.PropertyChanged += _playbackViewModelPropertyChangedHandler;
 
-        AppServices.Playback.StateChanged += (s, e) =>
-        {
-            if (AppServices.Playback.IsPlaying && AppServices.Playback.CurrentTrack?.IsVideo == true)
-            {
-                DispatcherQueue?.TryEnqueue(() => ClosePreview());
-            }
-        };
+        _playbackStateChangedHandler = OnPlaybackStateChanged;
+        AppServices.Playback.StateChanged += _playbackStateChangedHandler;
 
         CardBorder.SizeChanged += (s, e) => EnsureHardwareRoundedClip();
         MediaContainerBorder.SizeChanged += (s, e) => EnsureHardwareRoundedClip();
@@ -155,12 +151,72 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 MediaCard.NotifyScrollActivity();
             }
         };
+        this.KeyDown += (s, e) =>
+        {
+            if (e.Key == Windows.System.VirtualKey.Escape && Visibility == Visibility.Visible)
+            {
+                e.Handled = true;
+                ClosePreview();
+            }
+        };
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         EnsureHardwareRoundedClip();
+        try
+        {
+            var player = GetOrCreateSharedPlayer();
+            PreviewVideoPlayer.SetMediaPlayer(player);
+        }
+        catch { }
+
+        if (_playbackViewModelPropertyChangedHandler == null)
+        {
+            _playbackViewModelPropertyChangedHandler = OnPlaybackViewModelPropertyChanged;
+            AppServices.PlaybackViewModel.PropertyChanged += _playbackViewModelPropertyChangedHandler;
+        }
+
+        if (_playbackStateChangedHandler == null)
+        {
+            _playbackStateChangedHandler = OnPlaybackStateChanged;
+            AppServices.Playback.StateChanged += _playbackStateChangedHandler;
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_playbackViewModelPropertyChangedHandler != null)
+        {
+            AppServices.PlaybackViewModel.PropertyChanged -= _playbackViewModelPropertyChangedHandler;
+            _playbackViewModelPropertyChangedHandler = null;
+        }
+
+        if (_playbackStateChangedHandler != null)
+        {
+            AppServices.Playback.StateChanged -= _playbackStateChangedHandler;
+            _playbackStateChangedHandler = null;
+        }
+
+        ClosePreview();
+    }
+
+    private void OnPlaybackViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive) && AppServices.PlaybackViewModel.IsVideoPlayerActive)
+        {
+            DispatcherQueue?.TryEnqueue(() => ClosePreview());
+        }
+    }
+
+    private void OnPlaybackStateChanged(object? sender, EventArgs e)
+    {
+        if (AppServices.Playback.IsPlaying && AppServices.Playback.CurrentTrack?.IsVideo == true)
+        {
+            DispatcherQueue?.TryEnqueue(() => ClosePreview());
+        }
     }
 
     private static MediaPlayer GetOrCreateSharedPlayer()
@@ -189,6 +245,14 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (_isExpanded) return; // Stay on screen if currently in expanded modal view!
         if (ReferenceEquals(_activeItem, item) && Visibility == Visibility.Visible) return;
 
+        // Cleanly stop any active glide animation so rapid card hover transitions never jitter or jump
+        if (_activeGlideStoryboard != null)
+        {
+            try { _activeGlideStoryboard.Stop(); } catch { }
+            _activeGlideStoryboard = null;
+            CardBorder.RenderTransform = null;
+        }
+
         // 1. Immediately stop pending video load and active timers from previous card
         _videoStartTimer.Stop();
         _loopTimer.Stop();
@@ -199,6 +263,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
         if (PreviewVideoPlayer != null)
         {
+            PreviewVideoPlayer.Visibility = Visibility.Visible;
             PreviewVideoPlayer.Opacity = 0.0;
             try
             {
@@ -212,11 +277,19 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             catch { }
         }
 
-        // Safely pause previous playback without destroying hardware context
+        // Safely unhook previous source card selection listener to prevent memory leak
+        if (_activeSourceCard != null)
+        {
+            try { _activeSourceCard.SelectionChanged -= OnSourceCardSelectionChanged; } catch { }
+            _activeSourceCard = null;
+        }
+
+        // Safely pause previous playback and detach source before stream cleanup to prevent Media Foundation pipeline corruption
         if (_sharedPlayer != null)
         {
             DetachPlayerEvents(_sharedPlayer);
             try { _sharedPlayer.Pause(); } catch { }
+            try { _sharedPlayer.Source = null; } catch { }
         }
 
         CleanupActiveSources();
@@ -253,19 +326,50 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             return;
         }
 
-        var cardRect = transform.TransformBounds(new Rect(0, 0, sourceCard.ActualWidth, sourceCard.ActualHeight));
+        double srcWidth = sourceCard.ActualWidth > 0
+            ? sourceCard.ActualWidth
+            : (sourceCard.CardWidth > 0 ? sourceCard.CardWidth : 150.0);
+        double srcHeight = sourceCard.ActualHeight > 0
+            ? sourceCard.ActualHeight
+            : (sourceCard.CardHeight > 0 ? sourceCard.CardHeight : 225.0);
 
-        const double targetWidth = 320;
-        const double targetHeight = 296;
+        var cardRect = transform.TransformBounds(new Rect(0, 0, srcWidth, srcHeight));
+        if (cardRect.Width <= 0) cardRect.Width = srcWidth;
+        if (cardRect.Height <= 0) cardRect.Height = srcHeight;
 
-        double left = cardRect.X + ((cardRect.Width - targetWidth) / 2.0);
+        double targetWidth = Math.Min(320.0, Math.Max(240.0, parent.ActualWidth - 24.0));
+        double targetHeight = Math.Min(296.0, Math.Max(220.0, parent.ActualHeight - 90.0));
+
+        double cardCenterX = cardRect.X + (cardRect.Width / 2.0);
+        double left = cardCenterX - (targetWidth / 2.0);
         double top = cardRect.Y - 18.0;
+
+        double minLeft = 12.0;
+        if (App.MainWindowInstance?.RootNavigationView is NavigationView nav && nav.IsPaneVisible)
+        {
+            minLeft = Math.Max(minLeft, (nav.IsPaneOpen ? nav.OpenPaneLength : nav.CompactPaneLength) + 8.0);
+        }
 
         double maxRight = parent.ActualWidth - 12.0;
         double maxBottom = parent.ActualHeight - 78.0; // Reserve space for TransportBar
 
-        if (left < 12.0) left = 12.0;
-        if (left + targetWidth > maxRight) left = Math.Max(12.0, maxRight - targetWidth);
+        // If centering over the card causes the preview to push into the navigation pane / window left margin,
+        // or if it shifts off the card's anchor, keep it anchored over the card instead of shoving it to the left window edge!
+        if (left < minLeft || left < 12.0)
+        {
+            left = Math.Max(minLeft, cardRect.X);
+        }
+        else if (cardRect.X < minLeft + 24.0 && left < cardRect.X)
+        {
+            // For the first card near the navigation pane, align flush with the card's left edge
+            left = Math.Max(minLeft, cardRect.X);
+        }
+
+        if (left + targetWidth > maxRight)
+        {
+            left = Math.Max(minLeft, maxRight - targetWidth);
+        }
+
         if (top < 12.0) top = 12.0;
         if (top + targetHeight > maxBottom) top = Math.Max(12.0, maxBottom - targetHeight);
 
@@ -276,6 +380,16 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         {
             PreviousPosterBrush.ImageSource = PreviewPosterBrush.ImageSource;
             PreviousPosterBorder.Opacity = 1.0;
+            try
+            {
+                var prevVis = ElementCompositionPreview.GetElementVisual(PreviousPosterBorder);
+                if (prevVis != null)
+                {
+                    prevVis.StopAnimation("Opacity");
+                    prevVis.Opacity = 1.0f;
+                }
+            }
+            catch { }
         }
         else
         {
@@ -297,9 +411,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (item.IsSeries && item.Episodes?.Count > 0)
         {
             effectiveSeries = item;
-            // Pick a random episode from this show for preview playback
-            int epIndex = Random.Shared.Next(item.Episodes.Count);
-            _activePreviewEpisode = item.Episodes[epIndex];
+            _activePreviewEpisode = item.Episodes[0];
         }
         else
         {
@@ -341,6 +453,14 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                     }
                 }
             }
+
+            if (effectiveSeries?.Episodes?.Count > 0)
+            {
+                _activePreviewEpisode = effectiveSeries.Episodes.FirstOrDefault(e =>
+                    e.Equals(item) ||
+                    (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, item.SourcePath, StringComparison.OrdinalIgnoreCase)))
+                    ?? effectiveSeries.Episodes[0];
+            }
         }
         _effectiveParentSeries = effectiveSeries;
 
@@ -356,7 +476,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             EpisodesDropdownButton.Visibility = canExpand ? Visibility.Visible : Visibility.Collapsed;
         }
         if (EpisodesSectionBorder != null) EpisodesSectionBorder.Visibility = Visibility.Collapsed;
-        if (EpisodesListPanel != null) EpisodesListPanel.Children.Clear();
+        ClearEpisodesList();
         if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
         if (MediaRowDefinition != null) MediaRowDefinition.Height = new GridLength(180);
         if (TitleText != null) TitleText.FontSize = 13;
@@ -477,74 +597,67 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             PlayTransitionAnimation(deltaX, deltaY);
         }
 
-        // Calculate preview scene offset
-        if (item.IsSeries && _activePreviewEpisode != null)
-        {
-            // For series, pick any random scene across the chosen episode (avoiding intro logos and credits)
-            var epDur = _activePreviewEpisode.Duration;
-            double epSec = epDur.TotalSeconds;
-            double startSec = 0;
-            if (epSec > 20.0)
-            {
-                double minSec = Math.Min(20.0, epSec * 0.12);
-                double maxSec = Math.Max(minSec + 8.0, epSec * 0.85);
-                startSec = minSec + (Random.Shared.NextDouble() * (maxSec - minSec));
-            }
-
-            _previewStart = TimeSpan.FromSeconds(startSec);
-            _previewEnd = _previewStart + TimeSpan.FromSeconds(8.0);
-            if (epSec > 0 && _previewEnd > epDur)
-            {
-                _previewEnd = epDur;
-                if (_previewEnd <= _previewStart)
-                {
-                    _previewStart = TimeSpan.FromSeconds(Math.Max(0, epSec - 8.0));
-                }
-            }
-        }
-        else
-        {
-            // Standalone video: Calculate preview scene offset (avoid intro logos and end credits)
-            var totalSec = item.Duration.TotalSeconds;
-            double startSec = 0;
-            if (totalSec > 25.0)
-            {
-                var hash = Math.Abs((item.Title ?? string.Empty).GetHashCode());
-                var ratio = 0.18 + ((hash % 16) / 100.0); // 18% to 33%
-                startSec = Math.Min(totalSec * ratio, Math.Max(0, totalSec - 10.0));
-            }
-
-            _previewStart = TimeSpan.FromSeconds(startSec);
-            _previewEnd = _previewStart + TimeSpan.FromSeconds(8.0);
-            if (item.Duration > TimeSpan.Zero && _previewEnd > item.Duration)
-            {
-                _previewEnd = item.Duration;
-                if (_previewEnd <= _previewStart)
-                {
-                    _previewStart = TimeSpan.FromSeconds(Math.Max(0, totalSec - 8.0));
-                }
-            }
-        }
+        var previewTarget = _activePreviewEpisode ?? item;
+        CalculatePreviewOffsets(previewTarget);
 
         // Phase 2: Start debounced video loading timer (only fires if user dwells on this card)
         _videoStartTimer.Start();
     }
 
+    private void CalculatePreviewOffsets(MediaItem item)
+    {
+        var totalSec = item.Duration.TotalSeconds;
+        double startSec = 0;
+        if (totalSec > 20.0)
+        {
+            var hash = Math.Abs((item.Title ?? string.Empty).GetHashCode());
+            var ratio = 0.12 + ((hash % 16) / 100.0); // 12% to 28% (avoids intro logos and opening themes)
+            startSec = Math.Min(totalSec * ratio, Math.Max(0, totalSec - 12.0));
+        }
+
+        _previewStart = TimeSpan.FromSeconds(startSec);
+        _previewEnd = _previewStart + TimeSpan.FromSeconds(12.0); // 12 seconds rich preview
+        if (item.Duration > TimeSpan.Zero && _previewEnd > item.Duration)
+        {
+            _previewEnd = item.Duration;
+            if (_previewEnd <= _previewStart)
+            {
+                _previewStart = TimeSpan.FromSeconds(Math.Max(0, totalSec - 12.0));
+            }
+        }
+    }
+
     private async void OnVideoStartTimerTick(object? sender, object e)
     {
-        _videoStartTimer.Stop();
-        var currentItem = _activeItem;
-        var currentCard = _activeSourceCard;
-        if (currentItem == null || currentCard == null || !IsPreviewActive) return;
+        try
+        {
+            _videoStartTimer.Stop();
+            var currentItem = _activeItem;
+            var currentCard = _activeSourceCard;
+            if (currentItem == null || currentCard == null || !IsPreviewActive) return;
 
-        var ct = _loadCts?.Token ?? CancellationToken.None;
-        if (ct.IsCancellationRequested) return;
+            var ct = _loadCts?.Token ?? CancellationToken.None;
+            if (ct.IsCancellationRequested) return;
 
-        var previewItem = _activePreviewEpisode ?? currentItem;
-        var path = previewItem.SourcePath ?? previewItem.FilePath;
+            var previewItem = _activePreviewEpisode ?? currentItem;
+            await StartPreviewPlaybackAsync(previewItem, ct);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnVideoStartTimerTick] Error: {ex.Message}");
+        }
+    }
+
+    private async Task StartPreviewPlaybackAsync(MediaItem targetItem, CancellationToken ct)
+    {
+        if (targetItem == null || !IsPreviewActive) return;
+        if (AppServices.PlaybackViewModel.IsVideoPlayerActive) return;
+
+        var path = targetItem.SourcePath ?? targetItem.FilePath;
         if (string.IsNullOrWhiteSpace(path))
         {
-            path = currentItem.SourcePath ?? currentItem.FilePath;
+            path = _activeItem?.SourcePath ?? _activeItem?.FilePath;
         }
         if (string.IsNullOrWhiteSpace(path)) return;
 
@@ -553,6 +666,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             var player = GetOrCreateSharedPlayer();
             try
             {
+                PreviewVideoPlayer.Visibility = Visibility.Visible;
                 PreviewVideoPlayer.SetMediaPlayer(player);
                 player.Volume = 0.0;
                 player.IsMuted = true;
@@ -560,9 +674,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             catch { }
 
             DetachPlayerEvents(player);
+            CleanupActiveSources();
+            _currentlyLoadedPath = null;
 
             var mediaSource = await CreateMediaSourceForPathAsync(path, ct);
-            if (ct.IsCancellationRequested || !ReferenceEquals(_activeItem, currentItem) || mediaSource == null)
+            if (ct.IsCancellationRequested || !IsPreviewActive || mediaSource == null)
             {
                 try { mediaSource?.Dispose(); } catch { }
                 CleanupActiveSources();
@@ -570,25 +686,28 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             }
 
             _activeMediaSource = mediaSource;
+            _currentlyLoadedPath = path;
 
-            void OnPlayerMediaOpened(MediaPlayer sender, object args)
+            CalculatePreviewOffsets(targetItem);
+
+            _activeMediaOpenedHandler = (sender, args) =>
             {
-                try
+                if (_activeMediaOpenedHandler != null)
                 {
-                    sender.MediaOpened -= OnPlayerMediaOpened;
+                    try { sender.MediaOpened -= _activeMediaOpenedHandler; } catch { }
+                    _activeMediaOpenedHandler = null;
                 }
-                catch { }
 
                 if (ct.IsCancellationRequested) return;
 
                 App.MainDispatcher?.TryEnqueue(() =>
                 {
-                    if (ct.IsCancellationRequested || !ReferenceEquals(_activeItem, currentItem)) return;
+                    if (ct.IsCancellationRequested || !IsPreviewActive) return;
 
                     try
                     {
                         var session = player.PlaybackSession;
-                        if (session != null && session.PlaybackState != MediaPlaybackState.None)
+                        if (session != null)
                         {
                             uint natW = 0;
                             uint natH = 0;
@@ -602,40 +721,22 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                             if (natW > 0 && natH > 0)
                             {
                                 UpdateResolutionBadge(natW, natH);
-                                if (string.IsNullOrEmpty(currentItem.Resolution) || currentItem.Resolution == "Unknown")
+                                if (string.IsNullOrEmpty(targetItem.Resolution) || targetItem.Resolution == "Unknown")
                                 {
-                                    currentItem.Resolution = $"{natW}x{natH}";
+                                    targetItem.Resolution = $"{natW}x{natH}";
                                 }
                             }
 
                             try
                             {
-                                if (currentItem.IsSeries && _activePreviewEpisode != null)
+                                if (targetItem.Duration <= TimeSpan.Zero && session.NaturalDuration > TimeSpan.Zero)
                                 {
-                                    if (_activePreviewEpisode.Duration <= TimeSpan.Zero && session.NaturalDuration > TimeSpan.Zero)
+                                    targetItem.Duration = session.NaturalDuration;
+                                    if (DurationText != null)
                                     {
-                                        _activePreviewEpisode.Duration = session.NaturalDuration;
-                                        double natSec = session.NaturalDuration.TotalSeconds;
-                                        if (natSec > 20.0)
-                                        {
-                                            double minSec = Math.Min(20.0, natSec * 0.12);
-                                            double maxSec = Math.Max(minSec + 8.0, natSec * 0.85);
-                                            double randomSec = minSec + (Random.Shared.NextDouble() * (maxSec - minSec));
-                                            _previewStart = TimeSpan.FromSeconds(randomSec);
-                                            _previewEnd = _previewStart + TimeSpan.FromSeconds(8.0);
-                                        }
-                                    }
-                                }
-                                else if (currentItem.Duration <= TimeSpan.Zero && session.NaturalDuration > TimeSpan.Zero)
-                                {
-                                    currentItem.Duration = session.NaturalDuration;
-                                    if (currentItem.Duration.TotalHours >= 1)
-                                    {
-                                        DurationText.Text = $"{(int)currentItem.Duration.TotalHours}h {currentItem.Duration.Minutes}m";
-                                    }
-                                    else
-                                    {
-                                        DurationText.Text = $"{currentItem.Duration.Minutes}m";
+                                        DurationText.Text = targetItem.Duration.TotalHours >= 1
+                                            ? $"{(int)targetItem.Duration.TotalHours}h {targetItem.Duration.Minutes}m"
+                                            : $"{targetItem.Duration.Minutes}m";
                                     }
                                 }
                             }
@@ -656,6 +757,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                         }
                         catch { }
 
+                        _isPreviewPlaybackFinished = false;
                         _loopTimer.Start();
                         EnsureHardwareRoundedClip();
                         FadeInVideoPlayer();
@@ -665,23 +767,20 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                         Debug.WriteLine($"[VideoHoverPreview] MediaOpened callback error: {ex.Message}");
                     }
                 });
-            }
+            };
 
-            void OnPlayerMediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
+            _activeMediaFailedHandler = (sender, args) =>
             {
-                try
+                if (_activeMediaFailedHandler != null)
                 {
-                    sender.MediaFailed -= OnPlayerMediaFailed;
+                    try { sender.MediaFailed -= _activeMediaFailedHandler; } catch { }
+                    _activeMediaFailedHandler = null;
                 }
-                catch { }
                 Debug.WriteLine($"[VideoHoverPreview] MediaPlayer error: {args.Error} ({args.ErrorMessage})");
-            }
+            };
 
-            _activeMediaOpenedHandler = OnPlayerMediaOpened;
-            _activeMediaFailedHandler = OnPlayerMediaFailed;
-
-            player.MediaOpened += OnPlayerMediaOpened;
-            player.MediaFailed += OnPlayerMediaFailed;
+            player.MediaOpened += _activeMediaOpenedHandler;
+            player.MediaFailed += _activeMediaFailedHandler;
             player.MediaEnded -= OnPlayerMediaEnded;
             player.MediaEnded += OnPlayerMediaEnded;
 
@@ -907,21 +1006,23 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         {
             EnsureHardwareRoundedClip();
 
-            _activeGlideStoryboard?.Stop();
-            _activeGlideStoryboard = null;
+            if (_activeGlideStoryboard != null)
+            {
+                try { _activeGlideStoryboard.Stop(); } catch { }
+                _activeGlideStoryboard = null;
+            }
             CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             var visual = ElementCompositionPreview.GetElementVisual(CardBorder);
             if (visual == null) return;
             var compositor = visual.Compositor;
 
-            visual.StopAnimation("Translation");
             visual.StopAnimation("Scale");
             visual.StopAnimation("Offset");
             visual.StopAnimation("Opacity");
             visual.CenterPoint = System.Numerics.Vector3.Zero;
             visual.Scale = System.Numerics.Vector3.One;
-            visual.Offset = System.Numerics.Vector3.Zero;
             CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             var easeOut = compositor.CreateCubicBezierEasingFunction(
@@ -935,6 +1036,16 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeOut);
 
             visual.StartAnimation("Opacity", opacityAnim);
+
+            if (MetadataContainerBorder != null)
+            {
+                var metaVisual = ElementCompositionPreview.GetElementVisual(MetadataContainerBorder);
+                if (metaVisual != null)
+                {
+                    metaVisual.StopAnimation("Opacity");
+                    metaVisual.Opacity = 1.0f;
+                }
+            }
         }
         catch { }
     }
@@ -945,39 +1056,46 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         {
             EnsureHardwareRoundedClip();
 
-            _activeGlideStoryboard?.Stop();
-            _activeGlideStoryboard = null;
+            if (_activeGlideStoryboard != null)
+            {
+                try { _activeGlideStoryboard.Stop(); } catch { }
+                _activeGlideStoryboard = null;
+            }
             CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             var visual = ElementCompositionPreview.GetElementVisual(CardBorder);
             if (visual == null) return;
             var compositor = visual.Compositor;
 
-            visual.StopAnimation("Translation");
             visual.StopAnimation("Scale");
+            visual.StopAnimation("Offset");
             visual.CenterPoint = System.Numerics.Vector3.Zero;
             visual.Scale = System.Numerics.Vector3.One;
             CardBorder.Translation = System.Numerics.Vector3.Zero;
 
-            // 1. Seamless poster cross-fade dissolve if previous poster is present
+            // 1. Seamless poster cross-fade dissolve if previous poster is present (200ms)
             if (PreviousPosterBrush.ImageSource != null)
             {
                 var prevVisual = ElementCompositionPreview.GetElementVisual(PreviousPosterBorder);
                 var nextVisual = ElementCompositionPreview.GetElementVisual(PreviewPosterBorder);
                 if (prevVisual != null && nextVisual != null)
                 {
+                    prevVisual.StopAnimation("Opacity");
+                    nextVisual.StopAnimation("Opacity");
+
                     var fadeEase = compositor.CreateCubicBezierEasingFunction(
                         new System.Numerics.Vector2(0.0f, 0.0f),
                         new System.Numerics.Vector2(0.0f, 1.0f));
 
                     var fadeOut = compositor.CreateScalarKeyFrameAnimation();
-                    fadeOut.Duration = TimeSpan.FromMilliseconds(250);
+                    fadeOut.Duration = TimeSpan.FromMilliseconds(200);
                     fadeOut.InsertKeyFrame(0.0f, 1.0f);
                     fadeOut.InsertKeyFrame(1.0f, 0.0f, fadeEase);
                     prevVisual.StartAnimation("Opacity", fadeOut);
 
                     var fadeIn = compositor.CreateScalarKeyFrameAnimation();
-                    fadeIn.Duration = TimeSpan.FromMilliseconds(250);
+                    fadeIn.Duration = TimeSpan.FromMilliseconds(200);
                     fadeIn.InsertKeyFrame(0.0f, 0.0f);
                     fadeIn.InsertKeyFrame(1.0f, 1.0f, fadeEase);
                     nextVisual.StartAnimation("Opacity", fadeIn);
@@ -988,26 +1106,28 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 var nextVisual = ElementCompositionPreview.GetElementVisual(PreviewPosterBorder);
                 if (nextVisual != null)
                 {
+                    nextVisual.StopAnimation("Opacity");
                     nextVisual.Opacity = 1.0f;
                 }
             }
 
-            // 2. Soft metadata transition
+            // 2. Soft metadata transition: gentle opacity cross-fade on MetadataContainerBorder so text does not pop harshly (200ms)
             var metaVisual = ElementCompositionPreview.GetElementVisual(MetadataContainerBorder);
             if (metaVisual != null)
             {
+                metaVisual.StopAnimation("Opacity");
                 var metaEase = compositor.CreateCubicBezierEasingFunction(
                     new System.Numerics.Vector2(0.0f, 0.0f),
                     new System.Numerics.Vector2(0.0f, 1.0f));
 
                 var metaFade = compositor.CreateScalarKeyFrameAnimation();
-                metaFade.Duration = TimeSpan.FromMilliseconds(250);
-                metaFade.InsertKeyFrame(0.0f, 0.5f);
+                metaFade.Duration = TimeSpan.FromMilliseconds(200);
+                metaFade.InsertKeyFrame(0.0f, 0.25f);
                 metaFade.InsertKeyFrame(1.0f, 1.0f, metaEase);
                 metaVisual.StartAnimation("Opacity", metaFade);
             }
 
-            // 3. Physical glide transition using XAML TranslateTransform (smooth Fluent deceleration)
+            // 3. Physical glide transition using XAML TranslateTransform (smooth Fluent cubic deceleration, 220ms)
             if (Math.Abs(deltaX) > 1.0 || Math.Abs(deltaY) > 1.0)
             {
                 var transform = new TranslateTransform { X = deltaX, Y = deltaY };
@@ -1019,7 +1139,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 {
                     From = deltaX,
                     To = 0.0,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(300)),
+                    Duration = new Duration(TimeSpan.FromMilliseconds(220)),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 Storyboard.SetTarget(animX, transform);
@@ -1029,7 +1149,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 {
                     From = deltaY,
                     To = 0.0,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(300)),
+                    Duration = new Duration(TimeSpan.FromMilliseconds(220)),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 Storyboard.SetTarget(animY, transform);
@@ -1054,7 +1174,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             {
                 // In-place gentle cross-fade
                 var softFade = compositor.CreateScalarKeyFrameAnimation();
-                softFade.Duration = TimeSpan.FromMilliseconds(220);
+                softFade.Duration = TimeSpan.FromMilliseconds(200);
                 softFade.InsertKeyFrame(0.0f, 0.7f);
                 softFade.InsertKeyFrame(1.0f, 1.0f);
                 visual.StartAnimation("Opacity", softFade);
@@ -1068,6 +1188,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         try
         {
             EnsureHardwareRoundedClip();
+            PreviewVideoPlayer.Visibility = Visibility.Visible;
             PreviewVideoPlayer.Opacity = 1.0;
             LoopProgressBar.Visibility = Visibility.Visible;
 
@@ -1080,13 +1201,46 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             fadeAnim.InsertKeyFrame(0.0f, 0.0f);
             fadeAnim.InsertKeyFrame(1.0f, 1.0f);
 
+            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             visual.StartAnimation("Opacity", fadeAnim);
+            batch.Completed += (s, e) =>
+            {
+                try
+                {
+                    visual.Opacity = 1.0f;
+                    PreviewVideoPlayer.Opacity = 1.0;
+                }
+                catch { }
+                finally
+                {
+                    batch.Dispose();
+                }
+            };
+            batch.End();
         }
         catch
         {
+            PreviewVideoPlayer.Visibility = Visibility.Visible;
             PreviewVideoPlayer.Opacity = 1.0;
             LoopProgressBar.Visibility = Visibility.Visible;
         }
+    }
+
+    public void CancelExitGraceTimer()
+    {
+        _exitGraceTimer.Stop();
+    }
+
+    public void StartExitGraceTimer()
+    {
+        if (_isExpanded) return;
+        _exitGraceTimer.Stop();
+        _exitGraceTimer.Start();
+    }
+
+    public void OnCardHoverTransition(MediaCard newCard)
+    {
+        _exitGraceTimer.Stop();
     }
 
     public void OnSourceCardPointerEntered(MediaCard sourceCard)
@@ -1343,6 +1497,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
     private void FadeVideoToPoster()
     {
+        if (_isExpanded) return;
         if (_isPreviewPlaybackFinished) return;
         _isPreviewPlaybackFinished = true;
 
@@ -1403,12 +1558,22 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             }
         }
         catch { }
+        try
+        {
+            player.MediaEnded -= OnPlayerMediaEnded;
+        }
+        catch { }
     }
 
     private void CleanupActiveSources()
     {
         try
         {
+            if (_sharedPlayer != null)
+            {
+                try { _sharedPlayer.Source = null; } catch { }
+            }
+
             try { _activeMediaSource?.Dispose(); } catch { }
             _activeMediaSource = null;
 
@@ -1423,6 +1588,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 try { _activeFileStream.Dispose(); } catch { }
                 _activeFileStream = null;
             }
+            _currentlyLoadedPath = null;
         }
         catch { }
     }
@@ -1432,10 +1598,15 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         _activeGlideStoryboard?.Stop();
         _activeGlideStoryboard = null;
         CardBorder.RenderTransform = null;
+        CardBorder.Translation = System.Numerics.Vector3.Zero;
 
         var oldCts = _loadCts;
         _loadCts = null;
         try { oldCts?.Cancel(); } catch { }
+
+        try { _episodeHoverDebounceTimer?.Stop(); } catch { }
+        _pendingHoverEpisode = null;
+        _currentlyLoadedPath = null;
 
         _videoStartTimer.Stop();
         _watchdogTimer.Stop();
@@ -1467,8 +1638,22 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
         if (EpisodesDropdownButton != null) EpisodesDropdownButton.Visibility = Visibility.Collapsed;
         if (EpisodesSectionBorder != null) EpisodesSectionBorder.Visibility = Visibility.Collapsed;
-        if (EpisodesListPanel != null) EpisodesListPanel.Children.Clear();
-        if (MetadataContainerBorder != null) MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
+        ClearEpisodesList();
+        if (MetadataContainerBorder != null)
+        {
+            MetadataContainerBorder.CornerRadius = new CornerRadius(0, 0, 7, 7);
+            MetadataContainerBorder.Opacity = 1.0;
+            try
+            {
+                var metaVisual = ElementCompositionPreview.GetElementVisual(MetadataContainerBorder);
+                if (metaVisual != null)
+                {
+                    metaVisual.StopAnimation("Opacity");
+                    metaVisual.Opacity = 1.0f;
+                }
+            }
+            catch { }
+        }
         if (MediaRowDefinition != null) MediaRowDefinition.Height = new GridLength(180);
         if (TitleText != null) TitleText.FontSize = 13;
         if (DurationText != null) DurationText.FontSize = 11;
@@ -1496,15 +1681,13 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
         try
         {
-            try { PreviewVideoPlayer.SetMediaPlayer(null); } catch { }
+            PreviewVideoPlayer.Visibility = Visibility.Visible;
             if (_sharedPlayer != null)
             {
                 DetachPlayerEvents(_sharedPlayer);
                 try { _sharedPlayer.MediaEnded -= OnPlayerMediaEnded; } catch { }
                 try { _sharedPlayer.Pause(); } catch { }
                 try { _sharedPlayer.Source = null; } catch { }
-                try { _sharedPlayer.Dispose(); } catch { }
-                _sharedPlayer = null;
             }
             PreviewVideoPlayer.Opacity = 0.0;
             PreviewPosterBrush.ImageSource = null;
@@ -1523,7 +1706,6 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                     visual.StopAnimation("Offset");
                     visual.StopAnimation("Opacity");
                     visual.Scale = System.Numerics.Vector3.One;
-                    visual.Offset = System.Numerics.Vector3.Zero;
                     visual.CenterPoint = System.Numerics.Vector3.Zero;
                     visual.Opacity = 1.0f;
                 }
@@ -1567,10 +1749,22 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 ? _activePreviewEpisode.Duration
                 : (_activeItem.Duration > TimeSpan.Zero ? _activeItem.Duration : TimeSpan.Zero);
 
-            // Stop preview video when preview end is reached without looping; cross-fade back to static poster image
+            // Handle preview boundary reached
             if (pos >= _previewEnd || (maxDuration > TimeSpan.Zero && pos >= maxDuration))
             {
-                FadeVideoToPoster();
+                if (_isExpanded)
+                {
+                    // Seamlessly loop the preview in the expanded modal
+                    try
+                    {
+                        session.Position = _previewStart;
+                    }
+                    catch { }
+                }
+                else
+                {
+                    FadeVideoToPoster();
+                }
             }
         }
         catch (Exception ex)
@@ -1684,6 +1878,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             _activeGlideStoryboard?.Stop();
             _activeGlideStoryboard = null;
             CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
 
             // ── Phase 1: Capture compact card geometry BEFORE layout changes ──
             double compactLeft = _currentLeft >= 0 ? _currentLeft : 12.0;
@@ -1708,27 +1903,39 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 28));
             CardBorder.Background = modalCardBg;
 
-            if (hasEpisodes && seriesItem != null)
+            if (hasEpisodes && seriesItem?.Episodes != null && seriesItem.Episodes.Count > 0)
             {
+                if (_activePreviewEpisode == null || !seriesItem.Episodes.Contains(_activePreviewEpisode))
+                {
+                    _activePreviewEpisode = seriesItem.Episodes[0];
+                }
+
                 // Generous modal with episodes lineup at bottom
-                double maxAvailableWidth = Math.Max(600.0, parentWidth - 32.0);
-                expandedWidth = Math.Clamp(parentWidth * 0.58, 720.0, Math.Min(1180.0, maxAvailableWidth));
+                double maxAvailableWidth = Math.Max(320.0, parentWidth - 32.0);
+                double minTargetW = Math.Min(720.0, maxAvailableWidth);
+                double maxTargetW = Math.Min(1180.0, maxAvailableWidth);
+                expandedWidth = minTargetW <= maxTargetW ? Math.Clamp(parentWidth * 0.58, minTargetW, maxTargetW) : maxAvailableWidth;
                 if (expandedWidth > maxAvailableWidth) expandedWidth = maxAvailableWidth;
 
                 const double metadataRequiredHeight = 105.0;
                 const double episodesRequiredHeight = 235.0;
                 double nonVideoHeight = metadataRequiredHeight + episodesRequiredHeight; // 340px
 
-                double maxAvailableHeight = Math.Max(520.0, maxBottom - 20.0);
-                expandedHeight = Math.Clamp(maxBottom * 0.84, 680.0, Math.Min(880.0, maxAvailableHeight));
+                double maxAvailableHeight = Math.Max(340.0, maxBottom - 20.0);
+                double minTargetH = Math.Min(680.0, maxAvailableHeight);
+                double maxTargetH = Math.Min(880.0, maxAvailableHeight);
+                expandedHeight = minTargetH <= maxTargetH ? Math.Clamp(maxBottom * 0.84, minTargetH, maxTargetH) : maxAvailableHeight;
                 if (expandedHeight > maxAvailableHeight) expandedHeight = maxAvailableHeight;
 
-                videoExpandedHeight = Math.Clamp(expandedHeight - nonVideoHeight, 260.0, 420.0);
+                double maxVideoH = Math.Max(120.0, expandedHeight - nonVideoHeight);
+                double minVideoH = Math.Min(260.0, maxVideoH);
+                double maxVideoClamped = Math.Min(420.0, maxVideoH);
+                videoExpandedHeight = minVideoH <= maxVideoClamped ? Math.Clamp(expandedHeight - nonVideoHeight, minVideoH, maxVideoClamped) : maxVideoH;
                 expandedHeight = videoExpandedHeight + nonVideoHeight;
                 if (expandedHeight > maxAvailableHeight)
                 {
                     expandedHeight = maxAvailableHeight;
-                    videoExpandedHeight = Math.Max(220.0, expandedHeight - nonVideoHeight);
+                    videoExpandedHeight = Math.Max(120.0, expandedHeight - nonVideoHeight);
                 }
 
                 if (MetadataContainerBorder != null)
@@ -1756,19 +1963,21 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             else
             {
                 // Standalone video (16:9 widescreen presentation)
-                double maxAvailableWidth = Math.Max(500.0, parentWidth - 48.0);
-                expandedWidth = Math.Clamp(parentWidth * 0.46, 520.0, Math.Min(700.0, maxAvailableWidth));
+                double maxAvailableWidth = Math.Max(280.0, parentWidth - 48.0);
+                double minTargetW = Math.Min(520.0, maxAvailableWidth);
+                double maxTargetW = Math.Min(700.0, maxAvailableWidth);
+                expandedWidth = minTargetW <= maxTargetW ? Math.Clamp(parentWidth * 0.46, minTargetW, maxTargetW) : maxAvailableWidth;
                 if (expandedWidth > maxAvailableWidth) expandedWidth = maxAvailableWidth;
 
                 const double metadataRequiredHeight = 118.0;
                 videoExpandedHeight = Math.Round(expandedWidth * 9.0 / 16.0);
                 expandedHeight = videoExpandedHeight + metadataRequiredHeight;
 
-                double maxAvailableHeight = Math.Max(380.0, maxBottom - 20.0);
+                double maxAvailableHeight = Math.Max(260.0, maxBottom - 20.0);
                 if (expandedHeight > maxAvailableHeight)
                 {
                     expandedHeight = maxAvailableHeight;
-                    videoExpandedHeight = Math.Max(220.0, expandedHeight - metadataRequiredHeight);
+                    videoExpandedHeight = Math.Max(120.0, expandedHeight - metadataRequiredHeight);
                 }
 
                 if (MetadataContainerBorder != null)
@@ -1797,12 +2006,18 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             if (QualityPillText != null) QualityPillText.FontSize = 10;
             if (HdrPillText != null) HdrPillText.FontSize = 10;
 
-            // ── Phase 2: Apply expanded layout ──
+            // ── Phase 2: Apply expanded layout (Dead-centre XAML layout with 39px bottom clearance) ──
+            double expandedLeft = Math.Max(12.0, (parentWidth - expandedWidth) / 2.0);
+            double expandedTop = Math.Max(12.0, (parentHeight - expandedHeight - 39.0) / 2.0);
+
             CardBorder.HorizontalAlignment = HorizontalAlignment.Center;
             CardBorder.VerticalAlignment = VerticalAlignment.Center;
-            CardBorder.Margin = new Thickness(0, 0, 0, 39); // Centered with clearance for transport bar
+            CardBorder.Margin = new Thickness(0, 0, 0, 39);
             CardBorder.Width = expandedWidth;
             CardBorder.Height = expandedHeight;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+            _currentLeft = expandedLeft;
+            _currentTop = expandedTop;
 
             if (MediaRowDefinition != null)
             {
@@ -1828,8 +2043,49 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             this.UpdateLayout();
             EnsureHardwareRoundedClip();
 
-            // ── Phase 3: ConnectedAnimation-Style Morph (Composition Scale + Offset + Opacity) ──
-            PlayExpandAnimation(compactLeft, compactTop, compactW, compactH, expandedWidth, expandedHeight, parentWidth, parentHeight);
+            // Ensure preview video playback is running in the expanded modal
+            _isPreviewPlaybackFinished = false;
+            if (PreviewVideoPlayer != null) PreviewVideoPlayer.Visibility = Visibility.Visible;
+            _videoStartTimer.Stop();
+            var targetForPlayback = _activePreviewEpisode ?? displayItem;
+            if (targetForPlayback != null)
+            {
+                var targetPath = targetForPlayback.SourcePath ?? targetForPlayback.FilePath;
+                if (string.IsNullOrWhiteSpace(targetPath))
+                {
+                    targetPath = _activeItem?.SourcePath ?? _activeItem?.FilePath;
+                }
+
+                if (!string.IsNullOrEmpty(targetPath) &&
+                    string.Equals(_currentlyLoadedPath, targetPath, StringComparison.OrdinalIgnoreCase) &&
+                    _sharedPlayer != null && _sharedPlayer.Source != null)
+                {
+                    // Already loaded: seamlessly resume or keep playing in expanded modal
+                    try
+                    {
+                        var session = _sharedPlayer.PlaybackSession;
+                        if (session != null && session.PlaybackState != MediaPlaybackState.Playing)
+                        {
+                            if (session.Position >= _previewEnd || session.Position < _previewStart)
+                            {
+                                session.Position = _previewStart;
+                            }
+                            _sharedPlayer.Play();
+                        }
+                        _loopTimer.Start();
+                        EnsureHardwareRoundedClip();
+                        FadeInVideoPlayer();
+                    }
+                    catch { }
+                }
+                else
+                {
+                    _ = StartPreviewPlaybackAsync(targetForPlayback, _loadCts?.Token ?? CancellationToken.None);
+                }
+            }
+
+            // ── Phase 3: ConnectedAnimation-Style Morph (Composition Scale + Translation + Opacity) ──
+            PlayExpandAnimation(compactLeft, compactTop, compactW, compactH, expandedWidth, expandedHeight, expandedLeft, expandedTop);
         }
         else
         {
@@ -1841,23 +2097,28 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             }
             if (EpisodesDropdownButton != null) ToolTipService.SetToolTip(EpisodesDropdownButton, "Expand");
 
+            // Stop any active glide animation immediately
+            _activeGlideStoryboard?.Stop();
+            _activeGlideStoryboard = null;
+            CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+
             // ── Phase 1: Capture expanded card geometry BEFORE layout changes ──
             double expandedW = CardBorder.ActualWidth > 0 ? CardBorder.ActualWidth : CardBorder.Width;
             double expandedH = CardBorder.ActualHeight > 0 ? CardBorder.ActualHeight : CardBorder.Height;
 
-            // Get the expanded card's rendered position relative to parent
-            double expandedCenterX = 0;
-            double expandedCenterY = 0;
+            FrameworkElement? parentElem = Parent as FrameworkElement;
+            double pWidth = parentElem?.ActualWidth > 0 ? parentElem.ActualWidth : (ActualWidth > 0 ? ActualWidth : 1600.0);
+            double pHeight = parentElem?.ActualHeight > 0 ? parentElem.ActualHeight : (ActualHeight > 0 ? ActualHeight : 900.0);
+
+            double expandedLeft = Math.Max(12.0, (pWidth - expandedW) / 2.0);
+            double expandedTop = Math.Max(12.0, (pHeight - expandedH - 39.0) / 2.0);
             try
             {
-                FrameworkElement? parentElem = Parent as FrameworkElement;
-                if (parentElem != null)
-                {
-                    var transform = CardBorder.TransformToVisual(parentElem);
-                    var expandedPos = transform.TransformPoint(new Point(0, 0));
-                    expandedCenterX = expandedPos.X;
-                    expandedCenterY = expandedPos.Y;
-                }
+                var transform = CardBorder.TransformToVisual(this);
+                var expandedPos = transform.TransformPoint(new Point(0, 0));
+                if (expandedPos.X >= 0) expandedLeft = expandedPos.X;
+                if (expandedPos.Y >= 0) expandedTop = expandedPos.Y;
             }
             catch { }
 
@@ -1916,7 +2177,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 if (QualityPillText != null) QualityPillText.FontSize = 9;
                 if (HdrPillText != null) HdrPillText.FontSize = 9;
 
-                double targetLeft = _originalLeft >= 0 ? _originalLeft : (_currentLeft >= 0 ? _currentLeft : 12.0);
+                double targetLeft = _originalLeft >= 0 ? _originalLeft : 12.0;
                 double targetTop = _originalTop >= 0 ? _originalTop : 12.0;
 
                 if (ModalDismissBackdrop != null)
@@ -1930,6 +2191,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 CardBorder.Margin = new Thickness(targetLeft, targetTop, 0, 0);
                 CardBorder.Width = compactWidth;
                 CardBorder.Height = compactHeight;
+                CardBorder.Translation = System.Numerics.Vector3.Zero;
                 _currentLeft = targetLeft;
                 _currentTop = targetTop;
 
@@ -1946,6 +2208,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 {
                     EpisodesSectionBorder.Visibility = Visibility.Collapsed;
                     EpisodesSectionBorder.Opacity = 1.0;
+                    ClearEpisodesList();
                     var epVisual = ElementCompositionPreview.GetElementVisual(EpisodesSectionBorder);
                     if (epVisual != null)
                     {
@@ -1958,8 +2221,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 this.UpdateLayout();
                 EnsureHardwareRoundedClip();
 
-                // Play reverse morph: start at expanded scale/offset, animate to compact (1.0)
-                PlayCollapseAnimation(expandedCenterX, expandedCenterY, expandedW, expandedH,
+                // Play reverse morph: start at expanded scale/translation, animate to compact (1.0)
+                PlayCollapseAnimation(expandedLeft, expandedTop, expandedW, expandedH,
                     compactWidth, compactHeight, targetLeft, targetTop);
             };
             collapseTimer.Start();
@@ -1974,8 +2237,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             if (visual == null) return;
             var compositor = visual.Compositor;
 
-            visual.StopAnimation("Translation");
             visual.StopAnimation("Scale");
+            visual.StopAnimation("Offset");
             visual.StopAnimation("Opacity");
             visual.CenterPoint = System.Numerics.Vector3.Zero;
             visual.Scale = System.Numerics.Vector3.One;
@@ -1997,45 +2260,87 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
     /// <summary>
     /// ConnectedAnimation-style expand morph: animates the card from its compact position/size
-    /// to the expanded centered modal using Composition Scale + Offset + Opacity.
-    /// The visual starts at the compact dimensions (via inverse scale) and glides to final 1.0 scale.
+    /// to the expanded centered modal using Composition Scale + Translation + Opacity.
+    /// The visual starts at the compact dimensions (via inverse scale and translation) and glides to final centered state.
     /// </summary>
     private void PlayExpandAnimation(
         double compactLeft, double compactTop, double compactW, double compactH,
-        double expandedW, double expandedH, double parentWidth, double parentHeight)
+        double expandedW, double expandedH, double expandedLeft, double expandedTop)
     {
         try
         {
+            _activeGlideStoryboard?.Stop();
+            _activeGlideStoryboard = null;
+            CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+
             var visual = ElementCompositionPreview.GetElementVisual(CardBorder);
             if (visual == null) return;
             var compositor = visual.Compositor;
 
-            visual.StopAnimation("Translation");
             visual.StopAnimation("Scale");
+            visual.StopAnimation("Offset");
             visual.StopAnimation("Opacity");
-
-            // Calculate the expanded card's rendered position (centered with bottom margin 39)
-            double expandedLeft = (parentWidth - expandedW) / 2.0;
-            double expandedTop = (parentHeight - expandedH - 39.0) / 2.0;
 
             // Scale ratios: how much smaller the compact card is relative to expanded
             float scaleX = (float)(compactW / expandedW);
             float scaleY = (float)(compactH / expandedH);
 
-            // Offset delta: where compact card center is, relative to expanded card center
+            // Translation delta: where compact card center was, relative to expanded card center
             double compactCenterX = compactLeft + (compactW / 2.0);
             double compactCenterY = compactTop + (compactH / 2.0);
             double expandedCenterX = expandedLeft + (expandedW / 2.0);
             double expandedCenterY = expandedTop + (expandedH / 2.0);
-            float offsetX = (float)(compactCenterX - expandedCenterX);
-            float offsetY = (float)(compactCenterY - expandedCenterY);
+            double deltaX = compactCenterX - expandedCenterX;
+            double deltaY = compactCenterY - expandedCenterY;
+
+            // XAML TranslateTransform for gliding smoothly from compact position to dead-centre
+            var transform = new TranslateTransform { X = deltaX, Y = deltaY };
+            CardBorder.RenderTransform = transform;
+
+            var sb = new Storyboard();
+
+            var animX = new DoubleAnimation
+            {
+                From = deltaX,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(300)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animX, transform);
+            Storyboard.SetTargetProperty(animX, "X");
+
+            var animY = new DoubleAnimation
+            {
+                From = deltaY,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(300)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animY, transform);
+            Storyboard.SetTargetProperty(animY, "Y");
+
+            sb.Children.Add(animX);
+            sb.Children.Add(animY);
+
+            sb.Completed += (s, e) =>
+            {
+                if (ReferenceEquals(_activeGlideStoryboard, sb))
+                {
+                    _activeGlideStoryboard = null;
+                }
+                CardBorder.RenderTransform = null;
+                CardBorder.Translation = System.Numerics.Vector3.Zero;
+            };
+
+            _activeGlideStoryboard = sb;
+            sb.Begin();
 
             // Set CenterPoint to center of the expanded card so scale emanates from center
             visual.CenterPoint = new System.Numerics.Vector3((float)(expandedW / 2.0), (float)(expandedH / 2.0), 0f);
 
-            // Start visual at compact scale/offset (the "source" of the connected animation)
+            // Start visual at compact scale
             visual.Scale = new System.Numerics.Vector3(scaleX, scaleY, 1.0f);
-            visual.Offset = new System.Numerics.Vector3(offsetX, offsetY, 0f);
 
             // Fluent Design decelerate curve (natural overshoot-free landing)
             var easeDecelerate = compositor.CreateCubicBezierEasingFunction(
@@ -2044,33 +2349,38 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
             // Scale animation: compact ratio → 1.0 (full expanded size)
             var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-            scaleAnim.Duration = TimeSpan.FromMilliseconds(367);
+            scaleAnim.Duration = TimeSpan.FromMilliseconds(300);
             scaleAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(scaleX, scaleY, 1.0f));
             scaleAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.One, easeDecelerate);
-
-            // Offset animation: delta → 0 (glide from compact position to centered)
-            var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnim.Duration = TimeSpan.FromMilliseconds(367);
-            offsetAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(offsetX, offsetY, 0f));
-            offsetAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.Zero, easeDecelerate);
 
             // Opacity animation: fade in smoothly
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
             opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
-            opacityAnim.InsertKeyFrame(0.0f, 0.5f);
+            opacityAnim.InsertKeyFrame(0.0f, 0.6f);
             opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeDecelerate);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             visual.StartAnimation("Scale", scaleAnim);
-            visual.StartAnimation("Offset", offsetAnim);
             visual.StartAnimation("Opacity", opacityAnim);
             batch.Completed += (s, e) =>
             {
                 try
                 {
                     visual.Scale = System.Numerics.Vector3.One;
-                    visual.Offset = System.Numerics.Vector3.Zero;
                     visual.CenterPoint = System.Numerics.Vector3.Zero;
+                    CardBorder.RenderTransform = null;
+                    CardBorder.Translation = System.Numerics.Vector3.Zero;
+                    EnsureHardwareRoundedClip();
+                    if (PreviewVideoPlayer != null)
+                    {
+                        PreviewVideoPlayer.Visibility = Visibility.Visible;
+                        if (_sharedPlayer != null && (_sharedPlayer.PlaybackSession?.PlaybackState == MediaPlaybackState.Playing || _sharedPlayer.Source != null))
+                        {
+                            PreviewVideoPlayer.Opacity = 1.0;
+                            var vpVisual = ElementCompositionPreview.GetElementVisual(PreviewVideoPlayer);
+                            if (vpVisual != null) vpVisual.Opacity = 1.0f;
+                        }
+                    }
                     if (EpisodesSectionBorder != null && EpisodesSectionBorder.Visibility == Visibility.Visible)
                     {
                         EpisodesSectionBorder.Opacity = 1.0;
@@ -2082,6 +2392,10 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                     }
                 }
                 catch { }
+                finally
+                {
+                    batch.Dispose();
+                }
             };
             batch.End();
 
@@ -2133,13 +2447,17 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 }
             }
         }
-        catch { }
+        catch
+        {
+            CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+        }
     }
 
     /// <summary>
     /// ConnectedAnimation-style collapse morph: animates the compact card from the expanded
-    /// position/size back to its compact anchor using Composition Scale + Offset + Opacity.
-    /// The visual starts at the expanded ratio (via oversized scale) and shrinks to 1.0 scale.
+    /// position/size back to its compact anchor using Composition Scale + XAML Storyboard Glide + Opacity.
+    /// The visual starts at the expanded ratio and glides smoothly back into the compact anchor.
     /// </summary>
     private void PlayCollapseAnimation(
         double expandedLeft, double expandedTop, double expandedW, double expandedH,
@@ -2147,74 +2465,124 @@ public sealed partial class VideoHoverPreviewHost : UserControl
     {
         try
         {
+            _activeGlideStoryboard?.Stop();
+            _activeGlideStoryboard = null;
+            CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+
             var visual = ElementCompositionPreview.GetElementVisual(CardBorder);
             if (visual == null) return;
             var compositor = visual.Compositor;
 
-            visual.StopAnimation("Translation");
             visual.StopAnimation("Scale");
-            visual.StopAnimation("Opacity");
             visual.StopAnimation("Offset");
+            visual.StopAnimation("Opacity");
 
             // Scale ratios: how much larger the expanded card was relative to current compact
             float scaleX = (float)(expandedW / compactW);
             float scaleY = (float)(expandedH / compactH);
 
-            // Offset delta: where expanded card center was, relative to compact card center
+            // Translation delta: where expanded card center was, relative to compact card center
             double compactCenterX = compactLeft + (compactW / 2.0);
             double compactCenterY = compactTop + (compactH / 2.0);
             double expandedCenterX = expandedLeft + (expandedW / 2.0);
             double expandedCenterY = expandedTop + (expandedH / 2.0);
-            float offsetX = (float)(expandedCenterX - compactCenterX);
-            float offsetY = (float)(expandedCenterY - compactCenterY);
+            double deltaX = expandedCenterX - compactCenterX;
+            double deltaY = expandedCenterY - compactCenterY;
+
+            // XAML TranslateTransform for gliding from expanded center to compact anchor
+            var transform = new TranslateTransform { X = deltaX, Y = deltaY };
+            CardBorder.RenderTransform = transform;
+
+            var sb = new Storyboard();
+
+            var animX = new DoubleAnimation
+            {
+                From = deltaX,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(250)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animX, transform);
+            Storyboard.SetTargetProperty(animX, "X");
+
+            var animY = new DoubleAnimation
+            {
+                From = deltaY,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(250)),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animY, transform);
+            Storyboard.SetTargetProperty(animY, "Y");
+
+            sb.Children.Add(animX);
+            sb.Children.Add(animY);
+
+            sb.Completed += (s, e) =>
+            {
+                if (ReferenceEquals(_activeGlideStoryboard, sb))
+                {
+                    _activeGlideStoryboard = null;
+                }
+                CardBorder.RenderTransform = null;
+                CardBorder.Translation = System.Numerics.Vector3.Zero;
+            };
+
+            _activeGlideStoryboard = sb;
+            sb.Begin();
 
             // CenterPoint at center of compact card
             visual.CenterPoint = new System.Numerics.Vector3((float)(compactW / 2.0), (float)(compactH / 2.0), 0f);
 
-            // Start visual at expanded scale/offset (the "source" of the reverse connected animation)
+            // Start visual at expanded scale
             visual.Scale = new System.Numerics.Vector3(scaleX, scaleY, 1.0f);
-            visual.Offset = new System.Numerics.Vector3(offsetX, offsetY, 0f);
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
 
-            // Fluent Design accelerate curve (natural pickup into resting position)
-            var easeAccelerate = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(1.0f, 0.0f),
-                new System.Numerics.Vector2(1.0f, 1.0f));
+            // Fluent Design decelerate curve
+            var easeOut = compositor.CreateCubicBezierEasingFunction(
+                new System.Numerics.Vector2(0.0f, 0.0f),
+                new System.Numerics.Vector2(0.0f, 1.0f));
 
-            // Scale animation: expanded ratio → 1.0 (compact size)
+            // Scale animation: expanded ratio -> 1.0 (compact size)
             var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
             scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
             scaleAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(scaleX, scaleY, 1.0f));
-            scaleAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.One, easeAccelerate);
+            scaleAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.One, easeOut);
 
-            // Offset animation: delta → 0 (glide from expanded center to compact anchor)
-            var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
-            offsetAnim.InsertKeyFrame(0.0f, new System.Numerics.Vector3(offsetX, offsetY, 0f));
-            offsetAnim.InsertKeyFrame(1.0f, System.Numerics.Vector3.Zero, easeAccelerate);
-
-            // Opacity: keep fully visible, gentle settle
+            // Opacity: gentle settle
             var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
             opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
             opacityAnim.InsertKeyFrame(0.0f, 0.85f);
-            opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeAccelerate);
+            opacityAnim.InsertKeyFrame(1.0f, 1.0f, easeOut);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             visual.StartAnimation("Scale", scaleAnim);
-            visual.StartAnimation("Offset", offsetAnim);
             visual.StartAnimation("Opacity", opacityAnim);
             batch.Completed += (s, e) =>
             {
                 try
                 {
                     visual.Scale = System.Numerics.Vector3.One;
-                    visual.Offset = System.Numerics.Vector3.Zero;
                     visual.CenterPoint = System.Numerics.Vector3.Zero;
+                    visual.Opacity = 1.0f;
+                    CardBorder.Translation = System.Numerics.Vector3.Zero;
                 }
                 catch { }
+                finally
+                {
+                    batch.Dispose();
+                }
             };
             batch.End();
         }
-        catch { }
+        catch
+        {
+            _activeGlideStoryboard?.Stop();
+            _activeGlideStoryboard = null;
+            CardBorder.RenderTransform = null;
+            CardBorder.Translation = System.Numerics.Vector3.Zero;
+        }
     }
 
     private void PopulateEpisodesList(MediaItem series)
@@ -2269,7 +2637,10 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 }
             }
 
-            EpisodesListPanel.Children.Clear();
+            ClearEpisodesList();
+            _episodesThumbnailCts = new CancellationTokenSource();
+            var epCt = _episodesThumbnailCts.Token;
+
             int totalSeasons = targetSeries.Episodes.Select(e => e.SeasonNumber).Distinct().Count();
             if (EpisodesCountSubtitle != null)
             {
@@ -2281,14 +2652,43 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             for (int i = 0; i < targetSeries.Episodes.Count; i++)
             {
                 var ep = targetSeries.Episodes[i];
-                var card = CreateEpisodeCard(ep, i + 1);
+                var card = CreateEpisodeCard(ep, i + 1, epCt);
                 EpisodesListPanel.Children.Add(card);
             }
         }
         catch { }
     }
 
-    private FrameworkElement CreateEpisodeCard(MediaItem episode, int index)
+    private void ClearEpisodesList()
+    {
+        try { _episodesThumbnailCts?.Cancel(); } catch { }
+        _episodesThumbnailCts = null;
+        try { _episodeHoverDebounceTimer?.Stop(); } catch { }
+        _pendingHoverEpisode = null;
+
+        if (EpisodesListPanel != null)
+        {
+            foreach (var child in EpisodesListPanel.Children)
+            {
+                if (child is Button btn && btn.Content is Grid grid)
+                {
+                    foreach (var gridChild in grid.Children)
+                    {
+                        if (gridChild is Border b && b.Child is Grid tg)
+                        {
+                            foreach (var tgChild in tg.Children)
+                            {
+                                if (tgChild is Image img) img.Source = null;
+                            }
+                        }
+                    }
+                }
+            }
+            EpisodesListPanel.Children.Clear();
+        }
+    }
+
+    private FrameworkElement CreateEpisodeCard(MediaItem episode, int index, CancellationToken ct)
     {
         try
         {
@@ -2348,7 +2748,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             }
             else if (!string.IsNullOrEmpty(episode.SourcePath))
             {
-                _ = LoadEpisodeThumbnailAsync(episode, image);
+                _ = LoadEpisodeThumbnailAsync(episode, image, ct);
             }
 
             thumbGrid.Children.Add(image);
@@ -2399,7 +2799,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             };
             thumbGrid.Children.Add(playOverlay);
 
-            // Interactive hover accent glow for card border and center play button
+            // Interactive hover accent glow for card border and center play button + episode preview switching
             cardButton.PointerEntered += (s, e) =>
             {
                 var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
@@ -2407,6 +2807,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 cardButton.BorderBrush = accentBrush;
                 playOverlay.Background = accentBrush;
                 playOverlay.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+                OnEpisodeCardHovered(episode);
             };
             cardButton.PointerExited += (s, e) =>
             {
@@ -2489,6 +2891,56 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
     }
 
+    private void OnEpisodeCardHovered(MediaItem episode)
+    {
+        if (episode == null || ReferenceEquals(_activePreviewEpisode, episode)) return;
+
+        _pendingHoverEpisode = episode;
+        if (_episodeHoverDebounceTimer == null)
+        {
+            _episodeHoverDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _episodeHoverDebounceTimer.Tick += (s, e) =>
+            {
+                _episodeHoverDebounceTimer.Stop();
+                if (_pendingHoverEpisode != null && _isExpanded)
+                {
+                    var target = _pendingHoverEpisode;
+                    _pendingHoverEpisode = null;
+                    SwitchActiveEpisodePreview(target);
+                }
+            };
+        }
+        _episodeHoverDebounceTimer.Stop();
+        _episodeHoverDebounceTimer.Start();
+    }
+
+    private void SwitchActiveEpisodePreview(MediaItem episode)
+    {
+        if (episode == null) return;
+        _activePreviewEpisode = episode;
+
+        if (DurationText != null && episode.Duration > TimeSpan.Zero)
+        {
+            DurationText.Text = episode.Duration.TotalHours >= 1
+                ? $"{(int)episode.Duration.TotalHours}h {episode.Duration.Minutes}m"
+                : $"{episode.Duration.Minutes}m";
+        }
+
+        string? thumbUrl = !string.IsNullOrEmpty(episode.EpisodeStillUrl) ? episode.EpisodeStillUrl : episode.PosterUrl;
+        if (!string.IsNullOrEmpty(thumbUrl))
+        {
+            PreviewPosterBrush.ImageSource = ImageBindHelper.SafeImageFromUrl(thumbUrl, 400);
+        }
+        else if (episode.Artwork != null)
+        {
+            PreviewPosterBrush.ImageSource = episode.Artwork;
+        }
+
+        PreviewPosterBorder.Opacity = 1.0;
+        _isPreviewPlaybackFinished = false;
+        _ = StartPreviewPlaybackAsync(episode, _loadCts?.Token ?? CancellationToken.None);
+    }
+
     private void PlayEpisode(MediaItem episode)
     {
         var activeSeries = (_activeItem?.IsSeries == true && _activeItem.Episodes?.Count > 0) ? _activeItem : (_effectiveParentSeries ?? _activeItem);
@@ -2500,16 +2952,21 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
     }
 
-    private static async Task LoadEpisodeThumbnailAsync(MediaItem episode, Image targetImage)
+    private static async Task LoadEpisodeThumbnailAsync(MediaItem episode, Image targetImage, CancellationToken ct)
     {
+        if (ct.IsCancellationRequested) return;
         if (string.IsNullOrWhiteSpace(episode.SourcePath) || !File.Exists(episode.SourcePath)) return;
         try
         {
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(episode.SourcePath);
+            if (ct.IsCancellationRequested) return;
+
             using var thumb = await file.GetThumbnailAsync(
                 Windows.Storage.FileProperties.ThumbnailMode.VideosView,
                 400,
                 Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+
+            if (ct.IsCancellationRequested) return;
 
             if (thumb != null && thumb.Size > 0)
             {
@@ -2517,7 +2974,10 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 bmp.DecodePixelWidth = 200;
                 using var stream = thumb.CloneStream();
                 await bmp.SetSourceAsync(stream);
-                targetImage.Source = bmp;
+                if (!ct.IsCancellationRequested)
+                {
+                    targetImage.Source = bmp;
+                }
             }
         }
         catch { }
@@ -2928,10 +3388,13 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             UpdateFavoriteVisuals(itemForFlyout?.IsFavorite == true);
             NotifySelectionRibbons();
         });
-        flyout.Closed += (s, args) =>
+        EventHandler<object>? onClosed = null;
+        onClosed = (s, args) =>
         {
+            try { flyout.Closed -= onClosed; } catch { }
             _isFlyoutOpen = false;
         };
+        flyout.Closed += onClosed;
         flyout.ShowAt(target);
     }
 
@@ -2951,10 +3414,13 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             UpdateFavoriteVisuals(itemForFlyout?.IsFavorite == true);
             NotifySelectionRibbons();
         });
-        flyout.Closed += (s, args) =>
+        EventHandler<object>? onRightClosed = null;
+        onRightClosed = (s, args) =>
         {
+            try { flyout.Closed -= onRightClosed; } catch { }
             _isFlyoutOpen = false;
         };
+        flyout.Closed += onRightClosed;
         flyout.ShowAt(this, e.GetPosition(this));
     }
 
@@ -3060,34 +3526,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
         if (!File.Exists(path)) return null;
 
-        // 1. Try native Win32 URI scheme first (zero COM overhead, direct MediaFoundation native demuxer for .mkv, .mp4, etc.)
-        try
-        {
-            var fileUri = new Uri(path);
-            return MediaSource.CreateFromUri(fileUri);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[VideoHoverPreview] CreateFromUri failed, falling back: {ex.Message}");
-        }
-
-        if (ct.IsCancellationRequested) return null;
-
-        // 2. Fallback to StorageFile (works in UWP AppContainer sandboxes)
-        try
-        {
-            var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path).AsTask(ct);
-            if (ct.IsCancellationRequested) return null;
-            return MediaSource.CreateFromStorageFile(storageFile);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[VideoHoverPreview] StorageFile fallback failed: {ex.Message}");
-        }
-
-        if (ct.IsCancellationRequested) return null;
-
-        // 3. Fallback to Win32 FileStream
+        // 1. Primary: Direct Win32 FileStream with explicit MIME content type (fastest, direct MediaFoundation native demuxer for .mkv, .mp4, .webm, .avi, etc.)
         try
         {
             var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.Asynchronous);
@@ -3098,7 +3537,34 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[VideoHoverPreview] Direct Win32 stream creation failed: {ex.Message}");
+            Debug.WriteLine($"[VideoHoverPreview] Direct Win32 stream creation failed, falling back: {ex.Message}");
+        }
+
+        if (ct.IsCancellationRequested) return null;
+
+        // 2. Fallback to StorageFile (works in UWP AppContainer sandboxes)
+        try
+        {
+            var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            if (ct.IsCancellationRequested) return null;
+            return MediaSource.CreateFromStorageFile(storageFile);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[VideoHoverPreview] StorageFile fallback failed, falling back: {ex.Message}");
+        }
+
+        if (ct.IsCancellationRequested) return null;
+
+        // 3. Fallback to Win32 URI scheme
+        try
+        {
+            var fileUri = new Uri(path);
+            return MediaSource.CreateFromUri(fileUri);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[VideoHoverPreview] CreateFromUri fallback failed: {ex.Message}");
             return null;
         }
     }

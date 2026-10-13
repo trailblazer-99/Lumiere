@@ -27,7 +27,7 @@ public class FullscreenManager : IFullscreenManager
             if (_isStreamingFullScreen != value)
             {
                 _isStreamingFullScreen = value;
-                FullscreenChanged?.Invoke(this, IsFullScreen);
+                FullscreenChanged?.Invoke(this, value);
             }
         }
     }

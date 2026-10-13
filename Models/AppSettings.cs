@@ -59,10 +59,14 @@ public sealed class AppSettings
     public AppThemeBackdrop BackdropType { get; set; } = AppThemeBackdrop.Mica;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
     public string? CustomAccentColorHex { get; set; }
+    /// <summary>Whether the user has consented to creating shell shortcuts (Desktop, Start Menu).</summary>
+    public bool CreateShellShortcuts { get; set; } = false;
     public bool AlwaysShowTransportBar { get; set; } = false;
     public bool AcrylicTransportBar { get; set; } = false;
     public bool AutoHideTransportBarInStreaming { get; set; } = true;
     public string PreferredStreamingRegion { get; set; } = "";
+    /// <summary>Use Windows location services to automatically detect the streaming region.</summary>
+    public bool UseLocationForRegion { get; set; } = false;
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

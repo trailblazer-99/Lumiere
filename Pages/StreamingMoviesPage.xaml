@@ -10,6 +10,39 @@
     Loaded="OnPageLoaded">
 
     <Grid x:Name="PageContent" Margin="{StaticResource PageContentMargin}" Opacity="1">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="PageLayoutStates">
+                <VisualState x:Name="WideLayout">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="720" />
+                    </VisualState.StateTriggers>
+                </VisualState>
+                <VisualState x:Name="NarrowLayout">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="PageContent.Margin" Value="{StaticResource PageContentMarginNarrow}" />
+                        <Setter Target="QuickActionRail.Width" Value="44" />
+                        <Setter Target="QuickActionRail.Margin" Value="0,0,8,0" />
+                        <Setter Target="QuickActionsTitle.Visibility" Value="Collapsed" />
+                        <Setter Target="QuickActionsSeparator.Visibility" Value="Collapsed" />
+                        <Setter Target="QuickFiltersTitle.Visibility" Value="Collapsed" />
+                        <Setter Target="ResetButtonText.Visibility" Value="Collapsed" />
+                        <Setter Target="SurpriseButtonText.Visibility" Value="Collapsed" />
+                        <Setter Target="RefreshButtonText.Visibility" Value="Collapsed" />
+                        <Setter Target="TopRatedButtonText.Visibility" Value="Collapsed" />
+                        <Setter Target="FreeButtonText.Visibility" Value="Collapsed" />
+                        <Setter Target="VerticalResetButton.Padding" Value="10,8" />
+                        <Setter Target="VerticalSurpriseButton.Padding" Value="10,8" />
+                        <Setter Target="VerticalRefreshButton.Padding" Value="10,8" />
+                        <Setter Target="VerticalTopRatedButton.Padding" Value="10,8" />
+                        <Setter Target="VerticalFreeButton.Padding" Value="10,8" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -44,7 +77,14 @@
                             <StackPanel Spacing="4" VerticalAlignment="Bottom">
                                 <TextBlock Text="Search" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Search movies..." TextChanged="OnSearchBoxTextChanged" QuerySubmitted="OnSearchBoxQuerySubmitted" Width="260" CornerRadius="8" Height="32">
+                                    <AutoSuggestBox x:Name="SearchBox"
+                                                    Style="{StaticResource PillAutoSuggestBoxStyle}"
+                                                    ItemTemplate="{StaticResource StreamingSearchSuggestionItemTemplate}"
+                                                    PlaceholderText="Search movies..."
+                                                    TextChanged="OnSearchBoxTextChanged"
+                                                    SuggestionChosen="OnSearchBoxSuggestionChosen"
+                                                    QuerySubmitted="OnSearchBoxQuerySubmitted"
+                                                    Width="260" Height="32">
                                         <AutoSuggestBox.QueryIcon>
                                             <AnimatedIcon x:Name="SearchAnimatedIcon">
                                                 <AnimatedIcon.Source>
@@ -85,14 +125,14 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Left Vertical Quick Action Rail -->
-                        <StackPanel Grid.Column="0" Spacing="8" Margin="0,0,16,0" VerticalAlignment="Top" Width="146">
-                            <TextBlock Text="Quick Actions" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+                        <StackPanel x:Name="QuickActionRail" Grid.Column="0" Spacing="8" Margin="0,0,16,0" VerticalAlignment="Top" Width="146">
+                            <TextBlock x:Name="QuickActionsTitle" Text="Quick Actions" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
                             
                             <!-- Reset Filters Button -->
                             <Button x:Name="VerticalResetButton" Command="{x:Bind ViewModel.ResetFiltersCommand}" Click="OnResetFiltersClick" ToolTipService.ToolTip="Reset Search &amp; Filters" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE777;" />
-                                    <TextBlock Text="Reset Filters" FontSize="14"/>
+                                    <TextBlock x:Name="ResetButtonText" Text="Reset Filters" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
@@ -100,7 +140,7 @@
                             <Button x:Name="VerticalSurpriseButton" Command="{x:Bind ViewModel.SurpriseMeCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.SurpriseMeActionToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE8B1;" />
-                                    <TextBlock Text="Surprise Me" FontSize="14"/>
+                                    <TextBlock x:Name="SurpriseButtonText" Text="Surprise Me" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
@@ -108,19 +148,19 @@
                             <Button x:Name="VerticalRefreshButton" Command="{x:Bind ViewModel.RefreshFeedCommand}" ToolTipService.ToolTip="Refresh Feed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE72C;" />
-                                    <TextBlock Text="Refresh" FontSize="14"/>
+                                    <TextBlock x:Name="RefreshButtonText" Text="Refresh" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
-                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4"/>
+                            <Border x:Name="QuickActionsSeparator" Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4"/>
 
-                            <TextBlock Text="Quick Filters" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
+                            <TextBlock x:Name="QuickFiltersTitle" Text="Quick Filters" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="4,0,0,2"/>
 
                             <!-- Top Rated Filter -->
                             <Button x:Name="VerticalTopRatedButton" Command="{x:Bind ViewModel.QuickFilterTopRatedCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.QuickFilterTopRatedToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE735;" Foreground="#FFD700"/>
-                                    <TextBlock Text="{x:Bind ViewModel.QuickFilterTopRatedText, Mode=OneWay}" FontSize="14"/>
+                                    <TextBlock x:Name="TopRatedButtonText" Text="{x:Bind ViewModel.QuickFilterTopRatedText, Mode=OneWay}" FontSize="14"/>
                                 </StackPanel>
                             </Button>
 
@@ -128,7 +168,7 @@
                             <Button x:Name="VerticalFreeButton" Command="{x:Bind ViewModel.QuickFilterFreeCommand}" ToolTipService.ToolTip="{x:Bind ViewModel.QuickFilterFreeToolTip, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" CornerRadius="8" Padding="12,8" helpers:SpringAnimationHelper.EnableHoverSpring="True" Style="{StaticResource SubtleButtonStyle}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE774;" />
-                                    <TextBlock Text="{x:Bind ViewModel.QuickFilterFreeText, Mode=OneWay}" FontSize="14"/>
+                                    <TextBlock x:Name="FreeButtonText" Text="{x:Bind ViewModel.QuickFilterFreeText, Mode=OneWay}" FontSize="14"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -348,8 +388,8 @@
                                                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
                                                         <Button Style="{StaticResource AccentButtonStyle}" Height="36" CornerRadius="8" Padding="16,0" Click="OnHeroViewDetailsClick">
                                                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                <FontIcon Glyph="&#xE946;" FontSize="16"/>
-                                                                <TextBlock Text="View Details" />
+                                                                <FontIcon Glyph="&#xE946;" FontSize="16" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                                                <TextBlock Text="View Details" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                                             </StackPanel>
                                                         </Button>
                                                         <Button Click="OnHeroPlayTrailerClick" Height="36" CornerRadius="8" Padding="16,0" Background="#33FFFFFF" Foreground="White" BorderBrush="#30FFFFFF" BorderThickness="1">

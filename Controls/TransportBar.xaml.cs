@@ -54,6 +54,14 @@ public sealed partial class TransportBar : UserControl
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
     private double _pendingScrubValue;
 
+    private PointerEventHandler? _progressPointerEnteredHandler;
+    private PointerEventHandler? _progressPointerMovedHandler;
+    private PointerEventHandler? _progressPointerExitedHandler;
+    private PointerEventHandler? _progressPointerPressedHandler;
+    private PointerEventHandler? _progressPointerReleasedHandler;
+    private PointerEventHandler? _progressPointerCaptureLostHandler;
+    private PointerEventHandler? _progressPointerCanceledHandler;
+
     public event EventHandler? PlayPauseRequested;
     public event EventHandler? StopRequested;
     public event EventHandler? PreviousRequested;
@@ -94,23 +102,98 @@ public sealed partial class TransportBar : UserControl
             }
             EnsureSliderHaloUnclipped(ProgressSlider);
             EnsureSliderHaloUnclipped(VolumeSlider);
+            UpdateResponsiveLayout(ActualWidth > 0 ? ActualWidth : 1000);
+            RegisterProgressSliderPointerHandlers();
+            if (_observedTrack == null && CurrentTrack != null)
+            {
+                ObserveCurrentTrack(null, CurrentTrack);
+            }
         };
+        Unloaded += OnUnloaded;
+        SizeChanged += (_, e) => UpdateResponsiveLayout(e.NewSize.Width);
 
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
-        _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(100);
+        _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(33);
         _scrubThrottleTimer.Tick += (s, e) =>
         {
             _scrubThrottleTimer.Stop();
             if (_isSeeking) ScrubbingPositionChanged?.Invoke(this, _pendingScrubValue);
         };
 
-        // WinUI 3 Slider consumes pointer events, so we must register with handledEventsToo = true
-        ProgressSlider.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler(OnProgressSliderPointerEntered), true);
-        ProgressSlider.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnProgressSliderPointerMoved), true);
-        ProgressSlider.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(OnProgressSliderPointerExited), true);
-        ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnProgressPointerCapture), true);
-        ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(OnProgressPointerReleased), true);
-        ProgressSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(OnProgressPointerReleased), true);
+        RegisterProgressSliderPointerHandlers();
+    }
+
+    private void RegisterProgressSliderPointerHandlers()
+    {
+        if (ProgressSlider == null || _progressPointerEnteredHandler != null) return;
+
+        _progressPointerEnteredHandler = new PointerEventHandler(OnProgressSliderPointerEntered);
+        _progressPointerMovedHandler = new PointerEventHandler(OnProgressSliderPointerMoved);
+        _progressPointerExitedHandler = new PointerEventHandler(OnProgressSliderPointerExited);
+        _progressPointerPressedHandler = new PointerEventHandler(OnProgressPointerCapture);
+        _progressPointerReleasedHandler = new PointerEventHandler(OnProgressPointerReleased);
+        _progressPointerCaptureLostHandler = new PointerEventHandler(OnProgressPointerReleased);
+        _progressPointerCanceledHandler = new PointerEventHandler(OnProgressPointerReleased);
+
+        ProgressSlider.AddHandler(UIElement.PointerEnteredEvent, _progressPointerEnteredHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerMovedEvent, _progressPointerMovedHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerExitedEvent, _progressPointerExitedHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerPressedEvent, _progressPointerPressedHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, _progressPointerReleasedHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerCaptureLostEvent, _progressPointerCaptureLostHandler, true);
+        ProgressSlider.AddHandler(UIElement.PointerCanceledEvent, _progressPointerCanceledHandler, true);
+    }
+
+    private void UnregisterProgressSliderPointerHandlers()
+    {
+        if (ProgressSlider == null) return;
+
+        if (_progressPointerEnteredHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerEnteredEvent, _progressPointerEnteredHandler);
+            _progressPointerEnteredHandler = null;
+        }
+        if (_progressPointerMovedHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerMovedEvent, _progressPointerMovedHandler);
+            _progressPointerMovedHandler = null;
+        }
+        if (_progressPointerExitedHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerExitedEvent, _progressPointerExitedHandler);
+            _progressPointerExitedHandler = null;
+        }
+        if (_progressPointerPressedHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerPressedEvent, _progressPointerPressedHandler);
+            _progressPointerPressedHandler = null;
+        }
+        if (_progressPointerReleasedHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerReleasedEvent, _progressPointerReleasedHandler);
+            _progressPointerReleasedHandler = null;
+        }
+        if (_progressPointerCaptureLostHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerCaptureLostEvent, _progressPointerCaptureLostHandler);
+            _progressPointerCaptureLostHandler = null;
+        }
+        if (_progressPointerCanceledHandler != null)
+        {
+            ProgressSlider.RemoveHandler(UIElement.PointerCanceledEvent, _progressPointerCanceledHandler);
+            _progressPointerCanceledHandler = null;
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        UnregisterProgressSliderPointerHandlers();
+
+        if (_observedTrack != null)
+        {
+            _observedTrack.PropertyChanged -= OnCurrentTrackPropertyChanged;
+            _observedTrack = null;
+        }
     }
 
     public Button QueueButtonControl => MoreButton;
@@ -157,6 +240,7 @@ public sealed partial class TransportBar : UserControl
         {
             bar.ObserveCurrentTrack(e.OldValue as MediaItem, e.NewValue as MediaItem);
             bar.UpdateTrackInfo();
+            bar.UpdateResponsiveLayout(bar.ActualWidth > 0 ? bar.ActualWidth : 1000);
         }
     }
 
@@ -219,6 +303,8 @@ public sealed partial class TransportBar : UserControl
     {
         if (CurrentTrack is null)
         {
+            _isSeeking = false;
+            _scrubThrottleTimer?.Stop();
             TrackTitleText.Text = "No track selected";
             if (TrackLocationBadge != null) TrackLocationBadge.Visibility = Visibility.Collapsed;
             TrackArtistText.Text = "Choose something to play";
@@ -248,7 +334,11 @@ public sealed partial class TransportBar : UserControl
             if (SkipBackButton != null) SkipBackButton.IsEnabled = false;
             if (SkipForwardButton != null) SkipForwardButton.IsEnabled = false;
             if (ReplayButton != null) ReplayButton.IsEnabled = false;
-            if (StopButton != null) StopButton.IsEnabled = false;
+            if (StopButton != null)
+            {
+                StopButton.IsEnabled = false;
+                Helpers.SpringAnimationHelper.AnimateSpringScale(StopButton, 1.0f);
+            }
             if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
             if (PipButton != null) PipButton.IsEnabled = false;
             if (SubtitlesButton != null)
@@ -281,6 +371,8 @@ public sealed partial class TransportBar : UserControl
                 TrackLocationBadge.Visibility = Visibility.Collapsed;
             }
         }
+        _isSeeking = false;
+        _scrubThrottleTimer?.Stop();
         TrackArtistText.Text = CurrentTrack.Artist;
         TotalTimeText.Text = CurrentTrack.DurationText;
         ProgressSlider.Maximum = CurrentTrack.Duration.TotalSeconds > 0 ? CurrentTrack.Duration.TotalSeconds : 100;
@@ -417,8 +509,18 @@ public sealed partial class TransportBar : UserControl
     }
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e) => PlayPauseRequested?.Invoke(this, EventArgs.Empty);
-    private void OnStopClick(object sender, RoutedEventArgs e) => StopRequested?.Invoke(this, EventArgs.Empty);
     private void OnPreviousClick(object sender, RoutedEventArgs e) => PreviousRequested?.Invoke(this, EventArgs.Empty);
+    private void OnStopClick(object sender, RoutedEventArgs e)
+    {
+        if (StopButton != null)
+        {
+            Helpers.SpringAnimationHelper.AnimateSpringScale(StopButton, 1.0f);
+        }
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+        {
+            StopRequested?.Invoke(this, EventArgs.Empty);
+        });
+    }
     private void OnNextClick(object sender, RoutedEventArgs e) => NextRequested?.Invoke(this, EventArgs.Empty);
     private void OnShuffleClick(object sender, RoutedEventArgs e) => ShuffleRequested?.Invoke(this, EventArgs.Empty);
     private void OnRepeatClick(object sender, RoutedEventArgs e) => RepeatRequested?.Invoke(this, EventArgs.Empty);
@@ -505,7 +607,7 @@ public sealed partial class TransportBar : UserControl
     private void OnPipClick(object sender, RoutedEventArgs e) => PipRequested?.Invoke(this, EventArgs.Empty);
     private void OnFullscreenClick(object sender, RoutedEventArgs e)
     {
-        if (CurrentTrack is null || !CurrentTrack.IsVideo) return;
+        if (!_isFullscreenPresentation && (CurrentTrack is null || !CurrentTrack.IsVideo)) return;
         FullscreenRequested?.Invoke(this, EventArgs.Empty);
     }
     private void OnTrackInfoClick(object sender, RoutedEventArgs e) => TrackClicked?.Invoke(this, EventArgs.Empty);
@@ -543,7 +645,7 @@ public sealed partial class TransportBar : UserControl
         if (!_isSeeking && HoverPreviewPopup != null)
         {
             HoverPreviewPopup.IsOpen = false;
-            _exactThumbnailCts?.Cancel();
+            _exactThumbnailVersion++;
             _activeHoverSeconds = -1;
             if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
             if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
@@ -570,13 +672,13 @@ public sealed partial class TransportBar : UserControl
         if (!_isSeeking) return;
         _isSeeking = false;
         _scrubThrottleTimer?.Stop();
-        ScrubbingEnded?.Invoke(this, ProgressSlider.Value);
         PositionChanged?.Invoke(this, ProgressSlider.Value);
+        ScrubbingEnded?.Invoke(this, ProgressSlider.Value);
         if (HoverPreviewPopup != null)
         {
             HoverPreviewPopup.IsOpen = false;
         }
-        _exactThumbnailCts?.Cancel();
+        _exactThumbnailVersion++;
         _activeHoverSeconds = -1;
         if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
         if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
@@ -627,6 +729,10 @@ public sealed partial class TransportBar : UserControl
     {
         var interval = AppServices.Settings.Current.SkipForwardInterval;
         var max = CurrentTrack?.Duration.TotalSeconds ?? 100;
+        if (max <= 0)
+        {
+            max = ProgressSlider.Maximum > 0 ? ProgressSlider.Maximum : double.MaxValue;
+        }
         var newPos = Math.Min(max, Position + interval);
         PositionChanged?.Invoke(this, newPos);
     }
@@ -732,6 +838,20 @@ public sealed partial class TransportBar : UserControl
         UpdateAcrylicBackground();
         UpdateFullscreenFontColors(isFullscreen);
         UpdateTrackInfo();
+
+        if (FullscreenIcon != null)
+        {
+            FullscreenIcon.Glyph = isFullscreen ? "\uE73F" : "\uE740";
+        }
+        if (FullscreenButton != null)
+        {
+            ToolTipService.SetToolTip(FullscreenButton, isFullscreen ? "Exit full screen (Esc)" : "Full screen (F11)");
+            AutomationProperties.SetName(FullscreenButton, isFullscreen ? "Exit full screen" : "Full screen");
+        }
+        if (MenuResponsiveFullscreenItem != null)
+        {
+            MenuResponsiveFullscreenItem.Text = isFullscreen ? "Exit full screen" : "Full screen";
+        }
     }
 
     public void RefreshTheme()
@@ -1024,54 +1144,38 @@ public sealed partial class TransportBar : UserControl
         }
     }
 
+    public FrameworkElement? MiniPlayerHost => MiniAlbumArt;
+
     public void SetMiniVideoPlayer(MediaPlayer? player)
     {
-        if (MiniVideoPlayer == null) return;
+        SetMiniVideoActive(player != null);
+    }
 
-        if (player != null)
+    public void SetMiniVideoActive(bool active)
+    {
+        _isMiniVideoActive = active;
+
+        if (MiniAlbumArt != null)
         {
-            if (MiniVideoPlayer.MediaPlayer != player)
+            double targetArtDim = _currentLayoutState == TransportBarLayoutState.Compact ? 38 : (_currentLayoutState == TransportBarLayoutState.Medium ? 44 : 48);
+            double targetWidth = active ? (_currentLayoutState == TransportBarLayoutState.Compact ? 64 : 80) : targetArtDim;
+            if (Math.Abs(MiniAlbumArt.Width - targetWidth) > 0.5)
             {
-                MiniVideoPlayer.SetMediaPlayer(player);
+                MiniAlbumArt.Width = targetWidth;
             }
-            _isMiniVideoActive = true;
-            MiniVideoPlayer.Visibility = Visibility.Visible;
-            if (ArtImage != null) ArtImage.Visibility = Visibility.Collapsed;
-            if (FallbackIcon != null) FallbackIcon.Visibility = Visibility.Collapsed;
-            if (MiniAlbumArt != null && MiniAlbumArt.Width != 80)
+            if (Math.Abs(MiniAlbumArt.Height - targetArtDim) > 0.5)
             {
-                MiniAlbumArt.Width = 80;
+                MiniAlbumArt.Height = targetArtDim;
             }
         }
-        else
-        {
-            if (!_isMiniVideoActive && MiniVideoPlayer.MediaPlayer == null && (MiniAlbumArt == null || MiniAlbumArt.Width == 48))
-            {
-                return;
-            }
 
-            _isMiniVideoActive = false;
-            if (MiniVideoPlayer.MediaPlayer != null)
-            {
-                MiniVideoPlayer.SetMediaPlayer(null);
-            }
-            MiniVideoPlayer.Visibility = Visibility.Collapsed;
-            if (MiniAlbumArt != null)
-            {
-                MiniAlbumArt.Width = 48;
-            }
-            if (ArtImage != null)
-            {
-                ArtImage.Visibility = ArtImage.Source != null ? Visibility.Visible : Visibility.Collapsed;
-                if (FallbackIcon != null)
-                {
-                    FallbackIcon.Visibility = ArtImage.Source != null ? Visibility.Collapsed : Visibility.Visible;
-                }
-            }
-            else if (FallbackIcon != null)
-            {
-                FallbackIcon.Visibility = Visibility.Visible;
-            }
+        if (ArtImage != null)
+        {
+            ArtImage.Visibility = active ? Visibility.Collapsed : (ArtImage.Source != null ? Visibility.Visible : Visibility.Collapsed);
+        }
+        if (FallbackIcon != null)
+        {
+            FallbackIcon.Visibility = active ? Visibility.Collapsed : (ArtImage?.Source != null ? Visibility.Collapsed : Visibility.Visible);
         }
     }
 
@@ -2059,7 +2163,7 @@ public sealed partial class TransportBar : UserControl
         e.Handled = true;
     }
 
-    private CancellationTokenSource? _exactThumbnailCts;
+    private int _exactThumbnailVersion;
     private double _activeHoverSeconds = -1;
     private bool _isThumbnailDecoding;
     private double _decodingSeconds = -1;
@@ -2116,7 +2220,26 @@ public sealed partial class TransportBar : UserControl
         double clampedX = Math.Clamp(centerX - (popupWidth / 2.0), 0.0, Math.Max(0.0, slider.ActualWidth - popupWidth));
         HoverPreviewPopup.HorizontalOffset = clampedX;
         HoverPreviewPopup.VerticalOffset = showThumbnail ? -126 : -44;
-        HoverPreviewPopup.IsOpen = true;
+        if (!HoverPreviewPopup.IsOpen)
+        {
+            HoverPreviewPopup.IsOpen = true;
+            if (HoverPreviewPopup.Child is FrameworkElement popupChild && ThemeHelper.IsAnimationEnabled)
+            {
+                try
+                {
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(popupChild);
+                    if (visual != null)
+                    {
+                        visual.Opacity = 0f;
+                        var fadeAnim = visual.Compositor.CreateScalarKeyFrameAnimation();
+                        fadeAnim.InsertKeyFrame(1.0f, 1.0f);
+                        fadeAnim.Duration = TimeSpan.FromMilliseconds(120);
+                        visual.StartAnimation("Opacity", fadeAnim);
+                    }
+                }
+                catch { }
+            }
+        }
     }
 
     private void UpdateSeekPreview(double seconds, bool isDragging, double pointerX = -1)
@@ -2213,13 +2336,11 @@ public sealed partial class TransportBar : UserControl
                 return;
             }
 
-            // 3. Debounce: cancel previous pending debounce and wait 100ms
-            _exactThumbnailCts?.Cancel();
-            _exactThumbnailCts = new CancellationTokenSource();
-            var token = _exactThumbnailCts.Token;
+            // 3. Debounce: increment request version and wait 100ms
+            int version = ++_exactThumbnailVersion;
 
-            await Task.Delay(100, token);
-            if (token.IsCancellationRequested) return;
+            await Task.Delay(100);
+            if (version != _exactThumbnailVersion) return;
 
             // 4. Double check cache after debounce in case background prefetch populated it
             cached = session.GetCachedThumbnail(seconds, 5.0);
@@ -2300,5 +2421,137 @@ public sealed partial class TransportBar : UserControl
             }
             UpdateSleepTimerMenuChecks();
         }
+    }
+
+    private enum TransportBarLayoutState
+    {
+        Wide,
+        Medium,
+        Compact
+    }
+
+    private TransportBarLayoutState _currentLayoutState = TransportBarLayoutState.Wide;
+
+    private void UpdateResponsiveLayout(double width)
+    {
+        if (width <= 0) return;
+
+        TransportBarLayoutState targetState;
+        if (width >= 960.0)
+        {
+            targetState = TransportBarLayoutState.Wide;
+        }
+        else if (width >= 680.0)
+        {
+            targetState = TransportBarLayoutState.Medium;
+        }
+        else
+        {
+            targetState = TransportBarLayoutState.Compact;
+        }
+
+        _currentLayoutState = targetState;
+
+        switch (targetState)
+        {
+            case TransportBarLayoutState.Wide:
+                if (ShuffleButton != null) ShuffleButton.Visibility = Visibility.Visible;
+                if (SkipBackButton != null) SkipBackButton.Visibility = Visibility.Visible;
+                if (ReplayButton != null) ReplayButton.Visibility = Visibility.Visible;
+                if (StopButton != null) StopButton.Visibility = Visibility.Visible;
+                if (SkipForwardButton != null) SkipForwardButton.Visibility = Visibility.Visible;
+                if (RepeatButton != null) RepeatButton.Visibility = Visibility.Visible;
+                if (CenterControlsPanel != null) CenterControlsPanel.Spacing = 12;
+
+                if (AudioButton != null) AudioButton.Visibility = Visibility.Visible;
+                if (SubtitlesButton != null) SubtitlesButton.Visibility = Visibility.Visible;
+                if (FullscreenButton != null) FullscreenButton.Visibility = Visibility.Visible;
+                if (PipButton != null) PipButton.Visibility = Visibility.Visible;
+                if (RightControlsPanel != null) RightControlsPanel.Spacing = 8;
+
+                if (MiniAlbumArt != null)
+                {
+                    MiniAlbumArt.Width = _isMiniVideoActive ? 80 : 48;
+                    MiniAlbumArt.Height = 48;
+                }
+
+                if (MenuResponsiveSeparator != null) MenuResponsiveSeparator.Visibility = Visibility.Collapsed;
+                if (MenuResponsiveShuffleItem != null) MenuResponsiveShuffleItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsiveRepeatItem != null) MenuResponsiveRepeatItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsiveFullscreenItem != null) MenuResponsiveFullscreenItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsivePipItem != null) MenuResponsivePipItem.Visibility = Visibility.Collapsed;
+                break;
+
+            case TransportBarLayoutState.Medium:
+                if (ShuffleButton != null) ShuffleButton.Visibility = Visibility.Visible;
+                if (SkipBackButton != null) SkipBackButton.Visibility = Visibility.Collapsed;
+                if (ReplayButton != null) ReplayButton.Visibility = Visibility.Collapsed;
+                if (StopButton != null) StopButton.Visibility = Visibility.Collapsed;
+                if (SkipForwardButton != null) SkipForwardButton.Visibility = Visibility.Collapsed;
+                if (RepeatButton != null) RepeatButton.Visibility = Visibility.Visible;
+                if (CenterControlsPanel != null) CenterControlsPanel.Spacing = 8;
+
+                if (AudioButton != null) AudioButton.Visibility = Visibility.Collapsed;
+                if (SubtitlesButton != null) SubtitlesButton.Visibility = Visibility.Visible;
+                if (FullscreenButton != null) FullscreenButton.Visibility = Visibility.Visible;
+                if (PipButton != null) PipButton.Visibility = Visibility.Collapsed;
+                if (RightControlsPanel != null) RightControlsPanel.Spacing = 6;
+
+                if (MiniAlbumArt != null)
+                {
+                    MiniAlbumArt.Width = _isMiniVideoActive ? 80 : 44;
+                    MiniAlbumArt.Height = 44;
+                }
+
+                if (MenuResponsiveSeparator != null) MenuResponsiveSeparator.Visibility = Visibility.Visible;
+                if (MenuResponsiveShuffleItem != null) MenuResponsiveShuffleItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsiveRepeatItem != null) MenuResponsiveRepeatItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsiveFullscreenItem != null) MenuResponsiveFullscreenItem.Visibility = Visibility.Collapsed;
+                if (MenuResponsivePipItem != null) MenuResponsivePipItem.Visibility = Visibility.Visible;
+                break;
+
+            case TransportBarLayoutState.Compact:
+                if (ShuffleButton != null) ShuffleButton.Visibility = Visibility.Collapsed;
+                if (SkipBackButton != null) SkipBackButton.Visibility = Visibility.Collapsed;
+                if (ReplayButton != null) ReplayButton.Visibility = Visibility.Collapsed;
+                if (StopButton != null) StopButton.Visibility = Visibility.Collapsed;
+                if (SkipForwardButton != null) SkipForwardButton.Visibility = Visibility.Collapsed;
+                if (RepeatButton != null) RepeatButton.Visibility = Visibility.Collapsed;
+                if (CenterControlsPanel != null) CenterControlsPanel.Spacing = 6;
+
+                if (AudioButton != null) AudioButton.Visibility = Visibility.Collapsed;
+                if (SubtitlesButton != null) SubtitlesButton.Visibility = Visibility.Collapsed;
+                if (FullscreenButton != null) FullscreenButton.Visibility = Visibility.Collapsed;
+                if (PipButton != null) PipButton.Visibility = Visibility.Collapsed;
+                if (RightControlsPanel != null) RightControlsPanel.Spacing = 4;
+
+                if (MiniAlbumArt != null)
+                {
+                    MiniAlbumArt.Width = _isMiniVideoActive ? 64 : 38;
+                    MiniAlbumArt.Height = 38;
+                }
+
+                if (MenuResponsiveSeparator != null) MenuResponsiveSeparator.Visibility = Visibility.Visible;
+                if (MenuResponsiveShuffleItem != null) MenuResponsiveShuffleItem.Visibility = Visibility.Visible;
+                if (MenuResponsiveRepeatItem != null) MenuResponsiveRepeatItem.Visibility = Visibility.Visible;
+                if (MenuResponsiveFullscreenItem != null) MenuResponsiveFullscreenItem.Visibility = Visibility.Visible;
+                if (MenuResponsivePipItem != null) MenuResponsivePipItem.Visibility = Visibility.Visible;
+                break;
+        }
+
+        if (TrackMetadataButton != null)
+        {
+            double centerEst = targetState == TransportBarLayoutState.Wide ? 420.0 : (targetState == TransportBarLayoutState.Medium ? 230.0 : 140.0);
+            double sideBudget = Math.Max(80.0, (width - centerEst) / 2.0 - 24.0);
+            TrackMetadataButton.MaxWidth = sideBudget;
+        }
+
+        if (ProgressRowGrid != null)
+        {
+            ProgressRowGrid.Margin = width < 520.0 ? new Thickness(10, 4, 10, 0) : new Thickness(16, 6, 16, 0);
+            ProgressRowGrid.ColumnSpacing = width < 520.0 ? 8 : 12;
+        }
+        if (ElapsedTimeText != null) ElapsedTimeText.FontSize = width < 520.0 ? 11 : 12;
+        if (TotalTimeText != null) TotalTimeText.FontSize = width < 520.0 ? 11 : 12;
     }
 }
