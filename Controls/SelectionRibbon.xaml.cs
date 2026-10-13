@@ -32,6 +32,7 @@ public sealed partial class SelectionRibbon : UserControl
     public SelectionRibbon()
     {
         InitializeComponent();
+        ElementCompositionPreview.SetIsTranslationEnabled(RibbonCard, true);
         SizeChanged += (_, e) => UpdateResponsiveRibbon(e.NewSize.Width);
     }
 
@@ -83,11 +84,31 @@ public sealed partial class SelectionRibbon : UserControl
         if (this.Visibility == Visibility.Visible && !_isHiding && this.Opacity > 0.9) return;
         _isHiding = false;
         this.Visibility = Visibility.Visible;
+        this.Opacity = 1.0;
 
         try
         {
+            ElementCompositionPreview.SetIsTranslationEnabled(RibbonCard, true);
             var visual = ElementCompositionPreview.GetElementVisual(RibbonCard);
+            if (visual == null)
+            {
+                RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
+                return;
+            }
+
             var compositor = visual.Compositor;
+            if (compositor == null || !ThemeHelper.IsAnimationEnabled)
+            {
+                visual.StopAnimation("Translation");
+                visual.StopAnimation("Opacity");
+                visual.Opacity = 1.0f;
+                RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
+                visual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, 0, 32));
+                return;
+            }
+
+            visual.StopAnimation("Translation");
+            visual.StopAnimation("Opacity");
 
             var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
             fadeAnim.InsertKeyFrame(0f, 0f);
@@ -96,14 +117,15 @@ public sealed partial class SelectionRibbon : UserControl
             visual.StartAnimation("Opacity", fadeAnim);
 
             var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnim.Duration = TimeSpan.FromMilliseconds(250);
-            visual.StartAnimation("Offset", slideAnim);
+            slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 32));
+            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 32));
+            slideAnim.Duration = TimeSpan.FromMilliseconds(220);
+            visual.StartAnimation("Translation", slideAnim);
         }
         catch
         {
             this.Opacity = 1.0;
+            RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
         }
     }
 
@@ -114,16 +136,39 @@ public sealed partial class SelectionRibbon : UserControl
 
         try
         {
+            ElementCompositionPreview.SetIsTranslationEnabled(RibbonCard, true);
             var visual = ElementCompositionPreview.GetElementVisual(RibbonCard);
+            if (visual == null)
+            {
+                _isHiding = false;
+                this.Visibility = Visibility.Collapsed;
+                RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
+                return;
+            }
+
             var compositor = visual.Compositor;
+            if (compositor == null || !ThemeHelper.IsAnimationEnabled)
+            {
+                _isHiding = false;
+                this.Visibility = Visibility.Collapsed;
+                visual.StopAnimation("Translation");
+                visual.StopAnimation("Opacity");
+                visual.Opacity = 1.0f;
+                RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
+                visual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, 0, 32));
+                return;
+            }
+
+            visual.StopAnimation("Translation");
+            visual.StopAnimation("Opacity");
 
             var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
             fadeAnim.InsertKeyFrame(1f, 0f);
             fadeAnim.Duration = TimeSpan.FromMilliseconds(150);
 
             var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 24, 0));
+            slideAnim.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 0, 32));
+            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 24, 32));
             slideAnim.Duration = TimeSpan.FromMilliseconds(150);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
@@ -134,8 +179,11 @@ public sealed partial class SelectionRibbon : UserControl
                     if (_isHiding)
                     {
                         this.Visibility = Visibility.Collapsed;
+                        visual.StopAnimation("Translation");
+                        visual.StopAnimation("Opacity");
                         visual.Opacity = 1.0f;
-                        visual.Offset = new System.Numerics.Vector3(0, 0, 0);
+                        RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
+                        visual.Properties.InsertVector3("Translation", new System.Numerics.Vector3(0, 0, 32));
                     }
                 }
                 finally
@@ -145,13 +193,14 @@ public sealed partial class SelectionRibbon : UserControl
                 }
             };
             visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Offset", slideAnim);
+            visual.StartAnimation("Translation", slideAnim);
             batch.End();
         }
         catch
         {
             _isHiding = false;
             this.Visibility = Visibility.Collapsed;
+            RibbonCard.Translation = new System.Numerics.Vector3(0, 0, 32);
         }
     }
 
