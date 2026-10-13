@@ -109,6 +109,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
     public partial bool IsUpdateAvailable { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsInstallingUpdate { get; set; }
     [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
     [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IsNoUpdatesAvailable { get; set; }
@@ -294,13 +298,40 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool CanInstallUpdate => IsUpdateAvailable && !IsCheckingForUpdates;
+    public bool CanInstallUpdate => IsUpdateAvailable && !IsCheckingForUpdates && !IsInstallingUpdate;
 
     [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
     private async System.Threading.Tasks.Task InstallUpdateAsync()
     {
-        if (!IsUpdateAvailable || IsCheckingForUpdates) return;
-        await UpdateService.InstallUpdateAsync(_downloadUri);
+        if (!IsUpdateAvailable || IsCheckingForUpdates || IsInstallingUpdate) return;
+        IsInstallingUpdate = true;
+        UpdateStatusText = "Downloading update package...";
+
+        try
+        {
+            var progress = new Progress<double>(percent =>
+            {
+                UpdateStatusText = $"Downloading update... {percent:F0}%";
+            });
+
+            bool launched = await UpdateService.InstallUpdateAsync(_downloadUri, progress);
+            if (launched)
+            {
+                UpdateStatusText = "Update launched! Complete setup in the installer prompt.";
+            }
+            else
+            {
+                UpdateStatusText = "Failed to launch installer. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText = $"Installation failed: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingUpdate = false;
+        }
     }
 
     // ── Index properties for ComboBox bindings ─────────────────────

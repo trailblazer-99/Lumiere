@@ -1276,8 +1276,13 @@
                                     <TextBlock Text="Check for updates"/>
                                 </StackPanel>
                             </Button>
-                            <Button Content="Update available" Style="{StaticResource SettingsAccentActionButtonStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" 
-                                    Command="{x:Bind ViewModel.InstallUpdateCommand}" VerticalAlignment="Center"/>
+                            <Button Style="{StaticResource SettingsAccentActionButtonStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" 
+                                    Command="{x:Bind ViewModel.InstallUpdateCommand}" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Visibility="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Foreground="White"/>
+                                    <TextBlock Text="Update available"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>

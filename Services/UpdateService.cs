@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -416,32 +418,114 @@ public static class UpdateService
         return report;
     }
 
-    public static async Task<bool> InstallUpdateAsync(string? directDownloadUri = null)
+    private static string GetUpdateDownloadDirectory()
+    {
+        try
+        {
+            return Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+        }
+        catch
+        {
+            return Path.GetTempPath();
+        }
+    }
+
+    public static async Task<bool> InstallUpdateAsync(
+        string? directDownloadUri = null,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         string targetUri = !string.IsNullOrWhiteSpace(directDownloadUri)
             ? directDownloadUri
             : (!string.IsNullOrWhiteSpace(LastCheckResult?.DownloadUri) ? LastCheckResult.DownloadUri : GitHubReleasesUrl);
 
-        try
+        // If targetUri is a direct downloadable package (.msixbundle, .msix, .appinstaller)
+        bool isPackageFile = targetUri.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase) ||
+                             targetUri.EndsWith(".msix", StringComparison.OrdinalIgnoreCase) ||
+                             targetUri.EndsWith(".appinstaller", StringComparison.OrdinalIgnoreCase);
+
+        if (isPackageFile && Uri.TryCreate(targetUri, UriKind.Absolute, out var packageUri))
         {
-            // Attempt launching the Windows App Installer protocol
-            var appInstallerUri = new Uri("ms-appinstaller:?source=" + AppInstallerUrl);
-            bool launched = await Windows.System.Launcher.LaunchUriAsync(appInstallerUri);
-            if (launched) return true;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[UpdateService] ms-appinstaller failed: {ex.Message}");
+            try
+            {
+                string downloadDir = GetUpdateDownloadDirectory();
+                string fileName = Path.GetFileName(packageUri.LocalPath);
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    fileName = "LumiereUpdate.msixbundle";
+                }
+                string localPackagePath = Path.Combine(downloadDir, fileName);
+
+                using (var response = await _httpClient.GetAsync(packageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+                {
+                    response.EnsureSuccessStatusCode();
+
+                    long? totalBytes = response.Content.Headers.ContentLength;
+                    using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                    using var fileStream = new FileStream(localPackagePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+
+                    byte[] buffer = new byte[81920];
+                    long totalRead = 0;
+                    int bytesRead;
+
+                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
+                    {
+                        await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
+                        totalRead += bytesRead;
+                        if (totalBytes.HasValue && totalBytes.Value > 0)
+                        {
+                            double pct = Math.Min(100.0, (double)totalRead / totalBytes.Value * 100.0);
+                            progress?.Report(pct);
+                        }
+                    }
+                }
+
+                progress?.Report(100.0);
+
+                // Launch the downloaded package file locally to invoke native Windows App Installer
+                try
+                {
+                    var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(localPackagePath);
+                    bool launched = await Windows.System.Launcher.LaunchFileAsync(storageFile);
+                    if (launched) return true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UpdateService] LaunchFileAsync failed: {ex.Message}");
+                }
+
+                try
+                {
+                    using var process = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = localPackagePath,
+                        UseShellExecute = true
+                    });
+                    if (process != null) return true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UpdateService] Process.Start fallback failed: {ex.Message}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[UpdateService] In-app package download failed: {ex.Message}");
+            }
         }
 
+        // Fallback: If downloading or launching the local package fails, open the release URL in the browser
         try
         {
-            // Fallback to direct package download or GitHub releases page in browser
             return await Windows.System.Launcher.LaunchUriAsync(new Uri(targetUri));
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[UpdateService] Browser fallback failed: {ex.Message}");
+            Debug.WriteLine($"[UpdateService] Browser fallback failed: {ex.Message}");
             return false;
         }
     }
