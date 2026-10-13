@@ -474,8 +474,8 @@ public static class ThemeResourceHelper
             "CardBackgroundFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36) : Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)),
             "CardStrokeColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58) : Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230)),
             "SurfaceStrokeColorFlyoutBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                isDark 
-                    ? Microsoft.UI.ColorHelper.FromArgb(0x40, 0xFF, 0xFF, 0xFF) 
+                isDark
+                    ? Microsoft.UI.ColorHelper.FromArgb(0x40, 0xFF, 0xFF, 0xFF)
                     : Microsoft.UI.ColorHelper.FromArgb(0x26, 0x00, 0x00, 0x00)),
             "TextFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(200, 255, 255, 255) : Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0)),
             "AccentFillColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0)),

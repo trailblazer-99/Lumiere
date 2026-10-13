@@ -560,14 +560,14 @@ public sealed partial class TransportBar : UserControl
         {
             if (ShuffleButton != null)
                 ShuffleButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
                 ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: On");
         }
         else
         {
             ShuffleButton?.ClearValue(Button.BackgroundProperty);
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
                 ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: Off");
         }
@@ -581,7 +581,7 @@ public sealed partial class TransportBar : UserControl
             case PlaybackRepeatMode.Off:
                 RepeatIcon.Glyph = "\uE8EE";
                 RepeatButton?.ClearValue(Button.BackgroundProperty);
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") 
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
                     ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: Off");
                 break;
@@ -589,7 +589,7 @@ public sealed partial class TransportBar : UserControl
                 RepeatIcon.Glyph = "\uE8EE";
                 if (RepeatButton != null)
                     RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
                     ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: All");
                 break;
@@ -597,7 +597,7 @@ public sealed partial class TransportBar : UserControl
                 RepeatIcon.Glyph = "\uE8ED";
                 if (RepeatButton != null)
                     RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush") 
+                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
                     ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: One");
                 break;

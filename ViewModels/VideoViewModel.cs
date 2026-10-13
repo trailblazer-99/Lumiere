@@ -215,7 +215,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         }
         else if (SelectedFilterExtension != "All Formats")
         {
-            filtered = filtered.Where(x => x.IsFolder || 
+            filtered = filtered.Where(x => x.IsFolder ||
                 string.Equals(x.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase) ||
                 (x.IsSeries && x.Episodes?.Any(e => string.Equals(e.FileExtension, SelectedFilterExtension, StringComparison.OrdinalIgnoreCase)) == true));
         }
@@ -398,15 +398,15 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         }
         else
         {
-            var parentSeries = FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e => 
-                e.Equals(video) || 
-                (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) || 
+            var parentSeries = FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e =>
+                e.Equals(video) ||
+                (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) ||
                 (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, video.SourcePath, StringComparison.OrdinalIgnoreCase))) == true);
             if (parentSeries?.Episodes != null)
             {
-                int epIdx = parentSeries.Episodes.FindIndex(e => 
-                    e.Equals(video) || 
-                    (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) || 
+                int epIdx = parentSeries.Episodes.FindIndex(e =>
+                    e.Equals(video) ||
+                    (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, video.Id, StringComparison.Ordinal)) ||
                     (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, video.SourcePath, StringComparison.OrdinalIgnoreCase)));
                 _playback.SetQueue(parentSeries.Episodes, Math.Max(0, epIdx));
             }
@@ -455,11 +455,11 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(PlayerVisibility));
         OnPropertyChanged(nameof(CurrentPosterUrl));
 
-        var parentSeries = series ?? FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e => 
-            e.Equals(episode) || 
-            (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, episode.Id, StringComparison.Ordinal)) || 
+        var parentSeries = series ?? FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e =>
+            e.Equals(episode) ||
+            (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, episode.Id, StringComparison.Ordinal)) ||
             (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, episode.SourcePath, StringComparison.OrdinalIgnoreCase))) == true);
-        
+
         var episodesList = parentSeries?.Episodes;
 
         if (episodesList != null && episodesList.Count > 0)

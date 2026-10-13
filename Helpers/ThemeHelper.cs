@@ -1360,67 +1360,67 @@ public static class ThemeHelper
         switch (backdrop)
         {
             case AppThemeBackdrop.Solid:
-            {
-                // Solid: 100% Opaque SolidColorBrush - clean elevated card, zero translucency, crisp elevation
-                Color solidBg = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 40); // #222228
-                return new SolidColorBrush(solidBg);
-            }
+                {
+                    // Solid: 100% Opaque SolidColorBrush - clean elevated card, zero translucency, crisp elevation
+                    Color solidBg = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 40); // #222228
+                    return new SolidColorBrush(solidBg);
+                }
 
             case AppThemeBackdrop.Mica:
-            {
-                // Fluent 2 elevated translucent card complementing Mica backdrop
-                Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
-                Color micaTint = isLight
-                    ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
-                    : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
-
-                return new Microsoft.UI.Xaml.Media.AcrylicBrush
                 {
-                    AlwaysUseFallback = false,
-                    TintColor = micaTint,
-                    TintOpacity = isLight ? 0.82 : 0.85,
-                    TintLuminosityOpacity = isLight ? 0.88 : 0.90,
-                    FallbackColor = micaTint
-                };
-            }
+                    // Fluent 2 elevated translucent card complementing Mica backdrop
+                    Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
+                    Color micaTint = isLight
+                        ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
+                        : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
+
+                    return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                    {
+                        AlwaysUseFallback = false,
+                        TintColor = micaTint,
+                        TintOpacity = isLight ? 0.82 : 0.85,
+                        TintLuminosityOpacity = isLight ? 0.88 : 0.90,
+                        FallbackColor = micaTint
+                    };
+                }
 
             case AppThemeBackdrop.MicaAlt:
-            {
-                // Fluent 2 elevated onyx translucent card complementing Mica Alt backdrop
-                Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
-                Color micaAltTint = isLight
-                    ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
-                    : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
-
-                return new Microsoft.UI.Xaml.Media.AcrylicBrush
                 {
-                    AlwaysUseFallback = false,
-                    TintColor = micaAltTint,
-                    TintOpacity = isLight ? 0.85 : 0.88,
-                    TintLuminosityOpacity = isLight ? 0.90 : 0.92,
-                    FallbackColor = micaAltTint
-                };
-            }
+                    // Fluent 2 elevated onyx translucent card complementing Mica Alt backdrop
+                    Color accent = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default;
+                    Color micaAltTint = isLight
+                        ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
+                        : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
+
+                    return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                    {
+                        AlwaysUseFallback = false,
+                        TintColor = micaAltTint,
+                        TintOpacity = isLight ? 0.85 : 0.88,
+                        TintLuminosityOpacity = isLight ? 0.90 : 0.92,
+                        FallbackColor = micaAltTint
+                    };
+                }
 
             case AppThemeBackdrop.Acrylic:
             default:
-            {
-                // Fluent 2 frosted-glass Acrylic material matching Windows 11 context menu reference
-                return new Microsoft.UI.Xaml.Media.AcrylicBrush
                 {
-                    AlwaysUseFallback = false,
-                    TintColor = isLight
-                        ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 250)
-                        : Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 28),
-                    TintOpacity = isLight ? 0.65 : 0.70,
-                    TintLuminosityOpacity = isLight ? 0.75 : 0.85,
-                    FallbackColor = isLight
-                        ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 245)
-                        : Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34)
-                };
-            }
+                    // Fluent 2 frosted-glass Acrylic material matching Windows 11 context menu reference
+                    return new Microsoft.UI.Xaml.Media.AcrylicBrush
+                    {
+                        AlwaysUseFallback = false,
+                        TintColor = isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 250)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 28),
+                        TintOpacity = isLight ? 0.65 : 0.70,
+                        TintLuminosityOpacity = isLight ? 0.75 : 0.85,
+                        FallbackColor = isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 245)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34)
+                    };
+                }
         }
     }
 
@@ -1432,38 +1432,38 @@ public static class ThemeHelper
         switch (backdrop)
         {
             case AppThemeBackdrop.Solid:
-            {
-                // Crisp neutral solid border
-                Color solidBorder = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 224, 224, 230)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 61, 61, 68); // #3D3D44
-                return new SolidColorBrush(solidBorder);
-            }
+                {
+                    // Crisp neutral solid border
+                    Color solidBorder = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 224, 224, 230)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 61, 61, 68); // #3D3D44
+                    return new SolidColorBrush(solidBorder);
+                }
 
             case AppThemeBackdrop.Mica:
-            {
-                // Subtle luminous rim matching Windows 11 Mica elevation
-                byte alpha = (byte)(isLight ? 28 : 42); // #2AFFFFFF luminous rim in dark mode
-                Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
-                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
-            }
+                {
+                    // Subtle luminous rim matching Windows 11 Mica elevation
+                    byte alpha = (byte)(isLight ? 28 : 42); // #2AFFFFFF luminous rim in dark mode
+                    Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                    return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
+                }
 
             case AppThemeBackdrop.MicaAlt:
-            {
-                // Crisp onyx border matching Mica Alt elevated surface
-                byte alpha = (byte)(isLight ? 32 : 55); // #37FFFFFF crisp border in dark mode
-                Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
-                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
-            }
+                {
+                    // Crisp onyx border matching Mica Alt elevated surface
+                    byte alpha = (byte)(isLight ? 32 : 55); // #37FFFFFF crisp border in dark mode
+                    Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                    return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
+                }
 
             case AppThemeBackdrop.Acrylic:
             default:
-            {
-                // Specular frosted glass rim simulating cut glass edge (matches Windows 11 context menu)
-                byte alpha = (byte)(isLight ? 48 : 72); // #48FFFFFF specular glass rim in dark mode
-                Color glassRim = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
-                return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, glassRim.R, glassRim.G, glassRim.B));
-            }
+                {
+                    // Specular frosted glass rim simulating cut glass edge (matches Windows 11 context menu)
+                    byte alpha = (byte)(isLight ? 48 : 72); // #48FFFFFF specular glass rim in dark mode
+                    Color glassRim = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+                    return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, glassRim.R, glassRim.G, glassRim.B));
+                }
         }
     }
 

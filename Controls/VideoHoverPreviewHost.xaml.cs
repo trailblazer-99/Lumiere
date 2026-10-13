@@ -1898,8 +1898,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             double videoExpandedHeight;
 
             bool isLight = RequestedTheme == ElementTheme.Light;
-            var modalCardBg = new SolidColorBrush(isLight 
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 252, 252, 254) 
+            var modalCardBg = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(255, 252, 252, 254)
                 : Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 28));
             CardBorder.Background = modalCardBg;
 
@@ -2693,11 +2693,11 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         try
         {
             bool isLight = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Light;
-            var defaultBorderBrush = new SolidColorBrush(isLight 
-                ? Microsoft.UI.ColorHelper.FromArgb(35, 0, 0, 0) 
+            var defaultBorderBrush = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(35, 0, 0, 0)
                 : Microsoft.UI.ColorHelper.FromArgb(45, 255, 255, 255));
-            var defaultBgBrush = new SolidColorBrush(isLight 
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255) 
+            var defaultBgBrush = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
                 : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36));
 
             var cardButton = new Button
@@ -2852,7 +2852,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 MaxLines = 1,
-                Foreground = isLight 
+                Foreground = isLight
                     ? new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24))
                     : new SolidColorBrush(Microsoft.UI.Colors.White)
             };
@@ -2869,7 +2869,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             {
                 Text = subText,
                 FontSize = 11,
-                Foreground = isLight 
+                Foreground = isLight
                     ? new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(200, 90, 90, 95))
                     : new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(200, 200, 200, 200))
             };
@@ -3252,8 +3252,8 @@ public sealed partial class VideoHoverPreviewHost : UserControl
 
         if (isFavorite)
         {
-            FavoriteButton.Background = new SolidColorBrush(isLight 
-                ? Microsoft.UI.ColorHelper.FromArgb(45, 255, 68, 68) 
+            FavoriteButton.Background = new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(45, 255, 68, 68)
                 : Microsoft.UI.ColorHelper.FromArgb(70, 255, 68, 68));
             FavoriteButton.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(140, 255, 68, 68));
             FavoriteIcon.Glyph = "\uEB52"; // Filled heart

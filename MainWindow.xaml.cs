@@ -5619,41 +5619,41 @@ public sealed partial class MainWindow : Window
         switch (backdrop)
         {
             case AppThemeBackdrop.MicaAlt:
-            {
-                var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
-                var micaAltTint = isLight
-                    ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
-                    : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
+                {
+                    var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
+                    var micaAltTint = isLight
+                        ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
+                        : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
 
-                return new SolidColorBrush(micaAltTint);
-            }
+                    return new SolidColorBrush(micaAltTint);
+                }
 
             case AppThemeBackdrop.Mica:
-            {
-                var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
-                var micaTint = isLight
-                    ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
-                    : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
+                {
+                    var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
+                    var micaTint = isLight
+                        ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
+                        : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
 
-                return new SolidColorBrush(micaTint);
-            }
+                    return new SolidColorBrush(micaTint);
+                }
 
             case AppThemeBackdrop.Acrylic:
-            {
-                var acrylicBg = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 242, 242, 246)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 26, 26, 32);
-                return new SolidColorBrush(acrylicBg);
-            }
+                {
+                    var acrylicBg = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 242, 242, 246)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 26, 26, 32);
+                    return new SolidColorBrush(acrylicBg);
+                }
 
             case AppThemeBackdrop.Solid:
             default:
-            {
-                var solidBg = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 249)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
-                return new SolidColorBrush(solidBg);
-            }
+                {
+                    var solidBg = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 249)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+                    return new SolidColorBrush(solidBg);
+                }
         }
     }
 

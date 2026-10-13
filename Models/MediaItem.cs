@@ -288,8 +288,8 @@ public sealed class MediaItem : INotifyPropertyChanged, IEquatable<MediaItem>
     public string? EpisodeTitle { get; set; }
     public string? EpisodeStillUrl { get; set; }
 
-    public string DurationText => (IsSeries && Episodes?.Count > 0) 
-        ? (Episodes.Count == 1 ? "1 Episode" : $"{Episodes.Count} Episodes") 
+    public string DurationText => (IsSeries && Episodes?.Count > 0)
+        ? (Episodes.Count == 1 ? "1 Episode" : $"{Episodes.Count} Episodes")
         : Helpers.TimeFormatting.Format(Duration);
     public bool IsVideo => Kind == MediaKind.Video;
 
