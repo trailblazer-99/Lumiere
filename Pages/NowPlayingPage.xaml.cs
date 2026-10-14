@@ -29,6 +29,7 @@ public sealed partial class NowPlayingPage : Page
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
 
         this.Unloaded += OnPageUnloaded;
+        this.SizeChanged += OnPageSizeChanged;
 
         ApplyAccentColor(ViewModel.AccentColor);
         SetupVisualizer();
@@ -43,6 +44,50 @@ public sealed partial class NowPlayingPage : Page
             ShowNoLyrics();
         }
         UpdateEmptyState();
+        UpdateResponsiveLayout(this.ActualWidth, this.ActualHeight);
+    }
+
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateResponsiveLayout(e.NewSize.Width, e.NewSize.Height);
+    }
+
+    private double _lastLayoutWidth;
+    private double _lastLayoutHeight;
+
+    private void UpdateResponsiveLayout(double width, double height)
+    {
+        if (width <= 0 || ContentGrid == null) return;
+        if (Math.Abs(width - _lastLayoutWidth) < 2.0 && Math.Abs(height - _lastLayoutHeight) < 2.0) return;
+        _lastLayoutWidth = width;
+        _lastLayoutHeight = height;
+
+        bool isCompact = width < 768.0;
+        double targetArtSize = isCompact ? Math.Clamp(Math.Min(width * 0.45, (height > 0 ? height : 600) * 0.40), 180.0, 280.0) : 340.0;
+
+        if (HeroArtGrid != null)
+        {
+            HeroArtGrid.Width = targetArtSize;
+            HeroArtGrid.Height = targetArtSize;
+        }
+        if (HeroAlbumArt != null)
+        {
+            HeroAlbumArt.Width = targetArtSize;
+            HeroAlbumArt.Height = targetArtSize;
+        }
+        if (MetadataOverlay != null)
+        {
+            MetadataOverlay.Width = targetArtSize;
+            MetadataOverlay.Height = targetArtSize;
+        }
+        if (AlbumArtContainer != null)
+        {
+            AlbumArtContainer.Margin = isCompact ? new Thickness(0, 0, 16, 0) : new Thickness(0, 0, 40, 0);
+        }
+        if (LyricsCard != null && height > 0)
+        {
+            LyricsCard.Height = isCompact ? Math.Clamp(height - targetArtSize - 180.0, 140.0, 240.0) : 240.0;
+        }
     }
 
     private void UpdateEmptyState()
@@ -113,6 +158,8 @@ public sealed partial class NowPlayingPage : Page
 
     private void CleanupResources()
     {
+        this.SizeChanged -= OnPageSizeChanged;
+
         if (_viewModelPropertyChangedHandler != null)
         {
             ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;

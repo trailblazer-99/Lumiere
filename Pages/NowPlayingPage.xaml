@@ -83,13 +83,14 @@
 
             <!-- Album art — left column -->
             <StackPanel
+                x:Name="AlbumArtContainer"
                 Grid.Column="0"
                 Margin="0,0,40,0"
                 Spacing="24"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
 
-                <Grid Width="340" Height="340">
+                <Grid x:Name="HeroArtGrid" Width="340" Height="340">
                     <!-- Actual album art with true Fluent Design 2 ThemeShadow -->
                     <Border
                         x:Name="HeroAlbumArt"

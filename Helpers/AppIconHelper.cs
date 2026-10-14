@@ -51,9 +51,76 @@ public static class AppIconHelper
     [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid riid, out IPropertyStore propertyStore);
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PROPVARIANT pvar);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+
+    private const uint RDW_INVALIDATE = 0x0001;
+    private const uint RDW_FRAME = 0x0400;
+    private const uint RDW_UPDATENOW = 0x0100;
+
     private const uint SHCNE_ASSOCCHANGED = 0x08000000;
     private const uint SHCNF_IDLIST = 0x0000;
     private const uint SHCNF_FLUSH = 0x1000;
+
+    [ComImport]
+    [Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig]
+        int GetCount(out uint cProps);
+        [PreserveSig]
+        int GetAt(uint iProp, out PROPERTYKEY pkey);
+        [PreserveSig]
+        int GetValue(ref PROPERTYKEY key, out PROPVARIANT pv);
+        [PreserveSig]
+        int SetValue(ref PROPERTYKEY key, ref PROPVARIANT pv);
+        [PreserveSig]
+        int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    private struct PROPERTYKEY
+    {
+        public Guid fmtid;
+        public uint pid;
+
+        public PROPERTYKEY(Guid fmtid, uint pid)
+        {
+            this.fmtid = fmtid;
+            this.pid = pid;
+        }
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct PROPVARIANT
+    {
+        [FieldOffset(0)] public ushort vt;
+        [FieldOffset(2)] public ushort wReserved1;
+        [FieldOffset(4)] public ushort wReserved2;
+        [FieldOffset(6)] public ushort wReserved3;
+        [FieldOffset(8)] public IntPtr pwszVal;
+
+        public static PROPVARIANT FromString(string val)
+        {
+            return new PROPVARIANT
+            {
+                vt = 31, // VT_LPWSTR
+                pwszVal = Marshal.StringToCoTaskMemUni(val)
+            };
+        }
+    }
+
+    private static readonly Guid IID_IPropertyStore = new("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99");
+    private static readonly PROPERTYKEY PKEY_AppUserModel_RelaunchIconResource = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 2);
+    private static readonly PROPERTYKEY PKEY_AppUserModel_ID = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
 
     [ComImport]
     [Guid("00021401-0000-0000-C000-000000000046")]
@@ -452,6 +519,16 @@ public static class AppIconHelper
                             SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_SMALL, hSmall);
                             SetClassLongPtr(hwnd, GCLP_HICONSM, hSmall);
                         }
+
+                        // Explicitly update the Windows Explorer Taskbar relaunch icon via IPropertyStore
+                        SetWindowPropertyStore(hwnd, icoPath);
+
+                        // Redraw window non-client frame to immediately reflect new icon
+                        try
+                        {
+                            RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+                        }
+                        catch { }
                     }
                 }
             }
@@ -459,6 +536,72 @@ public static class AppIconHelper
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[AppIconHelper] UpdateWindowIcon error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Explicitly sets the window property store's relaunch icon resource and AppUserModelID.
+    /// This forces Windows Explorer's Taskbar Manager to render the window's dynamic themed icon
+    /// on the Windows taskbar, bypassing the static manifest icon cache.
+    /// </summary>
+    public static void SetWindowPropertyStore(IntPtr hwnd, string icoPath)
+    {
+        if (hwnd == IntPtr.Zero || string.IsNullOrEmpty(icoPath) || !File.Exists(icoPath))
+            return;
+
+        try
+        {
+            var iid = IID_IPropertyStore;
+            int hr = SHGetPropertyStoreForWindow(hwnd, ref iid, out var store);
+            if (hr == 0 && store != null)
+            {
+                try
+                {
+                    // 1. Set PKEY_AppUserModel_RelaunchIconResource to the active themed .ico
+                    var pvIcon = PROPVARIANT.FromString($"{icoPath},0");
+                    try
+                    {
+                        var keyIcon = PKEY_AppUserModel_RelaunchIconResource;
+                        store.SetValue(ref keyIcon, ref pvIcon);
+                    }
+                    finally
+                    {
+                        PropVariantClear(ref pvIcon);
+                    }
+
+                    // 2. Set PKEY_AppUserModel_ID to ensure taskbar grouping matches package/app identity
+                    string aumid = "Trailblazer2599.LumireMediaPlayer.App";
+                    try
+                    {
+                        if (Windows.ApplicationModel.Package.Current != null)
+                        {
+                            aumid = $"{Windows.ApplicationModel.Package.Current.Id.FamilyName}!App";
+                        }
+                    }
+                    catch { }
+
+                    var pvId = PROPVARIANT.FromString(aumid);
+                    try
+                    {
+                        var keyId = PKEY_AppUserModel_ID;
+                        store.SetValue(ref keyId, ref pvId);
+                    }
+                    finally
+                    {
+                        PropVariantClear(ref pvId);
+                    }
+
+                    store.Commit();
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(store);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AppIconHelper] SetWindowPropertyStore error: {ex.Message}");
         }
     }
 
@@ -472,12 +615,16 @@ public static class AppIconHelper
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(targetWindow);
             if (hwnd == IntPtr.Zero) return;
 
+            string variantName = GetCurrentVariantName();
+            string icoFileName = $"{variantName}.ico";
+            string? icoPath = ResolveDiskPath(icoFileName);
+
             IntPtr hBig = _currentBigHIcon;
             IntPtr hSmall = _currentSmallHIcon;
 
-            if (hBig == IntPtr.Zero || hSmall == IntPtr.Zero)
+            if (hBig == IntPtr.Zero || hSmall == IntPtr.Zero || icoPath == null)
             {
-                UpdateWindowIcon(GetCurrentVariantName(), targetWindow);
+                UpdateWindowIcon(variantName, targetWindow);
                 return;
             }
 
@@ -486,6 +633,14 @@ public static class AppIconHelper
 
             SendMessage(hwnd, WM_SETICON, (IntPtr)ICON_SMALL, hSmall);
             SetClassLongPtr(hwnd, GCLP_HICONSM, hSmall);
+
+            SetWindowPropertyStore(hwnd, icoPath);
+
+            try
+            {
+                RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+            }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -571,10 +726,26 @@ public static class AppIconHelper
 
     // ── Shell Asset & Shortcut Synchronization ────────────────────────
 
+    private static string? _lastSyncedVariant;
+
     public static void SyncShellAssetsAndShortcuts(string variantName)
     {
+        if (string.Equals(_lastSyncedVariant, variantName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         try
         {
+            string checkIcoPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer", "Assets", "Icons", $"{variantName}.ico");
+            if (_lastSyncedVariant == null && File.Exists(checkIcoPath))
+            {
+                _lastSyncedVariant = variantName;
+                return;
+            }
+
+            _lastSyncedVariant = variantName;
+
             string icoFileName = $"{variantName}.ico";
             string pngFileName = $"{variantName}.png";
             string smallPngFileName = $"{variantName}_small.png";
@@ -701,7 +872,21 @@ public static class AppIconHelper
                 targetExePath = Path.Combine(AppContext.BaseDirectory, "LumiereMediaPlayer.exe");
             }
 
-            if (File.Exists(targetExePath))
+            string? packageFamilyName = null;
+            try
+            {
+                packageFamilyName = Windows.ApplicationModel.Package.Current?.Id?.FamilyName;
+            }
+            catch { }
+
+            // Guarantee a permanent, un-sandboxed icon copy in local app data for Explorer shell shortcut resolution
+            string userIconsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer", "Assets", "Icons");
+            Directory.CreateDirectory(userIconsDir);
+            string stableIcoPath = Path.Combine(userIconsDir, $"{variantName}.ico");
+            SafeCopyFile(icoPath, stableIcoPath);
+            string effectiveShortcutIco = File.Exists(stableIcoPath) ? stableIcoPath : icoPath;
+
+            if (File.Exists(targetExePath) || !string.IsNullOrEmpty(packageFamilyName))
             {
                 // Only CREATE new shortcuts if user has explicitly opted in
                 bool createShortcuts = false;
@@ -720,9 +905,9 @@ public static class AppIconHelper
                         string desktopLnk = Path.Combine(userDesktop, "Lumière Media Player.lnk");
                         if (createShortcuts)
                         {
-                            UpdateOrCreateShortcut(desktopLnk, targetExePath, icoPath);
+                            UpdateOrCreateShortcut(desktopLnk, targetExePath, effectiveShortcutIco, packageFamilyName);
                         }
-                        UpdateExistingShortcuts(userDesktop, targetExePath, icoPath);
+                        UpdateExistingShortcuts(userDesktop, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -733,7 +918,7 @@ public static class AppIconHelper
                     string altDesktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Desktop");
                     if (Directory.Exists(altDesktop))
                     {
-                        UpdateExistingShortcuts(altDesktop, targetExePath, icoPath);
+                        UpdateExistingShortcuts(altDesktop, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -744,7 +929,7 @@ public static class AppIconHelper
                     string commonDesktop = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
                     if (!string.IsNullOrEmpty(commonDesktop) && Directory.Exists(commonDesktop))
                     {
-                        UpdateExistingShortcuts(commonDesktop, targetExePath, icoPath);
+                        UpdateExistingShortcuts(commonDesktop, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -758,9 +943,9 @@ public static class AppIconHelper
                         if (createShortcuts)
                         {
                             string startMenuLnk = Path.Combine(startPrograms, "Lumière Media Player.lnk");
-                            UpdateOrCreateShortcut(startMenuLnk, targetExePath, icoPath);
+                            UpdateOrCreateShortcut(startMenuLnk, targetExePath, effectiveShortcutIco, packageFamilyName);
                         }
-                        UpdateExistingShortcuts(startPrograms, targetExePath, icoPath);
+                        UpdateExistingShortcuts(startPrograms, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -771,7 +956,7 @@ public static class AppIconHelper
                     string commonStart = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs");
                     if (Directory.Exists(commonStart))
                     {
-                        UpdateExistingShortcuts(commonStart, targetExePath, icoPath);
+                        UpdateExistingShortcuts(commonStart, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -782,7 +967,7 @@ public static class AppIconHelper
                     string taskbar = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
                     if (Directory.Exists(taskbar))
                     {
-                        UpdateExistingShortcuts(taskbar, targetExePath, icoPath);
+                        UpdateExistingShortcuts(taskbar, targetExePath, effectiveShortcutIco, packageFamilyName);
                     }
                 }
                 catch { }
@@ -881,7 +1066,7 @@ public static class AppIconHelper
         }
     }
 
-    private static void UpdateOrCreateShortcut(string shortcutPath, string targetExePath, string iconPath)
+    private static void UpdateOrCreateShortcut(string shortcutPath, string targetExePath, string iconPath, string? packageFamilyName = null)
     {
         try
         {
@@ -897,8 +1082,19 @@ public static class AppIconHelper
                 catch { }
             }
 
-            link.SetPath(targetExePath);
-            link.SetWorkingDirectory(Path.GetDirectoryName(targetExePath) ?? "");
+            if (!string.IsNullOrEmpty(packageFamilyName))
+            {
+                string explorerExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                link.SetPath(explorerExe);
+                link.SetArguments($"shell:AppsFolder\\{packageFamilyName}!App");
+                link.SetWorkingDirectory(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+            }
+            else
+            {
+                link.SetPath(targetExePath);
+                link.SetWorkingDirectory(Path.GetDirectoryName(targetExePath) ?? "");
+            }
+
             link.SetIconLocation(iconPath, 0);
             link.SetDescription("Lumière Media Player");
 
@@ -911,7 +1107,7 @@ public static class AppIconHelper
         }
     }
 
-    private static void UpdateExistingShortcuts(string directory, string targetExePath, string iconPath)
+    private static void UpdateExistingShortcuts(string directory, string targetExePath, string iconPath, string? packageFamilyName = null)
     {
         try
         {
@@ -924,7 +1120,7 @@ public static class AppIconHelper
                 if (fileName.Contains("Lumiere", StringComparison.OrdinalIgnoreCase) ||
                     fileName.Contains("Lumière", StringComparison.OrdinalIgnoreCase))
                 {
-                    UpdateOrCreateShortcut(lnk, targetExePath, iconPath);
+                    UpdateOrCreateShortcut(lnk, targetExePath, iconPath, packageFamilyName);
                 }
             }
         }

@@ -101,8 +101,76 @@ public class UpdateServiceTests
 
         Assert.IsTrue(vm.IsUpdateAvailable);
         Assert.IsFalse(vm.IsNoUpdatesAvailable);
-        Assert.IsTrue(vm.UpdateStatusText.Contains("Update available", StringComparison.OrdinalIgnoreCase));
+        Assert.AreEqual("v1.0.1.134", vm.UpdateStatusText);
         Assert.AreEqual("1.0.1.134", vm.LatestVersion);
+        Assert.AreEqual("Update", vm.InstallButtonText);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_InstallButtonText_DefaultsToUpdateAndTracksLifecycle()
+    {
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new global::LumiereMediaPlayer.Models.AppSettings());
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+        Assert.AreEqual("Update", vm.InstallButtonText);
+
+        vm.InstallButtonText = "Downloading 45%...";
+        Assert.AreEqual("Downloading 45%...", vm.InstallButtonText);
+
+        vm.InstallButtonText = "Installing...";
+        Assert.AreEqual("Installing...", vm.InstallButtonText);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_NoUpdatesDetectedEvent_FiresWhenUpToDate()
+    {
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new global::LumiereMediaPlayer.Models.AppSettings());
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+        string? notifiedVersion = null;
+        vm.NoUpdatesDetected += v => notifiedVersion = v;
+
+        var info = new AppUpdateInfo
+        {
+            CheckSucceeded = true,
+            IsUpdateAvailable = false,
+            CurrentVersion = "1.0.1.0",
+            LatestVersion = "1.0.1.0"
+        };
+
+        vm.ApplyUpdateInfo(info);
+        Assert.IsTrue(vm.IsNoUpdatesAvailable);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_ApplyUpdateInfo_ReentrancySafe_DoesNotStackOverflow()
+    {
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new global::LumiereMediaPlayer.Models.AppSettings());
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        var info = new AppUpdateInfo
+        {
+            CheckSucceeded = true,
+            IsUpdateAvailable = true,
+            CurrentVersion = "1.0.1.0",
+            LatestVersion = "1.0.2.0",
+            DownloadUri = "https://example.com/update"
+        };
+
+        for (int i = 0; i < 50; i++)
+        {
+            vm.ApplyUpdateInfo(info);
+        }
+
+        Assert.IsTrue(vm.IsUpdateAvailable);
+        Assert.AreEqual("v1.0.2.0", vm.UpdateStatusText);
     }
 
     [TestMethod]

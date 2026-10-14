@@ -322,13 +322,21 @@ public sealed partial class SelectionRibbon : UserControl
         HideRibbon();
     }
 
+    private int _lastRibbonMode = -1;
+
     private void UpdateResponsiveRibbon(double width)
     {
         if (width <= 0) return;
 
-        bool isCompact = width < 620.0;
-        if (RibbonGrid != null) RibbonGrid.ColumnSpacing = isCompact ? 8 : 24;
-        if (ActionButtonsPanel != null) ActionButtonsPanel.Spacing = isCompact ? 4 : 8;
+        int mode = width < 520.0 ? 0 : (width < 820.0 ? 1 : 2);
+        if (_lastRibbonMode == mode) return;
+        _lastRibbonMode = mode;
+
+        bool isCompact = mode <= 1;
+        bool isUltraCompact = mode == 0;
+
+        if (RibbonGrid != null) RibbonGrid.ColumnSpacing = isUltraCompact ? 6 : (isCompact ? 12 : 24);
+        if (ActionButtonsPanel != null) ActionButtonsPanel.Spacing = isUltraCompact ? 3 : (isCompact ? 4 : 8);
 
         var textVis = isCompact ? Visibility.Collapsed : Visibility.Visible;
         if (PlayNextText != null) PlayNextText.Visibility = textVis;
@@ -337,12 +345,26 @@ public sealed partial class SelectionRibbon : UserControl
         if (RemoveText != null) RemoveText.Visibility = textVis;
         if (PropertiesText != null) PropertiesText.Visibility = textVis;
 
-        var compactPadding = new Thickness(10, 0, 10, 0);
+        var ultraCompactPadding = new Thickness(6, 0, 6, 0);
+        var compactPadding = new Thickness(9, 0, 9, 0);
         var normalPadding = new Thickness(13, 0, 13, 0);
-        if (PlayNextButton != null) PlayNextButton.Padding = isCompact ? compactPadding : normalPadding;
-        if (AddToQueueButton != null) AddToQueueButton.Padding = isCompact ? compactPadding : normalPadding;
-        if (AddToPlaylistButton != null) AddToPlaylistButton.Padding = isCompact ? compactPadding : normalPadding;
-        if (RemoveButton != null) RemoveButton.Padding = isCompact ? compactPadding : normalPadding;
-        if (PropertiesButton != null) PropertiesButton.Padding = isCompact ? compactPadding : normalPadding;
+        var padding = isUltraCompact ? ultraCompactPadding : (isCompact ? compactPadding : normalPadding);
+
+        if (PlayButton != null) PlayButton.Padding = isUltraCompact ? new Thickness(10, 0, 10, 0) : (isCompact ? new Thickness(12, 0, 12, 0) : new Thickness(16, 0, 16, 0));
+        if (PlayNextButton != null) PlayNextButton.Padding = padding;
+        if (AddToQueueButton != null) AddToQueueButton.Padding = padding;
+        if (AddToPlaylistButton != null) AddToPlaylistButton.Padding = padding;
+        if (RemoveButton != null) RemoveButton.Padding = padding;
+        if (PropertiesButton != null) PropertiesButton.Padding = padding;
+
+        if (CountTextBlock != null)
+        {
+            CountTextBlock.FontSize = isUltraCompact ? 12 : 14;
+        }
+        if (ClearButton != null)
+        {
+            ClearButton.FontSize = isUltraCompact ? 12 : 14;
+            ClearButton.Padding = isUltraCompact ? new Thickness(4, 2, 4, 2) : new Thickness(8, 4, 8, 4);
+        }
     }
 }

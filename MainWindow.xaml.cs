@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
     private bool? _lastEdgeSeekForward = null;
     private DateTime _lastEdgeSeekTime = DateTime.MinValue;
     private DispatcherTimer? _edgeSeekFeedbackTimer;
+    private DispatcherTimer? _bottomToastTimer;
     private bool _isCursorHidden = false;
     private bool _isFullscreenTransitioning = false;
     private bool _isStreamingFullScreen = false;
@@ -626,12 +627,6 @@ public sealed partial class MainWindow : Window
         RootGrid.Children.Add(FullscreenMetadataOverlay);
         Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
         CloseFullscreenMetadataButton.Click += (_, _) => HideMetadataOverlayGlobal();
-        try
-        {
-            GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
-            AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
-        }
-        catch { }
         RootGrid.SizeChanged += RootGrid_SizeChanged;
 
         // Add global preview keydown for keyboard controls to intercept hotkeys before focused controls consume them
@@ -717,8 +712,22 @@ public sealed partial class MainWindow : Window
         try { AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged; } catch { }
         try { AppServices.HdrPipeline.Initialize(this); } catch { }
 
-        // Visual animations
-        try { if (MiniPlayerVisual != null) MiniPlayerVisual.Source = new Controls.LottieLogo1(); } catch { }
+        // Global video player media pipeline deferred to after first frame
+        try
+        {
+            if (GlobalVideoPlayer != null && GlobalVideoPlayer.MediaPlayer == null)
+            {
+                GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
+                AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+            }
+        }
+        catch { }
+
+        // Visual animations deferred to idle priority
+        DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            try { if (MiniPlayerVisual != null && MiniPlayerVisual.Source == null) MiniPlayerVisual.Source = new Controls.LottieLogo1(); } catch { }
+        });
 
         if (PlaybackInfoBadge != null)
         {
@@ -738,48 +747,32 @@ public sealed partial class MainWindow : Window
             }
         }
         catch { }
-
-        // Check for updates in the background and show notification if available
-        _ = CheckForUpdateOnStartupAsync();
     }
 
-    private async Task CheckForUpdateOnStartupAsync()
-    {
-        try
-        {
-            // Brief delay to let the UI settle before making network calls
-            await Task.Delay(3000);
-
-            var info = await UpdateService.CheckForUpdatesAsync();
-            if (info?.IsUpdateAvailable == true)
-            {
-                DispatcherQueue?.TryEnqueue(() =>
-                {
-                    ShowUpdateNotification(info);
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MainWindow] Startup update check failed: {ex.Message}");
-        }
-    }
+    private bool _isShowingUpdateNotification;
 
     public void ShowUpdateNotification(AppUpdateInfo info)
     {
-        if (info == null) return;
-        _updateDownloadUri = info.DownloadUri;
-        try { AppServices.SettingsViewModel?.ApplyUpdateInfo(info); } catch { }
-        if (UpdateInfoBadge != null)
+        if (info == null || _isShowingUpdateNotification) return;
+        _isShowingUpdateNotification = true;
+        try
         {
-            UpdateInfoBadge.Visibility = Visibility.Visible;
-            if (SettingsNavItem != null)
+            _updateDownloadUri = info.DownloadUri;
+            if (UpdateInfoBadge != null)
             {
-                ToolTipService.SetToolTip(SettingsNavItem, $"Update available: v{info.LatestVersion} (currently v{info.CurrentVersion})");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings, 1 notification");
+                UpdateInfoBadge.Visibility = Visibility.Visible;
+                if (SettingsNavItem != null)
+                {
+                    ToolTipService.SetToolTip(SettingsNavItem, $"Update available: v{info.LatestVersion} (currently v{info.CurrentVersion})");
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SettingsNavItem, "Settings, 1 notification");
+                }
             }
+            SetAppBadgeGlyph();
         }
-        SetAppBadgeGlyph();
+        finally
+        {
+            _isShowingUpdateNotification = false;
+        }
     }
 
     public void ClearUpdateNotification()
@@ -3119,6 +3112,8 @@ public sealed partial class MainWindow : Window
         _saveBoundsTimer = null;
         _edgeSeekFeedbackTimer?.Stop();
         _edgeSeekFeedbackTimer = null;
+        _bottomToastTimer?.Stop();
+        _bottomToastTimer = null;
         _resizePerformanceTimer?.Stop();
         _resizePerformanceTimer = null;
         _navPaneResponsivenessTimer?.Stop();
@@ -7344,5 +7339,122 @@ public sealed partial class MainWindow : Window
         {
             _isSyncingFloatingPlayer = false;
         }
+    }
+
+    // ── Floating Bottom Pop-up Toast ("No updates", notifications) ────────
+
+    public void ShowBottomToast(string title, string? subtitle = null, string glyph = "\uE73E")
+    {
+        try
+        {
+            if (BottomToastHost == null || BottomToastTitle == null) return;
+
+            if (DispatcherQueue != null && !DispatcherQueue.HasThreadAccess)
+            {
+                DispatcherQueue.TryEnqueue(() => ShowBottomToast(title, subtitle, glyph));
+                return;
+            }
+
+            BottomToastTitle.Text = title;
+            if (BottomToastSubtitle != null)
+            {
+                BottomToastSubtitle.Text = string.IsNullOrEmpty(subtitle) ? "" : $"— {subtitle}";
+                BottomToastSubtitle.Visibility = string.IsNullOrEmpty(subtitle) ? Visibility.Collapsed : Visibility.Visible;
+            }
+            if (BottomToastIcon != null)
+            {
+                BottomToastIcon.Glyph = glyph;
+            }
+
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(BottomToastHost);
+            var compositor = visual.Compositor;
+
+            BottomToastHost.Visibility = Visibility.Visible;
+            BottomToastHost.IsHitTestVisible = true;
+
+            // Slide up & fade in
+            visual.Opacity = 0f;
+            visual.Offset = new System.Numerics.Vector3(0f, 20f, 0f);
+
+            var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
+            opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
+            opacityAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(new System.Numerics.Vector2(0f, 0f), new System.Numerics.Vector2(0f, 1f)));
+            visual.StartAnimation("Opacity", opacityAnim);
+
+            var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
+            offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
+            offsetAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0f, 0f, 0f), compositor.CreateCubicBezierEasingFunction(new System.Numerics.Vector2(0f, 0f), new System.Numerics.Vector2(0f, 1f)));
+            visual.StartAnimation("Offset", offsetAnim);
+
+            if (_bottomToastTimer == null)
+            {
+                _bottomToastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                _bottomToastTimer.Tick += (s, e) =>
+                {
+                    _bottomToastTimer.Stop();
+                    HideBottomToast();
+                };
+            }
+
+            _bottomToastTimer.Stop();
+            _bottomToastTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainWindow] ShowBottomToast error: {ex.Message}");
+            if (BottomToastHost != null)
+            {
+                BottomToastHost.Visibility = Visibility.Visible;
+                BottomToastHost.Opacity = 1;
+                BottomToastHost.IsHitTestVisible = true;
+            }
+        }
+    }
+
+    private void HideBottomToast()
+    {
+        try
+        {
+            if (BottomToastHost == null || BottomToastHost.Visibility != Visibility.Visible) return;
+
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(BottomToastHost);
+            var compositor = visual.Compositor;
+
+            BottomToastHost.IsHitTestVisible = false;
+
+            var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
+            opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
+            opacityAnim.InsertKeyFrame(1f, 0f);
+            visual.StartAnimation("Opacity", opacityAnim);
+
+            var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
+            offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
+            offsetAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0f, 20f, 0f));
+            visual.StartAnimation("Offset", offsetAnim);
+
+            var hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            hideTimer.Tick += (s, e) =>
+            {
+                hideTimer.Stop();
+                if (BottomToastHost != null && !BottomToastHost.IsHitTestVisible)
+                {
+                    BottomToastHost.Visibility = Visibility.Collapsed;
+                }
+            };
+            hideTimer.Start();
+        }
+        catch
+        {
+            if (BottomToastHost != null)
+            {
+                BottomToastHost.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private void OnDismissBottomToastClicked(object sender, RoutedEventArgs e)
+    {
+        _bottomToastTimer?.Stop();
+        HideBottomToast();
     }
 }

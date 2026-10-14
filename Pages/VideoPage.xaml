@@ -88,48 +88,52 @@
                     VerticalScrollBarVisibility="Disabled"
                     VerticalScrollMode="Disabled"
                     VerticalAlignment="Center">
-                    <StackPanel x:Name="ControlsPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                    <StackPanel x:Name="ControlsPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <AutoSuggestBox
                             Width="180"
                             PlaceholderText="Search videos..."
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay}"
-                            VerticalAlignment="Bottom">
+                            VerticalAlignment="Center">
                             <AutoSuggestBox.QueryIcon>
                                 <SymbolIcon Symbol="Find" />
                             </AutoSuggestBox.QueryIcon>
                         </AutoSuggestBox>
                         <ComboBox
                             Width="140"
-                            Header="Filter By"
+                            ToolTipService.ToolTip="Filter by format"
+                            AutomationProperties.Name="Filter by format"
                             ItemsSource="{x:Bind ViewModel.FilterExtensionOptions}"
                             SelectedItem="{x:Bind ViewModel.SelectedFilterExtension, Mode=TwoWay}"
+                            VerticalAlignment="Center"
                             helpers:ComboBoxHelper.FollowBackdrop="True" />
                         <ToggleButton
                             Style="{StaticResource FavoritesFilterToggleButtonStyle}"
-                            VerticalAlignment="Bottom"
+                            VerticalAlignment="Center"
                             IsChecked="{x:Bind ViewModel.ShowFavoritesOnly, Mode=TwoWay}"
                             AutomationProperties.Name="Filter to favorites only"
                             ToolTipService.ToolTip="Filter to favorites only" />
                         <ComboBox
                             Width="160"
-                            Header="Sort By"
+                            ToolTipService.ToolTip="Sort by"
+                            AutomationProperties.Name="Sort by"
                             ItemsSource="{x:Bind ViewModel.SortOptions}"
                             SelectedItem="{x:Bind ViewModel.SelectedSort, Mode=TwoWay}"
+                            VerticalAlignment="Center"
                             helpers:ComboBoxHelper.FollowBackdrop="True" />
                             
-                        <Button VerticalAlignment="Bottom" Command="{x:Bind ViewModel.AddFolderCommand}" AutomationProperties.Name="Add Folder" ToolTipService.ToolTip="Add folder to library">
+                        <Button VerticalAlignment="Center" Command="{x:Bind ViewModel.AddFolderCommand}" AutomationProperties.Name="Add Folder" ToolTipService.ToolTip="Add folder to library">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE838;" FontSize="16" />
                                 <TextBlock Text="Add Folder" />
                             </StackPanel>
                         </Button>
-                        <Button VerticalAlignment="Bottom" Command="{x:Bind ViewModel.AddFilesCommand}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="Open File(s)" ToolTipService.ToolTip="Open file(s)">
+                        <Button VerticalAlignment="Center" Command="{x:Bind ViewModel.AddFilesCommand}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="Open File(s)" ToolTipService.ToolTip="Open file(s)">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8E5;" FontSize="16" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                 <TextBlock Text="Open File(s)" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                             </StackPanel>
                         </Button>
-                        <Button x:Name="ClearAllVideosButton" VerticalAlignment="Bottom" Click="OnClearAllVideosClick" AutomationProperties.Name="Clear all videos from library" ToolTipService.ToolTip="Clear all videos from library">
+                        <Button x:Name="ClearAllVideosButton" VerticalAlignment="Center" Click="OnClearAllVideosClick" AutomationProperties.Name="Clear all videos from library" ToolTipService.ToolTip="Clear all videos from library">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE74D;" FontSize="16" />
                                 <TextBlock Text="Clear All" />

@@ -42,6 +42,7 @@ public sealed partial class VideoPage : Page
 
         this.Loaded += OnLoaded;
         this.Unloaded += OnUnloaded;
+        this.SizeChanged += OnPageSizeChanged;
 
         if (CloseMetadataButton != null)
         {
@@ -52,10 +53,38 @@ public sealed partial class VideoPage : Page
         UpdateUiLuminance();
     }
 
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateLayoutForWidth(e.NewSize.Width);
+    }
+
+    private bool? _isNarrowHeader;
+
+    private void UpdateLayoutForWidth(double width)
+    {
+        if (width <= 0)
+        {
+            width = this.ActualWidth;
+            if (width <= 0 && PageContent != null) width = PageContent.ActualWidth;
+            if (width <= 0 && App.MainWindowInstance?.ContentFrame != null) width = App.MainWindowInstance.ContentFrame.ActualWidth;
+            if (width <= 0 && App.MainWindowInstance != null) width = App.MainWindowInstance.Bounds.Width;
+            if (width <= 0) return;
+        }
+
+        bool shouldBeNarrowHeader = width < 960;
+        if (_isNarrowHeader == shouldBeNarrowHeader) return;
+        _isNarrowHeader = shouldBeNarrowHeader;
+
+        VisualStateManager.GoToState(this, shouldBeNarrowHeader ? "NarrowHeader" : "WideHeader", true);
+    }
+
     private void AttachEventHandlers()
     {
         if (!_eventHandlersDetached) return;
         _eventHandlersDetached = false;
+
+        this.SizeChanged -= OnPageSizeChanged;
+        this.SizeChanged += OnPageSizeChanged;
 
         this.KeyDown -= OnPageKeyDown;
         this.KeyDown += OnPageKeyDown;
@@ -120,6 +149,8 @@ public sealed partial class VideoPage : Page
             _fullscreenStreamingClickHandler = null;
         }
 
+        this.SizeChanged -= OnPageSizeChanged;
+
         if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
     }
 
@@ -143,6 +174,7 @@ public sealed partial class VideoPage : Page
         try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
         AttachRibbonToHost();
         AttachEventHandlers();
+        UpdateLayoutForWidth(this.ActualWidth);
         SyncMediaPlayer(true);
         UpdateUiLuminance();
         UpdateEmptyState();
@@ -152,6 +184,7 @@ public sealed partial class VideoPage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
+        this.SizeChanged -= OnPageSizeChanged;
         DetachRibbonFromHost();
         DetachEventHandlers();
     }

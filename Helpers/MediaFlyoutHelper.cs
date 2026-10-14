@@ -552,8 +552,9 @@ public static class ThemeResourceHelper
                     }
                 }
 
-                // 4. Search merged dictionaries (including XamlControlsResources)
-                if (TryFindBrushInMergedDictionaries(Application.Current.Resources, key, themeKeys, out var mb))
+                // 4. Search merged dictionaries (including XamlControlsResources) with cycle and depth guards
+                var visited = new HashSet<ResourceDictionary>();
+                if (TryFindBrushInMergedDictionaries(Application.Current.Resources, key, themeKeys, visited, 0, out var mb))
                 {
                     brush = mb;
                     return true;
@@ -569,48 +570,69 @@ public static class ThemeResourceHelper
         return false;
     }
 
-    private static bool TryFindBrushInMergedDictionaries(ResourceDictionary dict, string key, string[] themeKeys, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Microsoft.UI.Xaml.Media.Brush? brush)
+    private static bool TryFindBrushInMergedDictionaries(
+        ResourceDictionary dict,
+        string key,
+        string[] themeKeys,
+        HashSet<ResourceDictionary> visited,
+        int depth,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Microsoft.UI.Xaml.Media.Brush? brush)
     {
-        foreach (var merged in dict.MergedDictionaries)
+        brush = null;
+        if (dict == null || depth > 4 || !visited.Add(dict))
         {
-            foreach (var tk in themeKeys)
+            return false;
+        }
+
+        try
+        {
+            foreach (var merged in dict.MergedDictionaries)
             {
-                if (merged.ThemeDictionaries.TryGetValue(tk, out var tdObj) &&
-                    tdObj is ResourceDictionary td &&
-                    td.TryGetValue(key, out var tb))
+                if (merged == null || !visited.Add(merged))
                 {
-                    if (tb is Microsoft.UI.Xaml.Media.Brush b1)
+                    continue;
+                }
+
+                foreach (var tk in themeKeys)
+                {
+                    if (merged.ThemeDictionaries.TryGetValue(tk, out var tdObj) &&
+                        tdObj is ResourceDictionary td &&
+                        td.TryGetValue(key, out var tb))
                     {
-                        brush = b1;
+                        if (tb is Microsoft.UI.Xaml.Media.Brush b1)
+                        {
+                            brush = b1;
+                            return true;
+                        }
+                        if (tb is Windows.UI.Color c1)
+                        {
+                            brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(c1);
+                            return true;
+                        }
+                    }
+                }
+
+                if (merged.TryGetValue(key, out var val))
+                {
+                    if (val is Microsoft.UI.Xaml.Media.Brush mb)
+                    {
+                        brush = mb;
                         return true;
                     }
-                    if (tb is Windows.UI.Color c1)
+                    if (val is Windows.UI.Color mc)
                     {
-                        brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(c1);
+                        brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(mc);
                         return true;
                     }
                 }
-            }
 
-            if (merged.TryGetValue(key, out var val))
-            {
-                if (val is Microsoft.UI.Xaml.Media.Brush mb)
+                if (TryFindBrushInMergedDictionaries(merged, key, themeKeys, visited, depth + 1, out brush))
                 {
-                    brush = mb;
                     return true;
                 }
-                if (val is Windows.UI.Color mc)
-                {
-                    brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(mc);
-                    return true;
-                }
-            }
-
-            if (TryFindBrushInMergedDictionaries(merged, key, themeKeys, out brush))
-            {
-                return true;
             }
         }
+        catch { }
 
         brush = null;
         return false;

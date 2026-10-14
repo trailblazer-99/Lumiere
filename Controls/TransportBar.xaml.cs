@@ -1077,7 +1077,7 @@ public sealed partial class TransportBar : UserControl
         }
         else if (AppServices.Settings.Current.AcrylicTransportBar)
         {
-            // Normal Windowed mode: Frosted Acrylic Glass material allowing window backdrop to show through
+            // Normal Windowed mode: Translucent Frosted Acrylic material
             bool isLight = ActualTheme == ElementTheme.Light;
             BarGrid.Margin = new Thickness(0);
             BarGrid.CornerRadius = new CornerRadius(0);
@@ -1090,7 +1090,7 @@ public sealed partial class TransportBar : UserControl
                 TintColor = isLight
                     ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
                     : Microsoft.UI.ColorHelper.FromArgb(255, 18, 20, 26),
-                TintOpacity = isLight ? 0.15 : 0.18,
+                TintOpacity = isLight ? 0.30 : 0.35,
                 TintLuminosityOpacity = isLight ? 0.85 : 0.80,
                 FallbackColor = isLight
                     ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
@@ -1098,13 +1098,12 @@ public sealed partial class TransportBar : UserControl
             };
 
             BarGrid.BorderBrush = new SolidColorBrush(isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
+                ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
+                : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
         }
         else
         {
-            // Normal Windowed mode: Follow active window backdrop theme
-            var backdrop = AppServices.Settings.Current.BackdropType;
+            // Normal Windowed mode: Solid opaque bar matching surface theme
             bool isLight = ActualTheme == ElementTheme.Light;
             BarGrid.Margin = new Thickness(0);
             BarGrid.CornerRadius = new CornerRadius(0);
@@ -1112,19 +1111,13 @@ public sealed partial class TransportBar : UserControl
             BarGrid.Translation = System.Numerics.Vector3.Zero;
             try { BarGrid.Shadow = null; } catch { }
 
-            if (backdrop == AppThemeBackdrop.Solid)
-            {
-                BarGrid.Background = ThemeResourceHelper.GetThemeBrush("SolidBackgroundFillColorBaseBrush");
-            }
-            else
-            {
-                // When backdrop is Mica, MicaAlt, or Acrylic: transparent allows the window backdrop material to flow through seamlessly
-                BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            }
+            BarGrid.Background = new SolidColorBrush(isLight
+                ? Microsoft.UI.Colors.White
+                : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32));
 
             BarGrid.BorderBrush = new SolidColorBrush(isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
+                ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
+                : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
         }
     }
 

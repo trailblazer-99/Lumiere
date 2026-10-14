@@ -113,6 +113,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
     public partial bool IsInstallingUpdate { get; set; }
+
+    [ObservableProperty]
+    public partial string InstallButtonText { get; set; } = "Update";
+
+    public event Action<string?>? NoUpdatesDetected;
+
     [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
     [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IsNoUpdatesAvailable { get; set; }
@@ -173,28 +179,41 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             UpdateStatusText = "Current version: v1.0.0 (Development build)";
         }
 
-        if (UpdateService.LastCheckResult != null)
-        {
-            ApplyUpdateInfo(UpdateService.LastCheckResult);
-        }
     }
+
+    private bool _isApplyingUpdateInfo;
 
     public void ApplyUpdateInfo(AppUpdateInfo info)
     {
-        if (info == null) return;
-        if (info.IsUpdateAvailable)
+        if (info == null || _isApplyingUpdateInfo) return;
+        _isApplyingUpdateInfo = true;
+        try
         {
-            IsUpdateAvailable = true;
-            IsNoUpdatesAvailable = false;
-            UpdateStatusText = $"Update available: v{info.LatestVersion} (Current: v{info.CurrentVersion})";
-            LatestVersion = info.LatestVersion;
-            _downloadUri = info.DownloadUri;
+            if (info.IsUpdateAvailable)
+            {
+                IsUpdateAvailable = true;
+                IsNoUpdatesAvailable = false;
+                InstallButtonText = "Update";
+                string version = info.LatestVersion ?? string.Empty;
+                if (!string.IsNullOrEmpty(version) && !version.StartsWith('v') && !version.StartsWith('V'))
+                {
+                    version = $"v{version}";
+                }
+                UpdateStatusText = version;
+                LatestVersion = info.LatestVersion ?? string.Empty;
+                _downloadUri = info.DownloadUri ?? string.Empty;
+                App.MainWindowInstance?.ShowUpdateNotification(info);
+            }
+            else if (info.CheckSucceeded || !string.IsNullOrEmpty(info.LatestVersion))
+            {
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+            }
         }
-        else if (info.CheckSucceeded || !string.IsNullOrEmpty(info.LatestVersion))
+        finally
         {
-            IsUpdateAvailable = false;
-            IsNoUpdatesAvailable = true;
-            UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+            _isApplyingUpdateInfo = false;
         }
     }
 
@@ -269,12 +288,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 IsUpdateAvailable = false;
                 IsNoUpdatesAvailable = true;
                 UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+                NotifyNoUpdatesAvailable(info.CurrentVersion);
             }
             else if (!string.IsNullOrEmpty(info.LatestVersion))
             {
                 IsUpdateAvailable = false;
                 IsNoUpdatesAvailable = true;
                 UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+                NotifyNoUpdatesAvailable(info.CurrentVersion);
             }
             else if (!string.IsNullOrEmpty(info.CurrentVersion))
             {
@@ -298,6 +319,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void NotifyNoUpdatesAvailable(string? currentVersion)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            NoUpdatesDetected?.Invoke(currentVersion);
+            App.MainWindowInstance?.ShowBottomToast("No updates", string.IsNullOrEmpty(currentVersion) ? "You're on the latest version" : $"You're on the latest version (v{currentVersion})");
+        });
+    }
+
     public bool CanInstallUpdate => IsUpdateAvailable && !IsCheckingForUpdates && !IsInstallingUpdate;
 
     [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
@@ -305,28 +335,35 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         if (!IsUpdateAvailable || IsCheckingForUpdates || IsInstallingUpdate) return;
         IsInstallingUpdate = true;
-        UpdateStatusText = "Downloading update package...";
+        InstallButtonText = "Downloading...";
 
         try
         {
             var progress = new Progress<double>(percent =>
             {
-                UpdateStatusText = $"Downloading update... {percent:F0}%";
+                if (percent < 100.0)
+                {
+                    InstallButtonText = $"Downloading {percent:F0}%...";
+                }
+                else
+                {
+                    InstallButtonText = "Installing...";
+                }
             });
 
             bool launched = await UpdateService.InstallUpdateAsync(_downloadUri, progress);
             if (launched)
             {
-                UpdateStatusText = "Update launched! Complete setup in the installer prompt.";
+                InstallButtonText = "Installing...";
             }
             else
             {
-                UpdateStatusText = "Failed to launch installer. Please try again.";
+                InstallButtonText = "Update";
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            UpdateStatusText = $"Installation failed: {ex.Message}";
+            InstallButtonText = "Update";
         }
         finally
         {
