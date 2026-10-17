@@ -329,7 +329,7 @@
                     ToolTipService.ToolTip="Audio track">
                     <FontIcon x:Name="AudioIcon" FontSize="16" Glyph="&#xE8D6;" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" Opened="OnAudioMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -343,7 +343,7 @@
                     ToolTipService.ToolTip="Subtitles">
                     <FontIcon x:Name="SubtitlesIcon" FontSize="16" Glyph="&#xED1E;" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" Opened="OnSubtitlesMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -355,8 +355,10 @@
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
-                    ToolTipService.ToolTip="Volume">
-                    <FontIcon x:Name="VolumeIcon" FontSize="16" Glyph="&#xE995;" />
+                    ToolTipService.ToolTip="Volume"
+                    PointerWheelChanged="OnVolumeButtonPointerWheelChanged"
+                    RightTapped="OnVolumeButtonRightTapped">
+                    <FontIcon x:Name="VolumeIcon" FontSize="16" Glyph="&#xE995;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                     <Button.Flyout>
                         <Flyout x:Name="VolumeFlyout" Placement="Top" Opening="OnVolumeFlyoutOpening" Opened="OnVolumeFlyoutOpened" helpers:FlyoutHelper.FollowBackdrop="True">
                             <Flyout.FlyoutPresenterStyle>
@@ -371,7 +373,7 @@
                                     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
                                 </Style>
                             </Flyout.FlyoutPresenterStyle>
-                            <Grid Height="32" VerticalAlignment="Center">
+                            <Grid x:Name="VolumeFlyoutContentGrid" Height="32" VerticalAlignment="Center" PointerWheelChanged="OnVolumeButtonPointerWheelChanged">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="32" />
                                     <ColumnDefinition Width="8" />
@@ -400,6 +402,7 @@
                                         x:Name="FlyoutVolumeIcon"
                                         FontSize="16"
                                         Glyph="&#xE995;"
+                                        Foreground="{ThemeResource AccentFillColorDefaultBrush}"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center" />
                                 </Button>
@@ -409,9 +412,9 @@
                                     x:Name="VolumeSlider"
                                     Grid.Column="2"
                                     AutomationProperties.Name="Volume level"
+                                    Style="{StaticResource FluentVolumeSliderStyle}"
                                     Width="130"
                                     Height="32"
-                                    Padding="8,0,8,0"
                                     Minimum="0"
                                     Maximum="100"
                                     Value="100"
@@ -419,12 +422,6 @@
                                     ValueChanged="OnVolumeValueChanged"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Center">
-                                    <Slider.Resources>
-                                        <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
-                                        <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
-                                        <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
-                                        <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
-                                    </Slider.Resources>
                                 </Slider>
 
                                 <!-- Volume value text label -->
@@ -466,9 +463,23 @@
                     <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE93A;" />
                 </Button>
 
+                <!-- TV Episode Queue Button (Visible for TV Series) -->
+                <Button
+                    x:Name="TvEpisodeQueueButton"
+                    AutomationProperties.Name="Episodes Queue"
+                    Click="OnTvEpisodeQueueButtonClick"
+                    Style="{StaticResource TransportIconButtonStyle}"
+                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                    helpers:SpringAnimationHelper.HoverScale="1.08"
+                    ToolTipService.ToolTip="Episodes Queue (Q)"
+                    Visibility="Collapsed">
+                    <FontIcon x:Name="TvEpisodeQueueIcon" FontSize="16" Glyph="&#xE78B;" />
+                </Button>
+
                 <!-- More Options (3-dot) Button -->
                 <Button
                     x:Name="MoreButton"
+                    Click="OnMoreButtonClick"
                     AutomationProperties.Name="More options"
                     Style="{StaticResource TransportIconButtonStyle}"
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
@@ -476,7 +487,7 @@
                     ToolTipService.ToolTip="More options">
                     <FontIcon x:Name="MoreIcon" FontSize="16" Glyph="&#xE712;" />
                     <Button.Flyout>
-                        <MenuFlyout Placement="Top" Opening="OnMoreMenuOpening" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        <MenuFlyout x:Name="MoreMenuFlyout" Placement="Top" Opening="OnMoreMenuOpening" Opened="OnMoreMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                             <MenuFlyoutItem x:Name="MenuPropertiesItem" Text="Properties" Click="OnInfoClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE946;" />
@@ -546,11 +557,6 @@
                                  <MenuFlyoutSubItem x:Name="MenuAspectRatioItem" Text="Aspect ratio" />
                                  <MenuFlyoutSubItem x:Name="MenuZoomItem" Text="Zoom" />
                              </MenuFlyoutSubItem>
-                             <MenuFlyoutItem x:Name="MenuQueueItem" Text="Open queue" Click="OnQueueClick">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xEA37;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator x:Name="MenuResponsiveSeparator" Visibility="Collapsed" />
                             <MenuFlyoutItem x:Name="MenuResponsiveShuffleItem" Text="Shuffle" Click="OnShuffleClick" Visibility="Collapsed">
                                 <MenuFlyoutItem.Icon>

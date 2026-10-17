@@ -379,9 +379,11 @@
                                 ToolTipService.ToolTip="Select / Unselect all videos" />
                             <TextBlock Text="Up Next" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Command="{x:Bind ViewModel.RefreshCommand}" ToolTipService.ToolTip="Refresh video library" Style="{StaticResource TransportIconButtonStyle}">
-                            <FontIcon Glyph="&#xE72C;" FontSize="16"/>
-                        </Button>
+                        <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Command="{x:Bind ViewModel.RefreshCommand}" ToolTipService.ToolTip="Refresh video library" Style="{StaticResource TransportIconButtonStyle}">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16"/>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                     
                     <ListView

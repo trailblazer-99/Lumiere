@@ -897,6 +897,106 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                     : Microsoft.UI.ColorHelper.FromArgb(40, 255, 255, 255));
                 break;
 
+            case Models.AppThemeBackdrop.FluentSymphony:
+                // Fluent Symphony: Crisp elevated solid cards
+                if (isLight)
+                {
+                    cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255));
+                    strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230));
+                }
+                else
+                {
+                    cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42));
+                    strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58));
+                }
+                break;
+
+            case Models.AppThemeBackdrop.CinematicAdaptive:
+                // Cinematic Adaptive: Deep cinema dark during video, Symphony elevated card otherwise
+                bool isVideoActive = App.MainWindowInstance?.IsVideoPlaybackActive == true;
+                if (isVideoActive)
+                {
+                    cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 18, 18, 22));
+                    strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 40, 40, 48));
+                }
+                else if (isLight)
+                {
+                    cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255));
+                    strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230));
+                }
+                else
+                {
+                    cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42));
+                    strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58));
+                }
+                break;
+
+            case Models.AppThemeBackdrop.BackdropStudio:
+                var studioCanvas = AppServices.Settings?.Current?.StudioCanvas ?? Models.StudioCanvasStyle.SolidLayer;
+                if (studioCanvas == Models.StudioCanvasStyle.SolidLayer)
+                {
+                    if (isLight)
+                    {
+                        cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255));
+                        strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230));
+                    }
+                    else
+                    {
+                        cardBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42));
+                        strokeBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58));
+                    }
+                }
+                else
+                {
+                    var baseBackdrop = AppServices.Settings?.Current?.StudioWindowBase ?? Models.AppThemeBackdrop.Mica;
+                    if (baseBackdrop == Models.AppThemeBackdrop.Acrylic)
+                    {
+                        cardBg = new AcrylicBrush
+                        {
+                            AlwaysUseFallback = false,
+                            TintColor = isLight
+                                ? Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 255)
+                                : Microsoft.UI.ColorHelper.FromArgb(255, 16, 16, 22),
+                            TintOpacity = isLight ? 0.60 : 0.58,
+                            TintLuminosityOpacity = isLight ? 0.75 : 0.70,
+                            FallbackColor = isLight
+                                ? Microsoft.UI.ColorHelper.FromArgb(230, 245, 245, 250)
+                                : Microsoft.UI.ColorHelper.FromArgb(230, 20, 20, 26)
+                        };
+                        strokeBrush = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(32, 0, 0, 0)
+                            : Microsoft.UI.ColorHelper.FromArgb(40, 255, 255, 255));
+                    }
+                    else if (baseBackdrop == Models.AppThemeBackdrop.MicaAlt)
+                    {
+                        cardBg = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(240, 244, 244, 246)
+                            : Microsoft.UI.ColorHelper.FromArgb(224, 22, 22, 28));
+                        strokeBrush = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(32, 0, 0, 0)
+                            : Microsoft.UI.ColorHelper.FromArgb(38, 255, 255, 255));
+                    }
+                    else if (baseBackdrop == Models.AppThemeBackdrop.Solid)
+                    {
+                        cardBg = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36));
+                        strokeBrush = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58));
+                    }
+                    else
+                    {
+                        cardBg = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(232, 255, 255, 255)
+                            : Microsoft.UI.ColorHelper.FromArgb(216, 32, 32, 38));
+                        strokeBrush = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0)
+                            : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255));
+                    }
+                }
+                break;
+
             case Models.AppThemeBackdrop.Solid:
             default:
                 // Solid: Pure 100% opaque surfaces matching the Solid window theme
@@ -944,7 +1044,7 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         if (EpisodesCountSubtitle != null) EpisodesCountSubtitle.Foreground = textSecondary;
 
         var iconAccentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
-            ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings.Current.AccentColor));
+            ?? new SolidColorBrush(ThemeHelper.GetAccentColor(AppServices.Settings?.Current?.AccentColor ?? Models.AccentColorOption.SystemDefault));
 
         if (MoreOptionsButton != null)
         {

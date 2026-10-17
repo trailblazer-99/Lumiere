@@ -2094,6 +2094,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 _crossfadeCheckTimer.Start();
             }
             UpdateDisplayRequestState();
+            AccessibilityHelper.NotifySoundCue();
         }
 
     }

@@ -23,9 +23,12 @@ public static class AccessibilityHelper
         "LayerFillColorAltBrush",
         "TextFillColorPrimaryBrush",
         "TextFillColorSecondaryBrush",
+        "TextFillColorTertiaryBrush",
         "CardStrokeColorDefaultBrush",
         "ControlStrokeColorDefaultBrush",
         "ControlStrongStrokeColorDefaultBrush",
+        "DividerStrokeColorDefaultBrush",
+        "SurfaceStrokeColorDefaultBrush",
         "AccentFillColorDefaultBrush",
         "AccentFillColorSecondaryBrush",
         "AccentFillColorTertiaryBrush",
@@ -35,7 +38,10 @@ public static class AccessibilityHelper
 
     private static readonly ConditionalWeakTable<FrameworkElement, ElementSnapshot> Snapshots = new();
     private static readonly ConditionalWeakTable<FrameworkElement, AutoReadHandlerMarker> AutoReadHandlers = new();
+    private static readonly ConditionalWeakTable<FrameworkElement, object> VirtualizedContainerMarkers = new();
     private static bool _wasHighContrast;
+    private static bool _wasColorBlind;
+    private static bool _hasAppliedTreeModifications;
 
     public static void Apply(AppSettings settings)
     {
@@ -56,14 +62,34 @@ public static class AccessibilityHelper
         {
             ApplyResourceSettings(settings);
 
-            bool needsTreeWalk = Math.Abs(settings.TextScale - 1.0) > 0.01 ||
-                                 settings.LargerClickTargets ||
-                                 settings.ScreenReaderOptimization ||
-                                 settings.AutoReadControls;
+            bool isModifiedState = Math.Abs(settings.TextScale - 1.0) > 0.01 ||
+                                   settings.LargerClickTargets ||
+                                   settings.ScreenReaderOptimization ||
+                                   settings.AutoReadControls ||
+                                   settings.ReduceMotion ||
+                                   settings.KeyboardNavigationHighlight;
+
+            bool needsTreeWalk = isModifiedState || _hasAppliedTreeModifications;
 
             if (needsTreeWalk && App.MainWindowContent is FrameworkElement root)
             {
                 ApplyToElementTree(root, settings);
+                _hasAppliedTreeModifications = isModifiedState;
+            }
+
+            if (App.MainWindowInstance is MainWindow mainWindow && mainWindow.ContentFrame != null)
+            {
+                if (settings.ReduceMotion)
+                {
+                    mainWindow.ContentFrame.ContentTransitions = null;
+                }
+                else
+                {
+                    mainWindow.ContentFrame.ContentTransitions = new TransitionCollection
+                    {
+                        new NavigationThemeTransition()
+                    };
+                }
             }
 
             ApplyCaptionsPreference(AppServices.Playback.MediaPlayer);
@@ -71,6 +97,29 @@ public static class AccessibilityHelper
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[AccessibilityHelper] Apply error: {ex.Message}");
+        }
+    }
+
+    public static void ApplyToPage(object? page, AppSettings settings)
+    {
+        if (page is not FrameworkElement fe) return;
+        try
+        {
+            bool isModifiedState = Math.Abs(settings.TextScale - 1.0) > 0.01 ||
+                                   settings.LargerClickTargets ||
+                                   settings.ScreenReaderOptimization ||
+                                   settings.AutoReadControls ||
+                                   settings.ReduceMotion ||
+                                   settings.KeyboardNavigationHighlight;
+
+            if (isModifiedState)
+            {
+                ApplyToElementTree(fe, settings);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AccessibilityHelper] ApplyToPage error: {ex.Message}");
         }
     }
 
@@ -176,13 +225,20 @@ public static class AccessibilityHelper
 
         if (settings.ColorBlindMode != ColorBlindMode.Off)
         {
+            _wasColorBlind = true;
             ApplyColorBlindAccent(settings.ColorBlindMode);
+        }
+        else if (_wasColorBlind)
+        {
+            _wasColorBlind = false;
+            ThemeHelper.ApplyAccentColor(settings.AccentColor);
         }
     }
 
     private static void ApplyHighContrastResources()
     {
-        var dark = App.MainWindowContent?.ActualTheme == ElementTheme.Dark;
+        var effectiveTheme = ThemeHelper.GetEffectiveElementTheme();
+        var dark = effectiveTheme == ElementTheme.Dark;
         var background = dark ? ColorHelper.FromHex("#000000") : ColorHelper.FromHex("#FFFFFF");
         var surface = dark ? ColorHelper.FromHex("#101010") : ColorHelper.FromHex("#FFFFFF");
         var text = dark ? ColorHelper.FromHex("#FFFFFF") : ColorHelper.FromHex("#000000");
@@ -196,9 +252,12 @@ public static class AccessibilityHelper
         UpdateBrushResource("LayerFillColorAltBrush", surface);
         UpdateBrushResource("TextFillColorPrimaryBrush", text);
         UpdateBrushResource("TextFillColorSecondaryBrush", text);
+        UpdateBrushResource("TextFillColorTertiaryBrush", text);
         UpdateBrushResource("CardStrokeColorDefaultBrush", stroke);
         UpdateBrushResource("ControlStrokeColorDefaultBrush", stroke);
         UpdateBrushResource("ControlStrongStrokeColorDefaultBrush", stroke);
+        UpdateBrushResource("DividerStrokeColorDefaultBrush", stroke);
+        UpdateBrushResource("SurfaceStrokeColorDefaultBrush", stroke);
         UpdateBrushResource("AccentFillColorDefaultBrush", accent);
         UpdateBrushResource("AccentFillColorSecondaryBrush", accent);
         UpdateBrushResource("AccentFillColorTertiaryBrush", accent);
@@ -248,6 +307,17 @@ public static class AccessibilityHelper
     {
         ApplyElementSettings(element, settings);
 
+        if (element is ListViewBase lvb && !VirtualizedContainerMarkers.TryGetValue(lvb, out _))
+        {
+            lvb.ContainerContentChanging += OnContainerContentChanging;
+            VirtualizedContainerMarkers.Add(lvb, true);
+        }
+        else if (element is Microsoft.UI.Xaml.Controls.ItemsRepeater ir && !VirtualizedContainerMarkers.TryGetValue(ir, out _))
+        {
+            ir.ElementPrepared += OnElementPrepared;
+            VirtualizedContainerMarkers.Add(ir, true);
+        }
+
         var childrenCount = VisualTreeHelper.GetChildrenCount(element);
         for (var i = 0; i < childrenCount; i++)
         {
@@ -265,6 +335,7 @@ public static class AccessibilityHelper
         {
             var snapshot = Snapshots.GetValue(element, CreateSnapshot);
 
+            // 1. Text Scale
             if (element is TextBlock textBlock)
             {
                 if (Math.Abs(settings.TextScale - 1.0) > 0.01)
@@ -294,29 +365,96 @@ public static class AccessibilityHelper
                     RestoreFontSize(richTextBlock, RichTextBlock.FontSizeProperty, snapshot);
             }
 
-            if (element is Control control && settings.LargerClickTargets)
+            // 2. Larger Click Targets (Min 44x44px touch/click target)
+            if (element is Control control)
             {
-                if ((element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase && element is not HyperlinkButton) ||
+                bool isTargetControl = (element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase && element is not HyperlinkButton) ||
                      element is ToggleSwitch ||
                      element is Slider ||
                      element is ComboBox ||
                      element is TextBox ||
                      element is PasswordBox ||
                      element is RichEditBox ||
-                     element is NavigationViewItem)
+                     element is NavigationViewItem;
+
+                if (isTargetControl)
                 {
-                    if (double.IsNaN(control.Width) || control.Width < 44)
-                        control.MinWidth = Math.Max(snapshot.MinWidth, 44);
-                    if (double.IsNaN(control.Height) || control.Height < 44)
-                        control.MinHeight = Math.Max(snapshot.MinHeight, 44);
+                    if (settings.LargerClickTargets)
+                    {
+                        if (double.IsNaN(control.Width) || control.Width < 44)
+                            control.MinWidth = Math.Max(snapshot.MinWidth, 44);
+                        if (double.IsNaN(control.Height) || control.Height < 44)
+                            control.MinHeight = Math.Max(snapshot.MinHeight, 44);
+                    }
+                    else
+                    {
+                        if (snapshot.LocalMinWidth == null || snapshot.LocalMinWidth == DependencyProperty.UnsetValue)
+                            control.ClearValue(FrameworkElement.MinWidthProperty);
+                        else
+                            control.MinWidth = snapshot.MinWidth;
+
+                        if (snapshot.LocalMinHeight == null || snapshot.LocalMinHeight == DependencyProperty.UnsetValue)
+                            control.ClearValue(FrameworkElement.MinHeightProperty);
+                        else
+                            control.MinHeight = snapshot.MinHeight;
+                    }
                 }
             }
 
+            // 3. Focus Indicators & Keyboard Navigation Highlight
+            if (element is Control focusControl)
+            {
+                if (settings.KeyboardNavigationHighlight)
+                {
+                    focusControl.UseSystemFocusVisuals = true;
+                    var focusThickness = Math.Clamp(settings.FocusIndicatorThickness, 1, 5);
+                    focusControl.FocusVisualPrimaryThickness = new Thickness(focusThickness);
+                    focusControl.FocusVisualSecondaryThickness = new Thickness(Math.Max(0, focusThickness - 1));
+                }
+                else
+                {
+                    if (snapshot.LocalUseSystemFocusVisuals == null || snapshot.LocalUseSystemFocusVisuals == DependencyProperty.UnsetValue)
+                        focusControl.ClearValue(Control.UseSystemFocusVisualsProperty);
+                    else if (snapshot.LocalUseSystemFocusVisuals is bool b)
+                        focusControl.UseSystemFocusVisuals = b;
+
+                    if (snapshot.LocalFocusVisualPrimaryThickness == null || snapshot.LocalFocusVisualPrimaryThickness == DependencyProperty.UnsetValue)
+                        focusControl.ClearValue(Control.FocusVisualPrimaryThicknessProperty);
+                    else if (snapshot.LocalFocusVisualPrimaryThickness is Thickness t1)
+                        focusControl.FocusVisualPrimaryThickness = t1;
+
+                    if (snapshot.LocalFocusVisualSecondaryThickness == null || snapshot.LocalFocusVisualSecondaryThickness == DependencyProperty.UnsetValue)
+                        focusControl.ClearValue(Control.FocusVisualSecondaryThicknessProperty);
+                    else if (snapshot.LocalFocusVisualSecondaryThickness is Thickness t2)
+                        focusControl.FocusVisualSecondaryThickness = t2;
+                }
+            }
+
+            // 4. Reduce Motion
+            if (settings.ReduceMotion)
+            {
+                element.Transitions = null;
+                if (element is ItemsControl itemsControl)
+                {
+                    itemsControl.ItemContainerTransitions = null;
+                }
+            }
+            else
+            {
+                element.Transitions = snapshot.Transitions;
+                if (element is ItemsControl itemsControl)
+                {
+                    itemsControl.ItemContainerTransitions = snapshot.ItemContainerTransitions;
+                }
+            }
+
+            // 5. Screen Reader Optimization
             if (settings.ScreenReaderOptimization)
             {
                 ImproveAutomationName(element);
             }
 
+            // 6. Auto-Read Controls on Focus
             if (settings.AutoReadControls && !AutoReadHandlers.TryGetValue(element, out _))
             {
                 element.GotFocus += OnAutoReadElementFocused;
@@ -405,7 +543,7 @@ public static class AccessibilityHelper
             return;
         }
 
-        var name = AutomationProperties.GetName(element);
+        var name = GetElementAnnouncementName(element);
         if (string.IsNullOrWhiteSpace(name))
         {
             return;
@@ -424,6 +562,32 @@ public static class AccessibilityHelper
         {
             System.Diagnostics.Debug.WriteLine($"Failed to announce focused control: {ex.Message}");
         }
+    }
+
+    private static string? GetElementAnnouncementName(UIElement uiElement)
+    {
+        var name = AutomationProperties.GetName(uiElement);
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        if (uiElement is FrameworkElement fe)
+        {
+            return fe switch
+            {
+                Button { Content: string content } => content,
+                Button { Content: TextBlock tb } => tb.Text,
+                ComboBox cb => cb.Header?.ToString() ?? cb.PlaceholderText,
+                ToggleSwitch ts => ts.Header?.ToString() ?? (ts.IsOn ? ts.OnContent?.ToString() : ts.OffContent?.ToString()),
+                Slider s => s.Header?.ToString(),
+                TextBox txt => !string.IsNullOrWhiteSpace(txt.Header?.ToString()) ? txt.Header.ToString() : txt.PlaceholderText,
+                TextBlock textBlock => textBlock.Text,
+                NavigationViewItem nvi => nvi.Content?.ToString(),
+                _ => null
+            };
+        }
+        return null;
     }
 
     private static void UpdateResource(string key, object value)

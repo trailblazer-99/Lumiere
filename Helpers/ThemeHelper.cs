@@ -1,4 +1,5 @@
 using LumiereMediaPlayer.Models;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -149,6 +150,80 @@ public static class ThemeHelper
                 ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, effectiveTheme);
             }
             AppIconHelper.UpdateAppIcon();
+        }
+        catch { }
+    }
+
+    public static void ApplyTheme(AppThemeOption option)
+    {
+        if (App.MainWindowContent != null)
+        {
+            ApplyTheme(App.MainWindowContent, option);
+        }
+    }
+
+    public static void ApplyThemePreset(ThemePreset preset)
+    {
+        if (preset == null) return;
+
+        try
+        {
+            var settings = AppServices.Settings?.Current;
+            if (settings != null)
+            {
+                settings.Theme = preset.Theme;
+                settings.BackdropType = preset.BackdropType;
+                settings.AccentColor = preset.AccentColor;
+                settings.CustomAccentColorHex = preset.CustomAccentColorHex;
+                settings.ActiveThemePresetId = preset.Id;
+            }
+        }
+        catch { }
+
+        try
+        {
+            ApplyTheme(preset.Theme);
+        }
+        catch { }
+
+        try
+        {
+            if (App.MainWindowInstance is MainWindow mainWindow)
+            {
+                mainWindow.ApplyBackdrop(preset.BackdropType);
+                mainWindow.UpdateTheme();
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (preset.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(preset.CustomAccentColorHex))
+            {
+                try
+                {
+                    var customColor = ColorHelper.FromHex(preset.CustomAccentColorHex);
+                    ApplyAccentColor(customColor);
+                }
+                catch
+                {
+                    ApplyAccentColor(preset.AccentColor);
+                }
+            }
+            else
+            {
+                ApplyAccentColor(preset.AccentColor);
+            }
+        }
+        catch { }
+
+        try
+        {
+            var settings = AppServices.Settings?.Current;
+            if (settings != null)
+            {
+                AccessibilityHelper.Apply(settings);
+            }
         }
         catch { }
     }
@@ -403,18 +478,12 @@ public static class ThemeHelper
     {
         try
         {
-            // Force WinUI 3 to re-resolve all {ThemeResource} bindings across the visual tree.
-            // Updating ResourceDictionary values alone does NOT trigger re-evaluation of existing
-            // ThemeResource references. Toggling RequestedTheme forces a full tree walk.
-            if (App.MainWindowContent is FrameworkElement root)
+            var effective = GetEffectiveElementTheme();
+            if (App.MainWindowContent is FrameworkElement root && root.RequestedTheme != effective)
             {
-                var current = root.RequestedTheme;
-                var toggled = current == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-                root.RequestedTheme = toggled;
-                root.RequestedTheme = current;
+                root.RequestedTheme = effective;
             }
 
-            var effective = GetEffectiveElementTheme();
             if ((App.MainWindowContent?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot) is XamlRoot xr)
             {
                 try
@@ -422,8 +491,11 @@ public static class ThemeHelper
                     var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
                     foreach (var p in openPopups)
                     {
-                        p.RequestedTheme = effective;
-                        if (p.Child is FrameworkElement childFe)
+                        if (p.RequestedTheme != effective)
+                        {
+                            p.RequestedTheme = effective;
+                        }
+                        if (p.Child is FrameworkElement childFe && childFe.RequestedTheme != effective)
                         {
                             childFe.RequestedTheme = effective;
                         }
@@ -570,6 +642,136 @@ public static class ThemeHelper
                         textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 54);
                         textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38);
                         textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                    }
+                    break;
+
+                case AppThemeBackdrop.FluentSymphony:
+                    // Fluent Symphony: Crisp elevated solid cards resting on the solid layer canvas
+                    // with subtle Fluent 2 elevation strokes and high-contrast text controls
+                    if (isLight)
+                    {
+                        cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255); // Solid pure white
+                        cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248);
+                        cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230);
+                        layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 248);
+                        controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 238, 238, 242);
+                        controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 230, 230, 235);
+                        controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                        textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250);
+                        textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                    }
+                    else
+                    {
+                        cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);    // Solid elevated dark card
+                        cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+                        cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58);
+                        layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                        controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 45, 45, 50);
+                        controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 55, 55, 62);
+                        controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 35, 35, 40);
+                        controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                        textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                        textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 54);
+                        textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38);
+                        textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                    }
+                    break;
+
+                case AppThemeBackdrop.CinematicAdaptive:
+                    // Cinematic Adaptive: Deep cinema dark cards when video is active, Symphony elevated cards otherwise
+                    bool isVideoActive = App.MainWindowInstance?.IsVideoPlaybackActive == true;
+                    if (isVideoActive)
+                    {
+                        cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 18, 18, 22);
+                        cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 14, 14, 18);
+                        cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 40, 40, 48);
+                        layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 10, 10, 12);
+                        controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 30);
+                        controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 42);
+                        controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 16, 16, 20);
+                        controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 56);
+                        textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 18, 18, 22);
+                        textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34);
+                        textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 14, 14, 18);
+                        textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 56);
+                    }
+                    else if (isLight)
+                    {
+                        cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248);
+                        cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230);
+                        layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 248);
+                        controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 238, 238, 242);
+                        controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 230, 230, 235);
+                        controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                        textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250);
+                        textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                        textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                    }
+                    else
+                    {
+                        cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                        cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+                        cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58);
+                        layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                        controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 45, 45, 50);
+                        controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 55, 55, 62);
+                        controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 35, 35, 40);
+                        controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                        textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                        textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 54);
+                        textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38);
+                        textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                    }
+                    break;
+
+                case AppThemeBackdrop.BackdropStudio:
+                    var studioCanvas = AppServices.Settings?.Current?.StudioCanvas ?? StudioCanvasStyle.SolidLayer;
+                    if (studioCanvas == StudioCanvasStyle.SolidLayer)
+                    {
+                        // Solid Canvas: Elevated solid cards
+                        if (isLight)
+                        {
+                            cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                            cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248);
+                            cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 230);
+                            layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                            controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 248);
+                            controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 238, 238, 242);
+                            controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 230, 230, 235);
+                            controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                            textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                            textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250);
+                            textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255);
+                            textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 215, 215, 220);
+                        }
+                        else
+                        {
+                            cardBackground = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                            cardSecondary = Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+                            cardStroke = Microsoft.UI.ColorHelper.FromArgb(255, 52, 52, 58);
+                            layerFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                            controlFill = Microsoft.UI.ColorHelper.FromArgb(255, 45, 45, 50);
+                            controlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 55, 55, 62);
+                            controlFillPressed = Microsoft.UI.ColorHelper.FromArgb(255, 35, 35, 40);
+                            controlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                            textControlFill = Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42);
+                            textControlFillPointerOver = Microsoft.UI.ColorHelper.FromArgb(255, 48, 48, 54);
+                            textControlFillFocused = Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38);
+                            textControlStroke = Microsoft.UI.ColorHelper.FromArgb(255, 65, 65, 72);
+                        }
+                    }
+                    else
+                    {
+                        // Transparent Canvas: Delegate to window base recipe
+                        var baseBackdrop = AppServices.Settings?.Current?.StudioWindowBase ?? AppThemeBackdrop.Mica;
+                        ApplyBackdropTheme(baseBackdrop, effectiveTheme);
+                        return;
                     }
                     break;
 
@@ -736,15 +938,17 @@ public static class ThemeHelper
             SetScopedBrush("ScrollBarBorderBrushPointerOver", Transparent, themeKey);
             SetScopedBrush("ScrollBarBorderBrushDisabled", Transparent, themeKey);
 
-            var accentPalette = GetAccentPalette(AppServices.Settings.Current.AccentColor);
+            var accentPalette = GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault);
 
             // Generate backdrop-tailored flyout background and border brushes
-            Func<object> getFlyoutBg = () => GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+            Func<object> getFlyoutBg = () => GetFlyoutPresenterBackground(backdrop, effectiveTheme, hasSystemBackdrop: true);
             Func<object> getFlyoutStroke = () => GetFlyoutBorderBrush(backdrop, effectiveTheme);
+            Func<object> getVolumeFlyoutBg = () => GetVolumeFlyoutBackground(backdrop, effectiveTheme, false);
+            Func<object> getVolumeFlyoutStroke = () => GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, false);
 
             SetScopedResource("FlyoutPresenterBackground", getFlyoutBg, themeKey);
             SetScopedResource("MenuFlyoutPresenterBackground", getFlyoutBg, themeKey);
-            SetScopedResource("VolumeFlyoutPresenterBackground", getFlyoutBg, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBackground", getVolumeFlyoutBg, themeKey);
             SetScopedResource("ComboBoxDropDownBackground", getFlyoutBg, themeKey);
             SetScopedResource("AutoSuggestBoxSuggestionsListBackground", getFlyoutBg, themeKey);
 
@@ -753,9 +957,10 @@ public static class ThemeHelper
             SetScopedResource("FlyoutBorderThemeBrush", getFlyoutStroke, themeKey);
             SetScopedResource("FlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
             SetScopedResource("MenuFlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
-            SetScopedResource("VolumeFlyoutPresenterBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBorderBrush", getVolumeFlyoutStroke, themeKey);
             SetScopedResource("ComboBoxDropDownBorderBrush", getFlyoutStroke, themeKey);
             SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", getFlyoutStroke, themeKey);
+            SetScopedResource("MenuFlyoutSystemBackdrop", () => new DesktopAcrylicBackdrop(), themeKey);
 
             Color ribbonBg = backdrop switch
             {
@@ -878,8 +1083,10 @@ public static class ThemeHelper
                                 {
                                     existAcb.TintColor = newScb.Color;
                                     existAcb.FallbackColor = newScb.Color;
-                                    existAcb.TintOpacity = 1.0;
-                                    existAcb.TintLuminosityOpacity = 1.0;
+                                    bool isZeroAlpha = newScb.Color.A == 0;
+                                    existAcb.TintOpacity = isZeroAlpha ? 0.0 : 1.0;
+                                    existAcb.TintLuminosityOpacity = isZeroAlpha ? 0.0 : 1.0;
+                                    existAcb.AlwaysUseFallback = isZeroAlpha;
                                 }
                             }
                             target[key] = val;
@@ -890,6 +1097,7 @@ public static class ThemeHelper
                             existAcb.TintOpacity = newAcb.TintOpacity;
                             existAcb.TintLuminosityOpacity = newAcb.TintLuminosityOpacity;
                             existAcb.FallbackColor = newAcb.FallbackColor;
+                            existAcb.AlwaysUseFallback = newAcb.AlwaysUseFallback;
                             target[key] = existAcb;
                         }
                         else
@@ -930,6 +1138,13 @@ public static class ThemeHelper
         {
             if (App.MainWindowContent != null)
                 ApplyToDictionary(App.MainWindowContent.Resources);
+        }
+        catch { }
+
+        try
+        {
+            if (App.MainWindowInstance?.TransportBarElement != null)
+                ApplyToDictionary(App.MainWindowInstance.TransportBarElement.Resources);
         }
         catch { }
 
@@ -1293,7 +1508,7 @@ public static class ThemeHelper
     public static void ApplyDarkThemeToMenuFlyout(MenuFlyout? mf)
     {
         if (mf == null) return;
-        var theme = GetEffectiveElementTheme();
+        var theme = App.MainWindowInstance?.IsFullscreenVideoActive == true ? ElementTheme.Dark : GetEffectiveElementTheme();
         foreach (var item in mf.Items)
         {
             ApplyThemeToMenuItem(item, theme);
@@ -1305,7 +1520,8 @@ public static class ThemeHelper
     /// </summary>
     public static void ApplyDarkThemeToMenuItem(MenuFlyoutItemBase? item)
     {
-        ApplyThemeToMenuItem(item, GetEffectiveElementTheme());
+        var theme = App.MainWindowInstance?.IsFullscreenVideoActive == true ? ElementTheme.Dark : GetEffectiveElementTheme();
+        ApplyThemeToMenuItem(item, theme);
     }
 
     public static void ApplyThemeToMenuItem(MenuFlyoutItemBase? item, ElementTheme theme)
@@ -1332,7 +1548,23 @@ public static class ThemeHelper
         {
             AppThemeBackdrop.Mica => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
             AppThemeBackdrop.MicaAlt => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt },
-            AppThemeBackdrop.Acrylic => new CustomAcrylicBackdrop(),
+            AppThemeBackdrop.Acrylic => new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop(),
+            AppThemeBackdrop.Solid => null,
+            AppThemeBackdrop.FluentSymphony => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
+            AppThemeBackdrop.CinematicAdaptive => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
+            AppThemeBackdrop.BackdropStudio => CreateStudioSystemBackdrop(),
+            _ => new Microsoft.UI.Xaml.Media.MicaBackdrop()
+        };
+    }
+
+    public static SystemBackdrop? CreateStudioSystemBackdrop()
+    {
+        var studioBase = AppServices.Settings?.Current?.StudioWindowBase ?? AppThemeBackdrop.Mica;
+        return studioBase switch
+        {
+            AppThemeBackdrop.Mica => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
+            AppThemeBackdrop.MicaAlt => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt },
+            AppThemeBackdrop.Acrylic => new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop(),
             AppThemeBackdrop.Solid => null,
             _ => new Microsoft.UI.Xaml.Media.MicaBackdrop()
         };
@@ -1352,12 +1584,916 @@ public static class ThemeHelper
         return new SolidColorBrush(solidBg);
     }
 
-    public static Brush GetFlyoutPresenterBackground(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool hasSystemBackdrop = false)
+    #region Fullscreen Specular Theming
+
+    private static DispatcherQueueTimer? _fullscreenPopupWatcherTimer;
+    private static int _consecutiveEmptyPopupTicks;
+    private static bool _isRenderingHooked;
+    private static int _consecutiveEmptyFrames;
+
+    public static Brush CreateFullscreenTransparentSpecularBackgroundBrush()
     {
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+    }
+
+    public static Brush CreateFullscreenSpecularBorderBrush()
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0.0, 0.0),
+            EndPoint = new Windows.Foundation.Point(1.0, 1.0)
+        };
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(165, 255, 255, 255), Offset = 0.0 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(53, 255, 255, 255), Offset = 0.30 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(10, 255, 255, 255), Offset = 0.70 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(48, 255, 255, 255), Offset = 1.0 });
+        return brush;
+    }
+
+    public static Brush CreateFullscreenSpecularTopHighlightBrush()
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0, 0),
+            EndPoint = new Windows.Foundation.Point(1, 0)
+        };
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255), Offset = 0.0 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(120, 255, 255, 255), Offset = 0.2 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(240, 255, 255, 255), Offset = 0.5 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(120, 255, 255, 255), Offset = 0.8 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255), Offset = 1.0 });
+        return brush;
+    }
+
+    public static void ApplyFullscreenSpecularTheming(bool isFullscreenVideo)
+    {
+        try
+        {
+            var effectiveTheme = GetEffectiveElementTheme();
+            string themeKey = effectiveTheme == ElementTheme.Light ? "Light" : "Dark";
+
+            if (isFullscreenVideo)
+            {
+                Func<object> getSpecularBg = () => CreateFullscreenTransparentSpecularBackgroundBrush();
+                Func<object> getSpecularBorder = () => CreateFullscreenSpecularBorderBrush();
+
+                SetScopedResource("FlyoutPresenterBackground", getSpecularBg, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBackground", getSpecularBg, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBackground", getSpecularBg, "Dark");
+                SetScopedResource("ComboBoxDropDownBackground", getSpecularBg, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBackground", getSpecularBg, "Dark");
+
+                SetScopedResource("SurfaceStrokeColorFlyoutBrush", getSpecularBorder, "Dark");
+                SetScopedResource("FlyoutBorderThemeBrush", getSpecularBorder, "Dark");
+                SetScopedResource("FlyoutPresenterBorderBrush", getSpecularBorder, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBorderBrush", getSpecularBorder, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBorderBrush", getSpecularBorder, "Dark");
+                SetScopedResource("ComboBoxDropDownBorderBrush", getSpecularBorder, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", getSpecularBorder, "Dark");
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => null!, "Dark");
+
+                if (themeKey != "Dark")
+                {
+                    SetScopedResource("FlyoutPresenterBackground", getSpecularBg, themeKey);
+                    SetScopedResource("MenuFlyoutPresenterBackground", getSpecularBg, themeKey);
+                    SetScopedResource("VolumeFlyoutPresenterBackground", getSpecularBg, themeKey);
+                    SetScopedResource("ComboBoxDropDownBackground", getSpecularBg, themeKey);
+                    SetScopedResource("SurfaceStrokeColorFlyoutBrush", getSpecularBorder, themeKey);
+                    SetScopedResource("FlyoutBorderThemeBrush", getSpecularBorder, themeKey);
+                    SetScopedResource("FlyoutPresenterBorderBrush", getSpecularBorder, themeKey);
+                    SetScopedResource("MenuFlyoutPresenterBorderBrush", getSpecularBorder, themeKey);
+                    SetScopedResource("VolumeFlyoutPresenterBorderBrush", getSpecularBorder, themeKey);
+                    SetScopedResource("MenuFlyoutSystemBackdrop", () => null!, themeKey);
+                }
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => null!, "Dark");
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => null!, "Light");
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => null!, "Default");
+
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        Application.Current.Resources["MenuFlyoutSystemBackdrop"] = null;
+                        Application.Current.Resources["MenuFlyoutPresenterBackground"] = CreateFullscreenTransparentSpecularBackgroundBrush();
+                        Application.Current.Resources["FlyoutPresenterBackground"] = CreateFullscreenTransparentSpecularBackgroundBrush();
+                        Application.Current.Resources["VolumeFlyoutPresenterBackground"] = CreateFullscreenTransparentSpecularBackgroundBrush();
+                        Application.Current.Resources["SurfaceStrokeColorFlyoutBrush"] = CreateFullscreenSpecularBorderBrush();
+                        Application.Current.Resources["FlyoutBorderThemeBrush"] = CreateFullscreenSpecularBorderBrush();
+                        Application.Current.Resources["FlyoutPresenterBorderBrush"] = CreateFullscreenSpecularBorderBrush();
+                        Application.Current.Resources["MenuFlyoutPresenterBorderBrush"] = CreateFullscreenSpecularBorderBrush();
+                        Application.Current.Resources["VolumeFlyoutPresenterBorderBrush"] = CreateFullscreenSpecularBorderBrush();
+                    }
+                }
+                catch { }
+
+                RefreshThemeBindings();
+                StartFullscreenPopupWatcher();
+            }
+            else
+            {
+                StopFullscreenPopupWatcher();
+                var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+                ApplyBackdropTheme(backdrop, effectiveTheme);
+
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        var bg = GetFlyoutPresenterBackground(backdrop, effectiveTheme, hasSystemBackdrop: true);
+                        var border = GetFlyoutBorderBrush(backdrop, effectiveTheme);
+                        var volBg = GetVolumeFlyoutBackground(backdrop, effectiveTheme, false);
+                        var volBorder = GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, false);
+                        Application.Current.Resources["MenuFlyoutPresenterBackground"] = bg;
+                        Application.Current.Resources["FlyoutPresenterBackground"] = bg;
+                        Application.Current.Resources["VolumeFlyoutPresenterBackground"] = volBg;
+                        Application.Current.Resources["SurfaceStrokeColorFlyoutBrush"] = border;
+                        Application.Current.Resources["FlyoutBorderThemeBrush"] = border;
+                        Application.Current.Resources["FlyoutPresenterBorderBrush"] = border;
+                        Application.Current.Resources["MenuFlyoutPresenterBorderBrush"] = border;
+                        Application.Current.Resources["VolumeFlyoutPresenterBorderBrush"] = volBorder;
+                        Application.Current.Resources["MenuFlyoutSystemBackdrop"] = new DesktopAcrylicBackdrop();
+                    }
+                }
+                catch { }
+
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => new DesktopAcrylicBackdrop(), "Dark");
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => new DesktopAcrylicBackdrop(), "Light");
+                SetScopedResource("MenuFlyoutSystemBackdrop", () => new DesktopAcrylicBackdrop(), "Default");
+            }
+
+            FlyoutHelper.RefreshAllFlyouts();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyFullscreenSpecularTheming] Error: {ex.Message}");
+        }
+    }
+
+    public static void StartFullscreenPopupWatcher()
+    {
+        var dispatcher = App.MainWindowInstance?.DispatcherQueue ?? App.MainWindowContent?.DispatcherQueue;
+        if (dispatcher == null) return;
+
+        dispatcher.TryEnqueue(() =>
+        {
+            HookRenderingWatcher();
+
+            if (_fullscreenPopupWatcherTimer == null)
+            {
+                _fullscreenPopupWatcherTimer = dispatcher.CreateTimer();
+                _fullscreenPopupWatcherTimer.Interval = TimeSpan.FromMilliseconds(30);
+                _fullscreenPopupWatcherTimer.Tick += OnFullscreenPopupWatcherTick;
+            }
+
+            _fullscreenPopupWatcherTimer.Interval = TimeSpan.FromMilliseconds(30);
+            _consecutiveEmptyPopupTicks = 0;
+            if (!_fullscreenPopupWatcherTimer.IsRunning)
+            {
+                _fullscreenPopupWatcherTimer.Start();
+            }
+
+            ProcessFullscreenPopups();
+        });
+    }
+
+    private static void HookRenderingWatcher()
+    {
+        if (!_isRenderingHooked)
+        {
+            _isRenderingHooked = true;
+            _consecutiveEmptyFrames = 0;
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnCompositionTargetRendering;
+        }
+    }
+
+    private static void UnhookRenderingWatcher()
+    {
+        if (_isRenderingHooked)
+        {
+            _isRenderingHooked = false;
+            _consecutiveEmptyFrames = 0;
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnCompositionTargetRendering;
+        }
+    }
+
+    private static void OnCompositionTargetRendering(object? sender, object e)
+    {
+        bool hasOpenPopups = ProcessFullscreenPopups();
+        if (!hasOpenPopups)
+        {
+            _consecutiveEmptyFrames++;
+            if (_consecutiveEmptyFrames >= 30)
+            {
+                UnhookRenderingWatcher();
+            }
+        }
+        else
+        {
+            _consecutiveEmptyFrames = 0;
+        }
+    }
+
+    public static void StopFullscreenPopupWatcher()
+    {
+        UnhookRenderingWatcher();
+        if (_fullscreenPopupWatcherTimer != null && _fullscreenPopupWatcherTimer.IsRunning)
+        {
+            _fullscreenPopupWatcherTimer.Stop();
+        }
+        _consecutiveEmptyPopupTicks = 0;
+    }
+
+    private static void OnFullscreenPopupWatcherTick(DispatcherQueueTimer sender, object args)
+    {
+        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+
+        bool hasOpenPopups = ProcessPopups(isFullscreenVideo);
+        if (!hasOpenPopups)
+        {
+            _consecutiveEmptyPopupTicks++;
+            // When no popups are open for 6 consecutive ticks (180ms), stop the timer to conserve resources
+            if (_consecutiveEmptyPopupTicks >= 6)
+            {
+                StopFullscreenPopupWatcher();
+            }
+            else if (_fullscreenPopupWatcherTimer != null && _fullscreenPopupWatcherTimer.Interval.TotalMilliseconds < 200)
+            {
+                _fullscreenPopupWatcherTimer.Interval = TimeSpan.FromMilliseconds(200);
+            }
+        }
+        else
+        {
+            _consecutiveEmptyPopupTicks = 0;
+            // When popups or sub-menus are active, run fast at 30ms to immediately catch cascading submenus
+            if (_fullscreenPopupWatcherTimer != null && _fullscreenPopupWatcherTimer.Interval.TotalMilliseconds != 30)
+            {
+                _fullscreenPopupWatcherTimer.Interval = TimeSpan.FromMilliseconds(30);
+            }
+        }
+    }
+
+    public static bool ProcessFullscreenPopups()
+    {
+        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+        return ProcessPopups(isFullscreenVideo);
+    }
+
+    private static bool ProcessPopups(bool isFullscreenVideo)
+    {
+        try
+        {
+            var xamlRoots = new System.Collections.Generic.HashSet<XamlRoot>();
+            if (App.MainWindowContent?.XamlRoot is { } xr1) xamlRoots.Add(xr1);
+            if (App.MainWindowInstance?.Content?.XamlRoot is { } xr2) xamlRoots.Add(xr2);
+            if (App.MainWindowInstance?.TransportBarElement?.XamlRoot is { } xr3) xamlRoots.Add(xr3);
+
+            FlyoutHelper.CollectActiveXamlRoots(xamlRoots);
+
+            if (xamlRoots.Count == 0) return false;
+
+            Brush? fsBgBrush = isFullscreenVideo ? CreateFullscreenTransparentSpecularBackgroundBrush() : null;
+            Brush? fsBorderBrush = isFullscreenVideo ? CreateFullscreenSpecularBorderBrush() : null;
+
+            if (isFullscreenVideo && fsBgBrush != null && fsBorderBrush != null)
+            {
+                FlyoutHelper.StyleAllActiveFlyoutPresenters(fsBgBrush, fsBorderBrush);
+            }
+
+            var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+            var effectiveTheme = GetEffectiveElementTheme();
+            Brush? winBgBrush = !isFullscreenVideo ? GetFlyoutPresenterBackground(backdrop, effectiveTheme) : null;
+            Brush? winBorderBrush = !isFullscreenVideo ? GetFlyoutBorderBrush(backdrop, effectiveTheme) : null;
+
+            bool foundAny = false;
+            foreach (var xamlRoot in xamlRoots)
+            {
+                var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot);
+                if (openPopups == null || openPopups.Count == 0) continue;
+
+                var activePresenters = new System.Collections.Generic.List<MenuFlyoutPresenter>();
+                foreach (var popup in openPopups)
+                {
+                    if (popup == null || !popup.IsOpen) continue;
+                    foundAny = true;
+
+                    if (isFullscreenVideo)
+                    {
+                        popup.RequestedTheme = ElementTheme.Dark;
+                        if (popup.Child is FrameworkElement childFe)
+                        {
+                            childFe.RequestedTheme = ElementTheme.Dark;
+                        }
+
+                        if (popup.Child is FlyoutPresenter fp)
+                        {
+                            StyleFullscreenPresenter(fp, fsBgBrush!, fsBorderBrush!);
+                        }
+                        else if (popup.Child is MenuFlyoutPresenter mfp)
+                        {
+                            StyleFullscreenPresenter(mfp, fsBgBrush!, fsBorderBrush!);
+                            if (!LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(mfp) && mfp.RenderTransform == null)
+                            {
+                                mfp.Opacity = 0.0;
+                            }
+                            activePresenters.Add(mfp);
+                        }
+                        else if (popup.Child is Border popupBorder)
+                        {
+                            popupBorder.RequestedTheme = ElementTheme.Dark;
+                            popupBorder.Background = fsBgBrush;
+                            popupBorder.BorderBrush = fsBorderBrush;
+                            popupBorder.BorderThickness = new Thickness(1.5);
+                            popupBorder.CornerRadius = new CornerRadius(8);
+                            ApplyFullscreenThemeShadow(popupBorder);
+                        }
+                        else if (popup.Child != null)
+                        {
+                            var presenters = FindVisualChildren<Control>(popup.Child);
+                            foreach (var p in presenters)
+                            {
+                                if (p is FlyoutPresenter or MenuFlyoutPresenter)
+                                {
+                                    StyleFullscreenPresenter(p, fsBgBrush!, fsBorderBrush!);
+                                    if (p is MenuFlyoutPresenter subMfp)
+                                    {
+                                        if (!LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(subMfp) && subMfp.RenderTransform == null)
+                                        {
+                                            subMfp.Opacity = 0.0;
+                                        }
+                                        activePresenters.Add(subMfp);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // In windowed mode: ensure popups do NOT have transparent/specular theming
+                        if (popup.Child is MenuFlyoutPresenter mfp)
+                        {
+                            ApplyPresenterInstanceTheme(mfp, effectiveTheme, winBgBrush!, winBorderBrush!, new Thickness(1));
+                            if (!LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(mfp) && mfp.RenderTransform == null)
+                            {
+                                mfp.Opacity = 0.0;
+                            }
+                            activePresenters.Add(mfp);
+                        }
+                        else if (popup.Child is FlyoutPresenter fp)
+                        {
+                            var volBg = GetVolumeFlyoutBackground(backdrop, effectiveTheme, false);
+                            var volBorder = GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, false);
+                            ApplyPresenterInstanceTheme(fp, effectiveTheme, volBg, volBorder, new Thickness(1));
+                        }
+                        else if (popup.Child != null)
+                        {
+                            var presenters = FindVisualChildren<Control>(popup.Child);
+                            foreach (var p in presenters)
+                            {
+                                if (p is MenuFlyoutPresenter subMfp)
+                                {
+                                    ApplyPresenterInstanceTheme(subMfp, effectiveTheme, winBgBrush!, winBorderBrush!, new Thickness(1));
+                                    if (!LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(subMfp) && subMfp.RenderTransform == null)
+                                    {
+                                        subMfp.Opacity = 0.0;
+                                    }
+                                    activePresenters.Add(subMfp);
+                                }
+                                else if (p is FlyoutPresenter subFp)
+                                {
+                                    var volBg = GetVolumeFlyoutBackground(backdrop, effectiveTheme, false);
+                                    var volBorder = GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, false);
+                                    ApplyPresenterInstanceTheme(subFp, effectiveTheme, volBg, volBorder, new Thickness(1));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Blank-space collision avoidance runs for ANY multi-layered menu in the app (both fullscreen and windowed)
+                if (activePresenters.Count >= 2)
+                {
+                    AdjustCascadingSubMenuGaps(activePresenters, xamlRoot);
+                }
+                else if (activePresenters.Count == 1)
+                {
+                    activePresenters[0].Opacity = 1.0;
+                    if (activePresenters[0].RenderTransform != null)
+                    {
+                        activePresenters[0].RenderTransform = null;
+                    }
+                }
+            }
+            return foundAny;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ProcessPopups] Error: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Calculates the optimal horizontal X coordinate for a cascading sub-menu, ensuring
+    /// it pops up into available blank space and never collides with or overlaps any existing
+    /// open menus in the hierarchy (such as root menus or parent menus).
+    /// </summary>
+    public static double CalculateSubMenuPlacementX(
+        Windows.Foundation.Rect parentRect,
+        double childWidth,
+        double untransformedLeft,
+        double untransformedTop,
+        double childHeight,
+        System.Collections.Generic.IReadOnlyList<Windows.Foundation.Rect> existingMenuRects,
+        double rootWidth,
+        double margin = 8.0,
+        double gap = 8.0,
+        bool parentCascadedLeft = false)
+    {
+        double parentLeft = parentRect.Left;
+        double parentRight = parentRect.Right;
+
+        bool VerticallyOverlaps(Windows.Foundation.Rect r)
+        {
+            if (r.Width <= 0 || r.Height <= 0) return false;
+            return !(untransformedTop + childHeight <= r.Top || untransformedTop >= r.Bottom);
+        }
+
+        bool CollidesWithAnyMenu(double left, double right)
+        {
+            for (int j = 0; j < existingMenuRects.Count; j++)
+            {
+                var r = existingMenuRects[j];
+                if (!VerticallyOverlaps(r)) continue;
+
+                // Two horizontal intervals collide if they are not separated by at least 'gap'
+                bool separated = (right <= r.Left - gap) || (left >= r.Right + gap);
+                if (!separated) return true;
+            }
+            return false;
+        }
+
+        // Candidate 1: Cascade to the RIGHT of parent
+        double candRightLeft = parentRight + gap;
+        double candRightRight = candRightLeft + childWidth;
+        bool candRightFitsOnScreen = candRightRight <= (rootWidth - margin);
+        bool candRightCollides = CollidesWithAnyMenu(candRightLeft, candRightRight);
+        bool candRightValid = candRightFitsOnScreen && !candRightCollides;
+
+        // Candidate 2: Cascade to the LEFT of parent
+        double candLeftRight = parentLeft - gap;
+        double candLeftLeft = candLeftRight - childWidth;
+        bool candLeftFitsOnScreen = candLeftLeft >= margin;
+        bool candLeftCollides = CollidesWithAnyMenu(candLeftLeft, candLeftRight);
+        bool candLeftValid = candLeftFitsOnScreen && !candLeftCollides;
+
+        if (candRightValid && !candLeftValid)
+        {
+            return candRightLeft;
+        }
+        if (candLeftValid && !candRightValid)
+        {
+            return candLeftLeft;
+        }
+        if (candRightValid && candLeftValid)
+        {
+            // Both directions have blank space: follow parent cascading direction
+            return parentCascadedLeft ? candLeftLeft : candRightLeft;
+        }
+
+        // Neither candidate is fully collision-free or fits neatly:
+        // Evaluate clamped versions and pick the position with minimal menu overlap
+        double clampedLeft = Math.Clamp(candLeftLeft, margin, Math.Max(margin, rootWidth - margin - childWidth));
+        double clampedRight = Math.Clamp(candRightLeft, margin, Math.Max(margin, rootWidth - margin - childWidth));
+
+        double overlapLeft = CalculateTotalOverlap(clampedLeft, clampedLeft + childWidth, existingMenuRects, untransformedTop, childHeight);
+        double overlapRight = CalculateTotalOverlap(clampedRight, clampedRight + childWidth, existingMenuRects, untransformedTop, childHeight);
+
+        return overlapLeft <= overlapRight ? clampedLeft : clampedRight;
+    }
+
+    private static double CalculateTotalOverlap(
+        double candLeft,
+        double candRight,
+        System.Collections.Generic.IReadOnlyList<Windows.Foundation.Rect> rects,
+        double top,
+        double height)
+    {
+        double total = 0;
+        for (int j = 0; j < rects.Count; j++)
+        {
+            var r = rects[j];
+            if (r.Width <= 0 || r.Height <= 0) continue;
+            if (top + height <= r.Top || top >= r.Bottom) continue;
+
+            double overlapStart = Math.Max(candLeft, r.Left);
+            double overlapEnd = Math.Min(candRight, r.Right);
+            if (overlapEnd > overlapStart)
+            {
+                total += (overlapEnd - overlapStart);
+            }
+        }
+        return total;
+    }
+
+    public static System.Collections.Generic.List<MenuFlyoutPresenter> SortPresentersHierarchically(
+        System.Collections.Generic.List<MenuFlyoutPresenter> presenters,
+        out System.Collections.Generic.Dictionary<MenuFlyoutPresenter, MenuFlyoutPresenter> parentMap)
+    {
+        var map = new System.Collections.Generic.Dictionary<MenuFlyoutPresenter, MenuFlyoutPresenter>();
+        parentMap = map;
+        if (presenters == null || presenters.Count == 0) return new();
+        if (presenters.Count == 1) return new System.Collections.Generic.List<MenuFlyoutPresenter>(presenters);
+
+        var presenterItems = new System.Collections.Generic.Dictionary<MenuFlyoutPresenter, System.Collections.Generic.HashSet<MenuFlyoutItemBase>>();
+        var presenterSubItems = new System.Collections.Generic.Dictionary<MenuFlyoutPresenter, System.Collections.Generic.List<MenuFlyoutSubItem>>();
+
+        foreach (var p in presenters)
+        {
+            var allItems = new System.Collections.Generic.HashSet<MenuFlyoutItemBase>();
+            try
+            {
+                foreach (var item in p.Items)
+                {
+                    if (item is MenuFlyoutItemBase mfib)
+                    {
+                        allItems.Add(mfib);
+                    }
+                }
+            }
+            catch { }
+
+            foreach (var item in FindVisualChildren<MenuFlyoutItemBase>(p))
+            {
+                allItems.Add(item);
+            }
+
+            presenterItems[p] = allItems;
+            var subItems = new System.Collections.Generic.List<MenuFlyoutSubItem>();
+            foreach (var item in allItems)
+            {
+                if (item is MenuFlyoutSubItem sub) subItems.Add(sub);
+            }
+            presenterSubItems[p] = subItems;
+        }
+
+        // Establish parent-child edges: if pA has a subItem whose Items contains any item in pB, pA is parent of pB
+        foreach (var pA in presenters)
+        {
+            foreach (var sub in presenterSubItems[pA])
+            {
+                foreach (var pB in presenters)
+                {
+                    if (ReferenceEquals(pA, pB)) continue;
+                    var bItems = presenterItems[pB];
+                    foreach (var subChildItem in sub.Items)
+                    {
+                        if (bItems.Contains(subChildItem))
+                        {
+                            map[pB] = pA;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Calculate depth/level of each presenter: 0 for root, 1 for level 1, 2 for level 2, etc.
+        int GetDepth(MenuFlyoutPresenter p, System.Collections.Generic.HashSet<MenuFlyoutPresenter> visited)
+        {
+            if (!visited.Add(p)) return 0; // prevent cycle
+            if (map.TryGetValue(p, out var parent))
+            {
+                return 1 + GetDepth(parent, visited);
+            }
+            // Check if known root
+            if (LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(p))
+            {
+                return 0;
+            }
+            return 1;
+        }
+
+        var depths = new System.Collections.Generic.Dictionary<MenuFlyoutPresenter, int>();
+        foreach (var p in presenters)
+        {
+            depths[p] = GetDepth(p, new System.Collections.Generic.HashSet<MenuFlyoutPresenter>());
+        }
+
+        var sorted = new System.Collections.Generic.List<MenuFlyoutPresenter>(presenters);
+        sorted.Sort((a, b) =>
+        {
+            int da = depths[a];
+            int db = depths[b];
+            if (da != db) return da.CompareTo(db);
+
+            bool aIsRoot = LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(a);
+            bool bIsRoot = LumiereMediaPlayer.Controls.TransportBar.IsRootMenuPresenter(b);
+            if (aIsRoot && !bIsRoot) return -1;
+            if (!aIsRoot && bIsRoot) return 1;
+
+            return 0;
+        });
+
+        // Guarantee parent map entries for all child menus in the hierarchy
+        for (int idx = 1; idx < sorted.Count; idx++)
+        {
+            var child = sorted[idx];
+            if (!map.ContainsKey(child))
+            {
+                map[child] = sorted[idx - 1];
+            }
+        }
+
+        return sorted;
+    }
+
+    private static void AdjustCascadingSubMenuGaps(System.Collections.Generic.List<MenuFlyoutPresenter> rawPresenters, XamlRoot xamlRoot)
+    {
+        if (xamlRoot.Content == null || rawPresenters.Count < 2) return;
+
+        try
+        {
+            var presenters = SortPresentersHierarchically(rawPresenters, out var parentMap);
+            double rootWidth = xamlRoot.Size.Width;
+            const double margin = 8.0;
+            const double gap = 8.0;
+
+            var placedRects = new System.Collections.Generic.List<Windows.Foundation.Rect>();
+            var presenterToRectIndex = new System.Collections.Generic.Dictionary<MenuFlyoutPresenter, int>();
+
+            for (int i = 0; i < presenters.Count; i++)
+            {
+                var presenter = presenters[i];
+                double width = presenter.ActualWidth;
+                double height = presenter.ActualHeight;
+
+                if (width <= 0 || height <= 0)
+                {
+                    try
+                    {
+                        presenter.Measure(new Windows.Foundation.Size(xamlRoot.Size.Width, xamlRoot.Size.Height));
+                        width = presenter.DesiredSize.Width;
+                        height = presenter.DesiredSize.Height;
+                    }
+                    catch { }
+                }
+                if (width <= 0) width = 240.0;
+                if (height <= 0) height = 200.0;
+
+                var transform = presenter.TransformToVisual(xamlRoot.Content);
+                var pos = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                double existingDeltaX = (presenter.RenderTransform as TranslateTransform)?.X ?? 0.0;
+                double untransformedLeft = pos.X - existingDeltaX;
+                double untransformedTop = pos.Y;
+
+                // Level 0: The root menu MUST STAY FIXED at its native placement! NEVER translated!
+                if (i == 0)
+                {
+                    if (presenter.RenderTransform != null)
+                    {
+                        presenter.RenderTransform = null;
+                    }
+                    presenter.Opacity = 1.0;
+                    placedRects.Add(new Windows.Foundation.Rect(untransformedLeft, untransformedTop, width, height));
+                    presenterToRectIndex[presenter] = 0;
+                    continue;
+                }
+
+                // Sub-sections (Level 1, Level 2, ...):
+                // Find parent menu rect via parentMap or previous placed menu
+                int parentIndex = -1;
+                if (parentMap.TryGetValue(presenter, out var directParent) && presenterToRectIndex.TryGetValue(directParent, out int mappedIdx))
+                {
+                    parentIndex = mappedIdx;
+                }
+                else
+                {
+                    parentIndex = i - 1;
+                }
+
+                if (parentIndex < 0 || parentIndex >= placedRects.Count)
+                {
+                    parentIndex = 0;
+                }
+
+                var parentRect = placedRects[parentIndex];
+                bool parentCascadedLeft = false;
+                if (parentIndex > 0)
+                {
+                    parentCascadedLeft = parentRect.Left < placedRects[0].Left;
+                }
+                else
+                {
+                    parentCascadedLeft = untransformedLeft < parentRect.Left;
+                }
+
+                double targetLeft = CalculateSubMenuPlacementX(
+                    parentRect,
+                    width,
+                    untransformedLeft,
+                    untransformedTop,
+                    height,
+                    placedRects,
+                    rootWidth,
+                    margin,
+                    gap,
+                    parentCascadedLeft);
+
+                double targetDeltaX = targetLeft - untransformedLeft;
+
+                if (presenter.RenderTransform is TranslateTransform existingTT)
+                {
+                    if (Math.Abs(existingTT.X - targetDeltaX) >= 0.5)
+                    {
+                        existingTT.X = targetDeltaX;
+                    }
+                }
+                else
+                {
+                    presenter.RenderTransform = new TranslateTransform { X = targetDeltaX };
+                }
+
+                presenter.Opacity = 1.0;
+
+                var parentPresenter = parentMap.TryGetValue(presenter, out var dp) ? dp : (i > 0 ? presenters[i - 1] : null);
+                if (App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                    App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true)
+                {
+                    ApplyFullscreenThemeShadow(presenter, parentPresenter);
+                }
+
+                placedRects.Add(new Windows.Foundation.Rect(targetLeft, untransformedTop, width, height));
+                presenterToRectIndex[presenter] = placedRects.Count - 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AdjustCascadingSubMenuGaps] Error: {ex.Message}");
+        }
+    }
+
+    public static void ApplyFullscreenThemeShadow(UIElement element, UIElement? parentPresenter = null)
+    {
+        if (element == null) return;
+        try
+        {
+            ThemeShadow shadow;
+            if (element.Shadow is ThemeShadow existingShadow)
+            {
+                shadow = existingShadow;
+            }
+            else
+            {
+                shadow = new ThemeShadow();
+                element.Shadow = shadow;
+            }
+
+            var targetTranslation = new System.Numerics.Vector3(0, 0, 64);
+            if (element.Translation != targetTranslation)
+            {
+                element.Translation = targetTranslation;
+            }
+
+            void AddReceiver(UIElement? receiver)
+            {
+                if (receiver != null && receiver != element && !shadow.Receivers.Contains(receiver))
+                {
+                    try
+                    {
+                        shadow.Receivers.Add(receiver);
+                    }
+                    catch { }
+                }
+            }
+
+            if (element.XamlRoot?.Content is UIElement xamlRootVisual)
+            {
+                AddReceiver(xamlRootVisual);
+            }
+
+            if (App.MainWindowInstance?.Content is UIElement mwContent)
+            {
+                AddReceiver(mwContent);
+                if (mwContent is FrameworkElement mwFe)
+                {
+                    AddReceiver(mwFe.FindName("FullscreenVideoContainer") as UIElement);
+                    AddReceiver(mwFe.FindName("FullscreenControlsOverlay") as UIElement);
+                }
+            }
+
+            if (parentPresenter != null)
+            {
+                AddReceiver(parentPresenter);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyFullscreenThemeShadow] Error: {ex.Message}");
+        }
+    }
+
+    public static void StyleFullscreenPresenter(Control presenter, Brush bgBrush, Brush borderBrush)
+    {
+        if (presenter.RequestedTheme != ElementTheme.Dark)
+        {
+            presenter.RequestedTheme = ElementTheme.Dark;
+        }
+        if (presenter.Background is not SolidColorBrush currentBg || currentBg.Color != Microsoft.UI.Colors.Transparent)
+        {
+            presenter.Background = bgBrush;
+        }
+        if (presenter.BorderBrush != borderBrush)
+        {
+            presenter.BorderBrush = borderBrush;
+        }
+        if (presenter.BorderThickness.Left != 1.5)
+        {
+            presenter.BorderThickness = new Thickness(1.5);
+        }
+        if (presenter is FlyoutPresenter fp)
+        {
+            if (fp.CornerRadius.TopLeft != 8) fp.CornerRadius = new CornerRadius(8);
+        }
+        else if (presenter is MenuFlyoutPresenter mfp)
+        {
+            if (mfp.CornerRadius.TopLeft != 8) mfp.CornerRadius = new CornerRadius(8);
+            try { mfp.SystemBackdrop = null; } catch { }
+        }
+
+        try
+        {
+            var borders = FindVisualChildren<Border>(presenter);
+            foreach (var b in borders)
+            {
+                b.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+        }
+        catch { }
+
+        try
+        {
+            ApplyFullscreenThemeShadow(presenter);
+        }
+        catch { }
+    }
+
+    #endregion
+
+    public static Brush GetVolumeFlyoutBackground(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool isFullscreenVideo = false)
+    {
+        if (isFullscreenVideo || App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+            App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true)
+        {
+            return CreateFullscreenTransparentSpecularBackgroundBrush();
+        }
+
+        return GetFlyoutPresenterBackground(backdrop, effectiveTheme, hasSystemBackdrop: false);
+    }
+
+    public static Brush GetVolumeFlyoutBorderBrush(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool isFullscreenVideo = false)
+    {
+        if (isFullscreenVideo || App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+            App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true)
+        {
+            return CreateFullscreenSpecularBorderBrush();
+        }
+
+        return GetFlyoutBorderBrush(backdrop, effectiveTheme);
+    }
+
+    public static Brush GetFlyoutPresenterBackground(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool hasSystemBackdrop = true)
+    {
+        if (App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+            App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true)
+        {
+            return CreateFullscreenTransparentSpecularBackgroundBrush();
+        }
         bool isLight = effectiveTheme == ElementTheme.Light ||
             (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
 
-        switch (backdrop)
+        var effectiveBackdrop = backdrop switch
+        {
+            AppThemeBackdrop.BackdropStudio => AppServices.Settings?.Current?.StudioWindowBase ?? AppThemeBackdrop.Mica,
+            _ => backdrop
+        };
+
+        if (backdrop == AppThemeBackdrop.CinematicAdaptive && App.MainWindowInstance?.IsVideoPlaybackActive == true)
+        {
+            Color fb = Microsoft.UI.ColorHelper.FromArgb(255, 20, 20, 24);
+            if (!hasSystemBackdrop) return new SolidColorBrush(fb);
+            return new Microsoft.UI.Xaml.Media.AcrylicBrush
+            {
+                AlwaysUseFallback = false,
+                TintColor = Microsoft.UI.ColorHelper.FromArgb(255, 14, 14, 18),
+                TintOpacity = 0.85,
+                TintLuminosityOpacity = 0.90,
+                FallbackColor = fb
+            };
+        }
+
+        switch (effectiveBackdrop)
         {
             case AppThemeBackdrop.Solid:
                 {
@@ -1376,6 +2512,7 @@ public static class ThemeHelper
                         ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 248, 248, 250), accent, 0.04)
                         : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 30, 30, 34), accent, 0.09);
 
+                    if (!hasSystemBackdrop) return new SolidColorBrush(micaTint);
                     return new Microsoft.UI.Xaml.Media.AcrylicBrush
                     {
                         AlwaysUseFallback = false,
@@ -1394,6 +2531,7 @@ public static class ThemeHelper
                         ? Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
                         : Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
 
+                    if (!hasSystemBackdrop) return new SolidColorBrush(micaAltTint);
                     return new Microsoft.UI.Xaml.Media.AcrylicBrush
                     {
                         AlwaysUseFallback = false,
@@ -1405,9 +2543,15 @@ public static class ThemeHelper
                 }
 
             case AppThemeBackdrop.Acrylic:
+            case AppThemeBackdrop.FluentSymphony:
+            case AppThemeBackdrop.CinematicAdaptive:
             default:
                 {
                     // Fluent 2 frosted-glass Acrylic material matching Windows 11 context menu reference
+                    Color fb = isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 245)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34);
+                    if (!hasSystemBackdrop) return new SolidColorBrush(fb);
                     return new Microsoft.UI.Xaml.Media.AcrylicBrush
                     {
                         AlwaysUseFallback = false,
@@ -1416,9 +2560,7 @@ public static class ThemeHelper
                             : Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 28),
                         TintOpacity = isLight ? 0.65 : 0.70,
                         TintLuminosityOpacity = isLight ? 0.75 : 0.85,
-                        FallbackColor = isLight
-                            ? Microsoft.UI.ColorHelper.FromArgb(255, 240, 240, 245)
-                            : Microsoft.UI.ColorHelper.FromArgb(255, 28, 28, 34)
+                        FallbackColor = fb
                     };
                 }
         }
@@ -1426,10 +2568,29 @@ public static class ThemeHelper
 
     public static Brush GetFlyoutBorderBrush(AppThemeBackdrop backdrop, ElementTheme effectiveTheme)
     {
+        if (App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+            App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true)
+        {
+            return CreateFullscreenSpecularBorderBrush();
+        }
+
         bool isLight = effectiveTheme == ElementTheme.Light ||
             (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
 
-        switch (backdrop)
+        var effectiveBackdrop = backdrop switch
+        {
+            AppThemeBackdrop.BackdropStudio => AppServices.Settings?.Current?.StudioWindowBase ?? AppThemeBackdrop.Mica,
+            _ => backdrop
+        };
+
+        if (backdrop == AppThemeBackdrop.CinematicAdaptive && App.MainWindowInstance?.IsVideoPlaybackActive == true)
+        {
+            byte alpha = (byte)(isLight ? 35 : 45);
+            Color rimColor = isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+            return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(alpha, rimColor.R, rimColor.G, rimColor.B));
+        }
+
+        switch (effectiveBackdrop)
         {
             case AppThemeBackdrop.Solid:
                 {
@@ -1457,6 +2618,8 @@ public static class ThemeHelper
                 }
 
             case AppThemeBackdrop.Acrylic:
+            case AppThemeBackdrop.FluentSymphony:
+            case AppThemeBackdrop.CinematicAdaptive:
             default:
                 {
                     // Specular frosted glass rim simulating cut glass edge (matches Windows 11 context menu)
@@ -1470,28 +2633,13 @@ public static class ThemeHelper
     public static void ApplySystemBackdropToFlyout(FlyoutBase? flyout)
     {
         if (flyout == null) return;
+        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
         try
         {
-            var backdrop = AppServices.Settings.Current.BackdropType;
-            if (backdrop == AppThemeBackdrop.Acrylic)
-            {
-                if (flyout.SystemBackdrop is not DesktopAcrylicBackdrop && flyout.SystemBackdrop is not CustomAcrylicBackdrop)
-                {
-                    flyout.SystemBackdrop = new DesktopAcrylicBackdrop();
-                }
-            }
-            else
-            {
-                if (flyout.SystemBackdrop != null)
-                {
-                    flyout.SystemBackdrop = null;
-                }
-            }
+            flyout.ShouldConstrainToRootBounds = isFullscreenVideo;
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ApplySystemBackdropToFlyout] Handled: {ex.Message}");
-        }
+        catch { }
     }
 
     public static void ApplySystemBackdropToPopup(Microsoft.UI.Xaml.Controls.Primitives.Popup? popup)
@@ -1506,26 +2654,16 @@ public static class ThemeHelper
                 childFe.RequestedTheme = effectiveTheme;
             }
 
+            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                     App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
             if (!popup.IsOpen)
             {
-                popup.ShouldConstrainToRootBounds = false;
+                popup.ShouldConstrainToRootBounds = isFullscreenVideo;
             }
 
-            var backdrop = AppServices.Settings.Current.BackdropType;
-            if (backdrop == AppThemeBackdrop.Acrylic && !popup.ShouldConstrainToRootBounds)
-            {
-                if (popup.SystemBackdrop is not DesktopAcrylicBackdrop && popup.SystemBackdrop is not CustomAcrylicBackdrop)
-                {
-                    popup.SystemBackdrop = new DesktopAcrylicBackdrop();
-                }
-            }
-            else
-            {
-                if (popup.SystemBackdrop != null)
-                {
-                    popup.SystemBackdrop = null;
-                }
-            }
+            // In WinUI 3 / Windows App SDK, accessing Popup.SystemBackdrop throws
+            // UnauthorizedAccessException (LimitedAccessFeatures) without a private Microsoft token.
+            // Dropdown popup materials and borders are cleanly handled via PopupBorder and AcrylicBrush in ComboBoxHelper.
         }
         catch (Exception ex)
         {
@@ -1538,18 +2676,76 @@ public static class ThemeHelper
         if (flyout == null) return;
         try
         {
+            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                     App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
             var backdrop = AppServices.Settings.Current.BackdropType;
-            var theme = GetEffectiveElementTheme();
-            var bgBrush = GetFlyoutPresenterBackground(backdrop, theme);
-            var borderBrush = GetFlyoutBorderBrush(backdrop, theme);
+            var theme = isFullscreenVideo ? ElementTheme.Dark : GetEffectiveElementTheme();
+            var bgBrush = isFullscreenVideo 
+                ? CreateFullscreenTransparentSpecularBackgroundBrush() 
+                : GetFlyoutPresenterBackground(backdrop, theme);
+            var borderBrush = isFullscreenVideo 
+                ? CreateFullscreenSpecularBorderBrush() 
+                : GetFlyoutBorderBrush(backdrop, theme);
+            var borderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
 
             ApplySystemBackdropToFlyout(flyout);
+
+            if (flyout is Flyout flStyle)
+            {
+                if (LumiereMediaPlayer.Controls.TransportBar.IsVolumeFlyout(flStyle))
+                {
+                    App.MainWindowInstance?.TransportBarElement?.ApplyVolumeFlyoutPresenterInstanceTheming();
+                }
+                else
+                {
+                    var s = new Style(typeof(FlyoutPresenter));
+                    if (Application.Current?.Resources.TryGetValue("DefaultFlyoutPresenterStyle", out var defStyle) == true && defStyle is Style baseStyle)
+                    {
+                        s.BasedOn = baseStyle;
+                    }
+                    s.Setters.Add(new Setter(Control.RequestedThemeProperty, theme));
+                    s.Setters.Add(new Setter(Control.BackgroundProperty, bgBrush));
+                    s.Setters.Add(new Setter(Control.BorderBrushProperty, borderBrush));
+                    s.Setters.Add(new Setter(Control.BorderThicknessProperty, borderThickness));
+                    s.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
+                    flStyle.FlyoutPresenterStyle = s;
+                }
+            }
+            else if (flyout is MenuFlyout mfStyle)
+            {
+                var s = new Style(typeof(MenuFlyoutPresenter));
+                if (Application.Current?.Resources.TryGetValue("DefaultMenuFlyoutPresenterStyle", out var defMfStyle) == true && defMfStyle is Style baseMfStyle)
+                {
+                    s.BasedOn = baseMfStyle;
+                }
+                else if (Application.Current?.Resources.TryGetValue("CinematicMenuFlyoutPresenterStyle", out var cineMfStyle) == true && cineMfStyle is Style baseCineStyle)
+                {
+                    s.BasedOn = baseCineStyle;
+                }
+                s.Setters.Add(new Setter(Control.RequestedThemeProperty, theme));
+                s.Setters.Add(new Setter(Control.BackgroundProperty, bgBrush));
+                s.Setters.Add(new Setter(Control.BorderBrushProperty, borderBrush));
+                s.Setters.Add(new Setter(Control.BorderThicknessProperty, borderThickness));
+                s.Setters.Add(new Setter(MenuFlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
+                if (isFullscreenVideo)
+                {
+                    s.Setters.Add(new Setter(MenuFlyoutPresenter.SystemBackdropProperty, null));
+                }
+                mfStyle.MenuFlyoutPresenterStyle = s;
+            }
+
+            var xamlRoots = new System.Collections.Generic.HashSet<XamlRoot>();
+            if (App.MainWindowContent?.XamlRoot is { } xr1) xamlRoots.Add(xr1);
+            if (App.MainWindowInstance?.Content?.XamlRoot is { } xr2) xamlRoots.Add(xr2);
+            if (App.MainWindowInstance?.TransportBarElement?.XamlRoot is { } xr3) xamlRoots.Add(xr3);
+            FlyoutHelper.CollectActiveXamlRoots(xamlRoots);
 
             if (flyout is Flyout f)
             {
                 if (f.Content is FrameworkElement fe)
                 {
                     fe.RequestedTheme = theme;
+                    if (fe.XamlRoot is { } fxr) xamlRoots.Add(fxr);
                     FlyoutPresenter? presenter = fe.Parent as FlyoutPresenter;
                     if (presenter == null)
                     {
@@ -1565,120 +2761,72 @@ public static class ThemeHelper
                         }
                     }
 
-                    if (presenter == null && (fe.XamlRoot ?? App.MainWindowContent?.XamlRoot) is XamlRoot xr)
-                    {
-                        try
-                        {
-                            var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
-                            foreach (var p in openPopups)
-                            {
-                                ApplySystemBackdropToPopup(p);
-                                if (p.Child is FlyoutPresenter fp)
-                                {
-                                    presenter = fp;
-                                    break;
-                                }
-                                else if (p.Child != null)
-                                {
-                                    var found = FindVisualChild<FlyoutPresenter>(p.Child);
-                                    if (found != null)
-                                    {
-                                        presenter = found;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-
                     if (presenter != null)
                     {
-                        presenter.RequestedTheme = theme;
-                        presenter.Background = bgBrush;
-                        presenter.BorderBrush = borderBrush;
-                        presenter.CornerRadius = new CornerRadius(8);
-                        presenter.BorderThickness = new Thickness(1);
-                        try
-                        {
-                            if (presenter.Shadow == null)
-                            {
-                                presenter.Shadow = new ThemeShadow();
-                                presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
-                            }
-                        }
-                        catch { }
+                        ApplyPresenterInstanceTheme(presenter, theme, bgBrush, borderBrush, borderThickness);
                     }
                 }
             }
             else if (flyout is MenuFlyout mf)
             {
                 ApplyDarkThemeToMenuFlyout(mf);
-
-                MenuFlyoutPresenter? presenter = null;
-                foreach (var item in mf.Items)
+                void ProcessItems(System.Collections.Generic.IList<MenuFlyoutItemBase> items)
                 {
-                    if (item is FrameworkElement fe)
+                    foreach (var item in items)
                     {
-                        DependencyObject? current = fe;
-                        while (current != null)
+                        if (item is FrameworkElement fe)
                         {
-                            if (current is MenuFlyoutPresenter mfp)
+                            if (fe.XamlRoot is { } mxr) xamlRoots.Add(mxr);
+                            DependencyObject? curr = fe;
+                            while (curr != null)
                             {
-                                presenter = mfp;
-                                break;
+                                if (curr is MenuFlyoutPresenter mfp)
+                                {
+                                    ApplyPresenterInstanceTheme(mfp, theme, bgBrush, borderBrush, borderThickness);
+                                    break;
+                                }
+                                curr = VisualTreeHelper.GetParent(curr);
                             }
-                            current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
                         }
-                        if (presenter != null) break;
+                        if (item is MenuFlyoutSubItem sub)
+                        {
+                            ProcessItems(sub.Items);
+                        }
                     }
                 }
+                ProcessItems(mf.Items);
+            }
 
-                var mxr = (mf.Items.FirstOrDefault() as FrameworkElement)?.XamlRoot ?? App.MainWindowContent?.XamlRoot;
-                if (presenter == null && mxr != null)
+            foreach (var xr in xamlRoots)
+            {
+                try
                 {
-                    try
+                    var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                    foreach (var p in openPopups)
                     {
-                        var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(mxr);
-                        foreach (var p in openPopups)
+                        ApplySystemBackdropToPopup(p);
+                        if (p.Child is MenuFlyoutPresenter mfp)
                         {
-                            ApplySystemBackdropToPopup(p);
-                            if (p.Child is MenuFlyoutPresenter mfp)
+                            ApplyPresenterInstanceTheme(mfp, theme, bgBrush, borderBrush, borderThickness);
+                        }
+                        else if (p.Child is FlyoutPresenter fp)
+                        {
+                            ApplyPresenterInstanceTheme(fp, theme, bgBrush, borderBrush, borderThickness);
+                        }
+                        else if (p.Child != null)
+                        {
+                            var foundList = FindVisualChildren<Control>(p.Child);
+                            foreach (var found in foundList)
                             {
-                                presenter = mfp;
-                                break;
-                            }
-                            else if (p.Child != null)
-                            {
-                                var found = FindVisualChild<MenuFlyoutPresenter>(p.Child);
-                                if (found != null)
+                                if (found is MenuFlyoutPresenter or FlyoutPresenter)
                                 {
-                                    presenter = found;
-                                    break;
+                                    ApplyPresenterInstanceTheme(found, theme, bgBrush, borderBrush, borderThickness);
                                 }
                             }
                         }
                     }
-                    catch { }
                 }
-
-                if (presenter != null)
-                {
-                    presenter.RequestedTheme = theme;
-                    presenter.Background = bgBrush;
-                    presenter.BorderBrush = borderBrush;
-                    presenter.CornerRadius = new CornerRadius(8);
-                    presenter.BorderThickness = new Thickness(1);
-                    try
-                    {
-                        if (presenter.Shadow == null)
-                        {
-                            presenter.Shadow = new ThemeShadow();
-                            presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
-                        }
-                    }
-                    catch { }
-                }
+                catch { }
             }
         }
         catch (Exception ex)
@@ -1687,18 +2835,85 @@ public static class ThemeHelper
         }
     }
 
+    private static void ApplyPresenterInstanceTheme(Control presenter, ElementTheme theme, Brush bgBrush, Brush borderBrush, Thickness borderThickness)
+    {
+        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+
+        if (isFullscreenVideo)
+        {
+            StyleFullscreenPresenter(presenter, bgBrush, borderBrush);
+            return;
+        }
+
+        if (presenter is FlyoutPresenter)
+        {
+            var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+            bgBrush = GetVolumeFlyoutBackground(backdrop, theme, false);
+            borderBrush = GetVolumeFlyoutBorderBrush(backdrop, theme, false);
+        }
+
+        presenter.RequestedTheme = theme;
+        presenter.Background = bgBrush;
+        presenter.BorderBrush = borderBrush;
+        presenter.BorderThickness = borderThickness;
+        if (presenter is FlyoutPresenter fp) fp.CornerRadius = new CornerRadius(8);
+        else if (presenter is MenuFlyoutPresenter mfp)
+        {
+            mfp.CornerRadius = new CornerRadius(8);
+            try { mfp.ClearValue(MenuFlyoutPresenter.SystemBackdropProperty); } catch { }
+        }
+
+        try
+        {
+            var borders = FindVisualChildren<Border>(presenter);
+            foreach (var b in borders)
+            {
+                if (presenter is FlyoutPresenter)
+                {
+                    b.Background = bgBrush;
+                    b.BorderBrush = borderBrush;
+                    b.BorderThickness = borderThickness;
+                    b.CornerRadius = new CornerRadius(8);
+                }
+                else
+                {
+                    b.ClearValue(Border.BackgroundProperty);
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (presenter.Shadow is ThemeShadow ts)
+            {
+                ts.Receivers.Clear();
+                presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+            }
+            else if (presenter.Shadow == null)
+            {
+                presenter.Shadow = new ThemeShadow();
+                presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+            }
+        }
+        catch { }
+    }
+
     public static void ApplyThemeToContentDialog(ContentDialog? dialog)
     {
         if (dialog == null) return;
         try
         {
+            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                     App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
             var backdrop = AppServices.Settings.Current.BackdropType;
-            var theme = GetEffectiveElementTheme();
+            var theme = isFullscreenVideo ? ElementTheme.Dark : GetEffectiveElementTheme();
 
             dialog.RequestedTheme = theme;
             dialog.Background = GetFlyoutPresenterBackground(backdrop, theme);
             dialog.BorderBrush = GetFlyoutBorderBrush(backdrop, theme);
-            dialog.BorderThickness = new Thickness(1);
+            dialog.BorderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
             dialog.CornerRadius = new CornerRadius(12);
 
             if (dialog.Content is FrameworkElement fe)
@@ -1724,6 +2939,28 @@ public static class ThemeHelper
             if (desc != null) return desc;
         }
         return null;
+    }
+
+    private static System.Collections.Generic.List<T> FindVisualChildren<T>(DependencyObject? parent) where T : DependencyObject
+    {
+        var results = new System.Collections.Generic.List<T>();
+        FindVisualChildrenInternal(parent, results);
+        return results;
+    }
+
+    private static void FindVisualChildrenInternal<T>(DependencyObject? parent, System.Collections.Generic.List<T> results) where T : DependencyObject
+    {
+        if (parent == null) return;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                results.Add(match);
+            }
+            FindVisualChildrenInternal(child, results);
+        }
     }
 
     #endregion

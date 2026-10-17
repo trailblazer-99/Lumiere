@@ -25,6 +25,7 @@
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
             <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
             <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#2AFFFFFF" />
@@ -193,6 +194,7 @@
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#18000000" />
             <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
             <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
+            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#28000000" />
@@ -202,7 +204,7 @@
             <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="#28000000" />
             <SolidColorBrush x:Key="FlyoutPresenterBorderBrush" Color="#28000000" />
             <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#28000000" />
-            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#FAF8F8FC" />
+            <SolidColorBrush x:Key="VolumeFlyoutPresenterBackground" Color="#F4F4F8" />
             <SolidColorBrush x:Key="VolumeFlyoutPresenterBorderBrush" Color="#18000000" />
             <SolidColorBrush x:Key="ButtonBackground" Color="#48FFFFFF" />
             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#60FFFFFF" />
@@ -361,6 +363,7 @@
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
             <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
             <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#48FFFFFF" />
@@ -660,6 +663,76 @@
         <Setter Property="helpers:SliderHelper.MakeThumbCircular" Value="True" />
     </Style>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         FLUENT 2 VOLUME SLIDER STYLE
+         Windows 11 Fluent 2 capsule tracks and elevated circular knob
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentVolumeSliderStyle" TargetType="Slider">
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="IsThumbToolTipEnabled" Value="False" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid x:Name="Root" Margin="{TemplateBinding Padding}" VerticalAlignment="Center">
+                        <Grid x:Name="SliderContainer" Background="Transparent">
+                            <Grid x:Name="HorizontalTemplate" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Inactive Track -->
+                                <Rectangle
+                                    x:Name="HorizontalTrackRect"
+                                    Grid.ColumnSpan="3"
+                                    Height="4"
+                                    RadiusX="2"
+                                    RadiusY="2"
+                                    Fill="{ThemeResource ControlFillColorSecondaryBrush}"
+                                    VerticalAlignment="Center" />
+
+                                <!-- Active Decrease Track -->
+                                <Rectangle
+                                    x:Name="HorizontalDecreaseRect"
+                                    Grid.Column="0"
+                                    Height="4"
+                                    RadiusX="2"
+                                    RadiusY="2"
+                                    Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                    VerticalAlignment="Center" />
+
+                                <!-- Fluent Solid Accent Circular Knob -->
+                                <Thumb
+                                    x:Name="HorizontalThumb"
+                                    Grid.Column="1"
+                                    Width="18"
+                                    Height="18"
+                                    VerticalAlignment="Center">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Grid Width="18" Height="18" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <Ellipse
+                                                    Width="18"
+                                                    Height="18"
+                                                    Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Grid>
+
+                            <Grid x:Name="VerticalTemplate" Visibility="Collapsed" />
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 
     <!-- Fallback Selection Ribbon Elevated Background -->
     <SolidColorBrush x:Key="SelectionRibbonBackground" Color="#F6202026" />
@@ -710,6 +783,7 @@
     </Style>
 
     <Style TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="SystemBackdrop" Value="{ThemeResource MenuFlyoutSystemBackdrop}" />
         <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
         <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
         <Setter Property="BorderThickness" Value="1" />
@@ -728,6 +802,7 @@
     </Style>
 
     <Style x:Key="CinematicMenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="SystemBackdrop" Value="{ThemeResource MenuFlyoutSystemBackdrop}" />
         <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
         <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
         <Setter Property="BorderThickness" Value="1" />
@@ -922,6 +997,9 @@
     <Style x:Key="SettingsExpanderStyle" TargetType="Expander">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="4" />
         <Setter Property="MinHeight" Value="60" />
     </Style>

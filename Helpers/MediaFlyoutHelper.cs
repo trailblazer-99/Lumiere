@@ -480,8 +480,7 @@ public static class ThemeResourceHelper
                     ? Microsoft.UI.ColorHelper.FromArgb(0x40, 0xFF, 0xFF, 0xFF)
                     : Microsoft.UI.ColorHelper.FromArgb(0x26, 0x00, 0x00, 0x00)),
             "TextFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(200, 255, 255, 255) : Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0)),
-            "AccentFillColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0)),
-            "AccentTextFillColorPrimaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 140, 0)),
+            "AccentFillColorDefaultBrush" or "AccentTextFillColorPrimaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? Models.AccentColorOption.SystemDefault).Default),
             "FavoriteIconBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 59, 92)),
             "SystemFillColorCriticalBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 106, 106) : Microsoft.UI.ColorHelper.FromArgb(255, 219, 0, 0)),
             "YouTubeBrandBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 0, 0)),

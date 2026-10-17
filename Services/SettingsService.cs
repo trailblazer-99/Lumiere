@@ -38,7 +38,14 @@ public sealed class SettingsService : ISettingsService
 
     // Appearance
     private const string BackdropTypeKey = "BackdropType";
+    private const string StudioWindowBaseKey = "StudioWindowBase";
+    private const string StudioNavRailKey = "StudioNavRail";
+    private const string StudioCanvasKey = "StudioCanvas";
+    private const string StudioTransportBarKey = "StudioTransportBar";
     private const string AccentColorKey = "AccentColor";
+    private const string CustomAccentColorHexKey = "CustomAccentColorHex";
+    private const string ActiveThemePresetIdKey = "ActiveThemePresetId";
+    private const string CustomThemePresetsKey = "CustomThemePresets";
     private const string AlwaysShowTransportBarKey = "AlwaysShowTransportBar";
     private const string AcrylicTransportBarKey = "AcrylicTransportBar";
     private const string AutoHideTransportBarInStreamingKey = "AutoHideTransportBarInStreaming";
@@ -163,7 +170,16 @@ public sealed class SettingsService : ISettingsService
 
             // Appearance
             BackdropType = ParseEnum(settingsValues, BackdropTypeKey, AppThemeBackdrop.Mica),
+            StudioWindowBase = ParseEnum(settingsValues, StudioWindowBaseKey, AppThemeBackdrop.Mica),
+            StudioNavRail = ParseEnum(settingsValues, StudioNavRailKey, StudioNavRailStyle.MicaAltTint),
+            StudioCanvas = ParseEnum(settingsValues, StudioCanvasKey, StudioCanvasStyle.SolidLayer),
+            StudioTransportBar = ParseEnum(settingsValues, StudioTransportBarKey, StudioTransportBarStyle.FrostedAcrylic),
             AccentColor = ParseEnum(settingsValues, AccentColorKey, AccentColorOption.SystemDefault),
+            CustomAccentColorHex = settingsValues.TryGetValue(CustomAccentColorHexKey, out var cHex) && cHex is string sHex ? sHex : null,
+            ActiveThemePresetId = settingsValues.TryGetValue(ActiveThemePresetIdKey, out var atp) && atp is string sAtp ? sAtp : null,
+            CustomThemePresets = settingsValues.TryGetValue(CustomThemePresetsKey, out var ctp) && ctp is string sCtp
+                ? DeserializeCustomThemePresets(sCtp)
+                : [],
             AlwaysShowTransportBar = ReadBool(settingsValues, AlwaysShowTransportBarKey, false),
             AcrylicTransportBar = ReadBool(settingsValues, AcrylicTransportBarKey, false),
             AutoHideTransportBarInStreaming = ReadBool(settingsValues, AutoHideTransportBarInStreamingKey, true),
@@ -367,7 +383,16 @@ public sealed class SettingsService : ISettingsService
 
         // Appearance
         values[BackdropTypeKey] = Current.BackdropType.ToString();
+        values[StudioWindowBaseKey] = Current.StudioWindowBase.ToString();
+        values[StudioNavRailKey] = Current.StudioNavRail.ToString();
+        values[StudioCanvasKey] = Current.StudioCanvas.ToString();
+        values[StudioTransportBarKey] = Current.StudioTransportBar.ToString();
         values[AccentColorKey] = Current.AccentColor.ToString();
+        if (Current.CustomAccentColorHex != null) values[CustomAccentColorHexKey] = Current.CustomAccentColorHex;
+        else values.Remove(CustomAccentColorHexKey);
+        if (Current.ActiveThemePresetId != null) values[ActiveThemePresetIdKey] = Current.ActiveThemePresetId;
+        else values.Remove(ActiveThemePresetIdKey);
+        values[CustomThemePresetsKey] = System.Text.Json.JsonSerializer.Serialize(Current.CustomThemePresets);
         values[AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar;
         values[AcrylicTransportBarKey] = Current.AcrylicTransportBar;
         values[AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming;
@@ -459,7 +484,14 @@ public sealed class SettingsService : ISettingsService
 
                 // Appearance
                 [BackdropTypeKey] = Current.BackdropType.ToString(),
+                [StudioWindowBaseKey] = Current.StudioWindowBase.ToString(),
+                [StudioNavRailKey] = Current.StudioNavRail.ToString(),
+                [StudioCanvasKey] = Current.StudioCanvas.ToString(),
+                [StudioTransportBarKey] = Current.StudioTransportBar.ToString(),
                 [AccentColorKey] = Current.AccentColor.ToString(),
+                [CustomAccentColorHexKey] = Current.CustomAccentColorHex ?? string.Empty,
+                [ActiveThemePresetIdKey] = Current.ActiveThemePresetId ?? string.Empty,
+                [CustomThemePresetsKey] = System.Text.Json.JsonSerializer.Serialize(Current.CustomThemePresets),
                 [AlwaysShowTransportBarKey] = Current.AlwaysShowTransportBar,
                 [AcrylicTransportBarKey] = Current.AcrylicTransportBar,
                 [AutoHideTransportBarInStreamingKey] = Current.AutoHideTransportBarInStreaming,
@@ -719,6 +751,19 @@ public sealed class SettingsService : ISettingsService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[SettingsService.DeserializeFolders] Unexpected error: {ex.Message}");
+            return [];
+        }
+    }
+
+    private static List<ThemePreset> DeserializeCustomThemePresets(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<ThemePreset>>(json) ?? [];
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsService.DeserializeCustomThemePresets] Error: {ex.Message}");
             return [];
         }
     }

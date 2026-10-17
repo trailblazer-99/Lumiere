@@ -79,8 +79,8 @@ public static class SliderHelper
                     verticalTemplate.Margin = new Thickness(0);
                 }
 
-                // Standard circular thumb diameter: 14px for compact sliders (<24px high), 16px for standard sliders
-                double thumbDiameter = (slider.Height > 0 && slider.Height < 24) ? 14 : 16;
+                // Standard circular thumb diameter: 14px for compact sliders (<24px high), 18px for tall sliders (>=32px high), 16px for standard sliders
+                double thumbDiameter = (slider.Height > 0 && slider.Height < 24) ? 14 : (slider.Height >= 32 ? 18 : 16);
                 var cornerRadius = new CornerRadius(thumbDiameter / 2.0);
 
                 var thumbs = FindChildren<Thumb>(slider);

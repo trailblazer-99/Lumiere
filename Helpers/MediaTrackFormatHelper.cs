@@ -463,11 +463,24 @@ public static class MediaTrackFormatHelper
                     {
                         int testPos = pos + 4;
                         long tracksLen = ReadVInt(buf, ref testPos);
-                        if (tracksLen > 0 && testPos < read && buf[testPos] == 0xAE)
+                        if (tracksLen > 0 && testPos < read)
                         {
-                            int tracksEnd = (int)Math.Min(read, testPos + tracksLen);
-                            ParseTracksInternal(buf, testPos, tracksEnd, list);
-                            if (list.Count > 0) break;
+                            int scanPos = testPos;
+                            while (scanPos < read - 2 && (buf[scanPos] == 0xBF || buf[scanPos] == 0xEC))
+                            {
+                                int p = scanPos;
+                                int skipId = ReadId(buf, ref p);
+                                long skipLen = ReadVInt(buf, ref p);
+                                if (skipLen < 0 || p + skipLen > read) break;
+                                scanPos = (int)(p + skipLen);
+                            }
+
+                            if (scanPos < read && buf[scanPos] == 0xAE)
+                            {
+                                int tracksEnd = (int)Math.Min(read, testPos + tracksLen);
+                                ParseTracksInternal(buf, scanPos, tracksEnd, list);
+                                if (list.Count > 0) break;
+                            }
                         }
                     }
                     pos++;
@@ -571,6 +584,43 @@ public static class MediaTrackFormatHelper
                         t.FrameRate = 1_000_000_000.0 / defDur;
                     }
                     break;
+                case 0x63A2: // CodecPrivate
+                    if (t.TrackType == 1 && len >= 4)
+                    {
+                        for (int i = pos; i <= elemEnd - 4; i++)
+                        {
+                            if ((buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C') ||
+                                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'v' && buf[i + 3] == 'C') ||
+                                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'h' && (buf[i + 3] == '1' || buf[i + 3] == 'e')) ||
+                                (buf[i] == 'd' && buf[i + 1] == 'o' && buf[i + 2] == 'v' && buf[i + 3] == 'i'))
+                            {
+                                t.HdrFormat = (t.TransferCharacteristics == 16 || t.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                                    ? "Dolby Vision / HDR10"
+                                    : "Dolby Vision";
+                                break;
+                            }
+                        }
+
+                        ParseHevcCodecPrivate(buf, pos, (int)len, t);
+                    }
+                    break;
+                case 0x41E4: // BlockAdditionMapping
+                    if (t.TrackType == 1 && len >= 4)
+                    {
+                        for (int i = pos; i <= elemEnd - 4; i++)
+                        {
+                            if ((buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C') ||
+                                (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'v' && buf[i + 3] == 'C') ||
+                                (buf[i] == 'd' && buf[i + 1] == 'o' && buf[i + 2] == 'v' && (buf[i + 3] == 'p' || buf[i + 3] == 'i')))
+                            {
+                                t.HdrFormat = (t.TransferCharacteristics == 16 || t.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                                    ? "Dolby Vision / HDR10"
+                                    : "Dolby Vision";
+                                break;
+                            }
+                        }
+                    }
+                    break;
                 case 0xE0: // Video
                     ParseVideoInternal(buf, pos, elemEnd, t);
                     break;
@@ -646,11 +696,12 @@ public static class MediaTrackFormatHelper
 
         if (t.TransferCharacteristics == 16)
         {
-            t.HdrFormat = (t.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase) ||
-                           t.Name.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
-                           Regex.IsMatch(t.Name, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])"))
-                ? "Dolby Vision"
-                : "HDR10";
+            bool hasDolby = t.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase) ||
+                            t.Name.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                            t.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                            Regex.IsMatch(t.Name, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])");
+
+            t.HdrFormat = hasDolby ? "Dolby Vision / HDR10" : "HDR10";
         }
         else if (t.TransferCharacteristics == 18)
         {
@@ -658,7 +709,10 @@ public static class MediaTrackFormatHelper
         }
         else if (t.ColorPrimaries == 9 && (t.BitDepth >= 10 || t.VideoBitDepth >= 10))
         {
-            t.HdrFormat = "HDR10";
+            if (string.IsNullOrEmpty(t.HdrFormat) || t.HdrFormat == "SDR")
+            {
+                t.HdrFormat = "HDR10";
+            }
         }
     }
 
@@ -717,7 +771,9 @@ public static class MediaTrackFormatHelper
 
                     if (tf == 16)
                     {
-                        videoTrack.HdrFormat = "HDR10";
+                        videoTrack.HdrFormat = videoTrack.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase)
+                            ? "Dolby Vision / HDR10"
+                            : "HDR10";
                         videoTrack.BitDepth = 10;
                         videoTrack.VideoBitDepth = 10;
                     }
@@ -729,7 +785,10 @@ public static class MediaTrackFormatHelper
                     }
                     else if (prim == 9 && tf != 1 && tf != 13)
                     {
-                        videoTrack.HdrFormat = "HDR10";
+                        if (!videoTrack.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase))
+                        {
+                            videoTrack.HdrFormat = "HDR10";
+                        }
                         videoTrack.BitDepth = 10;
                         videoTrack.VideoBitDepth = 10;
                     }
@@ -749,7 +808,9 @@ public static class MediaTrackFormatHelper
                 (buf[i] == 'd' && buf[i + 1] == 'v' && buf[i + 2] == 'v' && buf[i + 3] == 'C'))
             {
                 videoTrack.CodecId = "dvh1";
-                videoTrack.HdrFormat = "Dolby Vision";
+                videoTrack.HdrFormat = (videoTrack.TransferCharacteristics == 16 || videoTrack.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase))
+                    ? "Dolby Vision / HDR10"
+                    : "Dolby Vision";
                 videoTrack.BitDepth = 10;
                 videoTrack.VideoBitDepth = 10;
                 foundVideo = true;
@@ -758,22 +819,14 @@ public static class MediaTrackFormatHelper
         }
 
         // Search for HEVC 'hvcC'
-        if (videoTrack.BitDepth < 10)
+        for (int i = 0; i <= read - 8; i++)
         {
-            for (int i = 0; i <= read - 8; i++)
+            if (buf[i] == 'h' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C')
             {
-                if (buf[i] == 'h' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == 'C')
-                {
-                    int profile = buf[i + 5] & 0x1F;
-                    if (profile == 2) // Main 10
-                    {
-                        videoTrack.BitDepth = 10;
-                        videoTrack.VideoBitDepth = 10;
-                        videoTrack.CodecId = "hev1";
-                        foundVideo = true;
-                    }
-                    break;
-                }
+                videoTrack.CodecId = "hev1";
+                foundVideo = true;
+                ParseHevcCodecPrivate(buf, i + 4, read - (i + 4), videoTrack);
+                break;
             }
         }
 
@@ -990,5 +1043,340 @@ public static class MediaTrackFormatHelper
             > 8 => $"{channelCount - 1}.1 Surround",
             _ => string.Empty
         };
+    }
+
+    private static void ParseHevcCodecPrivate(byte[] buf, int pos, int len, ContainerTrackInfo t)
+    {
+        try
+        {
+            if (len < 23 || pos + 23 > buf.Length) return;
+            if (buf[pos] != 1) return;
+
+            int profileIdc = buf[pos + 1] & 0x1F;
+            if (profileIdc == 2 && t.BitDepth < 10)
+            {
+                t.BitDepth = 10;
+                t.VideoBitDepth = 10;
+            }
+
+            if (len > 18)
+            {
+                int lumaDepth = (buf[pos + 17] & 0x07) + 8;
+                if (lumaDepth >= 10 && t.BitDepth < lumaDepth)
+                {
+                    t.BitDepth = lumaDepth;
+                    t.VideoBitDepth = lumaDepth;
+                }
+            }
+
+            int numArrays = buf[pos + 22];
+            int curr = pos + 23;
+            for (int a = 0; a < numArrays; a++)
+            {
+                if (curr + 3 > pos + len || curr + 3 > buf.Length) break;
+                int nalType = buf[curr] & 0x3F;
+                int numNalus = (buf[curr + 1] << 8) | buf[curr + 2];
+                curr += 3;
+
+                for (int n = 0; n < numNalus; n++)
+                {
+                    if (curr + 2 > pos + len || curr + 2 > buf.Length) break;
+                    int nalLen = (buf[curr] << 8) | buf[curr + 1];
+                    curr += 2;
+                    if (curr + nalLen > pos + len || curr + nalLen > buf.Length) break;
+
+                    if (nalType == 33 && nalLen > 4) // SPS
+                    {
+                        ParseHevcSps(buf, curr, nalLen, t);
+                    }
+
+                    curr += nalLen;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static void ParseHevcSps(byte[] buf, int offset, int length, ContainerTrackInfo t)
+    {
+        try
+        {
+            byte[] rbsp = RemoveEmulationPrevention(buf.AsSpan(offset, length));
+
+            try
+            {
+                var br = new HevcBitReader(rbsp);
+                br.ReadBits(16); // nal_unit_header
+
+                br.ReadBits(4); // sps_video_param_set_id
+                uint maxSubLayersMinus1 = br.ReadBits(3);
+                br.ReadBit(); // sps_temporal_id_nesting_flag
+
+                br.ReadBits(2); // profile_space
+                br.ReadBit(); // tier_flag
+                uint profileIdc = br.ReadBits(5);
+                br.ReadBits(32); // profile_compatibility_flags
+                br.ReadBits(4); // progressive/interlaced flags
+                br.ReadBits(44); // constraint flags
+                br.ReadBits(8); // level_idc
+
+                var subLayerProfilePresent = new bool[maxSubLayersMinus1];
+                var subLayerLevelPresent = new bool[maxSubLayersMinus1];
+                for (int i = 0; i < maxSubLayersMinus1; i++)
+                {
+                    subLayerProfilePresent[i] = br.ReadBit() != 0;
+                    subLayerLevelPresent[i] = br.ReadBit() != 0;
+                }
+                if (maxSubLayersMinus1 > 0)
+                {
+                    for (int i = (int)maxSubLayersMinus1; i < 8; i++) br.ReadBits(2);
+                    for (int i = 0; i < maxSubLayersMinus1; i++)
+                    {
+                        if (subLayerProfilePresent[i]) br.ReadBits(2 + 1 + 5 + 32 + 4 + 44);
+                        if (subLayerLevelPresent[i]) br.ReadBits(8);
+                    }
+                }
+
+                br.ReadUe(); // sps_seq_parameter_set_id
+                uint chromaFormatIdc = br.ReadUe();
+                if (chromaFormatIdc == 3) br.ReadBit();
+
+                br.ReadUe(); // pic_width
+                br.ReadUe(); // pic_height
+                if (br.ReadBit() != 0) // conf_win
+                {
+                    br.ReadUe(); br.ReadUe(); br.ReadUe(); br.ReadUe();
+                }
+
+                uint bitDepthLumaMinus8 = br.ReadUe();
+                uint bitDepthChromaMinus8 = br.ReadUe();
+                int depth = (int)bitDepthLumaMinus8 + 8;
+                if (depth >= 10)
+                {
+                    t.BitDepth = depth;
+                    t.VideoBitDepth = depth;
+                }
+
+                br.ReadUe(); // log2_max_pic_order_cnt_lsb_minus4
+                bool subLayerOrdering = br.ReadBit() != 0;
+                int startSub = subLayerOrdering ? 0 : (int)maxSubLayersMinus1;
+                for (int i = startSub; i <= maxSubLayersMinus1; i++)
+                {
+                    br.ReadUe(); br.ReadUe(); br.ReadUe();
+                }
+
+                br.ReadUe(); br.ReadUe(); br.ReadUe(); br.ReadUe(); br.ReadUe(); br.ReadUe();
+
+                if (br.ReadBit() != 0) // scaling_list
+                {
+                    if (br.ReadBit() != 0)
+                    {
+                        for (int sizeId = 0; sizeId < 4; sizeId++)
+                        {
+                            for (int matrixId = 0; matrixId < (sizeId != 3 ? 6 : 2); matrixId++)
+                            {
+                                if (br.ReadBit() == 0) br.ReadUe();
+                                else
+                                {
+                                    int coefNum = Math.Min(64, 1 << (4 + (sizeId << 1)));
+                                    if (sizeId > 1) br.ReadSe();
+                                    for (int k = 0; k < coefNum; k++) br.ReadSe();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                br.ReadBit(); // amp
+                br.ReadBit(); // sao
+                if (br.ReadBit() != 0) // pcm
+                {
+                    br.ReadBits(8); br.ReadUe(); br.ReadUe(); br.ReadBit();
+                }
+
+                uint numStRef = br.ReadUe();
+                for (int i = 0; i < numStRef; i++)
+                {
+                    if (i != 0 && br.ReadBit() != 0)
+                    {
+                        br.ReadUe(); br.ReadBit(); br.ReadUe();
+                    }
+                    else
+                    {
+                        uint numNeg = br.ReadUe();
+                        uint numPos = br.ReadUe();
+                        for (int j = 0; j < numNeg; j++) { br.ReadUe(); br.ReadBit(); }
+                        for (int j = 0; j < numPos; j++) { br.ReadUe(); br.ReadBit(); }
+                    }
+                }
+
+                if (br.ReadBit() != 0) // lt_ref
+                {
+                    uint numLt = br.ReadUe();
+                    for (int i = 0; i < numLt; i++) { br.ReadBits((int)(br.ReadUe() + 4)); br.ReadBit(); }
+                }
+
+                br.ReadBit(); // temporal_mvp
+                br.ReadBit(); // strong_intra
+
+                if (br.ReadBit() != 0) // vui_parameters_present
+                {
+                    if (br.ReadBit() != 0) // aspect_ratio
+                    {
+                        uint aspectIdc = br.ReadBits(8);
+                        if (aspectIdc == 255) { br.ReadBits(16); br.ReadBits(16); }
+                    }
+                    if (br.ReadBit() != 0) br.ReadBit(); // overscan
+                    if (br.ReadBit() != 0) // video_signal_type
+                    {
+                        br.ReadBits(3); // video_format
+                        br.ReadBit(); // full_range
+                        if (br.ReadBit() != 0) // colour_description
+                        {
+                            uint primaries = br.ReadBits(8);
+                            uint transfer = br.ReadBits(8);
+                            uint matrix = br.ReadBits(8);
+
+                            ApplyHdrColorMetadata(t, (int)primaries, (int)transfer, (int)matrix);
+                            return;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Resilient fallback pattern scan in RBSP
+            for (int i = 0; i <= rbsp.Length - 3; i++)
+            {
+                if (rbsp[i] == 9 && rbsp[i + 1] == 16 && rbsp[i + 2] == 9)
+                {
+                    ApplyHdrColorMetadata(t, 9, 16, 9);
+                    return;
+                }
+                if (rbsp[i] == 9 && rbsp[i + 1] == 18 && rbsp[i + 2] == 9)
+                {
+                    ApplyHdrColorMetadata(t, 9, 18, 9);
+                    return;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static void ApplyHdrColorMetadata(ContainerTrackInfo t, int primaries, int transfer, int matrix)
+    {
+        t.ColorPrimaries = primaries;
+        t.TransferCharacteristics = transfer;
+        t.MatrixCoefficients = matrix;
+
+        if (transfer == 16)
+        {
+            bool hasDolby = t.CodecId.Contains("DOLBY", StringComparison.OrdinalIgnoreCase) ||
+                            t.Name.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                            t.HdrFormat.Contains("Dolby", StringComparison.OrdinalIgnoreCase) ||
+                            Regex.IsMatch(t.Name, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])");
+
+            t.HdrFormat = hasDolby ? "Dolby Vision / HDR10" : "HDR10";
+            if (t.BitDepth < 10) t.BitDepth = 10;
+            if (t.VideoBitDepth < 10) t.VideoBitDepth = 10;
+        }
+        else if (transfer == 18)
+        {
+            t.HdrFormat = "HLG";
+            if (t.BitDepth < 10) t.BitDepth = 10;
+            if (t.VideoBitDepth < 10) t.VideoBitDepth = 10;
+        }
+        else if (primaries == 9 && (t.BitDepth >= 10 || t.VideoBitDepth >= 10))
+        {
+            if (string.IsNullOrEmpty(t.HdrFormat) || t.HdrFormat == "SDR")
+            {
+                t.HdrFormat = "HDR10";
+            }
+        }
+        else if (transfer == 1 && primaries == 1)
+        {
+            if (string.IsNullOrEmpty(t.HdrFormat))
+            {
+                t.HdrFormat = "SDR";
+            }
+        }
+    }
+
+    private static byte[] RemoveEmulationPrevention(ReadOnlySpan<byte> src)
+    {
+        byte[] dst = new byte[src.Length];
+        int d = 0;
+        for (int i = 0; i < src.Length; i++)
+        {
+            if (i + 2 < src.Length && src[i] == 0 && src[i + 1] == 0 && src[i + 2] == 3)
+            {
+                dst[d++] = 0;
+                dst[d++] = 0;
+                i += 2;
+            }
+            else
+            {
+                dst[d++] = src[i];
+            }
+        }
+        if (d == src.Length) return dst;
+        byte[] trimmed = new byte[d];
+        Buffer.BlockCopy(dst, 0, trimmed, 0, d);
+        return trimmed;
+    }
+
+    private ref struct HevcBitReader
+    {
+        private readonly ReadOnlySpan<byte> _data;
+        private int _bytePos;
+        private int _bitPos;
+
+        public HevcBitReader(ReadOnlySpan<byte> data)
+        {
+            _data = data;
+            _bytePos = 0;
+            _bitPos = 0;
+        }
+
+        public int ReadBit()
+        {
+            if (_bytePos >= _data.Length) return 0;
+            int bit = (_data[_bytePos] >> (7 - _bitPos)) & 1;
+            _bitPos++;
+            if (_bitPos == 8)
+            {
+                _bitPos = 0;
+                _bytePos++;
+            }
+            return bit;
+        }
+
+        public uint ReadBits(int n)
+        {
+            uint val = 0;
+            for (int i = 0; i < n; i++)
+            {
+                val = (val << 1) | (uint)ReadBit();
+            }
+            return val;
+        }
+
+        public uint ReadUe()
+        {
+            int zeros = 0;
+            while (ReadBit() == 0 && zeros < 32)
+            {
+                zeros++;
+            }
+            if (zeros == 0) return 0;
+            uint val = ReadBits(zeros);
+            return ((1u << zeros) - 1u) + val;
+        }
+
+        public int ReadSe()
+        {
+            uint code = ReadUe();
+            return (code & 1) != 0 ? (int)((code + 1) / 2) : -(int)(code / 2);
+        }
     }
 }

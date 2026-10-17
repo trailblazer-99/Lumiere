@@ -19,11 +19,9 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop connectedTarget, XamlRoot xamlRoot)
     {
-        try
-        {
-            base.OnTargetConnected(connectedTarget, xamlRoot);
-        }
-        catch { }
+        // Do NOT call base.OnTargetConnected: In Windows App SDK, calling base.OnTargetConnected
+        // while also managing DesktopAcrylicController attaches two targets to the same compositor target,
+        // throwing ArgumentException (0x80070057: The parameter is incorrect. Parameter name: target).
 
         try
         {
@@ -154,11 +152,7 @@ public sealed class CustomAcrylicBackdrop : SystemBackdrop
             System.Diagnostics.Debug.WriteLine($"[CustomAcrylicBackdrop.OnTargetDisconnected] Error: {ex.Message}");
         }
 
-        try
-        {
-            base.OnTargetDisconnected(disconnectedTarget);
-        }
-        catch { }
+        // Do NOT call base.OnTargetDisconnected since base.OnTargetConnected was not invoked.
     }
 
     /// <summary>

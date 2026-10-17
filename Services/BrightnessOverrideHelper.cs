@@ -49,10 +49,17 @@ internal sealed class BrightnessOverrideHelper : IDisposable
         {
             if (_disposed) return false;
 
+            // If already actively overridden to max, retain current override
+            if (_overrideRequested && (_wmiOverrideActive || _ddcOverrideActive || _winRtOverride != null))
+            {
+                _lastHwnd = hwnd;
+                return true;
+            }
+
             _lastHwnd = hwnd;
             _overrideRequested = true;
 
-            // Cancel any pending WMI boost/restore operations for this helper
+            // Cancel any pending WMI restore operations for this helper
             try
             {
                 _wmiCts?.Cancel();
@@ -144,8 +151,8 @@ internal sealed class BrightnessOverrideHelper : IDisposable
 
                                 if (SetWmiBrightness(100))
                                 {
-                                    // Verify we weren't cancelled while SetWmiBrightness was executing
-                                    if (!_overrideRequested || _disposed || token.IsCancellationRequested)
+                                    // Verify we weren't released or disposed while SetWmiBrightness was executing
+                                    if (!_overrideRequested || _disposed)
                                     {
                                         // Immediately revert back to baseline!
                                         byte revertTarget = _savedWmiBrightness;

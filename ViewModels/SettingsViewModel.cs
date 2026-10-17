@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LumiereMediaPlayer.Helpers;
@@ -46,12 +47,72 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
     // ── Appearance ─────────────────────────────────────────────────
+    public ObservableCollection<ThemePreset> ThemePresets { get; } = [];
+    [ObservableProperty] public partial ThemePreset? SelectedThemePreset { get; set; }
+    public bool IsSelectedPresetCustom => SelectedThemePreset != null && !SelectedThemePreset.IsBuiltIn;
+
     [ObservableProperty] public partial AppThemeBackdrop SelectedBackdrop { get; set; }
+    public bool IsBackdropStudioSelected => SelectedBackdrop == AppThemeBackdrop.BackdropStudio;
+
+    // ── Studio Modular Properties ──────────────────────────────────
+    [ObservableProperty] public partial AppThemeBackdrop StudioWindowBase { get; set; }
+    [ObservableProperty] public partial StudioNavRailStyle StudioNavRail { get; set; }
+    [ObservableProperty] public partial StudioCanvasStyle StudioCanvas { get; set; }
+    [ObservableProperty] public partial StudioTransportBarStyle StudioTransportBar { get; set; }
+
+    public int SelectedStudioWindowBaseIndex
+    {
+        get => (int)StudioWindowBase <= 3 ? (int)StudioWindowBase : 0;
+        set { if (value >= 0 && value <= 3 && (int)StudioWindowBase != value) StudioWindowBase = (AppThemeBackdrop)value; }
+    }
+
+    public int SelectedStudioNavRailIndex
+    {
+        get => (int)StudioNavRail;
+        set { if (value >= 0 && (int)StudioNavRail != value) StudioNavRail = (StudioNavRailStyle)value; }
+    }
+
+    public int SelectedStudioCanvasIndex
+    {
+        get => (int)StudioCanvas;
+        set { if (value >= 0 && (int)StudioCanvas != value) StudioCanvas = (StudioCanvasStyle)value; }
+    }
+
+    public int SelectedStudioTransportBarIndex
+    {
+        get => (int)StudioTransportBar;
+        set { if (value >= 0 && (int)StudioTransportBar != value) StudioTransportBar = (StudioTransportBarStyle)value; }
+    }
+
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
     [ObservableProperty] public partial Windows.UI.Color CurrentAccentColor { get; set; }
     [ObservableProperty] public partial bool IsCustomAccentExpanded { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
     [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
+    public bool IsAcrylicTransportBarOptionEnabled => AlwaysShowTransportBar
+        && SelectedBackdrop != AppThemeBackdrop.Acrylic
+        && SelectedBackdrop != AppThemeBackdrop.FluentSymphony
+        && SelectedBackdrop != AppThemeBackdrop.CinematicAdaptive
+        && SelectedBackdrop != AppThemeBackdrop.BackdropStudio;
+
+    public bool AcrylicTransportBarEffective
+    {
+        get => SelectedBackdrop == AppThemeBackdrop.Acrylic
+            || SelectedBackdrop == AppThemeBackdrop.FluentSymphony
+            || SelectedBackdrop == AppThemeBackdrop.CinematicAdaptive
+            || (SelectedBackdrop == AppThemeBackdrop.BackdropStudio && StudioTransportBar == StudioTransportBarStyle.FrostedAcrylic)
+            || AcrylicTransportBar;
+        set
+        {
+            if (SelectedBackdrop != AppThemeBackdrop.Acrylic
+                && SelectedBackdrop != AppThemeBackdrop.FluentSymphony
+                && SelectedBackdrop != AppThemeBackdrop.CinematicAdaptive
+                && SelectedBackdrop != AppThemeBackdrop.BackdropStudio)
+            {
+                AcrylicTransportBar = value;
+            }
+        }
+    }
     [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
     [ObservableProperty] public partial bool UseLocationForRegion { get; set; }
     [ObservableProperty] public partial bool CreateShellShortcuts { get; set; }
@@ -501,6 +562,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         App.MainWindowInstance?.UpdateTheme();
         OnPropertyChanged(nameof(SelectedThemeIndex));
+        UpdateActivePresetMatch();
     }
 
     partial void OnAutoplayOnLaunchChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoplayOnLaunch = value; _settingsService.Save(); } }
@@ -642,6 +704,151 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     // Appearance
+    partial void OnSelectedThemePresetChanged(ThemePreset? value)
+    {
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        if (_isSyncing) return;
+
+        if (value == null)
+        {
+            _settingsService.Current.ActiveThemePresetId = null;
+            _settingsService.Save();
+            return;
+        }
+
+        _isSyncing = true;
+        try
+        {
+            _settingsService.Current.ActiveThemePresetId = value.Id;
+            ThemeHelper.ApplyThemePreset(value);
+
+            SelectedTheme = value.Theme;
+            SelectedBackdrop = value.BackdropType;
+            SelectedAccentColor = value.AccentColor;
+            _settingsService.Current.Theme = value.Theme;
+            _settingsService.Current.BackdropType = value.BackdropType;
+            _settingsService.Current.AccentColor = value.AccentColor;
+            _settingsService.Current.CustomAccentColorHex = value.CustomAccentColorHex;
+
+            if (value.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(value.CustomAccentColorHex))
+            {
+                try
+                {
+                    CurrentAccentColor = ColorHelper.FromHex(value.CustomAccentColorHex);
+                    IsCustomAccentExpanded = true;
+                }
+                catch
+                {
+                    CurrentAccentColor = ThemeHelper.GetAccentColor(value.AccentColor);
+                }
+            }
+            else
+            {
+                CurrentAccentColor = ThemeHelper.GetAccentColor(value.AccentColor);
+            }
+
+            _settingsService.Save();
+
+            OnPropertyChanged(nameof(SelectedThemeIndex));
+            OnPropertyChanged(nameof(SelectedBackdropIndex));
+            OnPropertyChanged(nameof(SelectedAccentColorIndex));
+            OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+            OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    private void UpdateActivePresetMatch()
+    {
+        if (_isSyncing) return;
+        var c = _settingsService.Current;
+        var match = ThemePresets.FirstOrDefault(p =>
+            p.Theme == c.Theme &&
+            p.BackdropType == c.BackdropType &&
+            p.AccentColor == c.AccentColor &&
+            (p.AccentColor != AccentColorOption.Custom || string.Equals(p.CustomAccentColorHex, c.CustomAccentColorHex, StringComparison.OrdinalIgnoreCase)));
+
+        c.ActiveThemePresetId = match?.Id;
+        if (SelectedThemePreset != match)
+        {
+            _isSyncing = true;
+            SelectedThemePreset = match;
+            _isSyncing = false;
+            OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        }
+    }
+
+    [RelayCommand]
+    public void SavePreset(string? presetName)
+    {
+        if (!string.IsNullOrWhiteSpace(presetName))
+        {
+            SaveCurrentAsPreset(presetName);
+        }
+    }
+
+    public ThemePreset? SaveCurrentAsPreset(string presetName)
+    {
+        if (string.IsNullOrWhiteSpace(presetName))
+            return null;
+
+        var current = _settingsService.Current;
+        var newPreset = new ThemePreset
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = presetName.Trim(),
+            Theme = current.Theme,
+            BackdropType = current.BackdropType,
+            AccentColor = current.AccentColor,
+            CustomAccentColorHex = current.CustomAccentColorHex,
+            IsBuiltIn = false
+        };
+
+        current.CustomThemePresets ??= [];
+        current.CustomThemePresets.Add(newPreset);
+        current.ActiveThemePresetId = newPreset.Id;
+
+        ThemePresets.Add(newPreset);
+        SelectedThemePreset = newPreset;
+        _settingsService.Save();
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+
+        return newPreset;
+    }
+
+    [RelayCommand]
+    public void DeletePreset(ThemePreset? preset)
+    {
+        var target = preset ?? SelectedThemePreset;
+        if (target != null)
+        {
+            DeleteCustomPreset(target);
+        }
+    }
+
+    public void DeleteCustomPreset(ThemePreset preset)
+    {
+        if (preset == null || preset.IsBuiltIn)
+            return;
+
+        var current = _settingsService.Current;
+        current.CustomThemePresets?.RemoveAll(p => p.Id == preset.Id);
+        ThemePresets.Remove(preset);
+
+        if (SelectedThemePreset?.Id == preset.Id || current.ActiveThemePresetId == preset.Id)
+        {
+            var defaultPreset = ThemePresets.FirstOrDefault(p => p.IsBuiltIn)
+                             ?? ThemePreset.GetBuiltInPresets().FirstOrDefault();
+            SelectedThemePreset = defaultPreset;
+        }
+
+        _settingsService.Save();
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+    }
+
     partial void OnSelectedBackdropChanged(AppThemeBackdrop value)
     {
         if (_isSyncing) return;
@@ -649,6 +856,67 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save();
         if (App.MainWindowInstance is MainWindow mainWindow) mainWindow.ApplyBackdrop(value);
         OnPropertyChanged(nameof(SelectedBackdropIndex));
+        OnPropertyChanged(nameof(IsBackdropStudioSelected));
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        UpdateActivePresetMatch();
+    }
+
+    partial void OnStudioWindowBaseChanged(AppThemeBackdrop value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioWindowBaseIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioWindowBase = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.ApplyBackdrop(AppThemeBackdrop.BackdropStudio);
+            }
+        }
+    }
+
+    partial void OnStudioNavRailChanged(StudioNavRailStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioNavRailIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioNavRail = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.UpdateNavigationPaneTheming();
+            }
+        }
+    }
+
+    partial void OnStudioCanvasChanged(StudioCanvasStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioCanvasIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioCanvas = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.ApplyBackdrop(AppThemeBackdrop.BackdropStudio);
+            }
+        }
+    }
+
+    partial void OnStudioTransportBarChanged(StudioTransportBarStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioTransportBarIndex));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioTransportBar = value;
+            _settingsService.Save();
+            if (SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+            }
+        }
     }
 
     partial void OnSelectedAccentColorChanged(AccentColorOption value)
@@ -673,6 +941,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         else
         {
+            IsCustomAccentExpanded = false;
             var color = ThemeHelper.GetAccentColor(value);
             _isSyncing = true;
             CurrentAccentColor = color;
@@ -682,6 +951,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save();
         AccessibilityHelper.Apply(_settingsService.Current);
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
+        UpdateActivePresetMatch();
     }
 
     partial void OnCurrentAccentColorChanged(Windows.UI.Color value)
@@ -703,10 +973,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _customAccentDebounceTimer?.Start();
 
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
+        UpdateActivePresetMatch();
     }
 
     partial void OnAlwaysShowTransportBarChanged(bool value)
     {
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
         if (!_isSyncing)
         {
             _settingsService.Current.AlwaysShowTransportBar = value;
@@ -717,6 +989,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     partial void OnAcrylicTransportBarChanged(bool value)
     {
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
         if (!_isSyncing)
         {
             _settingsService.Current.AcrylicTransportBar = value;
@@ -1088,6 +1361,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ShowHdrBadge = c.ShowHdrBadge;
 
         SelectedBackdrop = c.BackdropType;
+        StudioWindowBase = c.StudioWindowBase;
+        StudioNavRail = c.StudioNavRail;
+        StudioCanvas = c.StudioCanvas;
+        StudioTransportBar = c.StudioTransportBar;
         SelectedAccentColor = c.AccentColor;
         if (c.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(c.CustomAccentColorHex))
         {
@@ -1145,6 +1422,34 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         VoiceClarityEnabled = c.VoiceClarityEnabled;
         NightModeEnabled = c.NightModeEnabled;
 
+        ThemePresets.Clear();
+        foreach (var preset in ThemePreset.GetBuiltInPresets())
+        {
+            ThemePresets.Add(preset);
+        }
+        if (c.CustomThemePresets != null)
+        {
+            foreach (var preset in c.CustomThemePresets)
+            {
+                ThemePresets.Add(preset);
+            }
+        }
+
+        ThemePreset? activePreset = null;
+        if (!string.IsNullOrEmpty(c.ActiveThemePresetId))
+        {
+            activePreset = ThemePresets.FirstOrDefault(p => p.Id == c.ActiveThemePresetId);
+        }
+        if (activePreset == null)
+        {
+            activePreset = ThemePresets.FirstOrDefault(p =>
+                p.Theme == c.Theme &&
+                p.BackdropType == c.BackdropType &&
+                p.AccentColor == c.AccentColor &&
+                (p.AccentColor != AccentColorOption.Custom || string.Equals(p.CustomAccentColorHex, c.CustomAccentColorHex, StringComparison.OrdinalIgnoreCase)));
+        }
+        SelectedThemePreset = activePreset;
+
         _isSyncing = false;
 
         // Notify all index properties
@@ -1164,6 +1469,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedToneMappingModeIndex));
         OnPropertyChanged(nameof(PeakBrightnessText));
         OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex));
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        OnPropertyChanged(nameof(IsBackdropStudioSelected));
+        OnPropertyChanged(nameof(SelectedStudioWindowBaseIndex));
+        OnPropertyChanged(nameof(SelectedStudioNavRailIndex));
+        OnPropertyChanged(nameof(SelectedStudioCanvasIndex));
+        OnPropertyChanged(nameof(SelectedStudioTransportBarIndex));
+        OnPropertyChanged(nameof(SelectedThemePreset));
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
         try
         {
             AccessibilityHelper.Apply(c);

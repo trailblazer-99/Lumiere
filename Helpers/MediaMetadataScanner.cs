@@ -328,13 +328,14 @@ public static class MediaMetadataScanner
                     string fName = Path.GetFileName(playablePath);
                     if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])"))
                     {
-                        bool isHdrToken = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG)(?:$|[\s._\-\])+])");
+                        bool isHdrToken = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG)(?:$|[\s._\-\])+])") ||
+                                          (vTrack != null && (vTrack.TransferCharacteristics == 16 || vTrack.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase)));
                         item.HdrFormat = isHdrToken ? "Dolby Vision / HDR10" : "Dolby Vision";
                         item.BitDepth = "10-bit";
                     }
                     else if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG|ST2084|ST-2084|BT2020|BT\.2020)(?:$|[\s._\-\])+])"))
                     {
-                        if (string.IsNullOrEmpty(item.HdrFormat) || item.HdrFormat == "SDR")
+                        if (string.IsNullOrEmpty(item.HdrFormat) || item.HdrFormat == "SDR" || item.HdrFormat == "HDR10")
                         {
                             item.HdrFormat = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR10\+|HDR10Plus)(?:$|[\s._\-\])+])") ? "HDR10+" :
                                              Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])HLG(?:$|[\s._\-\])+])") ? "HLG" : "HDR10";
@@ -373,6 +374,23 @@ public static class MediaMetadataScanner
 
                     // Auto save changes back to cache json debounced
                     Services.MediaLibraryService.RequestDebouncedSave();
+
+                    // If newly discovered metadata indicates HDR or Dolby Vision, update active HDR pipeline
+                    if (!string.IsNullOrEmpty(item.HdrFormat) && !item.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            if (AppServices.Playback.CurrentTrack == item)
+                            {
+                                var player = AppServices.PlaybackViewModel.Session.MediaPlayer;
+                                Windows.Media.Playback.MediaPlaybackItem? currentItem = null;
+                                if (player.Source is Windows.Media.Playback.MediaPlaybackItem mpi) currentItem = mpi;
+                                else if (player.Source is Windows.Media.Playback.MediaPlaybackList mpl) currentItem = mpl.CurrentItem;
+                                AppServices.HdrPipeline.ConfigurePipeline(player, currentItem);
+                            }
+                        }
+                        catch { }
+                    }
                 }
                 catch (Exception ex)
                 {

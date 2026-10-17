@@ -152,6 +152,7 @@ public sealed partial class VideoPage : Page
         this.SizeChanged -= OnPageSizeChanged;
 
         if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
+        App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
     }
 
     private void OnLibraryScrollViewerViewChanging(object? sender, Microsoft.UI.Xaml.Controls.ScrollViewerViewChangingEventArgs e)

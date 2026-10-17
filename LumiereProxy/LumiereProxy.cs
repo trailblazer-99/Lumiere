@@ -180,7 +180,7 @@ namespace Lumiere.Proxy
                         break;
 
                     default:
-                        _logger.LogWarning($"Route '{service}' not recognized.");
+                        _logger.LogWarning("Route '{Service}' not recognized.", service);
                         return new NotFoundObjectResult("Service Route Not Found");
                 }
 
@@ -195,7 +195,7 @@ namespace Lumiere.Proxy
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Proxy Error: {ex.Message}");
+                _logger.LogError(ex, "Proxy Error: {ErrorMessage}", ex.Message);
                 return new BadRequestObjectResult("Proxy request failed.");
             }
         }

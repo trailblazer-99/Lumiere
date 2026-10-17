@@ -105,13 +105,25 @@ public sealed class HdrPipelineService : IHdrPipelineService
     }
     public bool IsHdrActive => _hdrActive;
 
-    public string ContentFormatLabel => _contentFormat switch
+    public string ContentFormatLabel
     {
-        HdrContentFormat.Hdr10 => "HDR10",
-        HdrContentFormat.Hlg => "HLG",
-        HdrContentFormat.DolbyVision => "Dolby Vision",
-        _ => "SDR"
-    };
+        get
+        {
+            var track = AppServices.Playback.CurrentTrack;
+            if (track != null && !string.IsNullOrEmpty(track.HdrFormat) && !track.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase))
+            {
+                return track.HdrFormat;
+            }
+
+            return _contentFormat switch
+            {
+                HdrContentFormat.Hdr10 => "HDR10",
+                HdrContentFormat.Hlg => "HLG",
+                HdrContentFormat.DolbyVision => "Dolby Vision",
+                _ => "SDR"
+            };
+        }
+    }
 
     public string DisplayCapabilityLabel => _displayCapability switch
     {
@@ -579,7 +591,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
         {
             HdrMode.ForceOn => true,   // always boost — user's explicit choice
             HdrMode.ForceSdr => false,  // always SDR   — user's explicit choice
-            _ => isContentHdr && isDisplayHdrCapable
+            _ => isContentHdr && (isDisplayHdrCapable || settings.AutoBoostHdrBrightness)
         };
 
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
@@ -796,17 +808,21 @@ public sealed class HdrPipelineService : IHdrPipelineService
             bool isFullscreen = _isAppFullscreen ||
                                 (App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
 
-            // Display HDR boost only when user is viewing video (on VideoPage or Fullscreen)
-            bool isVideoViewVisible = isFullscreen || _isVideoPageActive;
+            bool isPaused = false;
+            try
+            {
+                isPaused = AppServices.PlaybackViewModel.Session.MediaPlayer.PlaybackSession?.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused;
+            }
+            catch { }
+            bool isMediaActive = isPlaying || isPaused;
 
-            // In fullscreen mode, boost whenever HDR content is playing with auto-boost enabled (or forced)
-            bool shouldBoost = isContentHdr
-                               && (isFullscreen || _hdrActive || settings.HdrMode == HdrMode.ForceOn)
+            // Display HDR brightness max-out is strictly restricted to fullscreen playback
+            bool shouldBoost = isFullscreen
+                               && (isContentHdr || settings.HdrMode == HdrMode.ForceOn)
                                && settings.HdrMode != HdrMode.ForceSdr
                                && settings.AutoBoostHdrBrightness
                                && isVideo
-                               && isPlaying
-                               && isVideoViewVisible
+                               && isMediaActive
                                && !_isSuspended;
 
             if (shouldBoost)

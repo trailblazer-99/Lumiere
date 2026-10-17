@@ -57,8 +57,14 @@ public sealed class AppSettings
 
     // ── Appearance & Visuals ───────────────────────────────────────
     public AppThemeBackdrop BackdropType { get; set; } = AppThemeBackdrop.Mica;
+    public AppThemeBackdrop StudioWindowBase { get; set; } = AppThemeBackdrop.Mica;
+    public StudioNavRailStyle StudioNavRail { get; set; } = StudioNavRailStyle.MicaAltTint;
+    public StudioCanvasStyle StudioCanvas { get; set; } = StudioCanvasStyle.SolidLayer;
+    public StudioTransportBarStyle StudioTransportBar { get; set; } = StudioTransportBarStyle.FrostedAcrylic;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
     public string? CustomAccentColorHex { get; set; }
+    public string? ActiveThemePresetId { get; set; }
+    public List<ThemePreset> CustomThemePresets { get; set; } = [];
     /// <summary>Whether the user has consented to creating shell shortcuts (Desktop, Start Menu).</summary>
     public bool CreateShellShortcuts { get; set; } = false;
     public bool AlwaysShowTransportBar { get; set; } = false;

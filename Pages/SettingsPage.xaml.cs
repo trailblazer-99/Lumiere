@@ -561,6 +561,38 @@ public sealed partial class SettingsPage : Page
             Microsoft.UI.Xaml.Controls.AnimatedIcon.SetState(SettingsHeaderAnimatedIcon, "Normal");
         }
     }
+
+    private void OnSavePresetFlyoutOpened(object sender, object e)
+    {
+        if (PresetNameTextBox != null)
+        {
+            PresetNameTextBox.Text = string.Empty;
+            PresetNameTextBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void OnPresetNameTextBoxKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            OnSavePresetClick(sender, e);
+            e.Handled = true;
+        }
+    }
+
+    private void OnSavePresetClick(object sender, RoutedEventArgs e)
+    {
+        var name = PresetNameTextBox?.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            ViewModel.SaveCurrentAsPreset(name);
+            if (PresetNameTextBox != null)
+            {
+                PresetNameTextBox.Text = string.Empty;
+            }
+            SavePresetFlyout?.Hide();
+        }
+    }
 }
 
 public sealed class SettingSearchItem

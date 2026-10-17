@@ -21,6 +21,7 @@
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Default) -->
                     <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
                     <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+                    <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
                     <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
                     <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />

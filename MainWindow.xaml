@@ -1030,6 +1030,7 @@
         <controls:TransportBar
             x:Name="TransportControls"
             Grid.Row="1"
+            Canvas.ZIndex="590"
             PointerEntered="OnControlsPointerEntered"
             PointerExited="OnControlsPointerExited"
             PointerWheelChanged="OnTransportControlsPointerWheelChanged"
@@ -1041,12 +1042,14 @@
             x:Name="MiniPlayerGrid"
             Grid.Row="0"
             Grid.RowSpan="2"
+            Canvas.ZIndex="500"
             Background="{ThemeResource LayerFillColorDefaultBrush}"
             Visibility="Collapsed"
             IsHitTestVisible="False"
             PointerMoved="OnMiniPlayerPointerMoved"
             PointerEntered="OnMiniPlayerPointerEntered"
-            PointerExited="OnMiniPlayerPointerExited">
+            PointerExited="OnMiniPlayerPointerExited"
+            Tapped="OnMiniPlayerTapped">
 
             <!-- Video Player Host (Video Mode) -->
             <MediaPlayerElement
@@ -1110,10 +1113,10 @@
                 </Grid.RowDefinitions>
 
                 <!-- Top Scrim & Header Bar -->
-                <Grid Grid.Row="0" Padding="12,10,12,8">
+                <Grid x:Name="MiniHeaderGrid" Grid.Row="0" VerticalAlignment="Top" Height="36">
                     <Grid.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#CC000000" Offset="0.0" />
+                            <GradientStop Color="#C0000000" Offset="0.0" />
                             <GradientStop Color="#00000000" Offset="1.0" />
                         </LinearGradientBrush>
                     </Grid.Background>
@@ -1123,194 +1126,295 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Track Info & Brand -->
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="2,0,8,0">
+                    <StackPanel
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Margin="12,0,8,0">
                         <TextBlock
                             x:Name="MiniTrackTitle"
                             Text="Track Title"
                             FontSize="12"
                             FontWeight="SemiBold"
-                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Foreground="White"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
                         <TextBlock
                             x:Name="MiniArtistTitle"
                             Text="Artist Name"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            FontSize="11"
+                            Foreground="#B0FFFFFF"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
                     </StackPanel>
 
-                    <!-- Top Action Buttons (Mute & Expand to Window) positioned cleanly beside OS caption close button -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,40,0">
-                        <!-- Volume Mute Button -->
+                    <!-- Window Management Buttons: Minimize, Back to Normal Size, Close -->
+                    <StackPanel
+                        x:Name="MiniHeaderButtonsPanel"
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="0"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Right"
+                        Height="32">
+                        <!-- Minimize Button -->
                         <Button
-                            x:Name="MiniVolumeButton"
-                            Click="OnMiniVolumeClick"
-                            Width="32"
+                            x:Name="MiniMinimizeButton"
+                            Click="OnMiniMinimizeClick"
+                            Width="46"
                             Height="32"
                             Padding="0"
-                            CornerRadius="4"
-                            Style="{StaticResource TransportIconButtonStyle}"
-                            ToolTipService.ToolTip="Mute / Unmute"
-                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
-                            helpers:SpringAnimationHelper.HoverScale="1.08">
+                            CornerRadius="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Center"
+                            ToolTipService.ToolTip="Minimize"
+                            AutomationProperties.Name="Minimize">
+                            <Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#25FFFFFF" />
+                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#15FFFFFF" />
+                            </Button.Resources>
                             <FontIcon
-                                x:Name="MiniVolumeIcon"
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="16"
-                                Glyph="&#xE767;"
-                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                FontSize="10"
+                                Glyph="&#xE921;"
+                                Foreground="White" />
                         </Button>
 
-                        <!-- Expand / Exit PiP Button -->
+                        <!-- Maximize Button (Back to normal size) -->
                         <Button
+                            x:Name="MiniExpandButton"
                             Click="OnMiniExitPipClick"
-                            Width="32"
+                            Width="46"
                             Height="32"
                             Padding="0"
-                            CornerRadius="4"
-                            Style="{StaticResource TransportIconButtonStyle}"
-                            ToolTipService.ToolTip="Expand to window"
-                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
-                            helpers:SpringAnimationHelper.HoverScale="1.08">
+                            CornerRadius="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Center"
+                            ToolTipService.ToolTip="Maximize"
+                            AutomationProperties.Name="Maximize">
+                            <Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#25FFFFFF" />
+                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#15FFFFFF" />
+                            </Button.Resources>
                             <FontIcon
                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="16"
-                                Glyph="&#xE93A;"
-                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                FontSize="10"
+                                Glyph="&#xE922;"
+                                Foreground="White" />
+                        </Button>
+
+                        <!-- Close Button -->
+                        <Button
+                            x:Name="MiniCloseButton"
+                            Click="OnMiniCloseClick"
+                            Width="46"
+                            Height="32"
+                            Padding="0"
+                            CornerRadius="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Center"
+                            ToolTipService.ToolTip="Close"
+                            AutomationProperties.Name="Close">
+                            <Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#E81123" />
+                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#C4101F" />
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                                <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                            </Button.Resources>
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="10"
+                                Glyph="&#xE711;"
+                                Foreground="White" />
                         </Button>
                     </StackPanel>
                 </Grid>
 
-                <!-- Center Floating Playback Controls Dock -->
+                <!-- Center Floating Playback Controls Dock (10s Back, Play/Pause, 10s Forward) -->
                 <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border
-                        CornerRadius="26"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                        CornerRadius="24"
+                        Background="#D0141620"
+                        BorderBrush="#38FFFFFF"
                         BorderThickness="1"
-                        Padding="12,8"
-                        Translation="0,0,16">
+                        Padding="14,8"
+                        Translation="0,2,16">
                         <Border.Shadow>
                             <ThemeShadow />
                         </Border.Shadow>
                         <StackPanel
                             Orientation="Horizontal"
-                            Spacing="12"
+                            Spacing="14"
                             VerticalAlignment="Center">
-                            
-                            <!-- Previous Button -->
+
+                            <!-- Seek 10s Backward Button -->
                             <Button
-                                Click="OnMiniPreviousClick"
-                                Width="32"
-                                Height="32"
+                                Click="OnMiniSkipBackwardClick"
+                                Width="36"
+                                Height="36"
                                 Padding="0"
-                                CornerRadius="4"
+                                CornerRadius="18"
+                                Background="#26FFFFFF"
+                                BorderBrush="#20FFFFFF"
+                                BorderThickness="1"
                                 Style="{StaticResource TransportIconButtonStyle}"
-                                ToolTipService.ToolTip="Previous"
+                                ToolTipService.ToolTip="Seek 10s backward"
+                                AutomationProperties.Name="Seek 10 seconds back"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE892;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="15" Glyph="&#xED3C;" Foreground="White" />
                             </Button>
 
-                            <!-- Play/Pause Button (Exact button used in Media Player) -->
+                            <!-- Play/Pause Button -->
                             <Button
                                 x:Name="MiniPlayPauseButton"
-                                Style="{StaticResource CleanPlayPauseButtonStyle}"
                                 Click="OnMiniPlayPauseClick"
-                                ToolTipService.ToolTip="Play"
+                                Width="44"
+                                Height="44"
+                                Padding="0"
+                                CornerRadius="22"
+                                Background="#30FFFFFF"
+                                BorderBrush="#25FFFFFF"
+                                BorderThickness="1"
+                                ToolTipService.ToolTip="Play / Pause"
+                                AutomationProperties.Name="Play or Pause"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08"
                                 helpers:SpringAnimationHelper.PressScale="0.92">
+                                <Button.Resources>
+                                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#45FFFFFF" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#25FFFFFF" />
+                                </Button.Resources>
                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <AnimatedVisualPlayer
                                         x:Name="MiniPlayerVisual"
                                         AutoPlay="False"
-                                        Width="44"
-                                        Height="44"
+                                        Width="40"
+                                        Height="40"
                                         Opacity="0.4"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center" />
                                     <FontIcon
                                         x:Name="MiniPlayPauseIcon"
                                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        FontSize="16"
+                                        FontSize="18"
                                         Glyph="&#xE768;"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        Foreground="White"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         Margin="2,0,0,0" />
                                 </Grid>
                             </Button>
 
-                            <!-- Next Button -->
+                            <!-- Seek 10s Forward Button -->
                             <Button
-                                Click="OnMiniNextClick"
-                                Width="32"
-                                Height="32"
+                                Click="OnMiniSkipForwardClick"
+                                Width="36"
+                                Height="36"
                                 Padding="0"
-                                CornerRadius="4"
+                                CornerRadius="18"
+                                Background="#26FFFFFF"
+                                BorderBrush="#20FFFFFF"
+                                BorderThickness="1"
                                 Style="{StaticResource TransportIconButtonStyle}"
-                                ToolTipService.ToolTip="Next"
+                                ToolTipService.ToolTip="Seek 10s forward"
+                                AutomationProperties.Name="Seek 10 seconds forward"
                                 helpers:SpringAnimationHelper.EnableHoverSpring="True"
                                 helpers:SpringAnimationHelper.HoverScale="1.08">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE893;" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Path
+                                        Fill="White"
+                                        Stretch="Uniform"
+                                        Data="F0 M66.26,46.87 C67.34,46.87 68.37,46.97 69.35,47.18 C70.32,47.38 71.26,47.69 72.15,48.09 C73.04,48.5 73.9,48.98 74.74,49.55 C75.57,50.12 76.37,50.77 77.11,51.51 C78.15,52.52 78.98,53.73 79.6,55.15 C80.22,56.57 80.7,58.05 81.04,59.62 C81.38,61.18 81.6,62.76 81.7,64.35 C81.8,65.95 81.84,67.41 81.84,68.75 C81.84,70.08 81.8,71.55 81.7,73.14 C81.6,74.74 81.38,76.32 81.04,77.88 C80.7,79.44 80.22,80.93 79.6,82.35 C78.98,83.76 78.15,84.98 77.11,85.99 C76.37,86.72 75.57,87.37 74.74,87.94 C73.9,88.51 73.04,88.99 72.15,89.4 C71.26,89.81 70.32,90.11 69.35,90.32 C68.37,90.52 67.34,90.62 66.26,90.62 C65.19,90.62 64.16,90.52 63.18,90.32 C62.19,90.11 61.25,89.81 60.36,89.4 C59.46,89 58.6,88.51 57.77,87.94 C56.94,87.37 56.14,86.72 55.38,85.99 C54.33,84.98 53.5,83.76 52.89,82.35 C52.27,80.93 51.79,79.44 51.45,77.88 C51.1,76.32 50.88,74.74 50.79,73.14 C50.69,71.55 50.64,70.08 50.64,68.75 C50.64,67.41 50.69,65.95 50.79,64.35 C50.88,62.76 51.1,61.18 51.45,59.62 C51.79,58.05 52.27,56.57 52.89,55.15 C53.5,53.73 54.33,52.52 55.38,51.51 C56.9,50.05 58.57,48.91 60.36,48.1 C62.15,47.28 64.12,46.87 66.26,46.87 Z M35.06,46.87 C35.49,46.87 35.88,46.95 36.24,47.11 C36.6,47.26 36.94,47.49 37.24,47.8 C37.84,48.42 38.14,49.15 38.14,50 L38.14,87.5 C38.14,87.92 38.06,88.32 37.91,88.68 C37.75,89.05 37.52,89.39 37.21,89.7 C36.9,90.01 36.56,90.24 36.2,90.39 C35.83,90.55 35.44,90.62 35.01,90.62 C34.59,90.62 34.2,90.55 33.83,90.39 C33.46,90.24 33.13,90.01 32.82,89.7 C32.51,89.39 32.28,89.05 32.12,88.68 C31.97,88.32 31.89,87.92 31.89,87.5 L31.89,55.86 L27.4,58.84 C26.84,59.2 26.26,59.37 25.64,59.37 C25.22,59.37 24.82,59.3 24.46,59.14 C24.09,58.99 23.75,58.76 23.44,58.45 C22.82,57.83 22.51,57.1 22.51,56.25 C22.51,55.14 22.99,54.28 23.93,53.66 L33.31,47.41 C33.86,47.05 34.45,46.87 35.06,46.87 Z M50.64,3.12 C52.45,3.12 54.23,3.22 56,3.4 C57.77,3.59 59.53,3.87 61.26,4.25 C62.99,4.62 64.69,5.08 66.36,5.63 C68.02,6.18 69.65,6.82 71.25,7.54 C74.43,8.99 77.46,10.77 80.33,12.87 C83.19,14.97 85.81,17.37 88.19,20.07 L88.19,6.25 C88.19,5.83 88.27,5.43 88.42,5.07 C88.57,4.7 88.81,4.36 89.12,4.05 C89.43,3.74 89.76,3.51 90.13,3.36 C90.5,3.2 90.89,3.12 91.31,3.12 C91.74,3.12 92.13,3.2 92.5,3.36 C92.86,3.51 93.2,3.74 93.51,4.05 C93.82,4.36 94.05,4.7 94.21,5.07 C94.36,5.43 94.44,5.83 94.44,6.25 L94.44,31.25 C94.44,31.67 94.36,32.07 94.21,32.43 C94.05,32.8 93.82,33.14 93.51,33.45 C93.2,33.76 92.86,33.99 92.5,34.14 C92.13,34.3 91.74,34.37 91.31,34.37 L66.31,34.37 C65.89,34.37 65.5,34.3 65.13,34.14 C64.76,33.99 64.43,33.76 64.12,33.45 C63.81,33.14 63.57,32.8 63.42,32.43 C63.27,32.07 63.19,31.67 63.19,31.25 C63.19,30.83 63.27,30.43 63.42,30.07 C63.57,29.7 63.81,29.36 64.12,29.05 C64.43,28.74 64.76,28.51 65.13,28.36 C65.5,28.2 65.89,28.12 66.31,28.12 L86.58,28.12 C84.56,25.2 82.22,22.57 79.57,20.26 C78.24,19.11 76.86,18.04 75.43,17.06 C73.99,16.08 72.5,15.19 70.95,14.38 C67.86,12.77 64.6,11.53 61.16,10.67 C59.44,10.24 57.71,9.91 55.97,9.7 C54.22,9.48 52.46,9.37 50.69,9.37 C47.82,9.37 44.99,9.64 42.19,10.18 C39.39,10.72 36.67,11.54 34.04,12.65 C30.07,14.31 26.45,16.46 23.17,19.12 C21.54,20.44 20.01,21.88 18.58,23.43 C17.15,24.98 15.83,26.64 14.6,28.42 C14.02,29.26 13.49,30.13 13.02,31.03 C12.55,31.93 12.03,32.81 11.48,33.69 C11.15,34.21 10.77,34.63 10.33,34.94 C9.89,35.25 9.35,35.4 8.7,35.4 C8.27,35.4 7.88,35.33 7.51,35.18 C7.15,35.03 6.81,34.81 6.5,34.52 C5.88,33.94 5.57,33.2 5.57,32.32 C5.57,31.84 5.69,31.36 5.91,30.91 C6.94,28.79 8.1,26.78 9.4,24.86 C10.71,22.94 12.15,21.13 13.73,19.41 C16.88,15.97 20.42,13.05 24.32,10.64 C26.27,9.44 28.3,8.37 30.39,7.45 C32.49,6.52 34.66,5.73 36.89,5.08 C39.13,4.43 41.4,3.94 43.69,3.61 C45.98,3.29 48.3,3.12 50.64,3.12 Z" />
+                                </Viewbox>
                             </Button>
                         </StackPanel>
                     </Border>
                 </Grid>
 
-                <!-- Bottom Scrim & Interactive Progress Bar -->
-                <Grid Grid.Row="2" Padding="14,8,14,10">
+                <!-- Bottom Scrim & Playback Controls Bar (Seek, Timestamps, Sound Mute/Unmute) -->
+                <Grid
+                    x:Name="MiniPositionHost"
+                    Grid.Row="2"
+                    Padding="14,6,14,10"
+                    IsHitTestVisible="True">
                     <Grid.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                             <GradientStop Color="#00000000" Offset="0.0" />
-                            <GradientStop Color="#CC000000" Offset="1.0" />
+                            <GradientStop Color="#C8000000" Offset="1.0" />
                         </LinearGradientBrush>
                     </Grid.Background>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+                    <Grid ColumnSpacing="10" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <!-- Interactive Seek Slider -->
-                    <Slider
-                        x:Name="MiniPositionSlider"
-                        Grid.Row="0"
-                        Minimum="0"
-                        Maximum="100"
-                        Value="0"
-                        Height="20"
-                        Padding="10,0,10,0"
-                        Margin="0,-4,0,-4"
-                        IsThumbToolTipEnabled="False"
-                        ValueChanged="OnMiniSliderValueChanged"
-                        PointerCaptureLost="OnMiniSliderPointerCaptureLost">
-                        <Slider.Resources>
-                            <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
-                            <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
-                            <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
-                            <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
-                        </Slider.Resources>
-                    </Slider>
-
-                    <!-- Timestamp row -->
-                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                        <!-- Elapsed Position Timestamp -->
                         <TextBlock
                             x:Name="MiniPositionText"
+                            Grid.Column="0"
                             Text="00:00"
-                            FontSize="12"
-                            FontWeight="Medium"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            HorizontalAlignment="Left" />
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Foreground="#E0FFFFFF"
+                            VerticalAlignment="Center" />
+
+                        <!-- Seek Slider -->
+                        <Slider
+                            x:Name="MiniPositionSlider"
+                            Grid.Column="1"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="0"
+                            VerticalAlignment="Center"
+                            Margin="0,-2,0,-2"
+                            IsThumbToolTipEnabled="False"
+                            ValueChanged="OnMiniSliderValueChanged"
+                            PointerPressed="OnMiniSliderPointerPressed"
+                            PointerReleased="OnMiniSliderPointerReleased" />
+
+                        <!-- Duration Timestamp -->
                         <TextBlock
                             x:Name="MiniDurationText"
+                            Grid.Column="2"
                             Text="00:00"
-                            FontSize="12"
-                            FontWeight="Medium"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            HorizontalAlignment="Right" />
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Foreground="#A0FFFFFF"
+                            VerticalAlignment="Center" />
+
+                        <!-- Sound Mute/Unmute Button -->
+                        <Button
+                            x:Name="MiniVolumeButton"
+                            Grid.Column="3"
+                            Click="OnMiniVolumeClick"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            CornerRadius="15"
+                            Background="#50000000"
+                            BorderBrush="#25FFFFFF"
+                            BorderThickness="1"
+                            Style="{StaticResource TransportIconButtonStyle}"
+                            ToolTipService.ToolTip="Mute / Unmute"
+                            AutomationProperties.Name="Mute or Unmute"
+                            helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                            helpers:SpringAnimationHelper.HoverScale="1.08">
+                            <FontIcon
+                                x:Name="MiniVolumeIcon"
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="13"
+                                Glyph="&#xE767;"
+                                Foreground="White" />
+                        </Button>
                     </Grid>
                 </Grid>
             </Grid>
@@ -1430,6 +1534,14 @@
             x:Name="VideoHoverPreview"
             Grid.RowSpan="2"
             Canvas.ZIndex="600"
+            Visibility="Collapsed" />
+
+        <!-- TV Episode Video Card Queue Overlay -->
+        <controls:TvEpisodeQueueOverlay
+            x:Name="TvEpisodeQueueOverlay"
+            x:FieldModifier="public"
+            Grid.RowSpan="2"
+            Canvas.ZIndex="580"
             Visibility="Collapsed" />
 
         <!-- Floating Bottom Pop-up Toast Host (e.g. "No updates") -->

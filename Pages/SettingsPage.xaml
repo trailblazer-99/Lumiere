@@ -428,6 +428,50 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE790;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Theme preset"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Quickly switch between curated styles or save your own custom appearance."/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <ComboBox MinWidth="180" VerticalAlignment="Center"
+                                      ItemsSource="{x:Bind ViewModel.ThemePresets, Mode=OneWay}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedThemePreset, Mode=TwoWay}"
+                                      DisplayMemberPath="Name"
+                                      PlaceholderText="Select a preset..."
+                                      helpers:ComboBoxHelper.FollowBackdrop="True"/>
+                            <Button ToolTipService.ToolTip="Save current appearance as a preset">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="14" Glyph="&#xE74E;"/>
+                                    <TextBlock Text="Save" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button.Flyout>
+                                    <Flyout x:Name="SavePresetFlyout" Opened="OnSavePresetFlyoutOpened">
+                                        <StackPanel Spacing="12" Width="260">
+                                            <TextBlock Text="Save Current as Preset" FontWeight="SemiBold" FontSize="14"/>
+                                            <TextBox x:Name="PresetNameTextBox" PlaceholderText="Preset name..." KeyDown="OnPresetNameTextBoxKeyDown"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                                <Button Content="Save" Style="{StaticResource AccentButtonStyle}"
+                                                        Click="OnSavePresetClick"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                            <Button ToolTipService.ToolTip="Delete selected custom preset"
+                                    Visibility="{x:Bind ViewModel.IsSelectedPresetCustom, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.DeletePresetCommand}">
+                                <FontIcon FontSize="14" Glyph="&#xE74D;"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE771;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                             <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="App theme"/>
@@ -449,96 +493,191 @@
                         <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE7B3;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                             <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Backdrop type"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Change window backdrop effect (Mica, Mica Alt, Acrylic, or Solid)."/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Change window backdrop effect (Mica, Mica Alt, Acrylic, Solid, Fluent Symphony, Cinematic Adaptive, or Backdrop Studio)."/>
                         </StackPanel>
-                        <ComboBox Grid.Column="2" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedBackdropIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                        <ComboBox Grid.Column="2" MinWidth="180" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedBackdropIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
                             <ComboBoxItem Content="Mica"/>
                             <ComboBoxItem Content="Mica Alt"/>
                             <ComboBoxItem Content="Acrylic"/>
                             <ComboBoxItem Content="Solid"/>
+                            <ComboBoxItem Content="Fluent Symphony"/>
+                            <ComboBoxItem Content="Cinematic Adaptive"/>
+                            <ComboBoxItem Content="Backdrop Studio"/>
                         </ComboBox>
                     </Grid>
                 </Border>
 
-                <Expander x:Name="AccentColorExpander" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{x:Bind ViewModel.IsCustomAccentExpanded, Mode=TwoWay}">
+                <!-- Backdrop Studio Configurator -->
+                <Expander x:Name="BackdropStudioExpander" 
+                          Style="{StaticResource SettingsExpanderStyle}"
+                          IsExpanded="True"
+                          Visibility="{x:Bind ViewModel.IsBackdropStudioSelected, Mode=OneWay}">
                     <Expander.Header>
-                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
+                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch" Padding="0,12" MinHeight="60">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="36"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE790;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                                <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Accent color"/>
-                                <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Sync with Windows accent color (System Theme) or pick a custom color."/>
+                                <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Backdrop Studio settings"/>
+                                <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Individually customize the material of each window and interface zone."/>
                             </StackPanel>
-                            <ComboBox Grid.Column="2" MinWidth="180" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedAccentColorIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="System Theme" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#F7630C" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Orange" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#8E4EC6" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Purple" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#0078D4" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Blue" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#00B7C3" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Teal" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#D13438" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Red" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="#E3008C" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Pink" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                                <ComboBoxItem>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Width="14" Height="14" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
-                                        <TextBlock Text="Custom" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ComboBoxItem>
-                            </ComboBox>
                         </Grid>
                     </Expander.Header>
                     <Expander.Content>
-                        <StackPanel Spacing="12" Padding="16,12,16,16">
-                            <TextBlock Text="Custom Accent Color" FontWeight="SemiBold" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                            <ColorPicker
-                                Color="{x:Bind ViewModel.CurrentAccentColor, Mode=TwoWay}"
-                                ColorSpectrumShape="Box"
-                                IsMoreButtonVisible="False"
-                                IsColorSliderVisible="True"
-                                IsColorChannelTextInputVisible="True"
-                                IsHexInputVisible="True"
-                                IsAlphaEnabled="False"
-                                IsAlphaSliderVisible="True"
-                                IsAlphaTextInputVisible="True" />
+                        <StackPanel Spacing="16" Padding="16,12,16,16">
+                            <!-- 1. Window Base -->
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Window shell base"/>
+                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Root window material sampling the desktop wallpaper or solid background."/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedStudioWindowBaseIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                                    <ComboBoxItem Content="Mica"/>
+                                    <ComboBoxItem Content="Mica Alt"/>
+                                    <ComboBoxItem Content="Acrylic"/>
+                                    <ComboBoxItem Content="Solid"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- 2. Navigation Rail -->
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Navigation rail"/>
+                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Left navigation menu surface styling."/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedStudioNavRailIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                                    <ComboBoxItem Content="Mica Alt Tint"/>
+                                    <ComboBoxItem Content="Match Window"/>
+                                    <ComboBoxItem Content="Solid Surface"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- 3. Content Surface -->
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Content surface"/>
+                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Page canvas layer styling behind media cards and text."/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedStudioCanvasIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                                    <ComboBoxItem Content="Solid Layer (High Contrast)"/>
+                                    <ComboBoxItem Content="Match Window (Pass-Through)"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- 4. Playback Transport Bar -->
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Playback transport bar"/>
+                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Bottom playback controls bar material."/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedStudioTransportBarIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                                    <ComboBoxItem Content="Frosted Acrylic"/>
+                                    <ComboBoxItem Content="Match Window"/>
+                                    <ComboBoxItem Content="Solid Surface"/>
+                                </ComboBox>
+                            </Grid>
                         </StackPanel>
                     </Expander.Content>
                 </Expander>
+
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE790;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Accent color"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Sync with Windows accent color (System Theme) or pick a custom color."/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="180" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedAccentColorIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="System Theme" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#F7630C" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Orange" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#8E4EC6" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Purple" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#0078D4" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Blue" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#00B7C3" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Teal" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#D13438" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Red" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="#E3008C" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Pink" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Width="14" Height="14" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"/>
+                                    <TextBlock Text="Custom" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ComboBoxItem>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Custom Accent Color Picker Card -->
+                <Border x:Name="AccentColorExpander" Style="{StaticResource SettingsCardMiddleStyle}"
+                        Visibility="{x:Bind ViewModel.IsCustomAccentExpanded, Mode=OneWay}">
+                    <StackPanel Spacing="12" Padding="16,4,16,8">
+                        <TextBlock Text="Custom Accent Color" FontWeight="SemiBold" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <ColorPicker
+                            Color="{x:Bind ViewModel.CurrentAccentColor, Mode=TwoWay}"
+                            ColorSpectrumShape="Box"
+                            IsMoreButtonVisible="False"
+                            IsColorSliderVisible="True"
+                            IsColorChannelTextInputVisible="True"
+                            IsHexInputVisible="True"
+                            IsAlphaEnabled="False"
+                            IsAlphaSliderVisible="True"
+                            IsAlphaTextInputVisible="True" />
+                    </StackPanel>
+                </Border>
 
                 <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
@@ -554,20 +693,36 @@
                     </Grid>
                 </Border>
 
-                <Expander x:Name="TransportBarExpander" Style="{StaticResource SettingsExpanderStyle}">
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE700;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Playback transport bar"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display and customize the playback controls bar at the bottom of the window."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <Expander x:Name="TransportBarExpander" Style="{StaticResource SettingsExpanderStyle}"
+                          IsExpanded="True"
+                          Visibility="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=OneWay}">
                     <Expander.Header>
-                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
+                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch" Padding="0,12" MinHeight="60">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE700;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE793;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                                <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Playback transport bar"/>
-                                <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display and customize the playback controls bar at the bottom of the window."/>
+                                <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Transport bar options"/>
+                                <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Customize material and streaming auto-hide behavior."/>
                             </StackPanel>
-                            <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=TwoWay}"/>
                         </Grid>
                     </Expander.Header>
                     <Expander.Content>
@@ -580,9 +735,9 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
                                     <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Acrylic material"/>
-                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use translucent frosted acrylic material for the playback transport bar."/>
+                                    <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Use translucent frosted acrylic material for the playback transport bar instead of matching the window backdrop."/>
                                 </StackPanel>
-                                <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.AcrylicTransportBar, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=OneWay}"/>
+                                <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.AcrylicTransportBarEffective, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.IsAcrylicTransportBarOptionEnabled, Mode=OneWay}"/>
                             </Grid>
 
                             <!-- Auto-hide in Streaming -->
@@ -820,7 +975,7 @@
                 <!-- AI Provider Configuration Expander -->
                 <Expander x:Name="AiProviderExpander" Style="{StaticResource SettingsExpanderStyle}">
                     <Expander.Header>
-                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
+                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch" Padding="0,12" MinHeight="60">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36"/>
                                 <ColumnDefinition Width="*"/>
@@ -1010,7 +1165,7 @@
                             <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Color blind mode"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Adjust colors for color vision deficiency."/>
                         </StackPanel>
-                        <ComboBox Grid.Column="2" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedColorBlindModeIndex, Mode=TwoWay}">
+                        <ComboBox Grid.Column="2" MinWidth="160" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedColorBlindModeIndex, Mode=TwoWay}" helpers:ComboBoxHelper.FollowBackdrop="True">
                             <ComboBoxItem Content="Off"/>
                             <ComboBoxItem Content="Protanopia (Red-Green)"/>
                             <ComboBoxItem Content="Deuteranopia (Green-Red)"/>
@@ -1074,7 +1229,8 @@
                             <ComboBox x:Name="SubtitlesStyleComboBox"
                                       MinWidth="160"
                                       VerticalAlignment="Center"
-                                      SelectionChanged="OnSubtitlesStyleSelectionChanged" />
+                                      SelectionChanged="OnSubtitlesStyleSelectionChanged"
+                                      helpers:ComboBoxHelper.FollowBackdrop="True" />
                             <Button Click="OnOpenWindowsCaptionsSettingsClick"
                                     VerticalAlignment="Center"
                                     ToolTipService.ToolTip="Open Windows Accessibility Captions Settings">
@@ -1182,7 +1338,7 @@
 
                 <Expander x:Name="KeyboardShortcutsExpander" Style="{StaticResource SettingsExpanderStyle}">
                     <Expander.Header>
-                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
+                        <Grid ColumnSpacing="16" HorizontalAlignment="Stretch" Padding="0,12" MinHeight="60">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>

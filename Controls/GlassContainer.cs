@@ -103,7 +103,7 @@ public class GlassContainer : ContentControl, IDisposable
     {
         if (_compositor == null && e.NewSize.Width > 0 && e.NewSize.Height > 0)
         {
-            InitializeCompositionTree();
+            InitializeCompositionTree(new Vector2((float)e.NewSize.Width, (float)e.NewSize.Height));
         }
         else
         {
@@ -116,9 +116,11 @@ public class GlassContainer : ContentControl, IDisposable
         UpdateTintColor();
     }
 
-    private void InitializeCompositionTree()
+    private void InitializeCompositionTree(Vector2? explicitSize = null)
     {
-        if (_compositor != null || ActualWidth <= 0 || ActualHeight <= 0) return;
+        float width = explicitSize?.X ?? (float)ActualWidth;
+        float height = explicitSize?.Y ?? (float)ActualHeight;
+        if (_compositor != null || width <= 0 || height <= 0) return;
         _isDisposed = false;
 
         var hostVisual = ElementCompositionPreview.GetElementVisual(this);
@@ -156,7 +158,7 @@ public class GlassContainer : ContentControl, IDisposable
             // 3. Create Backdrop SpriteVisual
             _backdropVisual = _compositor.CreateSpriteVisual();
             _backdropVisual.Brush = _effectBrush;
-            _backdropVisual.Size = new Vector2((float)ActualWidth, (float)ActualHeight);
+            _backdropVisual.Size = new Vector2(width, height);
 
             // 4. Create Adaptive Tint SpriteVisual (Light/Dark mode responsive)
             _tintVisual = _compositor.CreateSpriteVisual();
@@ -210,6 +212,12 @@ public class GlassContainer : ContentControl, IDisposable
 
     private void UpdateVisualSizes(Windows.Foundation.Size size)
     {
+        if (_compositor == null && size.Width > 0 && size.Height > 0)
+        {
+            InitializeCompositionTree(new Vector2((float)size.Width, (float)size.Height));
+            return;
+        }
+
         var newSize = new Vector2((float)size.Width, (float)size.Height);
         if (_backdropVisual != null && _backdropVisual.Size == newSize) return;
 
@@ -258,6 +266,23 @@ public class GlassContainer : ContentControl, IDisposable
                     tintGeom.Size = size;
                     tintGeom.CornerRadius = new Vector2(radius, radius);
                     _tintVisual.Clip = _compositor.CreateGeometricClip(tintGeom);
+                }
+            }
+
+            if (_rootContainerVisual != null)
+            {
+                if (_rootContainerVisual.Clip is CompositionGeometricClip existingRootClip &&
+                    existingRootClip.Geometry is CompositionRoundedRectangleGeometry existingRootGeom)
+                {
+                    existingRootGeom.Size = size;
+                    existingRootGeom.CornerRadius = new Vector2(radius, radius);
+                }
+                else
+                {
+                    var rootGeom = _compositor.CreateRoundedRectangleGeometry();
+                    rootGeom.Size = size;
+                    rootGeom.CornerRadius = new Vector2(radius, radius);
+                    _rootContainerVisual.Clip = _compositor.CreateGeometricClip(rootGeom);
                 }
             }
         }

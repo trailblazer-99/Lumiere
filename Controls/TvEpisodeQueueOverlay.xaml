@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="LumiereMediaPlayer.Controls.TvEpisodeQueueOverlay"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:LumiereMediaPlayer.Controls"
+    xmlns:models="using:LumiereMediaPlayer.Models"
+    xmlns:helpers="using:LumiereMediaPlayer.Helpers"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch"
+    Visibility="Collapsed"
+    RequestedTheme="Dark">
+
+    <Grid x:Name="RootOverlayGrid">
+        <!-- Transparent Scrim Tap-to-Dismiss Layer (Leaves background video completely as it is) -->
+        <Border
+            x:Name="ScrimBackdrop"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Margin="0,0,0,112"
+            Background="Transparent"
+            Tapped="OnScrimTapped"
+            IsHitTestVisible="True" />
+
+        <!-- Slide-Up Video Card Queue Drawer Container (Shifted up above transport bar) -->
+        <Border
+            x:Name="DrawerContainer"
+            VerticalAlignment="Bottom"
+            HorizontalAlignment="Stretch"
+            Margin="16,0,16,132"
+            MaxWidth="1440"
+            CornerRadius="16"
+            Background="Transparent"
+            BorderBrush="{StaticResource SpecularRimBorderBrush}"
+            BorderThickness="1"
+            Translation="0,0,32">
+            <Border.Shadow>
+                <ThemeShadow />
+            </Border.Shadow>
+
+            <Grid CornerRadius="16">
+                <!-- Transparent Backing Layer (Preserves Clean Floating Glass Look) -->
+                <Border
+                    x:Name="DrawerTintOverlay"
+                    CornerRadius="16"
+                    Background="Transparent" />
+
+                <!-- Drawer Content -->
+                <Grid RowSpacing="6" Padding="4,4,4,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Top Header Strip -->
+                        <Grid Grid.Row="0" Padding="16,12,16,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Series Title & Episode Count Info (Left) -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                <Border
+                                    Width="36"
+                                    Height="36"
+                                    CornerRadius="8"
+                                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                    VerticalAlignment="Center">
+                                    <FontIcon
+                                        Glyph="&#xE714;"
+                                        FontSize="18"
+                                        Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel VerticalAlignment="Center" Spacing="1">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock
+                                            x:Name="SeriesTitleText"
+                                            Text="TV Show"
+                                            FontSize="16"
+                                            FontWeight="Bold"
+                                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                            TextTrimming="CharacterEllipsis"
+                                            MaxLines="1" />
+                                        <Border
+                                            CornerRadius="4"
+                                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            Padding="6,1"
+                                            VerticalAlignment="Center">
+                                            <TextBlock Text="EPISODES" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock
+                                        x:Name="SeriesSubtitleText"
+                                        Text="Episodes"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        TextTrimming="CharacterEllipsis"
+                                        MaxLines="1" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Season Filter ComboBox (Center) -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="16,0,16,0">
+                                <ComboBox
+                                    x:Name="SeasonFilterComboBox"
+                                    Width="160"
+                                    SelectionChanged="OnSeasonFilterSelectionChanged"
+                                    AutomationProperties.Name="Filter by Season"
+                                    ToolTipService.ToolTip="Select season"
+                                    helpers:ComboBoxHelper.FollowBackdrop="True" />
+                            </StackPanel>
+
+                            <!-- Controls & Dismiss Button (Right) -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <!-- Autoplay Next Toggle Switch -->
+                                <ToggleSwitch
+                                    x:Name="AutoplayToggle"
+                                    IsOn="True"
+                                    OnContent="Autoplay"
+                                    OffContent="Autoplay"
+                                    Toggled="OnAutoplayToggled"
+                                    Margin="0,0,4,0"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Automatically play next episode when current episode finishes" />
+
+                                <!-- Jump to Current Episode Button -->
+                                <Button
+                                    x:Name="JumpToCurrentButton"
+                                    Click="OnJumpToCurrentClicked"
+                                    Style="{StaticResource TransportIconButtonStyle}"
+                                    AutomationProperties.Name="Scroll to current playing episode"
+                                    ToolTipService.ToolTip="Scroll to current episode"
+                                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                    helpers:SpringAnimationHelper.HoverScale="1.08">
+                                    <FontIcon Glyph="&#xE895;" FontSize="15" />
+                                </Button>
+
+                                <!-- Close Overlay Button -->
+                                <Button
+                                    x:Name="CloseButton"
+                                    Click="OnCloseClicked"
+                                    Style="{StaticResource TransportIconButtonStyle}"
+                                    AutomationProperties.Name="Close episode queue"
+                                    ToolTipService.ToolTip="Close (Esc)"
+                                    helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                    helpers:SpringAnimationHelper.HoverScale="1.08">
+                                    <FontIcon Glyph="&#xE711;" FontSize="14" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Video Cards Horizontal Strip (Row 1) -->
+                        <Grid Grid.Row="1" MinHeight="196" Padding="8,4,8,8">
+                            <!-- Carousel ScrollViewer -->
+                            <ScrollViewer
+                                x:Name="CardsScrollViewer"
+                                HorizontalScrollMode="Enabled"
+                                HorizontalScrollBarVisibility="Hidden"
+                                VerticalScrollMode="Disabled"
+                                VerticalScrollBarVisibility="Disabled"
+                                ViewChanged="OnCardsScrollViewerViewChanged"
+                                PointerWheelChanged="OnCardsScrollViewerPointerWheelChanged">
+                                <StackPanel
+                                    x:Name="CardsPanel"
+                                    Orientation="Horizontal"
+                                    Spacing="12"
+                                    Padding="8,4,8,8" />
+                            </ScrollViewer>
+
+                            <!-- Left Navigation Chevron -->
+                            <Button
+                                x:Name="ScrollLeftButton"
+                                Click="OnScrollLeftClicked"
+                                AutomationProperties.Name="Previous episodes"
+                                ToolTipService.ToolTip="Previous episodes"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Width="36"
+                                Height="56"
+                                Margin="4,0,0,0"
+                                CornerRadius="8"
+                                Background="#D5181820"
+                                BorderBrush="#45FFFFFF"
+                                BorderThickness="1"
+                                Padding="0"
+                                Visibility="Collapsed"
+                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                helpers:SpringAnimationHelper.HoverScale="1.08">
+                                <FontIcon Glyph="&#xE76B;" FontSize="16" Foreground="#FFFFFF" />
+                            </Button>
+
+                            <!-- Right Navigation Chevron -->
+                            <Button
+                                x:Name="ScrollRightButton"
+                                Click="OnScrollRightClicked"
+                                AutomationProperties.Name="Next episodes"
+                                ToolTipService.ToolTip="Next episodes"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="36"
+                                Height="56"
+                                Margin="0,0,4,0"
+                                CornerRadius="8"
+                                Background="#D5181820"
+                                BorderBrush="#45FFFFFF"
+                                BorderThickness="1"
+                                Padding="0"
+                                Visibility="Collapsed"
+                                helpers:SpringAnimationHelper.EnableHoverSpring="True"
+                                helpers:SpringAnimationHelper.HoverScale="1.08">
+                                <FontIcon Glyph="&#xE76C;" FontSize="16" Foreground="#FFFFFF" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

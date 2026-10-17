@@ -589,6 +589,7 @@ public sealed partial class MainWindow : Window
     public Microsoft.UI.Xaml.Controls.MediaPlayerElement GlobalVideoPlayer { get; }
     public Microsoft.UI.Xaml.Controls.Grid FloatingVideoContainer { get; }
     public Controls.VideoHoverPreviewHost VideoHoverPreviewControl => VideoHoverPreview;
+    public Controls.TvEpisodeQueueOverlay? TvShowQueueOverlay => TvEpisodeQueueOverlay;
 
     public MainWindow()
     {
@@ -628,6 +629,18 @@ public sealed partial class MainWindow : Window
         Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
         CloseFullscreenMetadataButton.Click += (_, _) => HideMetadataOverlayGlobal();
         RootGrid.SizeChanged += RootGrid_SizeChanged;
+
+        // Display & HDR pipeline eager initialization so display capabilities and window handle are ready before any media opens
+        try { AppServices.DisplayManager.InitializeForWindow(this); } catch { }
+        try { AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged; } catch { }
+        try { AppServices.HdrPipeline.Initialize(this); } catch { }
+
+        try
+        {
+            GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
+            AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+        }
+        catch { }
 
         // Add global preview keydown for keyboard controls to intercept hotkeys before focused controls consume them
         RootGrid.PreviewKeyDown += OnMainWindowKeyDown;
@@ -706,22 +719,6 @@ public sealed partial class MainWindow : Window
 
         // Initialize Navigation Service
         try { AppServices.Navigation.Initialize(RootNavigationView, ContentFrame); } catch { }
-
-        // Display & HDR pipeline
-        try { AppServices.DisplayManager.InitializeForWindow(this); } catch { }
-        try { AppServices.DisplayManager.AdvancedColorInfoChanged += OnAdvancedColorInfoChanged; } catch { }
-        try { AppServices.HdrPipeline.Initialize(this); } catch { }
-
-        // Global video player media pipeline deferred to after first frame
-        try
-        {
-            if (GlobalVideoPlayer != null && GlobalVideoPlayer.MediaPlayer == null)
-            {
-                GlobalVideoPlayer.SetMediaPlayer(AppServices.PlaybackViewModel.Session.MediaPlayer);
-                AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
-            }
-        }
-        catch { }
 
         // Visual animations deferred to idle priority
         DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
@@ -993,8 +990,19 @@ public sealed partial class MainWindow : Window
         TransportControls.MuteToggled += (_, _) => ToggleMute();
         TransportControls.QueueRequested += (_, _) =>
         {
-            _queueFlyout ??= CreateQueueFlyout();
-            _queueFlyout.ShowAt(TransportControls.QueueButtonControl);
+            if (_playback.CurrentTrack is MediaItem track && track.IsVideo && (track.IsSeries || track.SeasonNumber > 0 || !string.IsNullOrWhiteSpace(track.SeriesTitle) || Helpers.TvShowHelper.ExtractTvEpisodeInfo(track) != null))
+            {
+                TvEpisodeQueueOverlay?.Toggle();
+            }
+            else
+            {
+                _queueFlyout ??= CreateQueueFlyout();
+                _queueFlyout.ShowAt(TransportControls.QueueButtonControl);
+            }
+        };
+        TransportControls.TvEpisodeQueueRequested += (_, _) =>
+        {
+            TvEpisodeQueueOverlay?.Toggle();
         };
         TransportControls.PipRequested += (_, _) => TogglePipMode();
         TransportControls.FullscreenRequested += (_, _) => OnFullscreenRequested();
@@ -1210,6 +1218,11 @@ public sealed partial class MainWindow : Window
                     _positionTimer.Stop();
                     if (PlaybackInfoBadge != null) PlaybackInfoBadge.Visibility = Visibility.Collapsed;
                 }
+                if (AppServices.Settings.Current.BackdropType == AppThemeBackdrop.CinematicAdaptive)
+                {
+                    UpdateRootGridBackground();
+                    TransportControls?.RefreshTheme();
+                }
                 return;
             }
 
@@ -1237,6 +1250,11 @@ public sealed partial class MainWindow : Window
                 || e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio))
             {
                 UpdateLayoutForVideoMode();
+                if (AppServices.Settings.Current.BackdropType == AppThemeBackdrop.CinematicAdaptive)
+                {
+                    UpdateRootGridBackground();
+                    TransportControls?.RefreshTheme();
+                }
             }
         }
         catch (Exception ex)
@@ -2545,6 +2563,7 @@ public sealed partial class MainWindow : Window
         VideoHoverPreview?.ClosePreview();
         if (e.SourcePageType != typeof(Pages.VideoPage))
         {
+            TvEpisodeQueueOverlay?.Hide();
             try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
         }
         if (AppServices.Settings.Current.AutoHideTransportBarInStreaming && Services.NavigationService.IsStreamingSection(e.SourcePageType))
@@ -2703,6 +2722,13 @@ public sealed partial class MainWindow : Window
                 ThemeHelper.ApplyBackdropTheme(currentBackdrop, currentTheme);
             }
 
+            if (currentBackdrop == AppThemeBackdrop.CinematicAdaptive)
+            {
+                UpdateRootGridBackground();
+                UpdateNavigationPaneTheming();
+                TransportControls?.RefreshTheme();
+            }
+
             if (ContentFrame.Content is FrameworkElement page)
             {
                 ThemeHelper.ApplyTextControlFocusedBrushes(ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor));
@@ -2711,6 +2737,7 @@ public sealed partial class MainWindow : Window
                     try
                     {
                         Helpers.ComboBoxHelper.ApplyBackdropToVisualTree(page);
+                        Helpers.AccessibilityHelper.ApplyToPage(page, AppServices.Settings.Current);
                     }
                     catch { }
                 });
@@ -3221,11 +3248,8 @@ public sealed partial class MainWindow : Window
         {
             if (AppWindow != null && AppWindow.TitleBar != null)
             {
+                AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
                 AppWindow.TitleBar.PreferredHeightOption = isPip ? TitleBarHeightOption.Standard : TitleBarHeightOption.Tall;
-                if (!isPip)
-                {
-                    AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-                }
             }
         }
         catch { }
@@ -3263,6 +3287,7 @@ public sealed partial class MainWindow : Window
             SaveAndClearRowDefinitions();
             if (MiniPlayerGrid != null)
             {
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(MiniPlayerGrid, 500);
                 MiniPlayerGrid.Visibility = Visibility.Visible;
                 MiniPlayerGrid.IsHitTestVisible = true;
             }
@@ -3273,6 +3298,7 @@ public sealed partial class MainWindow : Window
             }
 
             UpdateMiniPlayer();
+            SyncMiniPlayerCaptionButtons();
             ShowMiniPlayerControls();
             _miniPlayerInteractionTimer?.Start();
         }
@@ -3299,6 +3325,18 @@ public sealed partial class MainWindow : Window
                 MiniControlsDimmer.IsHitTestVisible = false;
             }
             try { MiniPositionSlider?.ReleasePointerCaptures(); } catch { }
+
+            if (AppWindowTitleBar.IsCustomizationSupported() && AppWindow?.TitleBar != null)
+            {
+                var titleBar = AppWindow.TitleBar;
+                titleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+                titleBar.ButtonForegroundColor = null;
+                titleBar.ButtonHoverForegroundColor = null;
+                titleBar.ButtonPressedForegroundColor = null;
+                titleBar.ButtonInactiveForegroundColor = null;
+                titleBar.ButtonHoverBackgroundColor = null;
+                titleBar.ButtonPressedBackgroundColor = null;
+            }
 
             RestoreRowDefinitions();
 
@@ -3469,6 +3507,9 @@ public sealed partial class MainWindow : Window
                 _videoControlsTimer.Stop();
                 _videoControlsTimer.Start();
                 TryRunHdrPipelineOnFullscreenPlayer();
+                ThemeHelper.ApplyFullscreenSpecularTheming(true);
+                ApplyFullscreenSpecularOverlays(true);
+                TransportControls?.RefreshTheme();
             }
             else
             {
@@ -3527,6 +3568,9 @@ public sealed partial class MainWindow : Window
                     }
 
                     UpdateRootGridBackground();
+                    ThemeHelper.ApplyFullscreenSpecularTheming(false);
+                    ApplyFullscreenSpecularOverlays(false);
+                    TransportControls?.RefreshTheme();
                 }
 
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
@@ -3566,19 +3610,11 @@ public sealed partial class MainWindow : Window
                     Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
                 }
                 TransportControls?.SetMiniVideoPlayer(null);
-                if (GlobalVideoPlayer != null)
-                {
-                    try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
-                }
                 SetFullScreenMode(false);
                 return;
             }
 
             TransportControls?.SetMiniVideoPlayer(null);
-            if (GlobalVideoPlayer != null)
-            {
-                try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
-            }
             if (FloatingVideoContainer != null)
             {
                 FloatingVideoContainer.Visibility = Visibility.Collapsed;
@@ -3783,6 +3819,7 @@ public sealed partial class MainWindow : Window
 
     private void ExitVideoPlayback()
     {
+        TvEpisodeQueueOverlay?.Hide();
         if (ContentFrame?.Content is VideoPage)
         {
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
@@ -3813,6 +3850,7 @@ public sealed partial class MainWindow : Window
 
     private void OnVideoBackButtonClick(object sender, RoutedEventArgs e)
     {
+        TvEpisodeQueueOverlay?.Hide();
         if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
         {
             SetFullScreenMode(false);
@@ -3845,6 +3883,12 @@ public sealed partial class MainWindow : Window
         {
             Microsoft.UI.Xaml.Controls.AnimatedIcon.SetState(FullscreenBackAnimatedIcon, "PointerOver");
         }
+        if (FullscreenBackButton != null)
+        {
+            FullscreenBackButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 255, 255, 255));
+            FullscreenBackButton.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            FullscreenBackButton.BorderThickness = new Thickness(1);
+        }
     }
 
     private void OnFullscreenBackButtonPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -3853,6 +3897,12 @@ public sealed partial class MainWindow : Window
         if (FullscreenBackAnimatedIcon != null)
         {
             Microsoft.UI.Xaml.Controls.AnimatedIcon.SetState(FullscreenBackAnimatedIcon, "Normal");
+        }
+        if (FullscreenBackButton != null)
+        {
+            FullscreenBackButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            FullscreenBackButton.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            FullscreenBackButton.BorderThickness = new Thickness(0);
         }
     }
 
@@ -4683,10 +4733,18 @@ public sealed partial class MainWindow : Window
         _miniPlayerInteractionTimer?.Stop();
     }
 
+    private void OnMiniPlayerTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        ShowMiniPlayerControls();
+        _miniPlayerInteractionTimer?.Stop();
+        _miniPlayerInteractionTimer?.Start();
+    }
+
     private void ShowMiniPlayerControls()
     {
         if (MiniOverlayControls != null)
         {
+            MiniOverlayControls.IsHitTestVisible = true;
             FadeElement(MiniOverlayControls, 1.0, 120);
         }
         if (MiniControlsDimmer != null && _playback.CurrentTrack is { IsVideo: true })
@@ -4723,6 +4781,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void OnMiniSkipBackwardClick(object sender, RoutedEventArgs e)
+    {
+        try { (sender as UIElement)?.ReleasePointerCaptures(); } catch { }
+        double newPos = Math.Max(0, _playback.PositionSeconds - 10);
+        _playback.PositionSeconds = newPos;
+        _playback.Seek(newPos);
+    }
+
+    private void OnMiniSkipForwardClick(object sender, RoutedEventArgs e)
+    {
+        try { (sender as UIElement)?.ReleasePointerCaptures(); } catch { }
+        double newPos = _playback.PositionSeconds + 10;
+        _playback.PositionSeconds = newPos;
+        _playback.Seek(newPos);
+    }
+
     private void OnMiniPreviousClick(object sender, RoutedEventArgs e)
     {
         _playback.PreviousCommand.Execute(null);
@@ -4739,6 +4813,15 @@ public sealed partial class MainWindow : Window
         UpdateMiniVolumeIcon();
     }
 
+    private void OnMiniMinimizeClick(object sender, RoutedEventArgs e)
+    {
+        try { (sender as UIElement)?.ReleasePointerCaptures(); } catch { }
+        if (_subclassHwnd != nint.Zero)
+        {
+            ShowWindow(_subclassHwnd, SW_MINIMIZE);
+        }
+    }
+
     private void OnMiniExitPipClick(object sender, RoutedEventArgs e)
     {
         try { (sender as UIElement)?.ReleasePointerCaptures(); } catch { }
@@ -4747,7 +4830,61 @@ public sealed partial class MainWindow : Window
 
     private void OnMiniCloseClick(object sender, RoutedEventArgs e)
     {
+        try { (sender as UIElement)?.ReleasePointerCaptures(); } catch { }
         AnimateWindowExitAndClose();
+    }
+
+    private void SyncMiniPlayerCaptionButtons()
+    {
+        try
+        {
+            if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.CompactOverlay)
+            {
+                return;
+            }
+
+            double scale = RootGrid?.XamlRoot?.RasterizationScale ?? 1.0;
+            if (scale <= 0) scale = 1.0;
+            double titleBarHeightDips = (AppWindow?.TitleBar != null && AppWindow.TitleBar.Height > 0)
+                ? (AppWindow.TitleBar.Height / scale)
+                : 32.0;
+
+            if (MiniHeaderButtonsPanel != null)
+            {
+                MiniHeaderButtonsPanel.Height = titleBarHeightDips;
+                MiniHeaderButtonsPanel.Margin = new Thickness(0);
+            }
+            if (MiniMinimizeButton != null)
+            {
+                MiniMinimizeButton.Height = titleBarHeightDips;
+                MiniMinimizeButton.Visibility = Visibility.Visible;
+            }
+            if (MiniExpandButton != null)
+            {
+                MiniExpandButton.Height = titleBarHeightDips;
+                MiniExpandButton.Visibility = Visibility.Visible;
+            }
+            if (MiniCloseButton != null)
+            {
+                MiniCloseButton.Height = titleBarHeightDips;
+                MiniCloseButton.Visibility = Visibility.Visible;
+            }
+
+            // Suppress native DWM button glyphs so our unified Minimize, Maximize, Close buttons render seamlessly
+            if (AppWindowTitleBar.IsCustomizationSupported() && AppWindow?.TitleBar != null)
+            {
+                var titleBar = AppWindow.TitleBar;
+                titleBar.ButtonForegroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonHoverForegroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonInactiveForegroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonHoverBackgroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonPressedBackgroundColor = Microsoft.UI.Colors.Transparent;
+                titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            }
+        }
+        catch { }
     }
 
     private void OnMiniSliderPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -4801,6 +4938,96 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    public bool IsVideoPlaybackActive => (_playback?.CurrentTrack?.IsVideo == true) || (_playback?.IsVideoPlayerActive == true);
+
+    public bool IsFullscreenVideoActive
+    {
+        get
+        {
+            if (TransportBarElement?.IsFullscreenPresentation == true) return true;
+            bool isFullscreen = (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen) ||
+                                (_expectedPresenterKind == AppWindowPresenterKind.FullScreen) ||
+                                (_isFullscreenTransitioning && _expectedPresenterKind != AppWindowPresenterKind.Overlapped);
+            bool isVideo = IsVideoPlaybackActive || _isStreamingFullScreen ||
+                           (_playback?.CurrentTrack?.IsVideo == true) ||
+                           (ContentFrame?.Content is Pages.VideoPage) ||
+                           (FullscreenVideoContainer?.Visibility == Visibility.Visible);
+            return isFullscreen && isVideo;
+        }
+    }
+
+    private void ApplyFullscreenSpecularOverlays(bool isFullscreenVideo)
+    {
+        if (isFullscreenVideo)
+        {
+            if (FullscreenSeekBackOverlay != null)
+            {
+                FullscreenSeekBackOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                FullscreenSeekBackOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                FullscreenSeekBackOverlay.BorderThickness = new Thickness(1.5);
+            }
+            if (FullscreenSeekForwardOverlay != null)
+            {
+                FullscreenSeekForwardOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                FullscreenSeekForwardOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                FullscreenSeekForwardOverlay.BorderThickness = new Thickness(1.5);
+            }
+            if (FullscreenMetadataOverlay != null)
+            {
+                FullscreenMetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                FullscreenMetadataOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                FullscreenMetadataOverlay.BorderThickness = new Thickness(1.5);
+            }
+            if (FullscreenBackButton != null)
+            {
+                FullscreenBackButton.CornerRadius = new CornerRadius(8);
+            }
+        }
+        else
+        {
+            if (FullscreenSeekBackOverlay != null)
+            {
+                FullscreenSeekBackOverlay.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(179, 26, 26, 26));
+                FullscreenSeekBackOverlay.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(51, 255, 255, 255));
+                FullscreenSeekBackOverlay.BorderThickness = new Thickness(1);
+            }
+            if (FullscreenSeekForwardOverlay != null)
+            {
+                FullscreenSeekForwardOverlay.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(179, 26, 26, 26));
+                FullscreenSeekForwardOverlay.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(51, 255, 255, 255));
+                FullscreenSeekForwardOverlay.BorderThickness = new Thickness(1);
+            }
+            if (FullscreenMetadataOverlay != null)
+            {
+                var backdrop = AppServices.Settings.Current.BackdropType;
+                var theme = ThemeHelper.GetEffectiveElementTheme();
+                FullscreenMetadataOverlay.Background = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
+                FullscreenMetadataOverlay.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
+                FullscreenMetadataOverlay.BorderThickness = new Thickness(1);
+            }
+            if (FullscreenBackButton != null)
+            {
+                FullscreenBackButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                FullscreenBackButton.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                FullscreenBackButton.BorderThickness = new Thickness(0);
+                FullscreenBackButton.CornerRadius = new CornerRadius(4);
+            }
+        }
+    }
+
+    private static bool IsStudioBackdropMatching(Microsoft.UI.Xaml.Media.SystemBackdrop? current)
+    {
+        var targetBase = AppServices.Settings?.Current?.StudioWindowBase ?? AppThemeBackdrop.Mica;
+        return targetBase switch
+        {
+            AppThemeBackdrop.Mica => current is Microsoft.UI.Xaml.Media.MicaBackdrop mb && mb.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base,
+            AppThemeBackdrop.MicaAlt => current is Microsoft.UI.Xaml.Media.MicaBackdrop mba && mba.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt,
+            AppThemeBackdrop.Acrylic => current is Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop,
+            AppThemeBackdrop.Solid => current == null,
+            _ => false
+        };
+    }
+
     public void ApplyBackdrop(AppThemeBackdrop backdropType)
     {
         try
@@ -4812,21 +5039,17 @@ public sealed partial class MainWindow : Window
             {
                 AppThemeBackdrop.Mica => SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop mb && mb.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base,
                 AppThemeBackdrop.MicaAlt => SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop mba && mba.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt,
-                AppThemeBackdrop.Acrylic => SystemBackdrop is Helpers.CustomAcrylicBackdrop,
+                AppThemeBackdrop.Acrylic => SystemBackdrop is Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop,
                 AppThemeBackdrop.Solid => SystemBackdrop == null,
+                AppThemeBackdrop.FluentSymphony => SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop ms && ms.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base,
+                AppThemeBackdrop.CinematicAdaptive => SystemBackdrop is Microsoft.UI.Xaml.Media.MicaBackdrop mca && mca.Kind == Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base,
+                AppThemeBackdrop.BackdropStudio => IsStudioBackdropMatching(SystemBackdrop),
                 _ => false
             };
 
             if (!alreadyMatches)
             {
-                SystemBackdrop = backdropType switch
-                {
-                    AppThemeBackdrop.Mica => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base },
-                    AppThemeBackdrop.MicaAlt => new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt },
-                    AppThemeBackdrop.Acrylic => new Helpers.CustomAcrylicBackdrop(),
-                    AppThemeBackdrop.Solid => null,
-                    _ => new Microsoft.UI.Xaml.Media.MicaBackdrop()
-                };
+                SystemBackdrop = ThemeHelper.CreateSystemBackdrop(backdropType);
             }
             else if (SystemBackdrop is Helpers.CustomAcrylicBackdrop cab)
             {
@@ -4889,11 +5112,18 @@ public sealed partial class MainWindow : Window
             {
                 RootGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0));
             }
+            if (ContentFrame != null) ContentFrame.Background = null;
             return;
         }
 
         var backdropType = AppServices.Settings.Current.BackdropType;
-        if (backdropType == AppThemeBackdrop.Solid)
+        var actualTheme = RootGrid?.ActualTheme ?? ElementTheme.Default;
+        bool isLight = actualTheme == ElementTheme.Light ||
+            (actualTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
+
+        // 1. RootGrid Background (window-level fill)
+        if (backdropType == AppThemeBackdrop.Solid ||
+            (backdropType == AppThemeBackdrop.BackdropStudio && AppServices.Settings.Current.StudioWindowBase == AppThemeBackdrop.Solid))
         {
             if (RootGrid != null)
             {
@@ -4905,6 +5135,49 @@ public sealed partial class MainWindow : Window
             if (RootGrid != null)
             {
                 RootGrid.Background = null;
+            }
+        }
+
+        // 2. ContentFrame Background (content area layer base)
+        if (ContentFrame != null)
+        {
+            switch (backdropType)
+            {
+                case AppThemeBackdrop.FluentSymphony:
+                    ContentFrame.Background = new SolidColorBrush(isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+                        : Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24));
+                    break;
+
+                case AppThemeBackdrop.CinematicAdaptive:
+                    if (IsVideoPlaybackActive)
+                    {
+                        ContentFrame.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 9, 9, 11));
+                    }
+                    else
+                    {
+                        ContentFrame.Background = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+                            : Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24));
+                    }
+                    break;
+
+                case AppThemeBackdrop.BackdropStudio:
+                    if (AppServices.Settings.Current.StudioCanvas == StudioCanvasStyle.SolidLayer)
+                    {
+                        ContentFrame.Background = new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+                            : Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24));
+                    }
+                    else
+                    {
+                        ContentFrame.Background = null;
+                    }
+                    break;
+
+                default:
+                    ContentFrame.Background = null;
+                    break;
             }
         }
     }
@@ -5336,12 +5609,18 @@ public sealed partial class MainWindow : Window
                 _videoControlsTimer.Stop();
                 _videoControlsTimer.Start();
                 TryRunHdrPipelineOnFullscreenPlayer();
+
+                ThemeHelper.ApplyFullscreenSpecularTheming(true);
+                ApplyFullscreenSpecularOverlays(true);
+                TransportControls?.RefreshTheme();
             }
             else
             {
                 // Streaming WebView (YouTube / Twitch) or other non-local video fullscreen
                 _isStreamingFullScreen = true;
                 ApplyStreamingFullscreenChrome(true);
+                ThemeHelper.ApplyFullscreenSpecularTheming(true);
+                ApplyFullscreenSpecularOverlays(true);
 
                 if (AppWindow?.Presenter?.Kind != AppWindowPresenterKind.FullScreen)
                 {
@@ -5443,6 +5722,9 @@ public sealed partial class MainWindow : Window
             UpdateRootGridBackground();
             ForceRefreshNavigationViewLayout();
             ApplyBackdrop(AppServices.Settings.Current.BackdropType);
+            ThemeHelper.ApplyFullscreenSpecularTheming(false);
+            ApplyFullscreenSpecularOverlays(false);
+            TransportControls?.RefreshTheme();
 
             // 6. Restore RootNavigationView and AppTitleBar prepared for smooth fade-in
             if (RootNavigationView != null)
@@ -5611,6 +5893,8 @@ public sealed partial class MainWindow : Window
     {
         switch (backdrop)
         {
+            case AppThemeBackdrop.FluentSymphony:
+            case AppThemeBackdrop.CinematicAdaptive:
             case AppThemeBackdrop.MicaAlt:
                 {
                     var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
@@ -5618,6 +5902,22 @@ public sealed partial class MainWindow : Window
                         ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
                         : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
 
+                    return new SolidColorBrush(micaAltTint);
+                }
+
+            case AppThemeBackdrop.BackdropStudio:
+                {
+                    if (AppServices.Settings.Current.StudioNavRail == StudioNavRailStyle.Solid)
+                    {
+                        var solidBg = isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 246, 246, 249)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36);
+                        return new SolidColorBrush(solidBg);
+                    }
+                    var accent = ThemeHelper.GetAccentPalette(AppServices.Settings.Current.AccentColor).Default;
+                    var micaAltTint = isLight
+                        ? ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248), accent, 0.06)
+                        : ThemeHelper.Mix(Microsoft.UI.ColorHelper.FromArgb(255, 22, 22, 24), accent, 0.13);
                     return new SolidColorBrush(micaAltTint);
                 }
 
@@ -5675,11 +5975,15 @@ public sealed partial class MainWindow : Window
             // For Mica and Mica Alt, keep transparent so the desktop material shines through natively
             Brush defaultPaneBrush = (backdrop == AppThemeBackdrop.Mica || backdrop == AppThemeBackdrop.MicaAlt)
                 ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
-                : (backdrop == AppThemeBackdrop.Solid
-                    ? new SolidColorBrush(isLight
-                        ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
-                        : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38))
-                    : new SolidColorBrush(Microsoft.UI.Colors.Transparent));
+                : (backdrop == AppThemeBackdrop.FluentSymphony ||
+                   (backdrop == AppThemeBackdrop.CinematicAdaptive && !IsVideoPlaybackActive) ||
+                   (backdrop == AppThemeBackdrop.BackdropStudio && AppServices.Settings.Current.StudioNavRail == StudioNavRailStyle.MicaAltTint)
+                    ? GetNavigationPaneOverlayBrush(AppThemeBackdrop.MicaAlt, theme, isLight)
+                    : (backdrop == AppThemeBackdrop.Solid || (backdrop == AppThemeBackdrop.BackdropStudio && AppServices.Settings.Current.StudioNavRail == StudioNavRailStyle.Solid)
+                        ? new SolidColorBrush(isLight
+                            ? Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)
+                            : Microsoft.UI.ColorHelper.FromArgb(255, 34, 34, 38))
+                        : new SolidColorBrush(Microsoft.UI.Colors.Transparent)));
 
             RootNavigationView.Resources["NavigationViewDefaultPaneBackground"] = defaultPaneBrush;
 
@@ -5697,8 +6001,13 @@ public sealed partial class MainWindow : Window
             RootNavigationView.Resources["NavigationViewSelectionIndicatorForeground"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             RootNavigationView.Resources["NavigationViewContentBackground"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
+            bool hasDistinctRail = backdrop == AppThemeBackdrop.FluentSymphony ||
+                                   backdrop == AppThemeBackdrop.Solid ||
+                                   (backdrop == AppThemeBackdrop.CinematicAdaptive && !IsVideoPlaybackActive) ||
+                                   (backdrop == AppThemeBackdrop.BackdropStudio && AppServices.Settings.Current.StudioNavRail != StudioNavRailStyle.Transparent);
+
             Brush overlayBorder = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
-            var overlayThickness = (open && isOverlay) ? new Thickness(0, 0, 1, 0) : new Thickness(0);
+            var overlayThickness = ((open && isOverlay) || hasDistinctRail) ? new Thickness(0, 0, 1, 0) : new Thickness(0);
 
             // 4. Locate and configure the underlying SplitView (RootSplitView)
             _rootSplitView ??= FindVisualChild<SplitView>(RootNavigationView);
@@ -5716,9 +6025,9 @@ public sealed partial class MainWindow : Window
                 _paneRoot ??= FindVisualChild<Grid>(_rootSplitView, "PaneRoot");
                 if (_paneRoot != null)
                 {
-                    _paneRoot.Background = (open && isOverlay) ? overlayPaneBrush : (open ? defaultPaneBrush : new SolidColorBrush(Microsoft.UI.Colors.Transparent));
+                    _paneRoot.Background = (open && isOverlay) ? overlayPaneBrush : defaultPaneBrush;
                     _paneRoot.BorderThickness = overlayThickness;
-                    _paneRoot.BorderBrush = (open && isOverlay) ? overlayBorder : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                    _paneRoot.BorderBrush = ((open && isOverlay) || hasDistinctRail) ? overlayBorder : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
                     _rootSplitView.PaneBackground = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
                 }
                 else
@@ -6034,6 +6343,10 @@ public sealed partial class MainWindow : Window
                 if (isFullScreen || isPip)
                 {
                     AppTitleBarRightPaddingColumn.Width = new GridLength(0);
+                    if (isPip)
+                    {
+                        SyncMiniPlayerCaptionButtons();
+                    }
                 }
                 else
                 {
@@ -6111,6 +6424,7 @@ public sealed partial class MainWindow : Window
             {
                 if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
                 {
+                    ApplyFullscreenSpecularOverlays(IsFullscreenVideoActive);
                     FullscreenMetadataOverlay.MaxHeight = Math.Max(100, (RootGrid?.ActualHeight ?? 600) - 160);
                     FullscreenMetadataOverlay.Visibility = Visibility.Visible;
                     var track = AppServices.PlaybackViewModel.CurrentTrack;
@@ -6172,7 +6486,7 @@ public sealed partial class MainWindow : Window
                     e.Handled = true;
                     return;
                 case Windows.System.VirtualKey.Right:
-                    SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                    SeekRelative(AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay ? 10 : AppServices.Settings.Current.SkipForwardInterval);
                     e.Handled = true;
                     return;
                 case Windows.System.VirtualKey.I:
@@ -6239,6 +6553,10 @@ public sealed partial class MainWindow : Window
                     {
                         TriggerIncrementalSeek(true);
                     }
+                    else if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+                    {
+                        SeekRelative(10);
+                    }
                     else
                     {
                         SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
@@ -6261,6 +6579,10 @@ public sealed partial class MainWindow : Window
                 if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
                 {
                     TriggerIncrementalSeek(true);
+                }
+                else if (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+                {
+                    SeekRelative(10);
                 }
                 else
                 {
@@ -6299,8 +6621,28 @@ public sealed partial class MainWindow : Window
                 NavigateForward();
                 e.Handled = true;
                 break;
+            case Windows.System.VirtualKey.Q:
+                if (TvEpisodeQueueOverlay != null)
+                {
+                    if (TvEpisodeQueueOverlay.IsOpen)
+                    {
+                        TvEpisodeQueueOverlay.Hide();
+                        e.Handled = true;
+                    }
+                    else if (_playback.CurrentTrack is { IsVideo: true })
+                    {
+                        TvEpisodeQueueOverlay.Show();
+                        e.Handled = true;
+                    }
+                }
+                break;
             case Windows.System.VirtualKey.Escape:
-                if (VideoHoverPreview != null && VideoHoverPreview.Visibility == Visibility.Visible)
+                if (TvEpisodeQueueOverlay != null && TvEpisodeQueueOverlay.IsOpen)
+                {
+                    TvEpisodeQueueOverlay.Hide();
+                    e.Handled = true;
+                }
+                else if (VideoHoverPreview != null && VideoHoverPreview.Visibility == Visibility.Visible)
                 {
                     VideoHoverPreview.ClosePreview();
                     e.Handled = true;
@@ -6386,7 +6728,7 @@ public sealed partial class MainWindow : Window
             _lastEdgeSeekTime = now;
 
             double stepSeconds = isForward
-                ? (AppServices.Settings?.Current?.SkipForwardInterval ?? 10.0)
+                ? (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay ? 10.0 : (AppServices.Settings?.Current?.SkipForwardInterval ?? 10.0))
                 : (AppServices.Settings?.Current?.SkipBackwardInterval ?? 10.0);
             double accumulatedSeconds = stepSeconds * _edgeSeekStreak;
             double seekSeconds = isForward ? stepSeconds : -stepSeconds;
@@ -7078,6 +7420,8 @@ public sealed partial class MainWindow : Window
                 FloatingVideoContainer.Clip = null;
                 Grid.SetRow(FloatingVideoContainer, 0);
                 Grid.SetRowSpan(FloatingVideoContainer, 2);
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
+                FloatingVideoContainer.IsHitTestVisible = false;
                 TransportControls?.SetMiniVideoPlayer(null);
 
                 bool isVideoInPip = _playback.CurrentTrack is { IsVideo: true } && _playback.IsVideoPlayerActive;
@@ -7125,10 +7469,6 @@ public sealed partial class MainWindow : Window
                 FloatingVideoContainer.IsHitTestVisible = false;
                 Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(FloatingVideoContainer, 10);
                 TransportControls?.SetMiniVideoPlayer(null);
-                if (GlobalVideoPlayer != null)
-                {
-                    try { GlobalVideoPlayer.SetMediaPlayer(null); } catch { }
-                }
                 if (FloatingVideoContainer.Visibility != Visibility.Collapsed)
                 {
                     FloatingVideoContainer.Visibility = Visibility.Collapsed;

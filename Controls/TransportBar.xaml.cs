@@ -72,6 +72,12 @@ public sealed partial class TransportBar : UserControl
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler? MuteToggled;
     public event EventHandler? QueueRequested;
+    public event EventHandler? TvEpisodeQueueRequested;
+    public event EventHandler? TvShowQueueRequested
+    {
+        add => TvEpisodeQueueRequested += value;
+        remove => TvEpisodeQueueRequested -= value;
+    }
     public event EventHandler? PipRequested;
     public event EventHandler? FullscreenRequested;
     public event EventHandler? TrackClicked;
@@ -86,16 +92,19 @@ public sealed partial class TransportBar : UserControl
         ActualThemeChanged += (_, _) =>
         {
             UpdateAcrylicBackground();
-            ApplyVolumeFlyoutTheming();
+            ApplyAllFlyoutsTheming();
+            UpdateVolumeIcon();
+            UpdateShuffleVisual();
+            UpdateRepeatVisual();
         };
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
-        ApplyVolumeFlyoutTheming();
+        ApplyAllFlyoutsTheming();
         SyncVolumeUi();
         Loaded += (_, _) =>
         {
             SyncVolumeUi();
-            ApplyVolumeFlyoutTheming();
+            ApplyAllFlyoutsTheming();
             if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
             {
                 HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
@@ -197,6 +206,7 @@ public sealed partial class TransportBar : UserControl
     }
 
     public Button QueueButtonControl => MoreButton;
+    public bool IsFullscreenPresentation => _isFullscreenPresentation;
 
     public MediaItem? CurrentTrack
     {
@@ -341,6 +351,11 @@ public sealed partial class TransportBar : UserControl
             }
             if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
             if (PipButton != null) PipButton.IsEnabled = false;
+            if (TvEpisodeQueueButton != null)
+            {
+                TvEpisodeQueueButton.IsEnabled = false;
+                TvEpisodeQueueButton.Visibility = Visibility.Collapsed;
+            }
             if (SubtitlesButton != null)
             {
                 SubtitlesButton.IsEnabled = false;
@@ -457,6 +472,20 @@ public sealed partial class TransportBar : UserControl
                 AudioButton.IsEnabled = false;
             }
             if (FullscreenButton != null) FullscreenButton.IsEnabled = false;
+        }
+
+        bool isTvShow = isVideo && (
+            CurrentTrack.IsSeries ||
+            CurrentTrack.SeasonNumber > 0 ||
+            !string.IsNullOrWhiteSpace(CurrentTrack.SeriesTitle) ||
+            Helpers.TvShowHelper.ExtractTvEpisodeInfo(CurrentTrack) != null ||
+            (AppServices.PlaybackViewModel?.Queue?.Count > 1 && AppServices.PlaybackViewModel.Queue.Any(t => t.IsSeries || !string.IsNullOrWhiteSpace(t.SeriesTitle)))
+        );
+
+        if (TvEpisodeQueueButton != null)
+        {
+            TvEpisodeQueueButton.Visibility = isTvShow ? Visibility.Visible : Visibility.Collapsed;
+            TvEpisodeQueueButton.IsEnabled = isTvShow;
         }
 
         UpdateAcrylicBackground();
@@ -604,6 +633,8 @@ public sealed partial class TransportBar : UserControl
         }
     }
     private void OnQueueClick(object sender, RoutedEventArgs e) => QueueRequested?.Invoke(this, EventArgs.Empty);
+    private void OnTvEpisodeQueueButtonClick(object sender, RoutedEventArgs e) => TvEpisodeQueueRequested?.Invoke(this, EventArgs.Empty);
+    private void OnTvShowQueueButtonClick(object sender, RoutedEventArgs e) => TvEpisodeQueueRequested?.Invoke(this, EventArgs.Empty);
     private void OnPipClick(object sender, RoutedEventArgs e) => PipRequested?.Invoke(this, EventArgs.Empty);
     private void OnFullscreenClick(object sender, RoutedEventArgs e)
     {
@@ -743,8 +774,18 @@ public sealed partial class TransportBar : UserControl
         {
             if (_isFullscreenPresentation)
             {
-                BarGrid.BorderThickness = new Thickness(0);
-                BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                    (AppServices.Playback?.CurrentTrack?.IsVideo == true);
+                if (isFullscreenVideo)
+                {
+                    BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+                    BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
+                }
+                else
+                {
+                    BarGrid.BorderThickness = new Thickness(0);
+                    BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                }
             }
             else
             {
@@ -838,6 +879,11 @@ public sealed partial class TransportBar : UserControl
         UpdateAcrylicBackground();
         UpdateFullscreenFontColors(isFullscreen);
         UpdateTrackInfo();
+        ApplyAllFlyoutsTheming();
+        if (isFullscreen)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+        }
 
         if (FullscreenIcon != null)
         {
@@ -858,7 +904,7 @@ public sealed partial class TransportBar : UserControl
     {
         UpdateFullscreenFontColors(_isFullscreenPresentation);
         UpdateAcrylicBackground();
-        ApplyVolumeFlyoutTheming();
+        ApplyAllFlyoutsTheming();
         if (HoverPreviewPopup != null)
         {
             HoverPreviewPopup.RequestedTheme = RequestedTheme;
@@ -986,6 +1032,10 @@ public sealed partial class TransportBar : UserControl
             {
                 ApplyForegroundRecursively(BarGrid, false);
             }
+
+            UpdateVolumeIcon();
+            UpdateShuffleVisual();
+            UpdateRepeatVisual();
         }
     }
 
@@ -1059,66 +1109,149 @@ public sealed partial class TransportBar : UserControl
 
         if (_isFullscreenPresentation)
         {
-            // Fullscreen video presentation overlay mode: smooth vertical gradient scrim float over video
-            BarGrid.Background = new LinearGradientBrush
+            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                (AppServices.Playback?.CurrentTrack?.IsVideo == true);
+
+            if (isFullscreenVideo)
             {
-                StartPoint = new Windows.Foundation.Point(0, 0),
-                EndPoint = new Windows.Foundation.Point(0, 1),
-                GradientStops =
+                BarGrid.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
+                BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            }
+            else
+            {
+                // Fullscreen audio / non-video fallback: smooth vertical gradient scrim float over video
+                BarGrid.Background = new LinearGradientBrush
                 {
-                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
-                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
-                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
-                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
-                }
-            };
-            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            BarGrid.BorderThickness = new Thickness(0);
-        }
-        else if (AppServices.Settings.Current.AcrylicTransportBar)
-        {
-            // Normal Windowed mode: Translucent Frosted Acrylic material
-            bool isLight = ActualTheme == ElementTheme.Light;
-            BarGrid.Margin = new Thickness(0);
-            BarGrid.CornerRadius = new CornerRadius(0);
-            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
-            BarGrid.Translation = System.Numerics.Vector3.Zero;
-            try { BarGrid.Shadow = null; } catch { }
-
-            BarGrid.Background = new AcrylicBrush
-            {
-                TintColor = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
-                    : Microsoft.UI.ColorHelper.FromArgb(255, 18, 20, 26),
-                TintOpacity = isLight ? 0.30 : 0.35,
-                TintLuminosityOpacity = isLight ? 0.85 : 0.80,
-                FallbackColor = isLight
-                    ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
-                    : Microsoft.UI.ColorHelper.FromArgb(240, 24, 24, 30)
-            };
-
-            BarGrid.BorderBrush = new SolidColorBrush(isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
+                    StartPoint = new Windows.Foundation.Point(0, 0),
+                    EndPoint = new Windows.Foundation.Point(0, 1),
+                    GradientStops =
+                    {
+                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
+                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
+                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
+                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
+                    }
+                };
+                BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                BarGrid.BorderThickness = new Thickness(0);
+            }
         }
         else
         {
-            // Normal Windowed mode: Solid opaque bar matching surface theme
-            bool isLight = ActualTheme == ElementTheme.Light;
+            // Normal Windowed mode: layout defaults
+            bool isLight = ActualTheme == ElementTheme.Light ||
+                (ActualTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
             BarGrid.Margin = new Thickness(0);
             BarGrid.CornerRadius = new CornerRadius(0);
             BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
             BarGrid.Translation = System.Numerics.Vector3.Zero;
             try { BarGrid.Shadow = null; } catch { }
 
-            BarGrid.Background = new SolidColorBrush(isLight
-                ? Microsoft.UI.Colors.White
-                : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32));
+            var backdrop = AppServices.Settings.Current.BackdropType;
 
-            BarGrid.BorderBrush = new SolidColorBrush(isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
-                : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
+            if (backdrop == AppThemeBackdrop.Acrylic)
+            {
+                // When window backdrop is Acrylic, apply frosted acrylic material to the transport bar
+                ApplyInAppFrostedAcrylic(isLight);
+            }
+            else if (backdrop == AppThemeBackdrop.FluentSymphony)
+            {
+                // Fluent Symphony: Translucent Frosted Acrylic floating over Mica window foundation
+                ApplyInAppFrostedAcrylic(isLight);
+            }
+            else if (backdrop == AppThemeBackdrop.CinematicAdaptive)
+            {
+                // Cinematic Adaptive: Pitch dark glass during active video playback, frosted acrylic otherwise
+                bool isVideoPlaying = App.MainWindowInstance?.IsVideoPlaybackActive == true;
+                if (isVideoPlaying)
+                {
+                    BarGrid.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(240, 10, 10, 12));
+                    BarGrid.BorderBrush = new SolidColorBrush(isLight
+                        ? Microsoft.UI.ColorHelper.FromArgb(25, 0, 0, 0)
+                        : Microsoft.UI.ColorHelper.FromArgb(30, 255, 255, 255));
+                }
+                else
+                {
+                    ApplyInAppFrostedAcrylic(isLight);
+                }
+            }
+            else if (backdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                var studioBar = AppServices.Settings.Current.StudioTransportBar;
+                switch (studioBar)
+                {
+                    case StudioTransportBarStyle.FrostedAcrylic:
+                        ApplyInAppFrostedAcrylic(isLight);
+                        break;
+                    case StudioTransportBarStyle.Transparent:
+                        BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(AppServices.Settings.Current.StudioWindowBase, ActualTheme);
+                        break;
+                    case StudioTransportBarStyle.Solid:
+                    default:
+                        ApplySolidBar(isLight);
+                        break;
+                }
+            }
+            else if (AppServices.Settings.Current.AcrylicTransportBar)
+            {
+                // Explicit toggle in transport bar settings when window backdrop is not Acrylic:
+                // Translucent Frosted Acrylic material
+                ApplyInAppFrostedAcrylic(isLight);
+            }
+            else
+            {
+                // Default: Reflect the active window backdrop type
+                switch (backdrop)
+                {
+                    case AppThemeBackdrop.Mica:
+                    case AppThemeBackdrop.MicaAlt:
+                        // Reflect Mica / Mica Alt: seamless pass-through allowing the underlying Mica desktop
+                        // material to shine through natively with a subtle Fluent 2 elevation border
+                        BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, ActualTheme);
+                        break;
+
+                    case AppThemeBackdrop.Solid:
+                    default:
+                        // Reflect Solid: solid opaque bar matching the window surface theme
+                        ApplySolidBar(isLight);
+                        break;
+                }
+            }
         }
+    }
+
+    private void ApplyInAppFrostedAcrylic(bool isLight)
+    {
+        BarGrid.Background = new AcrylicBrush
+        {
+            AlwaysUseFallback = false,
+            TintColor = isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
+                : Microsoft.UI.ColorHelper.FromArgb(255, 18, 20, 26),
+            TintOpacity = isLight ? 0.30 : 0.35,
+            TintLuminosityOpacity = isLight ? 0.85 : 0.80,
+            FallbackColor = isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+                : Microsoft.UI.ColorHelper.FromArgb(240, 24, 24, 30)
+        };
+
+        BarGrid.BorderBrush = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
+            : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
+    }
+
+    private void ApplySolidBar(bool isLight)
+    {
+        BarGrid.Background = new SolidColorBrush(isLight
+            ? Microsoft.UI.Colors.White
+            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32));
+
+        BarGrid.BorderBrush = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
+            : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
     }
 
     public void SetArtImageSource(ImageSource source)
@@ -1181,11 +1314,64 @@ public sealed partial class TransportBar : UserControl
         MuteToggled?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnVolumeButtonRightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        MuteToggled?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
+
+    private void OnVolumeButtonPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        var pointerPoint = e.GetCurrentPoint(sender as UIElement ?? this);
+        var delta = pointerPoint.Properties.MouseWheelDelta;
+        if (delta != 0)
+        {
+            double step = delta > 0 ? 5 : -5;
+            double current = VolumeSlider != null ? VolumeSlider.Value : Volume;
+            if (IsMuted && delta > 0)
+            {
+                IsMuted = false;
+                MuteToggled?.Invoke(this, EventArgs.Empty);
+            }
+            double next = Math.Clamp(current + step, 0, 100);
+            if (VolumeSlider != null)
+            {
+                VolumeSlider.Value = next;
+            }
+            else
+            {
+                Volume = next;
+                if (next > 0 && IsMuted) IsMuted = false;
+                VolumeChanged?.Invoke(this, next);
+            }
+
+            if (next <= 0 && !IsMuted)
+            {
+                IsMuted = true;
+                MuteToggled?.Invoke(this, EventArgs.Empty);
+            }
+
+            UpdateVolumeIcon();
+            e.Handled = true;
+        }
+    }
+
     private void OnVolumeFlyoutOpening(object? sender, object? e)
     {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+
         if (sender is Flyout f && f.Content is FrameworkElement fe)
         {
-            fe.RequestedTheme = ThemeHelper.GetEffectiveElementTheme();
+            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true;
+            fe.RequestedTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
+        }
+        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
         }
         ApplyVolumeFlyoutTheming();
         SyncVolumeUi();
@@ -1217,8 +1403,48 @@ public sealed partial class TransportBar : UserControl
         return null;
     }
 
+    public static bool IsVolumeFlyout(FlyoutBase? flyout)
+    {
+        if (flyout == null) return false;
+        if (flyout is Flyout fl && fl.Content is FrameworkElement fe && fe.Name == "VolumeFlyoutContentGrid") return true;
+        if (App.MainWindowInstance?.TransportBarElement?.VolumeFlyout == flyout) return true;
+        return false;
+    }
+
+    public static bool IsRootMenuPresenter(MenuFlyoutPresenter? presenter)
+    {
+        if (presenter == null) return false;
+        var bar = App.MainWindowInstance?.TransportBarElement;
+        if (bar != null)
+        {
+            try
+            {
+                foreach (var item in presenter.Items)
+                {
+                    if (item is MenuFlyoutItemBase mfib)
+                    {
+                        if (bar.MoreMenuFlyout?.Items.Contains(mfib) == true) return true;
+                        if (bar.AudioMenuFlyout?.Items.Contains(mfib) == true) return true;
+                        if (bar.SubtitlesMenuFlyout?.Items.Contains(mfib) == true) return true;
+                    }
+                }
+            }
+            catch { }
+
+            var items = FindVisualChildren<MenuFlyoutItemBase>(presenter);
+            foreach (var item in items)
+            {
+                if (bar.MoreMenuFlyout?.Items.Contains(item) == true) return true;
+                if (bar.AudioMenuFlyout?.Items.Contains(item) == true) return true;
+                if (bar.SubtitlesMenuFlyout?.Items.Contains(item) == true) return true;
+            }
+        }
+        return false;
+    }
+
     public void ApplyVolumeFlyoutTheming()
     {
+        UpdateVolumeIcon();
         if (VolumeFlyout == null) return;
 
         // Re-apply the system backdrop to the volume flyout on every theme/backdrop change
@@ -1228,17 +1454,17 @@ public sealed partial class TransportBar : UserControl
         ApplyVolumeFlyoutPresenterInstanceTheming();
     }
 
-    private void ApplyVolumeFlyoutPresenterInstanceTheming()
+    public void ApplyVolumeFlyoutPresenterInstanceTheming()
     {
         if (VolumeFlyout == null) return;
 
-        var backdrop = AppServices.Settings.Current.BackdropType;
-        var effectiveTheme = ThemeHelper.GetEffectiveElementTheme();
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        var effectiveTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
+        var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
 
-        // Use the centralized helper — tailored AcrylicBrush recipes for Mica (Mica sub visuals),
-        // MicaAlt, and Acrylic, and solid fill for Solid, consistent across all flyouts in the app.
-        Brush bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
-        Brush borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
+        Brush bgBrush = ThemeHelper.GetVolumeFlyoutBackground(backdrop, effectiveTheme, isFullscreenVideo);
+        Brush borderBrush = ThemeHelper.GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, isFullscreenVideo);
+        var borderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
 
         try
         {
@@ -1268,7 +1494,7 @@ public sealed partial class TransportBar : UserControl
             style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(12, 8, 12, 8)));
             style.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, bgBrush));
             style.Setters.Add(new Setter(FlyoutPresenter.BorderBrushProperty, borderBrush));
-            style.Setters.Add(new Setter(FlyoutPresenter.BorderThicknessProperty, new Thickness(1)));
+            style.Setters.Add(new Setter(FlyoutPresenter.BorderThicknessProperty, borderThickness));
             style.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
             style.Setters.Add(new Setter(FlyoutPresenter.MinHeightProperty, 48.0));
             style.Setters.Add(new Setter(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
@@ -1307,16 +1533,293 @@ public sealed partial class TransportBar : UserControl
 
             if (presenter != null)
             {
-                presenter.RequestedTheme = effectiveTheme;
-                presenter.Background = bgBrush;
-                presenter.BorderBrush = borderBrush;
-                presenter.CornerRadius = new CornerRadius(8);
-                presenter.BorderThickness = new Thickness(1);
+                if (isFullscreenVideo)
+                {
+                    ThemeHelper.StyleFullscreenPresenter(presenter, bgBrush, borderBrush);
+                }
+                else
+                {
+                    presenter.RequestedTheme = effectiveTheme;
+                    presenter.Background = bgBrush;
+                    presenter.BorderBrush = borderBrush;
+                    presenter.CornerRadius = new CornerRadius(8);
+                    presenter.BorderThickness = borderThickness;
+                    var borders = FindVisualChildren<Border>(presenter);
+                    foreach (var b in borders)
+                    {
+                        b.Background = bgBrush;
+                        b.BorderBrush = borderBrush;
+                        b.BorderThickness = borderThickness;
+                        b.CornerRadius = new CornerRadius(8);
+                    }
+                }
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[ApplyVolumeFlyoutTheming] Presenter direct update failed: {ex.Message}");
+        }
+    }
+
+    public void ApplyAllFlyoutsTheming()
+    {
+        ApplyVolumeFlyoutTheming();
+        ApplyMenuFlyoutPresenterTheming(MoreMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+    }
+
+    public void ApplyMenuFlyoutPresenterTheming(MenuFlyout? mf)
+    {
+        if (mf == null) return;
+
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        var backdrop = AppServices.Settings.Current.BackdropType;
+        var effectiveTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
+
+        Brush bgBrush = isFullscreenVideo 
+            ? ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush() 
+            : ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+        Brush borderBrush = isFullscreenVideo 
+            ? ThemeHelper.CreateFullscreenSpecularBorderBrush() 
+            : ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
+        var borderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
+
+        try
+        {
+            mf.ShouldConstrainToRootBounds = isFullscreenVideo;
+        }
+        catch { }
+
+        try
+        {
+            this.Resources["MenuFlyoutPresenterBackground"] = bgBrush;
+            this.Resources["MenuFlyoutPresenterBorderBrush"] = borderBrush;
+            this.Resources["SurfaceStrokeColorFlyoutBrush"] = borderBrush;
+        }
+        catch { }
+
+        try
+        {
+            if (Application.Current != null)
+            {
+                Application.Current.Resources["MenuFlyoutPresenterBackground"] = bgBrush;
+                Application.Current.Resources["MenuFlyoutPresenterBorderBrush"] = borderBrush;
+                Application.Current.Resources["SurfaceStrokeColorFlyoutBrush"] = borderBrush;
+                if (isFullscreenVideo)
+                {
+                    Application.Current.Resources["MenuFlyoutSystemBackdrop"] = null;
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            var style = new Style(typeof(MenuFlyoutPresenter));
+            if (Application.Current?.Resources.TryGetValue("CinematicMenuFlyoutPresenterStyle", out var defStyle) == true && defStyle is Style baseStyle)
+            {
+                style.BasedOn = baseStyle;
+            }
+            style.Setters.Add(new Setter(MenuFlyoutPresenter.RequestedThemeProperty, effectiveTheme));
+            style.Setters.Add(new Setter(MenuFlyoutPresenter.BackgroundProperty, bgBrush));
+            style.Setters.Add(new Setter(MenuFlyoutPresenter.BorderBrushProperty, borderBrush));
+            style.Setters.Add(new Setter(MenuFlyoutPresenter.BorderThicknessProperty, borderThickness));
+            style.Setters.Add(new Setter(MenuFlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
+            if (isFullscreenVideo)
+            {
+                style.Setters.Add(new Setter(MenuFlyoutPresenter.SystemBackdropProperty, null));
+            }
+            mf.MenuFlyoutPresenterStyle = style;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ApplyMenuFlyoutPresenterTheming] Style update failed: {ex.Message}");
+        }
+
+        TraverseAndStyleMenuFlyout(mf);
+        UpdateOpenFlyoutPresenters(bgBrush, borderBrush, borderThickness, effectiveTheme);
+    }
+
+    private void TraverseAndStyleMenuFlyout(MenuFlyout? mf)
+    {
+        if (mf == null) return;
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        if (!isFullscreenVideo) return;
+
+        var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+        var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+
+        void StyleItems(System.Collections.Generic.IList<MenuFlyoutItemBase> items)
+        {
+            foreach (var item in items)
+            {
+                if (item is FrameworkElement fe)
+                {
+                    DependencyObject? curr = fe;
+                    while (curr != null)
+                    {
+                        if (curr is MenuFlyoutPresenter mfp)
+                        {
+                            ThemeHelper.StyleFullscreenPresenter(mfp, bgBrush, borderBrush);
+                            break;
+                        }
+                        curr = VisualTreeHelper.GetParent(curr);
+                    }
+                }
+                if (item is MenuFlyoutSubItem sub)
+                {
+                    StyleItems(sub.Items);
+                }
+            }
+        }
+
+        StyleItems(mf.Items);
+    }
+
+    private void UpdateOpenFlyoutPresenters(Brush bgBrush, Brush borderBrush, Thickness borderThickness, ElementTheme effectiveTheme)
+    {
+        try
+        {
+            var xamlRoots = new System.Collections.Generic.HashSet<XamlRoot>();
+            if (this.XamlRoot is { } xr0) xamlRoots.Add(xr0);
+            if (App.MainWindowContent?.XamlRoot is { } xr1) xamlRoots.Add(xr1);
+            if (App.MainWindowInstance?.Content?.XamlRoot is { } xr2) xamlRoots.Add(xr2);
+            if (App.MainWindowInstance?.TransportBarElement?.XamlRoot is { } xr3) xamlRoots.Add(xr3);
+
+            FlyoutHelper.CollectActiveXamlRoots(xamlRoots);
+            bool isFullscreen = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+            if (isFullscreen)
+            {
+                FlyoutHelper.StyleAllActiveFlyoutPresenters(bgBrush, borderBrush);
+            }
+
+            foreach (var xr in xamlRoots)
+            {
+                var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                if (openPopups == null) continue;
+                foreach (var p in openPopups)
+                {
+                    if (p == null || !p.IsOpen) continue;
+                    p.RequestedTheme = effectiveTheme;
+                    if (p.Child is FrameworkElement childFe)
+                    {
+                        childFe.RequestedTheme = effectiveTheme;
+                    }
+
+                    if (p.Child is MenuFlyoutPresenter mfp)
+                    {
+                        ApplyPresenterProperties(mfp, bgBrush, borderBrush, borderThickness, effectiveTheme);
+                    }
+                    else if (p.Child is FlyoutPresenter fp)
+                    {
+                        ApplyPresenterProperties(fp, bgBrush, borderBrush, borderThickness, effectiveTheme);
+                    }
+                    else if (p.Child is Border b)
+                    {
+                        if (effectiveTheme == ElementTheme.Dark && (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true))
+                        {
+                            b.Background = bgBrush;
+                            b.BorderBrush = borderBrush;
+                            b.BorderThickness = borderThickness;
+                            b.CornerRadius = new CornerRadius(8);
+                        }
+                    }
+                    else if (p.Child != null)
+                    {
+                        var controls = FindVisualChildren<Control>(p.Child);
+                        foreach (var c in controls)
+                        {
+                            if (c is MenuFlyoutPresenter or FlyoutPresenter)
+                            {
+                                ApplyPresenterProperties(c, bgBrush, borderBrush, borderThickness, effectiveTheme);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UpdateOpenFlyoutPresenters] Error: {ex.Message}");
+        }
+    }
+
+    private static void ApplyPresenterProperties(Control presenter, Brush bgBrush, Brush borderBrush, Thickness borderThickness, ElementTheme effectiveTheme)
+    {
+        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+
+        if (isFullscreenVideo)
+        {
+            ThemeHelper.StyleFullscreenPresenter(presenter, bgBrush, borderBrush);
+            return;
+        }
+
+        presenter.RequestedTheme = effectiveTheme;
+        presenter.Background = bgBrush;
+        presenter.BorderBrush = borderBrush;
+        presenter.BorderThickness = borderThickness;
+        if (presenter is FlyoutPresenter fp) fp.CornerRadius = new CornerRadius(8);
+        else if (presenter is MenuFlyoutPresenter mfp)
+        {
+            mfp.CornerRadius = new CornerRadius(8);
+        }
+
+        try
+        {
+            var borders = FindVisualChildren<Border>(presenter);
+            foreach (var b in borders)
+            {
+                b.ClearValue(Border.BackgroundProperty);
+            }
+        }
+        catch { }
+
+        try
+        {
+            bool isFullscreen = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                                App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+            if (isFullscreen)
+            {
+                ThemeHelper.ApplyFullscreenThemeShadow(presenter);
+            }
+            else
+            {
+                if (presenter.Shadow is ThemeShadow ts)
+                {
+                    ts.Receivers.Clear();
+                    presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+                }
+                else if (presenter.Shadow == null)
+                {
+                    presenter.Shadow = new ThemeShadow();
+                    presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static System.Collections.Generic.List<T> FindVisualChildren<T>(DependencyObject? parent) where T : DependencyObject
+    {
+        var results = new System.Collections.Generic.List<T>();
+        FindVisualChildrenInternal(parent, results);
+        return results;
+    }
+
+    private static void FindVisualChildrenInternal<T>(DependencyObject? parent, System.Collections.Generic.List<T> results) where T : DependencyObject
+    {
+        if (parent == null) return;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                results.Add(match);
+            }
+            FindVisualChildrenInternal(child, results);
         }
     }
 
@@ -1355,6 +1858,7 @@ public sealed partial class TransportBar : UserControl
     public void UpdateVolumeIcon()
     {
         bool isSilenced = IsMuted || (VolumeSlider != null && VolumeSlider.Value == 0);
+        double val = VolumeSlider != null ? VolumeSlider.Value : Volume;
         string glyph;
         if (isSilenced)
         {
@@ -1362,7 +1866,6 @@ public sealed partial class TransportBar : UserControl
         }
         else
         {
-            double val = VolumeSlider != null ? VolumeSlider.Value : Volume;
             glyph = val switch
             {
                 <= 33 => "\uE992", // Volume 1
@@ -1371,23 +1874,46 @@ public sealed partial class TransportBar : UserControl
             };
         }
 
+        var criticalBrush = ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush")
+            ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77));
+        var whiteBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+        var themeBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+            ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
+
+        bool isFullscreen = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+
         if (VolumeIcon != null)
         {
             VolumeIcon.Glyph = glyph;
-            if (!_isFullscreenPresentation)
+            if (isSilenced)
             {
-                VolumeIcon.Foreground = isSilenced
-                    ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
-                    : (ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue));
+                VolumeIcon.Foreground = criticalBrush;
+            }
+            else
+            {
+                VolumeIcon.Foreground = isFullscreen ? whiteBrush : themeBrush;
             }
         }
         if (FlyoutVolumeIcon != null)
         {
             FlyoutVolumeIcon.Glyph = glyph;
-            FlyoutVolumeIcon.Foreground = isSilenced
-                ? (ThemeResourceHelper.GetThemeBrush("SystemFillColorCriticalBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 77, 77)))
-                : (ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush") ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue));
+            if (isSilenced)
+            {
+                FlyoutVolumeIcon.Foreground = criticalBrush;
+            }
+            else
+            {
+                FlyoutVolumeIcon.Foreground = isFullscreen ? whiteBrush : themeBrush;
+            }
         }
+
+        try
+        {
+            string toolTipText = isSilenced ? "Unmute" : $"Volume ({(int)val}%)";
+            if (VolumeButton != null) ToolTipService.SetToolTip(VolumeButton, toolTipText);
+            if (FlyoutVolumeButton != null) ToolTipService.SetToolTip(FlyoutVolumeButton, isSilenced ? "Unmute" : "Mute");
+        }
+        catch { }
     }
 
     private void OnSpeedClick(object sender, RoutedEventArgs e)
@@ -1642,8 +2168,67 @@ public sealed partial class TransportBar : UserControl
         catch { }
     }
 
+    private void EnsureSubmenuTransparencyListeners()
+    {
+        void AttachToSubItem(MenuFlyoutSubItem? sub)
+        {
+            if (sub == null) return;
+            sub.PointerEntered -= OnSubItemPointerEntered;
+            sub.PointerEntered += OnSubItemPointerEntered;
+            foreach (var item in sub.Items)
+            {
+                if (item is MenuFlyoutSubItem childSub)
+                {
+                    AttachToSubItem(childSub);
+                }
+            }
+        }
+
+        AttachToSubItem(MenuSpeedSubItem);
+        AttachToSubItem(MenuSleepTimerSubItem);
+        AttachToSubItem(AudioDevicesSubItem);
+        AttachToSubItem(MenuVideoSettingsSubItem);
+        AttachToSubItem(MenuAspectRatioItem);
+        AttachToSubItem(MenuZoomItem);
+    }
+
+    private void OnSubItemPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        ThemeHelper.StartFullscreenPopupWatcher();
+        ThemeHelper.ProcessFullscreenPopups();
+        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        {
+            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+        }
+    }
+
+    private void OnMoreButtonClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+    }
+
     private void OnMoreMenuOpening(object sender, object e)
     {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        if (isFullscreenVideo)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+        }
+        ApplyMenuFlyoutPresenterTheming(sender as MenuFlyout ?? MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout);
+        EnsureSubmenuTransparencyListeners();
+
         bool hasMedia = CurrentTrack != null;
         bool isVideo = hasMedia && CurrentTrack!.IsVideo;
 
@@ -1680,10 +2265,6 @@ public sealed partial class TransportBar : UserControl
             MenuVideoSettingsSubItem.IsEnabled = isVideo;
         }
 
-        if (MenuQueueItem != null)
-        {
-            MenuQueueItem.IsEnabled = hasMedia || (AppServices.PlaybackViewModel?.Queue?.Count > 0);
-        }
 
         if (isVideo)
         {
@@ -1694,13 +2275,40 @@ public sealed partial class TransportBar : UserControl
         OnAudioDevicesMenuOpening(sender, e);
         UpdateSleepTimerMenuChecks();
 
-        if (sender is MenuFlyout mf)
+        if (sender is MenuFlyout mfTarget)
         {
-            ApplyDarkThemeToMenuFlyout(mf);
+            ApplyDarkThemeToMenuFlyout(mfTarget);
+            ApplyMenuFlyoutPresenterTheming(mfTarget);
         }
-        else if (MoreButton?.Flyout is MenuFlyout bm)
+        else if (MoreButton?.Flyout is MenuFlyout bmTarget)
         {
-            ApplyDarkThemeToMenuFlyout(bm);
+            ApplyDarkThemeToMenuFlyout(bmTarget);
+            ApplyMenuFlyoutPresenterTheming(bmTarget);
+        }
+        else
+        {
+            ApplyMenuFlyoutPresenterTheming(MoreMenuFlyout);
+        }
+    }
+
+    private void OnMoreMenuOpened(object sender, object e)
+    {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+
+        var targetMf = sender as MenuFlyout ?? MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout;
+        ApplyMenuFlyoutPresenterTheming(targetMf);
+        TraverseAndStyleMenuFlyout(targetMf);
+
+        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
         }
     }
 
@@ -1832,6 +2440,21 @@ public sealed partial class TransportBar : UserControl
 
     private void OnSubtitlesMenuOpening(object sender, object e)
     {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+
+        if (SubtitlesMenuFlyout == null) return;
+
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        if (isFullscreenVideo)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+        }
+        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+
         SubtitlesMenuFlyout.Items.Clear();
 
         var playback = AppServices.PlaybackViewModel.Session;
@@ -1947,12 +2570,14 @@ public sealed partial class TransportBar : UserControl
         plus500.Click += (_, _) => playback.AdjustSubtitleDelay(0.5);
         delaySubItem.Items.Add(plus500);
 
+        delaySubItem.PointerEntered += OnSubItemPointerEntered;
         SubtitlesMenuFlyout.Items.Add(delaySubItem);
 
         var stylesSubItem = new MenuFlyoutSubItem
         {
             Text = "Subtitles styles"
         };
+        stylesSubItem.PointerEntered += OnSubItemPointerEntered;
 
         var captionThemes = WindowsCaptionHelper.GetWindowsCaptionThemes();
         foreach (var theme in captionThemes)
@@ -1985,6 +2610,20 @@ public sealed partial class TransportBar : UserControl
 
         SubtitlesMenuFlyout.Items.Add(stylesSubItem);
         ApplyDarkThemeToMenuFlyout(SubtitlesMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+    }
+
+    private void OnSubtitlesMenuOpened(object sender, object e)
+    {
+        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+        TraverseAndStyleMenuFlyout(SubtitlesMenuFlyout);
+        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+        }
     }
 
     private async Task PickAndLoadSubtitleFileAsync()
@@ -2045,6 +2684,21 @@ public sealed partial class TransportBar : UserControl
 
     private void OnAudioMenuOpening(object sender, object e)
     {
+        try
+        {
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
+        }
+        catch { }
+
+        if (AudioMenuFlyout == null) return;
+
+        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        if (isFullscreenVideo)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+        }
+        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
+
         AudioMenuFlyout.Items.Clear();
 
         var playback = AppServices.PlaybackViewModel.Session;
@@ -2117,6 +2771,20 @@ public sealed partial class TransportBar : UserControl
             AudioMenuFlyout.Items.Add(noMediaItem);
         }
         ApplyDarkThemeToMenuFlyout(AudioMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
+    }
+
+    private void OnAudioMenuOpened(object sender, object e)
+    {
+        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
+        TraverseAndStyleMenuFlyout(AudioMenuFlyout);
+        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+        }
     }
 
     private void OnProgressValueChanged(object sender, RangeBaseValueChangedEventArgs e) => OnProgressSliderValueChanged(sender, e);
@@ -2216,6 +2884,16 @@ public sealed partial class TransportBar : UserControl
         if (!HoverPreviewPopup.IsOpen)
         {
             HoverPreviewPopup.IsOpen = true;
+            if (HoverPreviewPopup.Child is Border popupBorder)
+            {
+                bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+                if (isFullscreenVideo)
+                {
+                    popupBorder.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                    popupBorder.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                    popupBorder.BorderThickness = new Thickness(1.5);
+                }
+            }
             if (HoverPreviewPopup.Child is FrameworkElement popupChild && ThemeHelper.IsAnimationEnabled)
             {
                 try
