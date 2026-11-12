@@ -5,6 +5,7 @@ using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
 using LumiereMediaPlayer.Services.Streaming;
+using Microsoft.UI.Xaml.Media;
 
 namespace LumiereMediaPlayer.ViewModels;
 
@@ -17,6 +18,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly Microsoft.UI.Xaml.DispatcherTimer? _customAccentDebounceTimer;
     private readonly EventHandler _settingsChangedHandler;
     private readonly EventHandler _advancedColorChangedHandler;
+    private readonly Action _batterySaverStatusChangedHandler;
 
     // ── Playback ───────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeOption SelectedTheme { get; set; }
@@ -38,6 +40,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // ── Video ──────────────────────────────────────────────────────
     [ObservableProperty] public partial AspectRatioOption DefaultAspectRatio { get; set; }
     [ObservableProperty] public partial bool EnableHoverVideoPreview { get; set; }
+    [ObservableProperty] public partial bool PreciseSeekThumbnails { get; set; }
+    [ObservableProperty] public partial GpuPreference SelectedGpuPreference { get; set; }
+    [ObservableProperty] public partial string GpuSummaryText { get; set; } = "Detecting graphics adapters...";
+    [ObservableProperty] public partial string IntegratedGpuOptionText { get; set; } = "Power saving (Integrated GPU)";
+    [ObservableProperty] public partial string DiscreteGpuOptionText { get; set; } = "High performance (Dedicated GPU)";
+    [ObservableProperty] public partial bool IsDualGpuDetected { get; set; }
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     [ObservableProperty] public partial HdrMode SelectedHdrMode { get; set; }
@@ -109,15 +117,34 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 && SelectedBackdrop != AppThemeBackdrop.CinematicAdaptive
                 && SelectedBackdrop != AppThemeBackdrop.BackdropStudio)
             {
-                AcrylicTransportBar = value;
+                if (AcrylicTransportBar != value)
+                {
+                    AcrylicTransportBar = value;
+                    OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+                }
             }
         }
     }
     [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
     [ObservableProperty] public partial bool UseLocationForRegion { get; set; }
     [ObservableProperty] public partial bool CreateShellShortcuts { get; set; }
+    [ObservableProperty] public partial bool IsBatterySaverActive { get; set; }
 
     // ── Controls & Interface ───────────────────────────────────────
+    public bool IsDevelopmentDevice => UpdateService.IsDevelopmentDevice;
+
+    [ObservableProperty]
+    public partial bool AutoCheckForUpdates { get; set; }
+
+    partial void OnAutoCheckForUpdatesChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AutoCheckForUpdates = value;
+            _settingsService.Save();
+        }
+    }
+
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
     [ObservableProperty] public partial OpenFileCorner SelectedOpenFilePositionCorner { get; set; }
 
@@ -226,6 +253,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         };
         _displayManager.AdvancedColorInfoChanged += _advancedColorChangedHandler;
 
+        _batterySaverStatusChangedHandler = () =>
+        {
+            App.MainDispatcher?.TryEnqueue(() =>
+            {
+                IsBatterySaverActive = ThemeHelper.IsBatterySaverActive;
+                if (App.MainWindowInstance != null)
+                {
+                    ThemeHelper.ApplyFullscreenSpecularTheming(App.MainWindowInstance.IsFullscreenVideoActive, force: true);
+                    App.MainWindowInstance.TransportBarElement?.RefreshTheme();
+                    App.MainWindowInstance.TvEpisodeQueueOverlay?.UpdateTheming();
+                }
+            });
+        };
+        ThemeHelper.BatterySaverStatusChanged += _batterySaverStatusChangedHandler;
+
         // Analyze hardware async in background
         _ = AnalyzeHardwareBackgroundAsync();
         _ = CheckWindowsHelloStatusAsync();
@@ -250,6 +292,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _isApplyingUpdateInfo = true;
         try
         {
+            if (info.IsDevelopmentDevice)
+            {
+                // On authoring machine, protect active development build
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"Authoring device build (v{info.CurrentVersion}). Latest release is v{info.LatestVersion}.";
+                return;
+            }
+
             if (info.IsUpdateAvailable)
             {
                 IsUpdateAvailable = true;
@@ -282,6 +333,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         _settingsService.SettingsChanged -= _settingsChangedHandler;
         _displayManager.AdvancedColorInfoChanged -= _advancedColorChangedHandler;
+        ThemeHelper.BatterySaverStatusChanged -= _batterySaverStatusChangedHandler;
         if (_textScaleDebounceTimer != null)
         {
             _textScaleDebounceTimer.Stop();
@@ -317,12 +369,27 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private async System.Threading.Tasks.Task AnalyzeHardwareBackgroundAsync()
     {
         var result = await HardwareDetectionService.AnalyzeHardwareAsync();
+        var gpuEnv = result.GpuEnvironment;
+
         App.MainDispatcher?.TryEnqueue(() =>
         {
             IsLocalAiSupported = result.SupportsLocalAi;
             if (result.SupportsLocalAi)
             {
                 LocalAiHardwareSuggestion = $"Hardware analysis: Compatible {(string.IsNullOrWhiteSpace(result.GpuName) ? "System RAM" : result.GpuName)} detected. Local AI inference is recommended for privacy and offline usage.";
+            }
+
+            IsDualGpuDetected = gpuEnv.HasDualGpu;
+            GpuSummaryText = gpuEnv.Summary;
+
+            if (gpuEnv.IntegratedGpu != null)
+            {
+                IntegratedGpuOptionText = $"Power saving (Integrated: {gpuEnv.IntegratedGpu.Name}{(gpuEnv.IntegratedGpu.DedicatedMemoryMB > 0 ? $" — {gpuEnv.IntegratedGpu.DedicatedMemoryMB} MB" : "")})";
+            }
+
+            if (gpuEnv.DiscreteGpu != null)
+            {
+                DiscreteGpuOptionText = $"High performance (Dedicated: {gpuEnv.DiscreteGpu.Name}{(gpuEnv.DiscreteGpu.DedicatedMemoryMB > 0 ? $" — {gpuEnv.DiscreteGpu.DedicatedMemoryMB} MB" : "")})";
             }
         });
     }
@@ -340,9 +407,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         {
             var info = await UpdateService.CheckForUpdatesAsync();
 
-            if (info.IsUpdateAvailable)
+            if (info.IsDevelopmentDevice)
             {
                 ApplyUpdateInfo(info);
+                NotifyDevelopmentDevice(info.CurrentVersion, info.LatestVersion);
+            }
+            else if (info.IsUpdateAvailable)
+            {
+                ApplyUpdateInfo(info);
+                NotifyUpdateAvailable(info);
             }
             else if (info.CheckSucceeded)
             {
@@ -386,6 +459,23 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         {
             NoUpdatesDetected?.Invoke(currentVersion);
             App.MainWindowInstance?.ShowBottomToast("No updates", string.IsNullOrEmpty(currentVersion) ? "You're on the latest version" : $"You're on the latest version (v{currentVersion})");
+        });
+    }
+
+    private void NotifyUpdateAvailable(AppUpdateInfo info)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            App.MainWindowInstance?.ShowUpdateNotification(info);
+            App.MainWindowInstance?.ShowBottomToast("Update available", $"v{info.LatestVersion} is available to install", "\uE896");
+        });
+    }
+
+    private void NotifyDevelopmentDevice(string? currentVersion, string? latestVersion)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            App.MainWindowInstance?.ShowBottomToast("Authoring Device", $"Local dev build active (Remote: v{latestVersion})", "\uE7BE");
         });
     }
 
@@ -462,6 +552,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         get => (int)DefaultAspectRatio;
         set { if (value >= 0 && DefaultAspectRatio != (AspectRatioOption)value) DefaultAspectRatio = (AspectRatioOption)value; }
+    }
+
+    public int SelectedGpuPreferenceIndex
+    {
+        get => (int)SelectedGpuPreference;
+        set { if (value >= 0 && SelectedGpuPreference != (GpuPreference)value) SelectedGpuPreference = (GpuPreference)value; }
     }
 
     public int SelectedHdrModeIndex
@@ -649,6 +745,27 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (_isSyncing) return;
         _settingsService.Current.EnableHoverVideoPreview = value;
         _settingsService.Save();
+    }
+
+    partial void OnPreciseSeekThumbnailsChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.PreciseSeekThumbnails = value;
+        _settingsService.Save();
+        if (!value)
+        {
+            AppServices.Playback?.CleanupActiveComposition();
+            Helpers.MemoryTrimHelper.TrimWorkingSetAsync(delayMs: 100, deep: true);
+        }
+    }
+
+    partial void OnSelectedGpuPreferenceChanged(GpuPreference value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.PreferredGpu = value;
+        _settingsService.Save();
+        HardwareDetectionService.ApplyGpuPreferenceToWindows(value);
+        OnPropertyChanged(nameof(SelectedGpuPreferenceIndex));
     }
 
     // HDR & Color Pipeline
@@ -859,6 +976,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsBackdropStudioSelected));
         OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
         OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
         UpdateActivePresetMatch();
     }
 
@@ -950,6 +1068,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         _settingsService.Save();
         AccessibilityHelper.Apply(_settingsService.Current);
+        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
         UpdateActivePresetMatch();
     }
@@ -973,6 +1092,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _customAccentDebounceTimer?.Start();
 
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
+        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
         UpdateActivePresetMatch();
     }
 
@@ -1353,6 +1473,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         DefaultAspectRatio = c.DefaultAspectRatio;
         EnableHoverVideoPreview = c.EnableHoverVideoPreview;
+        PreciseSeekThumbnails = c.PreciseSeekThumbnails;
+        SelectedGpuPreference = c.PreferredGpu;
+        OnPropertyChanged(nameof(SelectedGpuPreferenceIndex));
 
         SelectedHdrMode = c.HdrMode;
         AutoBoostHdrBrightness = c.AutoBoostHdrBrightness;
@@ -1384,6 +1507,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
         AcrylicTransportBar = c.AcrylicTransportBar;
+        IsBatterySaverActive = ThemeHelper.IsBatterySaverActive;
         AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;
         UseLocationForRegion = c.UseLocationForRegion;
         CreateShellShortcuts = c.CreateShellShortcuts;
@@ -1392,6 +1516,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
 
         AutomaticLibraryScan = c.AutomaticLibraryScan;
+        AutoCheckForUpdates = c.AutoCheckForUpdates;
 
         // Privacy & Security
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;

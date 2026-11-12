@@ -88,9 +88,24 @@ namespace LumiereMediaPlayer.ViewModels
         public bool HasTrailer => !string.IsNullOrEmpty(Details?.Trailer);
 
         public StreamingDetailsViewModel()
-            : this(new WatchmodeService(), AppServices.StreamingLibrary)
+            : this(ResolveDefaultWatchmodeService(), AppServices.StreamingLibrary)
         {
         }
+
+        private static WatchmodeService ResolveDefaultWatchmodeService()
+        {
+            try
+            {
+                if (App.Services?.GetService(typeof(WatchmodeService)) is WatchmodeService svc)
+                {
+                    return svc;
+                }
+            }
+            catch { }
+            return new WatchmodeService();
+        }
+
+        private long _loadRequestVersion;
 
         public StreamingDetailsViewModel(WatchmodeService watchmodeService, IStreamingLibraryService streamingLibrary)
         {
@@ -98,8 +113,9 @@ namespace LumiereMediaPlayer.ViewModels
             _streamingLibrary = streamingLibrary;
         }
 
-        public async Task LoadDetailsAsync(int watchmodeId, string region = "", string titleIdFallback = "")
+        public async Task LoadDetailsAsync(int watchmodeId, string region = "", string titleIdFallback = "", string mediaTypeHint = "")
         {
+            long reqVer = System.Threading.Interlocked.Increment(ref _loadRequestVersion);
             WatchmodeId = watchmodeId;
             TitleIdFallback = titleIdFallback;
             SelectedRegion = region;
@@ -124,10 +140,11 @@ namespace LumiereMediaPlayer.ViewModels
 
                 if (WatchmodeId > 0)
                 {
+                    bool hintIsMovie = string.Equals(mediaTypeHint, "movie", StringComparison.OrdinalIgnoreCase);
                     detailsTask = SafeFetchAsync(() => _watchmodeService.GetDetailsAsync(WatchmodeId), (WatchmodeDetails?)null);
                     castTask = SafeFetchAsync(() => _watchmodeService.GetCastCrewAsync(WatchmodeId), new List<WatchmodeCastCrew>());
-                    seasonsTask = SafeFetchAsync(() => _watchmodeService.GetSeasonsAsync(WatchmodeId), new List<WatchmodeSeason>());
-                    episodesTask = SafeFetchAsync(() => _watchmodeService.GetEpisodesAsync(WatchmodeId), new List<WatchmodeEpisode>());
+                    seasonsTask = hintIsMovie ? Task.FromResult(new List<WatchmodeSeason>()) : SafeFetchAsync(() => _watchmodeService.GetSeasonsAsync(WatchmodeId), new List<WatchmodeSeason>());
+                    episodesTask = hintIsMovie ? Task.FromResult(new List<WatchmodeEpisode>()) : SafeFetchAsync(() => _watchmodeService.GetEpisodesAsync(WatchmodeId), new List<WatchmodeEpisode>());
                     sourcesTask = SafeFetchAsync(() => _watchmodeService.GetSourcesAsync(WatchmodeId, SelectedRegion), new List<WatchmodeSource>());
                     similarTask = SafeFetchAsync(() => _watchmodeService.GetSimilarTitlesAsync(WatchmodeId), new List<WatchmodeTitle>());
                     scoresTask = SafeFetchAsync(() => _watchmodeService.GetScoresAsync(WatchmodeId), (WatchmodeScores?)null);
@@ -153,6 +170,7 @@ namespace LumiereMediaPlayer.ViewModels
                     }
 
                     var fetchedDetails = await SafeFetchAsync(() => _watchmodeService.GetDetailsAsync(TitleIdFallback), (WatchmodeDetails?)null);
+                    if (reqVer != System.Threading.Volatile.Read(ref _loadRequestVersion)) return;
                     if (fetchedDetails == null)
                     {
                         ErrorMessage = "Failed to load details.";
@@ -167,9 +185,11 @@ namespace LumiereMediaPlayer.ViewModels
                     if (Details.Id > 0)
                     {
                         WatchmodeId = Details.Id;
+                        bool isMovie = string.Equals(Details.Type, "movie", StringComparison.OrdinalIgnoreCase) ||
+                                       (string.IsNullOrEmpty(Details.Type) && string.Equals(knownMediaType, "movie", StringComparison.OrdinalIgnoreCase));
                         castTask = SafeFetchAsync(() => _watchmodeService.GetCastCrewAsync(WatchmodeId, effectiveTmdbId, Details.Type ?? knownMediaType), new List<WatchmodeCastCrew>());
-                        seasonsTask = SafeFetchAsync(() => _watchmodeService.GetSeasonsAsync(WatchmodeId), new List<WatchmodeSeason>());
-                        episodesTask = SafeFetchAsync(() => _watchmodeService.GetEpisodesAsync(WatchmodeId), new List<WatchmodeEpisode>());
+                        seasonsTask = isMovie ? Task.FromResult(new List<WatchmodeSeason>()) : SafeFetchAsync(() => _watchmodeService.GetSeasonsAsync(WatchmodeId), new List<WatchmodeSeason>());
+                        episodesTask = isMovie ? Task.FromResult(new List<WatchmodeEpisode>()) : SafeFetchAsync(() => _watchmodeService.GetEpisodesAsync(WatchmodeId), new List<WatchmodeEpisode>());
                         sourcesTask = SafeFetchAsync(() => _watchmodeService.GetSourcesAsync(TitleIdFallback, SelectedRegion, Details.Title ?? string.Empty), new List<WatchmodeSource>());
                         similarTask = SafeFetchAsync(() => _watchmodeService.GetSimilarTitlesAsync(WatchmodeId), new List<WatchmodeTitle>());
                         scoresTask = SafeFetchAsync(() => _watchmodeService.GetScoresAsync(WatchmodeId), (WatchmodeScores?)null);
@@ -193,6 +213,7 @@ namespace LumiereMediaPlayer.ViewModels
                 }
 
                 await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask, similarTask, scoresTask, releasesTask);
+                if (reqVer != System.Threading.Volatile.Read(ref _loadRequestVersion)) return;
 
                 Details = await detailsTask;
                 var rawCast = await castTask;

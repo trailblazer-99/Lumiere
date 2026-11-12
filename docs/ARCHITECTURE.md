@@ -56,7 +56,7 @@ var settings = AppServices.Settings;
 | Registration | Lifetime | Examples |
 |---|---|---|
 | `Singleton` | One instance for app lifetime | `SettingsService`, `PlaybackSession`, `HdrPipelineService` |
-| `Transient` | New instance per resolve | Page ViewModels (`HomeViewModel`, `VideoViewModel`, etc.) |
+| `Singleton` | Shared instance across app/pages | Page ViewModels (`HomeViewModel`, `VideoViewModel`, etc.) |
 
 ---
 
@@ -119,9 +119,9 @@ API keys are **never** shipped in the client. Instead:
 Lumière implements a high-fidelity video processing and HDR tone-mapping architecture directly integrated with Windows Media Foundation (MF), Direct3D 11/12, and the Desktop Window Manager (DWM).
 
 ### Hardware Acceleration & Direct MPO Presentation
-- **Direct Multi-Plane Overlay (MPO)**: The player operates in native presentation mode with `IsVideoFrameServerEnabled = false` and `RealTimePlayback = true` during HDR playback. Frames are composited directly on dedicated GPU hardware overlay planes, bypassing CPU system-memory readback and DWM composition queue latency.
+- **Direct Multi-Plane Overlay (MPO)**: The player operates in native presentation mode with `IsVideoFrameServerEnabled = false` and `RealTimePlayback = false` during HDR playback. Frames are composited directly on dedicated GPU hardware overlay planes, bypassing CPU system-memory readback while preserving Media Foundation preroll and frame queue stability.
 - **Hybrid Multi-GPU Orchestration**: An asynchronous non-blocking WMI scan inspects `Win32_VideoController` to detect hybrid graphics configurations (e.g. AMD Radeon iGPU + NVIDIA RTX/GTX dGPU). For multi-GPU environments, cross-adapter DXGI shared-surface presentation is prioritized to preserve 10-bit P010 HDR color precision across PCIe buses.
-- **Persistent Swapchain Architecture**: A single `GlobalVideoPlayer` element floats dynamically across the visual tree (docking into `VideoPage`'s `VideoPlayerHost` during library browsing and expanding into fullscreen mode), preventing tearing down or recreating native DirectX swapchains during window transitions.
+- **Direct Docking Presentation Architecture**: A single persistent `GlobalVideoPlayer` element is docked directly into `VideoPage`'s `VideoPlayerHost` at index 0 during library browsing. This avoids fragile floating coordinate tracking and guarantees native XAML layout alignment without occlusion. For fullscreen playback, `GlobalVideoPlayer` is reparented to `FloatingVideoContainer` to execute high-fidelity Composition morphing animations (`ElementCompositionPreview`), then seamlessly docked back to `VideoPlayerHost` on exit. When navigating away from `VideoPage`, it is safely transferred to `FloatingVideoContainer` and routed to `TransportControls.MiniPlayerHost`.
 
 ### Windows Media Foundation Attributes (`mfobjects.h` Compliance)
 Lumière strictly adheres to official Windows Media Foundation SDK specifications for color grading and video encoding properties:

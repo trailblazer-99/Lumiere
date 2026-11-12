@@ -39,6 +39,8 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> AvailableGenres { get; } = new() { "All" };
 
     private string _currentSearchQuery = string.Empty;
+    private System.Threading.CancellationTokenSource? _metadataCts;
+    private readonly System.Threading.SemaphoreSlim _metadataSemaphore = new(1, 1);
 
     public MusicLibraryViewModel(PlaybackViewModel playback)
     {
@@ -57,70 +59,108 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
     {
         MediaLibraryService.LibraryChanged -= _libraryChangedHandler;
         _searchVersion++;
+        try
+        {
+            _metadataCts?.Cancel();
+            _metadataCts?.Dispose();
+            _metadataCts = null;
+        }
+        catch { }
+        _metadataSemaphore.Dispose();
     }
 
     private async Task PopulateMusicMetadataAsync()
     {
-        var audioTracks = MediaLibraryService.AudioTracks;
-        bool changed = false;
-
-        foreach (var track in audioTracks)
+        System.Threading.CancellationToken token;
+        try
         {
-            if (track.IsFolder) continue;
-            if (!string.IsNullOrEmpty(track.PosterUrl)) continue;
-
-            try
-            {
-                string query = track.Title;
-                if (!string.IsNullOrEmpty(track.Artist) && track.Artist != "Unknown Artist")
-                {
-                    query += $" {track.Artist}";
-                }
-
-                var results = await _musicService.SearchTracksAsync(query, limit: 5);
-                if (results != null && results.Count > 0)
-                {
-                    var bestMatch = results.FirstOrDefault(t =>
-                        (!string.IsNullOrEmpty(t.TrackName) && t.TrackName.Contains(track.Title, StringComparison.OrdinalIgnoreCase)) ||
-                        (!string.IsNullOrEmpty(track.Title) && track.Title.Contains(t.TrackName, StringComparison.OrdinalIgnoreCase)));
-
-                    if (bestMatch == null)
-                    {
-                        bestMatch = results[0];
-                    }
-
-                    if (bestMatch != null)
-                    {
-                        string? posterUrl = bestMatch.HighResArtworkUrl;
-                        string? releaseYear = !string.IsNullOrEmpty(bestMatch.ReleaseDate) && bestMatch.ReleaseDate.Length >= 4 ? bestMatch.ReleaseDate.Substring(0, 4) : null;
-                        string? genre = bestMatch.PrimaryGenreName;
-
-                        App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
-                        {
-                            if (string.IsNullOrEmpty(track.PosterUrl) && !string.IsNullOrEmpty(posterUrl))
-                                track.PosterUrl = posterUrl;
-                            if (string.IsNullOrEmpty(track.ReleaseYear) && !string.IsNullOrEmpty(releaseYear))
-                                track.ReleaseYear = releaseYear;
-                            if (string.IsNullOrEmpty(track.Genre) && !string.IsNullOrEmpty(genre))
-                                track.Genre = genre;
-                        });
-
-                        changed = true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] Metadata query failed for '{track.Title}': {ex.Message}");
-            }
+            _metadataCts?.Cancel();
+            _metadataCts?.Dispose();
+            _metadataCts = new System.Threading.CancellationTokenSource();
+            token = _metadataCts.Token;
+        }
+        catch
+        {
+            return;
         }
 
-        if (changed)
+        if (!await _metadataSemaphore.WaitAsync(0))
         {
-            // Give enqueued dispatcher property changes a tiny bit of time to settle, then save library cache
-            await Task.Delay(500);
-            await MediaLibraryService.SaveLibraryAsync();
-            SyncTracks();
+            return;
+        }
+
+        try
+        {
+            var audioTracks = MediaLibraryService.AudioTracks;
+            bool changed = false;
+
+            foreach (var track in audioTracks)
+            {
+                if (token.IsCancellationRequested) break;
+                if (track.IsFolder) continue;
+                if (!string.IsNullOrEmpty(track.PosterUrl)) continue;
+
+                try
+                {
+                    string query = track.Title;
+                    if (!string.IsNullOrEmpty(track.Artist) && track.Artist != "Unknown Artist")
+                    {
+                        query += $" {track.Artist}";
+                    }
+
+                    var results = await _musicService.SearchTracksAsync(query, limit: 5);
+                    if (token.IsCancellationRequested) break;
+                    if (results != null && results.Count > 0)
+                    {
+                        var bestMatch = results.FirstOrDefault(t =>
+                            (!string.IsNullOrEmpty(t.TrackName) && t.TrackName.Contains(track.Title, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(track.Title) && track.Title.Contains(t.TrackName, StringComparison.OrdinalIgnoreCase)));
+
+                        if (bestMatch == null)
+                        {
+                            bestMatch = results[0];
+                        }
+
+                        if (bestMatch != null)
+                        {
+                            string? posterUrl = bestMatch.HighResArtworkUrl;
+                            string? releaseYear = !string.IsNullOrEmpty(bestMatch.ReleaseDate) && bestMatch.ReleaseDate.Length >= 4 ? bestMatch.ReleaseDate.Substring(0, 4) : null;
+                            string? genre = bestMatch.PrimaryGenreName;
+
+                            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                if (string.IsNullOrEmpty(track.PosterUrl) && !string.IsNullOrEmpty(posterUrl))
+                                    track.PosterUrl = posterUrl;
+                                if (string.IsNullOrEmpty(track.ReleaseYear) && !string.IsNullOrEmpty(releaseYear))
+                                    track.ReleaseYear = releaseYear;
+                                if (string.IsNullOrEmpty(track.Genre) && !string.IsNullOrEmpty(genre))
+                                    track.Genre = genre;
+                            });
+
+                            changed = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MusicLibraryViewModel] Metadata query failed for '{track.Title}': {ex.Message}");
+                }
+            }
+
+            if (changed && !token.IsCancellationRequested)
+            {
+                // Give enqueued dispatcher property changes a tiny bit of time to settle, then save library cache
+                await Task.Delay(500, token);
+                await MediaLibraryService.SaveLibraryAsync();
+                SyncTracks();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            try { _metadataSemaphore.Release(); } catch { }
         }
     }
 
@@ -342,23 +382,26 @@ public partial class MusicLibraryViewModel : ObservableObject, IDisposable
     {
         try
         {
-            using var file = TagLib.File.Create(path);
-            var title = !string.IsNullOrWhiteSpace(file.Tag.Title) ? file.Tag.Title : Path.GetFileNameWithoutExtension(path);
-            var artist = !string.IsNullOrWhiteSpace(file.Tag.FirstPerformer) ? file.Tag.FirstPerformer : "Unknown Artist";
-            var album = !string.IsNullOrWhiteSpace(file.Tag.Album) ? file.Tag.Album : "Unknown Album";
-
-            var item = new MediaItem
+            var item = await Task.Run(() =>
             {
-                Id = Guid.NewGuid().ToString(),
-                Title = title,
-                Artist = artist,
-                Album = album,
-                Duration = file.Properties.Duration,
-                SourcePath = path,
-                Kind = MediaKind.Audio,
-                Bitrate = (uint)file.Properties.AudioBitrate,
-                Codec = file.Properties.Description
-            };
+                using var file = TagLib.File.Create(path);
+                var title = !string.IsNullOrWhiteSpace(file.Tag.Title) ? file.Tag.Title : Path.GetFileNameWithoutExtension(path);
+                var artist = !string.IsNullOrWhiteSpace(file.Tag.FirstPerformer) ? file.Tag.FirstPerformer : "Unknown Artist";
+                var album = !string.IsNullOrWhiteSpace(file.Tag.Album) ? file.Tag.Album : "Unknown Album";
+
+                return new MediaItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Title = title,
+                    Artist = artist,
+                    Album = album,
+                    Duration = file.Properties.Duration,
+                    SourcePath = path,
+                    Kind = MediaKind.Audio,
+                    Bitrate = (uint)file.Properties.AudioBitrate,
+                    Codec = file.Properties.Description
+                };
+            });
 
             await MediaLibraryService.AddTrackAsync(item);
         }

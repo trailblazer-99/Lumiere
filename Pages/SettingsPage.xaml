@@ -36,6 +36,24 @@
     </Page.Resources>
 
     <Grid>
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="SettingsLayoutStates">
+                <VisualState x:Name="WideSettings">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="641" />
+                    </VisualState.StateTriggers>
+                </VisualState>
+                <VisualState x:Name="NarrowSettings">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="PageContent.Margin" Value="16,0,16,24" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
         <ScrollViewer x:Name="PageScrollViewer" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" Margin="0,48,0,0" BringIntoViewOnFocusChange="False">
             <StackPanel x:Name="PageContent" Margin="32,0,32,24" Spacing="24" MaxWidth="1040" HorizontalAlignment="Stretch" Opacity="1">
 
@@ -343,6 +361,24 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE7F8;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Hardware decoding GPU preference"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="{x:Bind ViewModel.GpuSummaryText, Mode=OneWay}"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" MinWidth="240" VerticalAlignment="Center" SelectedIndex="{x:Bind ViewModel.SelectedGpuPreferenceIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Auto (Windows default)"/>
+                            <ComboBoxItem Content="{x:Bind ViewModel.IntegratedGpuOptionText, Mode=OneWay}"/>
+                            <ComboBoxItem Content="{x:Bind ViewModel.DiscreteGpuOptionText, Mode=OneWay}"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE7DE;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                             <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="HDR mode"/>
@@ -404,7 +440,7 @@
                     </Grid>
                 </Border>
 
-                <Border Style="{StaticResource SettingsCardBottomStyle}">
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
@@ -415,6 +451,20 @@
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Play an elevated animated preview of a scene when hovering over a video card."/>
                         </StackPanel>
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.EnableHoverVideoPreview, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingsCardBottomStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xEB9F;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Precise seekbar thumbnails"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Decodes exact video frames when hovering over the seekbar. Keep off for instant, low-memory seek previews."/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.PreciseSeekThumbnails, Mode=TwoWay}"/>
                     </Grid>
                 </Border>
             </StackPanel>
@@ -1418,6 +1468,20 @@
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Check for updates" VerticalAlignment="Center"/>
                                 <InfoBadge Style="{StaticResource AttentionDotInfoBadgeStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" VerticalAlignment="Center"/>
+                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
+                                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="12" 
+                                        Padding="8,2" 
+                                        Margin="4,0,0,0" 
+                                        Visibility="{x:Bind ViewModel.IsDevelopmentDevice, Mode=OneWay}" 
+                                        VerticalAlignment="Center"
+                                        ToolTipService.ToolTip="Local developer source environment. Production updates are bypassed to protect active builds.">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <FontIcon Glyph="&#xE7BE;" FontSize="11" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Authoring Device" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
                                 <StackPanel Orientation="Horizontal" Spacing="4" Visibility="{x:Bind ViewModel.IsNoUpdatesAvailable, Mode=OneWay}" VerticalAlignment="Center">
                                     <FontIcon Glyph="&#xE73E;" FontSize="11" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
                                     <TextBlock Text="No Updates" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
@@ -1435,7 +1499,7 @@
                             <Button Style="{StaticResource SettingsAccentActionButtonStyle}" Visibility="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" 
                                     Command="{x:Bind ViewModel.InstallUpdateCommand}" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Visibility="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Foreground="White"/>
+                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Visibility="{x:Bind ViewModel.IsInstallingUpdate, Mode=OneWay}" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
                                     <TextBlock Text="{x:Bind ViewModel.InstallButtonText, Mode=OneWay}"/>
                                 </StackPanel>
                             </Button>
@@ -1443,6 +1507,22 @@
                     </Grid>
                 </Border>
 
+                <!-- Check for updates automatically toggle card -->
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE896;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Check for updates automatically"/>
+                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="When enabled, Lumière periodically checks for new releases in the background and notifies you when an update is available." TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.AutoCheckForUpdates, Mode=TwoWay}"/>
+                    </Grid>
+                </Border>
                 <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
@@ -1463,7 +1543,7 @@
                     </Grid>
                 </Border>
 
-                <Border Style="{StaticResource SettingsCardMiddleStyle}">
+                                <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/>

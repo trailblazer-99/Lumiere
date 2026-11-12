@@ -85,6 +85,13 @@ stages:
         projects: 'Tests/LumiereMediaPlayer.Tests/LumiereMediaPlayer.Tests.csproj'
         arguments: '-p:Platform=$(buildPlatform) -c $(buildConfiguration)'
 
+    - task: PowerShell@2
+      displayName: 'Run Sentinel Architecture & Hygiene Checks'
+      inputs:
+        targetType: 'inline'
+        script: |
+          powershell -ExecutionPolicy Bypass -File tools/MonitoringKit/AppHealthCheck.ps1 -Quick
+
     - task: CopyFiles@2
       displayName: 'Stage WinUI 3 App Artifacts'
       inputs:

@@ -59,7 +59,8 @@ jobs:
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\x64\" `
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
-          /p:AppxPackageSigningEnabled=false
+          /p:AppxPackageSigningEnabled=false `
+          /p:TreatWarningsAsErrors=true
       shell: powershell
 
     - name: Run Unit Tests
@@ -154,6 +155,16 @@ jobs:
         $utf8NoBom = New-Object System.Text.UTF8Encoding $false
         [System.IO.File]::WriteAllText("$PWD\appsettings.json", $json, $utf8NoBom)
 
+    - name: Code Format Check (Release Gate)
+      run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
+
+    - name: Run Unit Tests (Release Gate)
+      run: dotnet test Tests\LumiereMediaPlayer.Tests\LumiereMediaPlayer.Tests.csproj -p:Platform=x64 -c Release
+
+    - name: Run Codebase Health Sentinel (Release Gate)
+      shell: powershell
+      run: powershell -ExecutionPolicy Bypass -File tools\MonitoringKit\AppHealthCheck.ps1 -Quick
+
     # Dynamically update the version in the manifest and csproj using GITHUB_RUN_NUMBER
     - name: Update Manifest and Project Version
       shell: powershell
@@ -205,6 +216,7 @@ jobs:
           /p:UapAppxPackageBuildMode=SideLoadOnly `
           /p:GenerateAppinstallerFile=false `
           /p:AppxPackageSigningEnabled=false `
+          /p:TreatWarningsAsErrors=true `
           /p:Version="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
@@ -239,6 +251,7 @@ jobs:
           /p:ApplicationVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:AppxPackageVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
           /p:ApplicationDisplayVersion="1.0.1.$env:GITHUB_RUN_NUMBER" `
+          /p:TreatWarningsAsErrors=true `
           /p:AppxAutoIncrementPackageRevision=False
       shell: powershell
 
@@ -513,7 +526,11 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: deploy/*.msixbundle
+        files: |
+          deploy/*.msixbundle
+          Signing/LumiereMediaPlayer.cer
+          scripts/Install-Lumiere.ps1
+          Install.cmd
         tag_name: v1.0.1.${{ github.run_number }}
         name: Lumière Media Player v1.0.1.${{ github.run_number }}
         body: |
@@ -626,6 +643,7 @@ jobs:
         
         # 3. Copy public certificate
         Copy-Item "Signing\LumiereMediaPlayer.cer" "deploy\LumiereMediaPlayer.cer"
+        Copy-Item "scripts\Install-Lumiere.ps1" "deploy\install.ps1"
         
         # 4. Generate final index.html from template (pointing direct download link to GitHub Release URL)
         $html = Get-Content "Signing\index.html" -Raw -Encoding utf8

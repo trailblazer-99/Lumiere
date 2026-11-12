@@ -50,7 +50,7 @@ public sealed partial class SettingsPage : Page
         AppIconHelper.ApplyCurrentIcon(SettingsBrandIcon);
         AppIconHelper.RegisterBrandIcon(SettingsBrandIcon);
 
-        PopulateSubtitlesStyles();
+        _ = PopulateSubtitlesStyles();
 
         if (e.Parameter is string target)
         {
@@ -58,25 +58,33 @@ public sealed partial class SettingsPage : Page
                 target.Equals("Captions", StringComparison.OrdinalIgnoreCase) ||
                 target.Equals("Subtitles styles", StringComparison.OrdinalIgnoreCase))
             {
-                DispatcherQueue?.TryEnqueue(async () =>
+                DispatcherQueue.SafeEnqueueAsync(async () =>
                 {
-                    await Task.Delay(200);
-                    if (SubtitlesStyleCard != null)
+                    try
                     {
-                        ScrollAndHighlightCard(SubtitlesStyleCard);
+                        await Task.Delay(200);
+                        if (SubtitlesStyleCard != null)
+                        {
+                            await ScrollAndHighlightCard(SubtitlesStyleCard);
+                        }
                     }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsPage] Subtitles highlight error: {ex.Message}"); }
                 });
             }
             else if (target.Equals("Library", StringComparison.OrdinalIgnoreCase) ||
                      target.Equals("Folders", StringComparison.OrdinalIgnoreCase))
             {
-                DispatcherQueue?.TryEnqueue(async () =>
+                DispatcherQueue.SafeEnqueueAsync(async () =>
                 {
-                    await Task.Delay(200);
-                    if (LibrarySection != null)
+                    try
                     {
-                        ScrollAndHighlightCard(LibrarySection);
+                        await Task.Delay(200);
+                        if (LibrarySection != null)
+                        {
+                            await ScrollAndHighlightCard(LibrarySection);
+                        }
                     }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsPage] Library highlight error: {ex.Message}"); }
                 });
             }
         }
@@ -84,7 +92,7 @@ public sealed partial class SettingsPage : Page
 
     private bool _isPopulatingSubtitlesStyles;
 
-    private async void PopulateSubtitlesStyles()
+    private async Task PopulateSubtitlesStyles()
     {
         try
         {
@@ -114,7 +122,14 @@ public sealed partial class SettingsPage : Page
 
     private async void OnOpenWindowsCaptionsSettingsClick(object sender, RoutedEventArgs e)
     {
-        await WindowsCaptionHelper.OpenWindowsCaptionSettings();
+        try
+        {
+            await WindowsCaptionHelper.OpenWindowsCaptionSettings();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsPage] OnOpenWindowsCaptionsSettingsClick error: {ex.Message}");
+        }
     }
 
     private async void OnOpenWindowsSignInSettingsClick(object sender, RoutedEventArgs e)
@@ -126,7 +141,7 @@ public sealed partial class SettingsPage : Page
         catch { }
     }
 
-    public async void ScrollAndHighlightCard(FrameworkElement target)
+    public async Task ScrollAndHighlightCard(FrameworkElement target)
     {
         try
         {
@@ -426,7 +441,7 @@ public sealed partial class SettingsPage : Page
         if (args.SelectedItem is SettingSearchItem item)
         {
             sender.Text = item.Title;
-            NavigateToSearchItem(item);
+            _ = NavigateToSearchItem(item);
         }
     }
 
@@ -450,11 +465,11 @@ public sealed partial class SettingsPage : Page
         if (itemToNavigate != null)
         {
             sender.Text = itemToNavigate.Title;
-            NavigateToSearchItem(itemToNavigate);
+            _ = NavigateToSearchItem(itemToNavigate);
         }
     }
 
-    private async void NavigateToSearchItem(SettingSearchItem item)
+    private async Task NavigateToSearchItem(SettingSearchItem item)
     {
         try
         {
@@ -514,35 +529,40 @@ public sealed partial class SettingsPage : Page
 
     private FrameworkElement? FindCardByTitleRecursive(DependencyObject parent, string title)
     {
-        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        if (parent == null) return null;
+        try
         {
-            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
-            if (child is TextBlock tb)
+            int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
             {
-                var text = tb.Text?.Trim();
-                if (!string.IsNullOrEmpty(text) &&
-                    (string.Equals(text, title, StringComparison.OrdinalIgnoreCase) ||
-                     text.StartsWith(title, StringComparison.OrdinalIgnoreCase) ||
-                     title.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
+                var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is TextBlock tb)
                 {
-                    // Traverse upwards to find the enclosing SettingsCard Border or Expander
-                    var current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(tb);
-                    while (current != null && current != PageContent)
+                    var text = tb.Text?.Trim();
+                    if (!string.IsNullOrEmpty(text) &&
+                        (string.Equals(text, title, StringComparison.OrdinalIgnoreCase) ||
+                         text.StartsWith(title, StringComparison.OrdinalIgnoreCase) ||
+                         title.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
                     {
-                        if ((current is Border b && b != PageContent) || current is Expander)
+                        // Traverse upwards to find the enclosing SettingsCard Border or Expander
+                        var current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(tb);
+                        while (current != null && current != PageContent)
                         {
-                            return (FrameworkElement)current;
+                            if ((current is Border b && b != PageContent) || current is Expander)
+                            {
+                                return (FrameworkElement)current;
+                            }
+                            current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
                         }
-                        current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+                        return tb;
                     }
-                    return tb;
                 }
-            }
 
-            var found = FindCardByTitleRecursive(child, title);
-            if (found != null) return found;
+                var found = FindCardByTitleRecursive(child, title);
+                if (found != null) return found;
+            }
         }
+        catch { }
         return null;
     }
 

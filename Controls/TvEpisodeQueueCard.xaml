@@ -219,13 +219,13 @@
                 </Grid>
             </Border>
 
-            <!-- Metadata Info Area (Row 1) - Translucent Frosted Glass Backing -->
+            <!-- Metadata Info Area (Row 1) - Theme Adaptive Surface -->
             <Border
                 Grid.Row="1"
                 CornerRadius="0,0,9,9"
-                Background="#25000000"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderThickness="0,1,0,0"
-                BorderBrush="#15FFFFFF">
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                 <Grid Padding="10,6,10,6" VerticalAlignment="Center">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

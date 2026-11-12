@@ -130,6 +130,9 @@ public class NavigationServiceTests
         Assert.IsTrue(xaml.Contains("Tag=\"streamTwitch\"\r\n                            SelectsOnInvoked=\"False\"") ||
                       xaml.Contains("Tag=\"streamTwitch\"\n                            SelectsOnInvoked=\"False\""),
                       "streamTwitch must declare SelectsOnInvoked=False");
+        Assert.IsTrue(xaml.Contains("Tag=\"streamSports\"\r\n                            SelectsOnInvoked=\"False\"") ||
+                      xaml.Contains("Tag=\"streamSports\"\n                            SelectsOnInvoked=\"False\""),
+                      "streamSports must declare SelectsOnInvoked=False");
 
         // Verify SafeSetSelectedItem guards against null to prevent 0xc0000005 crash in Microsoft.UI.Xaml.Controls.dll
         Assert.IsTrue(cs.Contains("if (item == null)"), "SafeSetSelectedItem must guard against null to prevent native WinUI 3 crash");
@@ -279,5 +282,88 @@ public class NavigationServiceTests
             "CreateFilmographyItemTemplate must use dynamic theme resource TextFillColorPrimaryBrush for title text");
         Assert.IsTrue(sdCs.Contains("TextFillColorSecondaryBrush"),
             "CreateFilmographyItemTemplate must use dynamic theme resource TextFillColorSecondaryBrush for year text");
+    }
+    [TestMethod]
+    public void Verify_StreamingNavigation_StopsVideoPlayback()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+        {
+            dir = dir.Parent;
+        }
+        var projectRoot = dir?.FullName ?? "";
+        var mainWindowCsPath = System.IO.Path.Combine(projectRoot, "MainWindow.xaml.cs");
+        var navServiceCsPath = System.IO.Path.Combine(projectRoot, "Services", "NavigationService.cs");
+
+        var mainCs = System.IO.File.ReadAllText(mainWindowCsPath);
+        var navCs = System.IO.File.ReadAllText(navServiceCsPath);
+
+        // 1. MainWindow must implement StopActiveVideoPlayback method
+        Assert.IsTrue(mainCs.Contains("public void StopActiveVideoPlayback()"),
+            "MainWindow must implement StopActiveVideoPlayback");
+        Assert.IsTrue(mainCs.Contains("_playback?.Stop();"),
+            "StopActiveVideoPlayback must call _playback?.Stop()");
+        Assert.IsTrue(mainCs.Contains("FloatingVideoContainer.Visibility = Visibility.Collapsed;"),
+            "StopActiveVideoPlayback must collapse FloatingVideoContainer");
+
+        // 2. OnContentFrameNavigating must stop active video playback when entering streaming sections
+        Assert.IsTrue(mainCs.Contains("if (Services.NavigationService.IsStreamingSection(e.SourcePageType))") &&
+                      mainCs.Contains("StopActiveVideoPlayback();"),
+            "OnContentFrameNavigating must call StopActiveVideoPlayback when navigating to streaming");
+
+        // 3. NavigationService must stop active video playback when entering streaming sections
+        Assert.IsTrue(navCs.Contains("if (IsStreamingSection(pageType))") &&
+                      navCs.Contains("App.MainWindowInstance?.StopActiveVideoPlayback();"),
+            "NavigationService.NavigateTo must invoke StopActiveVideoPlayback when entering streaming sections");
+
+        // 4. Ensure all streaming destinations are recognized as streaming section
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingMoviesPage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingTvShowsPage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingYouTubePage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingTwitchPage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingSportsPage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingMusicPage)));
+        Assert.IsTrue(NavigationService.IsStreamingSection(typeof(StreamingDetailsPage)));
+    }
+    [TestMethod]
+    public void Verify_BackNavigation_TwitchAndSidePane_Integrity()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+        {
+            dir = dir.Parent;
+        }
+        var projectRoot = dir?.FullName ?? "";
+        var mainWindowCsPath = System.IO.Path.Combine(projectRoot, "MainWindow.xaml.cs");
+        var twitchCsPath = System.IO.Path.Combine(projectRoot, "Pages", "StreamingTwitchPage.xaml.cs");
+        var youTubeCsPath = System.IO.Path.Combine(projectRoot, "Pages", "StreamingYouTubePage.xaml.cs");
+
+        var mainCs = System.IO.File.ReadAllText(mainWindowCsPath);
+        var twitchCs = System.IO.File.ReadAllText(twitchCsPath);
+        var ytCs = System.IO.File.ReadAllText(youTubeCsPath);
+
+        // 1. Twitch and YouTube must hook CoreWebView2.HistoryChanged and trigger UpdateBackButtonState
+        Assert.IsTrue(twitchCs.Contains("CoreWebView2.HistoryChanged += OnWebViewHistoryChanged"),
+            "StreamingTwitchPage must hook HistoryChanged");
+        Assert.IsTrue(twitchCs.Contains("App.MainWindowInstance?.UpdateBackButtonState()"),
+            "StreamingTwitchPage must notify MainWindow.UpdateBackButtonState");
+        Assert.IsTrue(ytCs.Contains("CoreWebView2.HistoryChanged += OnWebViewHistoryChanged"),
+            "StreamingYouTubePage must hook HistoryChanged");
+        Assert.IsTrue(ytCs.Contains("App.MainWindowInstance?.UpdateBackButtonState()"),
+            "StreamingYouTubePage must notify MainWindow.UpdateBackButtonState");
+
+        // 2. MainWindow must implement UpdateBackButtonState method
+        Assert.IsTrue(mainCs.Contains("public void UpdateBackButtonState()"),
+            "MainWindow must expose UpdateBackButtonState");
+
+        // 3. MainWindow must preserve backstack on regular navigations and record streaming origin page
+        Assert.IsTrue(mainCs.Contains("_streamingOriginPage = ContentFrame.CurrentSourcePageType;"),
+            "MainWindow must record _streamingOriginPage when navigating into Twitch or YouTube");
+        Assert.IsFalse(mainCs.Contains("StreamingTwitchPage)\r\n            {\r\n                NavigateTo(typeof(StreamingMoviesPage));") || mainCs.Contains("StreamingTwitchPage)\n            {\n                NavigateTo(typeof(StreamingMoviesPage));"),
+            "MainWindow.NavigateBack must not hardcode redirect Twitch or YouTube to StreamingMoviesPage");
+
+        // 4. UpdateTitleBarInsets must dynamically expand left padding to OpenPaneLength when pane is open
+        Assert.IsTrue(mainCs.Contains("AppTitleBarLeftPaddingColumn.Width = new GridLength(RootNavigationView.OpenPaneLength);"),
+            "UpdateTitleBarInsets must expand AppTitleBarLeftPaddingColumn to RootNavigationView.OpenPaneLength when open to prevent clipping");
     }
 }

@@ -26,6 +26,7 @@ public class AppUpdateInfo
     public string DeviceArchitecture { get; set; } = string.Empty;
     public bool IsPackaged { get; set; }
     public string Channel { get; set; } = "Stable";
+    public bool IsDevelopmentDevice { get; set; }
 }
 
 public class UpdatePipelineHealthReport
@@ -60,6 +61,40 @@ public static class UpdateService
     private const string GitHubReleasesUrl = "https://github.com/trailblazer-99/Lumiere/releases/latest";
 
     public static AppUpdateInfo? LastCheckResult { get; set; }
+
+    /// <summary>
+    /// Detects if this machine is the authoring / development workstation where Lumiere is built.
+    /// On this device, automated update prompts and replacements are safely suppressed.
+    /// </summary>
+    public static bool IsDevelopmentDevice
+    {
+        get
+        {
+            try
+            {
+                if (Directory.Exists(@"V:\Projects\Lumiere\Services") &&
+                    File.Exists(@"V:\Projects\Lumiere\LumiereMediaPlayer.csproj"))
+                {
+                    return true;
+                }
+
+                var baseDir = AppContext.BaseDirectory;
+                if (!string.IsNullOrEmpty(baseDir))
+                {
+                    var candidate = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\..\LumiereMediaPlayer.csproj"));
+                    if (File.Exists(candidate)) return true;
+                }
+
+                if (Debugger.IsAttached) return true;
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     static UpdateService()
     {
@@ -146,7 +181,7 @@ public static class UpdateService
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var response = await _httpClient.GetAsync(AppInstallerUrl, cts.Token);
+            using var response = await _httpClient.GetAsync(AppInstallerUrl, cts.Token);
             if (response.IsSuccessStatusCode)
             {
                 string xmlContent = await response.Content.ReadAsStringAsync(cts.Token);
@@ -259,16 +294,25 @@ public static class UpdateService
             }
         }
 
-        // 5. Final Status Message
+        // 5. Final Status Message (Conforms to special handling for authoring device)
         if (result.CheckSucceeded)
         {
-            result.StatusMessage = result.IsUpdateAvailable
-                ? $"Update available: v{result.LatestVersion}"
-                : $"No Updates: Current version v{result.CurrentVersion} is up to date.";
+            if (result.IsDevelopmentDevice)
+            {
+                result.StatusMessage = $"Authoring Device: Local build (v{result.CurrentVersion}). Published release is v{result.LatestVersion}.";
+            }
+            else
+            {
+                result.StatusMessage = result.IsUpdateAvailable
+                    ? $"Update available: v{result.LatestVersion}"
+                    : $"No Updates: Current version v{result.CurrentVersion} is up to date.";
+            }
         }
         else
         {
-            result.StatusMessage = "Unable to reach update servers. Please try again later.";
+            result.StatusMessage = result.IsDevelopmentDevice
+                ? $"Authoring Device: Local build (v{result.CurrentVersion}). Unable to reach update servers."
+                : "Unable to reach update servers. Please try again later.";
         }
 
         LastCheckResult = result;
@@ -364,7 +408,7 @@ public static class UpdateService
                 sw.Restart();
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 using var req = new HttpRequestMessage(HttpMethod.Head, report.TargetBundleUri);
-                var resp = await _httpClient.SendAsync(req, cts.Token);
+                using var resp = await _httpClient.SendAsync(req, cts.Token);
                 sw.Stop();
                 report.IsBundleDownloadUriAccessible = resp.IsSuccessStatusCode ||
                                                        resp.StatusCode == System.Net.HttpStatusCode.Found ||
@@ -388,7 +432,7 @@ public static class UpdateService
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var req = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesApiUrl);
             req.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
-            var resp = await _httpClient.SendAsync(req, cts.Token);
+            using var resp = await _httpClient.SendAsync(req, cts.Token);
             sw.Stop();
             report.FallbackEndpointStatusCode = (int)resp.StatusCode;
             report.FallbackEndpointResponseMs = sw.Elapsed.TotalMilliseconds;
@@ -458,6 +502,53 @@ public static class UpdateService
         catch { }
     }
 
+    public static bool IsSafeUpdateUri(string? rawUri, out Uri? parsedUri)
+    {
+        parsedUri = null;
+        if (string.IsNullOrWhiteSpace(rawUri)) return false;
+        if (!Uri.TryCreate(rawUri.Trim(), UriKind.Absolute, out var uri)) return false;
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return false;
+        parsedUri = uri;
+        return true;
+    }
+
+    private static bool ValidateDownloadedPackageIntegrity(string filePath)
+    {
+        try
+        {
+            if (filePath.EndsWith(".appinstaller", StringComparison.OrdinalIgnoreCase))
+            {
+                var doc = XDocument.Load(filePath);
+                var root = doc.Root;
+                if (root == null || root.Name.LocalName != "AppInstaller") return false;
+                foreach (var elem in root.Elements())
+                {
+                    if (elem.Name.LocalName is "MainBundle" or "MainPackage")
+                    {
+                        var uriAttr = elem.Attribute("Uri")?.Value;
+                        return IsSafeUpdateUri(uriAttr, out _);
+                    }
+                }
+                return false;
+            }
+
+            if (filePath.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase) ||
+                filePath.EndsWith(".msix", StringComparison.OrdinalIgnoreCase))
+            {
+                using var archive = System.IO.Compression.ZipFile.OpenRead(filePath);
+                bool hasSignature = archive.Entries.Any(e => e.FullName.Equals("AppxSignature.p7x", StringComparison.OrdinalIgnoreCase));
+                bool hasBlockMap = archive.Entries.Any(e => e.FullName.Equals("AppxBlockMap.xml", StringComparison.OrdinalIgnoreCase));
+                return hasSignature && hasBlockMap;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[UpdateService] Package integrity validation failed: {ex.Message}");
+        }
+
+        return false;
+    }
+
     public static async Task<bool> InstallUpdateAsync(
         string? directDownloadUri = null,
         IProgress<double>? progress = null,
@@ -469,50 +560,100 @@ public static class UpdateService
             ? directDownloadUri
             : (!string.IsNullOrWhiteSpace(LastCheckResult?.DownloadUri) ? LastCheckResult.DownloadUri : GitHubReleasesUrl);
 
-        // If targetUri is a direct downloadable package (.msixbundle, .msix, .appinstaller)
-        bool isPackageFile = targetUri.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase) ||
-                             targetUri.EndsWith(".msix", StringComparison.OrdinalIgnoreCase) ||
-                             targetUri.EndsWith(".appinstaller", StringComparison.OrdinalIgnoreCase);
-
-        if (isPackageFile && Uri.TryCreate(targetUri, UriKind.Absolute, out var packageUri))
+        if (!IsSafeUpdateUri(targetUri, out var safeTargetUri) || safeTargetUri == null)
         {
+            Debug.WriteLine($"[UpdateService] Rejected non-HTTPS update URI: {targetUri}");
+            return false;
+        }
+
+        // If targetUri is a direct downloadable package (.msixbundle, .msix, .appinstaller)
+        string pathWithoutQuery = safeTargetUri.AbsolutePath;
+        bool isPackageFile = pathWithoutQuery.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase) ||
+                             pathWithoutQuery.EndsWith(".msix", StringComparison.OrdinalIgnoreCase) ||
+                             pathWithoutQuery.EndsWith(".appinstaller", StringComparison.OrdinalIgnoreCase);
+
+        if (isPackageFile)
+        {
+            string? tempPackagePath = null;
             try
             {
-                string downloadDir = GetUpdateDownloadDirectory();
-                string fileName = Path.GetFileName(packageUri.LocalPath);
-                if (string.IsNullOrWhiteSpace(fileName))
+                string downloadDir = Path.GetFullPath(GetUpdateDownloadDirectory());
+                Directory.CreateDirectory(downloadDir);
+                string fileName = Path.GetFileName(safeTargetUri.LocalPath);
+                foreach (char c in Path.GetInvalidFileNameChars())
+                {
+                    fileName = fileName.Replace(c, '_');
+                }
+                if (string.IsNullOrWhiteSpace(fileName) || fileName.Contains(".."))
                 {
                     fileName = "LumiereUpdate.msixbundle";
                 }
-                string localPackagePath = Path.Combine(downloadDir, fileName);
+                string localPackagePath = Path.GetFullPath(Path.Combine(downloadDir, fileName));
+                if (!localPackagePath.StartsWith(downloadDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(Path.GetDirectoryName(localPackagePath), downloadDir.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
 
-                using (var response = await _httpClient.GetAsync(packageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+                tempPackagePath = localPackagePath + ".tmp";
+
+                using (var response = await _httpClient.GetAsync(safeTargetUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
                 {
                     response.EnsureSuccessStatusCode();
 
                     long? totalBytes = response.Content.Headers.ContentLength;
                     using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                    using var fileStream = new FileStream(localPackagePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-
-                    byte[] buffer = new byte[81920];
-                    long totalRead = 0;
-                    int bytesRead;
-
-                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
+                    using (var fileStream = new FileStream(tempPackagePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
                     {
-                        await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
-                        totalRead += bytesRead;
-                        if (totalBytes.HasValue && totalBytes.Value > 0)
+                        byte[] buffer = new byte[81920];
+                        long totalRead = 0;
+                        int bytesRead;
+
+                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
                         {
-                            double pct = Math.Min(100.0, (double)totalRead / totalBytes.Value * 100.0);
-                            progress?.Report(pct);
+                            await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
+                            totalRead += bytesRead;
+                            if (totalBytes.HasValue && totalBytes.Value > 0)
+                            {
+                                double pct = Math.Min(100.0, (double)totalRead / totalBytes.Value * 100.0);
+                                progress?.Report(pct);
+                            }
                         }
                     }
                 }
 
+                if (!ValidateDownloadedPackageIntegrity(tempPackagePath))
+                {
+                    Debug.WriteLine("[UpdateService] Downloaded update package failed structural/signature validation.");
+                    return false;
+                }
+
+                File.Move(tempPackagePath, localPackagePath, overwrite: true);
+                tempPackagePath = null;
                 progress?.Report(100.0);
 
-                // Launch the downloaded package file locally to invoke native Windows App Installer
+                // Tier 1: Try native WinRT PackageManager deployment with ForceApplicationShutdown
+                try
+                {
+                    var packageManager = new Windows.Management.Deployment.PackageManager();
+                    var deploymentOp = packageManager.AddPackageAsync(
+                        new Uri(localPackagePath),
+                        null,
+                        Windows.Management.Deployment.DeploymentOptions.ForceApplicationShutdown);
+
+                    var task = deploymentOp.AsTask(cancellationToken);
+                    var deployResult = await task.ConfigureAwait(false);
+                    if (deployResult != null && (deployResult.IsRegistered || deployResult.ExtendedErrorCode == null))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UpdateService] PackageManager fallback: {ex.Message}");
+                }
+
+                // Tier 2: Launch the downloaded package file locally to invoke native Windows App Installer
                 try
                 {
                     var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(localPackagePath);
@@ -546,12 +687,19 @@ public static class UpdateService
             {
                 Debug.WriteLine($"[UpdateService] In-app package download failed: {ex.Message}");
             }
+            finally
+            {
+                if (!string.IsNullOrEmpty(tempPackagePath) && File.Exists(tempPackagePath))
+                {
+                    try { File.Delete(tempPackagePath); } catch { }
+                }
+            }
         }
 
-        // Fallback: If downloading or launching the local package fails, open the release URL in the browser
+        // Fallback: If downloading or launching the local package fails, open the HTTPS release URL in the browser
         try
         {
-            return await Windows.System.Launcher.LaunchUriAsync(new Uri(targetUri));
+            return await Windows.System.Launcher.LaunchUriAsync(safeTargetUri);
         }
         catch (Exception ex)
         {

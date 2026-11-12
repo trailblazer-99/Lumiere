@@ -42,6 +42,8 @@
             <Grid Grid.Column="1" VerticalAlignment="Center">
                 <Slider
                     x:Name="ProgressSlider"
+                    helpers:SliderHelper.IsThumbVisible="False"
+                    helpers:SliderHelper.HideThumbWhenDisabled="True"
                     Maximum="100"
                     Padding="10,0,10,0"
                     IsThumbToolTipEnabled="False"
@@ -329,7 +331,7 @@
                     ToolTipService.ToolTip="Audio track">
                     <FontIcon x:Name="AudioIcon" FontSize="16" Glyph="&#xE8D6;" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="AudioMenuFlyout" Opening="OnAudioMenuOpening" Opened="OnAudioMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        <MenuFlyout x:Name="AudioMenuFlyout" Placement="Top" Opening="OnAudioMenuOpening" Opened="OnAudioMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -343,7 +345,7 @@
                     ToolTipService.ToolTip="Subtitles">
                     <FontIcon x:Name="SubtitlesIcon" FontSize="16" Glyph="&#xED1E;" />
                     <Button.Flyout>
-                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Opening="OnSubtitlesMenuOpening" Opened="OnSubtitlesMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
+                        <MenuFlyout x:Name="SubtitlesMenuFlyout" Placement="Top" Opening="OnSubtitlesMenuOpening" Opened="OnSubtitlesMenuOpened" helpers:FlyoutHelper.FollowBackdrop="True" MenuFlyoutPresenterStyle="{StaticResource CinematicMenuFlyoutPresenterStyle}">
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -460,7 +462,7 @@
                     helpers:SpringAnimationHelper.EnableHoverSpring="True"
                     helpers:SpringAnimationHelper.HoverScale="1.08"
                     ToolTipService.ToolTip="Picture in Picture">
-                    <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xE93A;" />
+                    <FontIcon x:Name="PipIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Glyph="&#xEE47;" />
                 </Button>
 
                 <!-- TV Episode Queue Button (Visible for TV Series) -->
@@ -578,7 +580,7 @@
                             </MenuFlyoutItem>
                             <MenuFlyoutItem x:Name="MenuResponsivePipItem" Text="Picture in Picture" Click="OnPipClick" Visibility="Collapsed">
                                 <MenuFlyoutItem.Icon>
-                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE93A;" />
+                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEE47;" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                         </MenuFlyout>

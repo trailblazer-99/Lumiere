@@ -19,13 +19,17 @@ public static class SecureStorageHelper
         {
             var vault = new PasswordVault();
 
-            // Remove existing entry if present
+            // Remove existing entry if present (query vault list to avoid first-chance COMException when empty)
             try
             {
-                var existing = vault.Retrieve(ResourceName, key);
-                if (existing != null)
+                foreach (var c in vault.RetrieveAll())
                 {
-                    vault.Remove(existing);
+                    if (string.Equals(c.Resource, ResourceName, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(c.UserName, key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        vault.Remove(c);
+                        break;
+                    }
                 }
             }
             catch { }
@@ -49,8 +53,34 @@ public static class SecureStorageHelper
         try
         {
             var vault = new PasswordVault();
-            var cred = vault.Retrieve(ResourceName, key);
-            return cred?.Password ?? string.Empty;
+            System.Collections.Generic.IReadOnlyList<PasswordCredential> list;
+            try
+            {
+                list = vault.RetrieveAll();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            foreach (var cred in list)
+            {
+                if (string.Equals(cred.Resource, ResourceName, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(cred.UserName, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        cred.RetrievePassword();
+                        return cred.Password ?? string.Empty;
+                    }
+                    catch
+                    {
+                        return string.Empty;
+                    }
+                }
+            }
+
+            return string.Empty;
         }
         catch
         {
@@ -65,10 +95,14 @@ public static class SecureStorageHelper
         try
         {
             var vault = new PasswordVault();
-            var cred = vault.Retrieve(ResourceName, key);
-            if (cred != null)
+            foreach (var c in vault.RetrieveAll())
             {
-                vault.Remove(cred);
+                if (string.Equals(c.Resource, ResourceName, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(c.UserName, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    vault.Remove(c);
+                    break;
+                }
             }
         }
         catch { }

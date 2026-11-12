@@ -48,7 +48,7 @@
                                                     TextChanged="OnSearchTextChanged"
                                                     SuggestionChosen="OnSearchSuggestionChosen"
                                                     QuerySubmitted="OnSearchQuerySubmitted"
-                                                    Width="260" Height="32">
+                                                    Width="260" Height="36">
                                         <AutoSuggestBox.QueryIcon>
                                             <AnimatedIcon x:Name="SearchAnimatedIcon">
                                                 <AnimatedIcon.Source>

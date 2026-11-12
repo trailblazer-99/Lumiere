@@ -48,7 +48,7 @@
                                         <MenuFlyoutItem Text="Completed" Click="OnSaveWatchlistClick" Tag="Completed" />
                                         <MenuFlyoutItem Text="Favorites" Click="OnSaveWatchlistClick" Tag="Favorites" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem x:Name="RemoveLibraryItem" Text="Remove from Library" Click="OnRemoveFromLibraryClick" Foreground="Red" />
+                                        <MenuFlyoutItem x:Name="RemoveLibraryItem" Text="Remove from Library" Click="OnRemoveFromLibraryClick" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                                     </MenuFlyout>
                                 </Button.Flyout>
                                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
@@ -88,26 +88,30 @@
 
                             <StackPanel x:Name="ScoresPanel" Orientation="Horizontal" Spacing="12" Margin="0,4,0,4" Visibility="Collapsed">
                                 <Border x:Name="RtScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="🍅 RT" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE734;" FontSize="11" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                                        <TextBlock Text="RT" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock x:Name="RtScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="ImdbScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="⭐ IMDb" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE735;" FontSize="11" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+                                        <TextBlock Text="IMDb" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock x:Name="ImdbScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="CriticScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="🎬 Critic" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE8B2;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="Critic" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock x:Name="CriticScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="AudienceScoreBorder" CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="8,4,8,4" Visibility="Collapsed">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="🍿 Audience" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE716;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="Audience" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock x:Name="AudienceScoreText" FontSize="12" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>

@@ -99,7 +99,7 @@ public static class AppIconHelper
         }
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
     private struct PROPVARIANT
     {
         [FieldOffset(0)] public ushort vt;

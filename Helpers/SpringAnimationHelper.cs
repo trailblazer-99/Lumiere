@@ -384,27 +384,31 @@ public static class SpringAnimationHelper
             return cached;
         }
 
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is FontIcon || child is SymbolIcon || child is AnimatedIcon || child is PathIcon || child is ImageIcon || child is Image)
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
             {
-                var found = child as FrameworkElement;
-                if (found != null)
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is FontIcon || child is SymbolIcon || child is AnimatedIcon || child is PathIcon || child is ImageIcon || child is Image)
                 {
-                    _iconCache.AddOrUpdate(parent, found);
+                    var found = child as FrameworkElement;
+                    if (found != null)
+                    {
+                        _iconCache.AddOrUpdate(parent, found);
+                    }
+                    return found;
                 }
-                return found;
-            }
 
-            var nested = FindIconElement(child);
-            if (nested != null)
-            {
-                _iconCache.AddOrUpdate(parent, nested);
-                return nested;
+                var nested = FindIconElement(child);
+                if (nested != null)
+                {
+                    _iconCache.AddOrUpdate(parent, nested);
+                    return nested;
+                }
             }
         }
+        catch { }
 
         return null;
     }
@@ -560,16 +564,17 @@ public static class SpringAnimationHelper
 
     public static Brush GetAiCheckedIconBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextOnAccentFillColorPrimaryBrush", out var res) && res is Brush b)
-            return b;
-        return new SolidColorBrush(Microsoft.UI.Colors.White);
+        if (ThemeResourceHelper.TryGetThemeBrush("TextOnAccentFillColorPrimaryBrush", out var brush))
+            return brush;
+        bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+        return new SolidColorBrush(isDark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
     }
 
     public static Brush GetAiUncheckedIconBrush()
     {
-        if (Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var res) && res is Brush b)
-            return b;
-        return new SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+        if (ThemeResourceHelper.TryGetThemeBrush("AccentFillColorDefaultBrush", out var brush))
+            return brush;
+        return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 120, 212));
     }
 
     /// <summary>

@@ -26,7 +26,8 @@ public class NavigationService : INavigationService
         { PageKeys.StreamMovies, typeof(StreamingMoviesPage) },
         { PageKeys.StreamTvShows, typeof(StreamingTvShowsPage) },
         { PageKeys.StreamYouTube, typeof(StreamingYouTubePage) },
-        { PageKeys.StreamTwitch, typeof(StreamingTwitchPage) }
+        { PageKeys.StreamTwitch, typeof(StreamingTwitchPage) },
+        { PageKeys.StreamSports, typeof(StreamingSportsPage) }
     };
 
     public void Initialize(NavigationView navigationView, Frame frame)
@@ -110,6 +111,19 @@ public class NavigationService : INavigationService
                     transitionInfo = new EntranceNavigationTransitionInfo();
                 }
 
+                if (IsStreamingSection(pageType))
+                {
+                    try
+                    {
+                        App.MainWindowInstance?.StopActiveVideoPlayback();
+                        if (AppServices.PlaybackViewModel?.CurrentTrack?.IsVideo == true || AppServices.PlaybackViewModel?.IsVideoPlayerActive == true)
+                        {
+                            AppServices.PlaybackViewModel.Stop();
+                        }
+                    }
+                    catch { }
+                }
+
                 _frame.Navigate(pageType, parameter, transitionInfo);
 
                 if (_navigationView != null)
@@ -170,7 +184,8 @@ public class NavigationService : INavigationService
                 pageKey == PageKeys.StreamMovies ||
                 pageKey == PageKeys.StreamTvShows ||
                 pageKey == PageKeys.StreamYouTube ||
-                pageKey == PageKeys.StreamTwitch)
+                pageKey == PageKeys.StreamTwitch ||
+                pageKey == PageKeys.StreamSports)
             {
                 return true;
             }
@@ -183,6 +198,7 @@ public class NavigationService : INavigationService
                 pageType == typeof(StreamingMusicPage) ||
                 pageType == typeof(StreamingYouTubePage) ||
                 pageType == typeof(StreamingTwitchPage) ||
+                pageType == typeof(StreamingSportsPage) ||
                 pageType == typeof(StreamingDetailsPage) ||
                 pageType.Name.StartsWith("Streaming", StringComparison.Ordinal))
             {
@@ -197,6 +213,7 @@ public class NavigationService : INavigationService
                 pageContent is StreamingMusicPage ||
                 pageContent is StreamingYouTubePage ||
                 pageContent is StreamingTwitchPage ||
+                pageContent is StreamingSportsPage ||
                 pageContent is StreamingDetailsPage ||
                 pageContent.GetType().Name.StartsWith("Streaming", StringComparison.Ordinal))
             {

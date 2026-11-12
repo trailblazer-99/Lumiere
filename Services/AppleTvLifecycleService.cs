@@ -100,6 +100,7 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
     private readonly object _trackingLock = new();
     private readonly object _disposalLock = new();
     private CancellationTokenSource? _trackingCts;
+    private long _trackingSessionId;
     private volatile bool _isTrackingActive;
     private bool _isDisposed;
 
@@ -133,6 +134,79 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
     private const int DWMWA_CLOAKED = 14;
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint processAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, int processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, System.Text.StringBuilder lpExeName, ref int lpdwSize);
+
+    private static string? TryGetProcessImagePath(Process proc)
+    {
+        IntPtr hProc = IntPtr.Zero;
+        try
+        {
+            hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, proc.Id);
+            if (hProc != IntPtr.Zero)
+            {
+                var sb = new System.Text.StringBuilder(1024);
+                int size = sb.Capacity;
+                if (QueryFullProcessImageName(hProc, 0, sb, ref size) && size > 0)
+                {
+                    return sb.ToString();
+                }
+            }
+
+            return proc.MainModule?.FileName;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            if (hProc != IntPtr.Zero)
+            {
+                CloseHandle(hProc);
+            }
+        }
+    }
+
+    private static bool IsVerifiedAppleProcess(Process proc, string processName)
+    {
+        string? imagePath = TryGetProcessImagePath(proc);
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            return false;
+        }
+
+        // Never touch Windows core executables regardless of process name collision
+        if (imagePath.Contains(@"\Windows\System32\", StringComparison.OrdinalIgnoreCase) ||
+            imagePath.Contains(@"\Windows\SysWOW64\", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Generic helper names must reside inside an Apple application / Apple Computer directory
+        if (string.Equals(processName, "defaults", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(processName, "appdefaults", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(processName, "SharedHelper", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(processName, "RestartAgent", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(processName, "WMFCapabilities", StringComparison.OrdinalIgnoreCase))
+        {
+            return imagePath.Contains("Apple", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return imagePath.Contains("Apple", StringComparison.OrdinalIgnoreCase) ||
+               imagePath.Contains("AMPLibrary", StringComparison.OrdinalIgnoreCase) ||
+               imagePath.Contains("AMPDevices", StringComparison.OrdinalIgnoreCase);
+    }
 
     #endregion
 
@@ -341,14 +415,15 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
             catch { }
 
             _trackingCts = new CancellationTokenSource();
+            long sessionId = Interlocked.Increment(ref _trackingSessionId);
             _isTrackingActive = true;
             var token = _trackingCts.Token;
 
-            _ = Task.Run(async () => await MonitorSessionAsync(token));
+            _ = Task.Run(async () => await MonitorSessionAsync(token, sessionId));
         }
     }
 
-    private async Task MonitorSessionAsync(CancellationToken token)
+    private async Task MonitorSessionAsync(CancellationToken token, long sessionId)
     {
         try
         {
@@ -432,7 +507,10 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
         }
         finally
         {
-            _isTrackingActive = false;
+            if (sessionId == Interlocked.Read(ref _trackingSessionId))
+            {
+                _isTrackingActive = false;
+            }
         }
     }
 
@@ -471,6 +549,11 @@ public sealed class AppleTvLifecycleService : IAppleTvLifecycleService
                             try
                             {
                                 if (proc.HasExited) continue;
+
+                                if (!IsVerifiedAppleProcess(proc, processName))
+                                {
+                                    continue;
+                                }
 
                                 // Guard against terminating AppleTV if window was restored
                                 if (string.Equals(processName, "AppleTV", StringComparison.OrdinalIgnoreCase) && !force)

@@ -78,6 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<StreamingMoviesViewModel>();
         services.AddSingleton<StreamingTvShowsViewModel>();
         services.AddSingleton<StreamingMusicViewModel>();
+        services.AddSingleton<StreamingSportsViewModel>();
         services.AddSingleton<StreamingDetailsViewModel>();
 
         return services;

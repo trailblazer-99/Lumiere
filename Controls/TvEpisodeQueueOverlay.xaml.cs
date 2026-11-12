@@ -8,9 +8,13 @@ using LumiereMediaPlayer.Services;
 using LumiereMediaPlayer.ViewModels;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
+using System.Numerics;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.Imaging;
@@ -22,20 +26,28 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
     private readonly List<TvEpisodeQueueItem> _allEpisodeItems = new();
     private MediaItem? _currentSeries;
     private bool _isProgrammaticSeasonChange;
+    private bool _isProgrammaticToggle;
+    private bool _isHiding;
 
     public bool IsOpen { get; private set; }
 
     public TvEpisodeQueueOverlay()
     {
         this.InitializeComponent();
+        if (DrawerContainer != null)
+        {
+            DrawerContainer.SizeChanged += OnDrawerContainerSizeChanged;
+        }
         this.Loaded += (_, _) =>
         {
+            UpdateTheming();
             if (AppServices.PlaybackViewModel != null)
             {
                 AppServices.PlaybackViewModel.Session.StateChanged += OnPlaybackStateChanged;
                 AppServices.PlaybackViewModel.PropertyChanged += OnPlaybackViewModelPropertyChanged;
             }
         };
+        this.ActualThemeChanged += (_, _) => UpdateTheming();
         this.Unloaded += (_, _) =>
         {
             if (AppServices.PlaybackViewModel != null)
@@ -44,6 +56,97 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
                 AppServices.PlaybackViewModel.PropertyChanged -= OnPlaybackViewModelPropertyChanged;
             }
         };
+    }
+
+    public void UpdateTheming()
+    {
+        if (DrawerContainer == null) return;
+
+        bool isFullscreen = ThemeHelper.IsFullscreenPresentationActive;
+
+        if (isFullscreen)
+        {
+            this.RequestedTheme = ElementTheme.Dark;
+            DrawerContainer.RequestedTheme = ElementTheme.Dark;
+            DrawerContainer.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            DrawerContainer.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush(forceRefresh: true);
+            DrawerContainer.BorderThickness = new Thickness(1.5);
+            ThemeHelper.ApplyFlyoutDropShadow(DrawerContainer);
+            if (DrawerTintOverlay != null)
+            {
+                DrawerTintOverlay.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+            if (SeasonFilterComboBox != null)
+            {
+                SeasonFilterComboBox.RequestedTheme = ElementTheme.Dark;
+                ThemeHelper.ApplyFullscreenWhiteForegroundResources(SeasonFilterComboBox);
+            }
+            if (AutoplayToggle != null)
+            {
+                AutoplayToggle.RequestedTheme = ElementTheme.Dark;
+                ThemeHelper.ApplyFullscreenWhiteForegroundResources(AutoplayToggle);
+            }
+            ApplyScrollButtonTheme(ElementTheme.Dark);
+        }
+        else
+        {
+            var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+            var baseTheme = ThemeHelper.GetEffectiveElementTheme();
+            var drawerTheme = (backdrop == AppThemeBackdrop.CinematicAdaptive && App.MainWindowInstance?.IsVideoPlaybackActive == true)
+                ? ElementTheme.Dark
+                : baseTheme;
+
+            this.RequestedTheme = drawerTheme;
+            DrawerContainer.RequestedTheme = drawerTheme;
+            DrawerContainer.Background = ThemeHelper.GetFlyoutPresenterBackground(backdrop, drawerTheme, hasSystemBackdrop: true);
+            DrawerContainer.BorderBrush = (backdrop == AppThemeBackdrop.CinematicAdaptive && App.MainWindowInstance?.IsVideoPlaybackActive == true)
+                ? ThemeHelper.CreateFullscreenSpecularBorderBrush(forceRefresh: true)
+                : ThemeHelper.GetFlyoutBorderBrush(backdrop, drawerTheme);
+            DrawerContainer.BorderThickness = new Thickness(1.5);
+            ThemeHelper.ApplyFlyoutDropShadow(DrawerContainer);
+            if (DrawerTintOverlay != null)
+            {
+                DrawerTintOverlay.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+            if (SeasonFilterComboBox != null)
+            {
+                ThemeHelper.ClearFullscreenWhiteForegroundResources(SeasonFilterComboBox);
+                SeasonFilterComboBox.RequestedTheme = drawerTheme;
+                SeasonFilterComboBox.ClearValue(Control.ForegroundProperty);
+            }
+            if (AutoplayToggle != null)
+            {
+                ThemeHelper.ClearFullscreenWhiteForegroundResources(AutoplayToggle);
+                AutoplayToggle.RequestedTheme = drawerTheme;
+                AutoplayToggle.ClearValue(Control.ForegroundProperty);
+            }
+            ApplyScrollButtonTheme(drawerTheme);
+        }
+    }
+
+    private void ApplyScrollButtonTheme(ElementTheme theme)
+    {
+        bool isLight = theme == ElementTheme.Light ||
+            (theme == ElementTheme.Default && Application.Current?.RequestedTheme == ApplicationTheme.Light);
+
+        Brush bg = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(220, 245, 245, 248)
+            : Microsoft.UI.ColorHelper.FromArgb(213, 24, 24, 32));
+        Brush border = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(40, 0, 0, 0)
+            : Microsoft.UI.ColorHelper.FromArgb(69, 255, 255, 255));
+        Brush fg = new SolidColorBrush(isLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White);
+
+        foreach (var btn in new[] { ScrollLeftButton, ScrollRightButton })
+        {
+            if (btn == null) continue;
+            btn.Background = bg;
+            btn.BorderBrush = border;
+            if (btn.Content is FontIcon fi)
+            {
+                fi.Foreground = fg;
+            }
+        }
     }
 
     private void OnPlaybackViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -128,17 +231,29 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
         }
 
         IsOpen = true;
+        _isHiding = false;
         this.Visibility = Visibility.Visible;
+        UpdateTheming();
 
-        // Sync Autoplay switch with settings
+        // Sync Autoplay switch with settings without triggering Settings.Save()
         if (AppServices.Settings?.Current != null)
         {
-            AutoplayToggle.IsOn = AppServices.Settings.Current.AutoAdvanceToNextTrack;
+            _isProgrammaticToggle = true;
+            try
+            {
+                AutoplayToggle.IsOn = AppServices.Settings.Current.AutoAdvanceToNextTrack;
+            }
+            finally
+            {
+                _isProgrammaticToggle = false;
+            }
         }
 
         // Apply Season filter and populate cards
         PopulateSeasonSelector();
         ApplyFilterAndRenderCards();
+
+        AnimateEntrance();
 
         // Scroll to currently active episode after layout pass
         var dispatcher = this.DispatcherQueue ?? App.MainDispatcher;
@@ -151,8 +266,215 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
 
     public void Hide()
     {
+        if (!IsOpen && _isHiding) return;
         IsOpen = false;
-        this.Visibility = Visibility.Collapsed;
+
+        if (!ThemeHelper.IsAnimationEnabled)
+        {
+            this.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        AnimateExit();
+    }
+
+    private void OnDrawerContainerSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(DrawerContainer);
+            if (visual != null)
+            {
+                visual.CenterPoint = new Vector3((float)e.NewSize.Width / 2f, (float)e.NewSize.Height / 2f, 0f);
+            }
+        }
+        catch { }
+    }
+
+    private void AnimateEntrance()
+    {
+        if (DrawerContainer == null) return;
+        try
+        {
+            ThemeHelper.CreateFullscreenSpecularBorderBrush(forceRefresh: true);
+            ThemeHelper.ApplyFlyoutDropShadow(DrawerContainer);
+            ElementCompositionPreview.SetIsTranslationEnabled(DrawerContainer, true);
+            var drawerVisual = ElementCompositionPreview.GetElementVisual(DrawerContainer);
+            if (drawerVisual == null) return;
+
+            drawerVisual.StopAnimation("Opacity");
+            drawerVisual.StopAnimation("Scale");
+            drawerVisual.StopAnimation("Translation");
+
+            var compositor = drawerVisual.Compositor;
+            var easeDecelerate = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1.0f), new Vector2(0.3f, 1.0f));
+            var entranceDuration = TimeSpan.FromMilliseconds(240);
+
+            float w = (float)DrawerContainer.ActualWidth;
+            float h = (float)DrawerContainer.ActualHeight;
+            if (w <= 0 || h <= 0)
+            {
+                try
+                {
+                    DrawerContainer.Measure(new Windows.Foundation.Size(1440, 600));
+                    w = (float)DrawerContainer.DesiredSize.Width;
+                    h = (float)DrawerContainer.DesiredSize.Height;
+                }
+                catch { }
+            }
+            if (w <= 0) w = 800f;
+            if (h <= 0) h = 300f;
+            drawerVisual.CenterPoint = new Vector3(w / 2f, h / 2f, 0f);
+
+            var opAnim = compositor.CreateScalarKeyFrameAnimation();
+            opAnim.Duration = entranceDuration;
+            opAnim.InsertKeyFrame(0.0f, 0.0f);
+            opAnim.InsertKeyFrame(1.0f, 1.0f, easeDecelerate);
+
+            var scAnim = compositor.CreateVector3KeyFrameAnimation();
+            scAnim.Duration = entranceDuration;
+            scAnim.InsertKeyFrame(0.0f, new Vector3(0.96f, 0.96f, 1.0f));
+            scAnim.InsertKeyFrame(1.0f, Vector3.One, easeDecelerate);
+
+            var transAnim = compositor.CreateVector3KeyFrameAnimation();
+            transAnim.Duration = entranceDuration;
+            transAnim.InsertKeyFrame(0.0f, new Vector3(0f, 70f, 0f));
+            transAnim.InsertKeyFrame(1.0f, new Vector3(0f, 0f, 0f), easeDecelerate);
+
+            drawerVisual.StartAnimation("Opacity", opAnim);
+            drawerVisual.StartAnimation("Scale", scAnim);
+            drawerVisual.StartAnimation("Translation", transAnim);
+
+            if (ScrimBackdrop != null)
+            {
+                var scrimVisual = ElementCompositionPreview.GetElementVisual(ScrimBackdrop);
+                if (scrimVisual != null)
+                {
+                    scrimVisual.StopAnimation("Opacity");
+                    var scrimOp = compositor.CreateScalarKeyFrameAnimation();
+                    scrimOp.Duration = entranceDuration;
+                    scrimOp.InsertKeyFrame(0.0f, 0.0f);
+                    scrimOp.InsertKeyFrame(1.0f, 1.0f, easeDecelerate);
+                    scrimVisual.StartAnimation("Opacity", scrimOp);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TvEpisodeQueueOverlay.AnimateEntrance] Error: {ex.Message}");
+        }
+    }
+
+    private void AnimateExit()
+    {
+        if (DrawerContainer == null)
+        {
+            this.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        try
+        {
+            _isHiding = true;
+            ElementCompositionPreview.SetIsTranslationEnabled(DrawerContainer, true);
+            var drawerVisual = ElementCompositionPreview.GetElementVisual(DrawerContainer);
+            if (drawerVisual == null)
+            {
+                this.Visibility = Visibility.Collapsed;
+                _isHiding = false;
+                return;
+            }
+
+            var compositor = drawerVisual.Compositor;
+            var easeAccelerate = compositor.CreateCubicBezierEasingFunction(new Vector2(0.7f, 0.0f), new Vector2(1.0f, 0.5f));
+            var exitDuration = TimeSpan.FromMilliseconds(160);
+
+            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+            bool completedHandled = false;
+
+            void CompleteExit()
+            {
+                if (completedHandled) return;
+                completedHandled = true;
+                if (!IsOpen)
+                {
+                    this.Visibility = Visibility.Collapsed;
+                    try
+                    {
+                        drawerVisual.Opacity = 1.0f;
+                        drawerVisual.Scale = Vector3.One;
+                        DrawerContainer.Translation = Vector3.Zero;
+                        if (ScrimBackdrop != null)
+                        {
+                            var sv = ElementCompositionPreview.GetElementVisual(ScrimBackdrop);
+                            if (sv != null) sv.Opacity = 1.0f;
+                        }
+                    }
+                    catch { }
+                }
+                _isHiding = false;
+            }
+
+            batch.Completed += (s, e) =>
+            {
+                var dq = this.DispatcherQueue ?? App.MainDispatcher;
+                dq?.TryEnqueue(CompleteExit);
+            };
+
+            var opAnim = compositor.CreateScalarKeyFrameAnimation();
+            opAnim.Duration = exitDuration;
+            opAnim.InsertKeyFrame(0.0f, 1.0f);
+            opAnim.InsertKeyFrame(1.0f, 0.0f, easeAccelerate);
+
+            var scAnim = compositor.CreateVector3KeyFrameAnimation();
+            scAnim.Duration = exitDuration;
+            scAnim.InsertKeyFrame(0.0f, Vector3.One);
+            scAnim.InsertKeyFrame(1.0f, new Vector3(0.97f, 0.97f, 1.0f), easeAccelerate);
+
+            var transAnim = compositor.CreateVector3KeyFrameAnimation();
+            transAnim.Duration = exitDuration;
+            transAnim.InsertKeyFrame(0.0f, new Vector3(0f, 0f, 0f));
+            transAnim.InsertKeyFrame(1.0f, new Vector3(0f, 50f, 0f), easeAccelerate);
+
+            drawerVisual.StartAnimation("Opacity", opAnim);
+            drawerVisual.StartAnimation("Scale", scAnim);
+            drawerVisual.StartAnimation("Translation", transAnim);
+
+            if (ScrimBackdrop != null)
+            {
+                var scrimVisual = ElementCompositionPreview.GetElementVisual(ScrimBackdrop);
+                if (scrimVisual != null)
+                {
+                    var scrimOp = compositor.CreateScalarKeyFrameAnimation();
+                    scrimOp.Duration = exitDuration;
+                    scrimOp.InsertKeyFrame(0.0f, 1.0f);
+                    scrimOp.InsertKeyFrame(1.0f, 0.0f, easeAccelerate);
+                    scrimVisual.StartAnimation("Opacity", scrimOp);
+                }
+            }
+
+            batch.End();
+
+            // Safety fallback timer in case batch completion is delayed
+            var dqSafety = this.DispatcherQueue ?? App.MainDispatcher;
+            var timer = dqSafety?.CreateTimer();
+            if (timer != null)
+            {
+                timer.Interval = TimeSpan.FromMilliseconds(220);
+                timer.Tick += (s, e) =>
+                {
+                    timer.Stop();
+                    CompleteExit();
+                };
+                timer.Start();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TvEpisodeQueueOverlay.AnimateExit] Error: {ex.Message}");
+            this.Visibility = Visibility.Collapsed;
+            _isHiding = false;
+        }
     }
 
     private void PopulateQueueData(MediaItem currentTrack)
@@ -195,11 +517,11 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
         {
             sourceEpisodes = parentSeries.Episodes;
         }
-        else if (queue != null && queue.Count > 0)
+        else if (queue != null && queue.Count > 0 && queue.Any(q => q.IsSeries || !string.IsNullOrWhiteSpace(q.SeriesTitle) || TvShowHelper.ExtractTvEpisodeInfo(q) != null))
         {
-            sourceEpisodes = queue.ToList();
+            sourceEpisodes = queue.Where(q => q.IsSeries || !string.IsNullOrWhiteSpace(q.SeriesTitle) || TvShowHelper.ExtractTvEpisodeInfo(q) != null).ToList();
         }
-        else
+        else if (currentTrack.IsSeries || currentTrack.SeasonNumber > 0 || !string.IsNullOrWhiteSpace(currentTrack.SeriesTitle) || TvShowHelper.ExtractTvEpisodeInfo(currentTrack) != null)
         {
             sourceEpisodes = new List<MediaItem> { currentTrack };
         }
@@ -331,6 +653,16 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
 
     private void ApplyFilterAndRenderCards()
     {
+        foreach (var child in CardsPanel.Children)
+        {
+            if (child is TvEpisodeQueueCard card)
+            {
+                card.PlayRequested -= OnCardPlayRequested;
+                card.PlayNextRequested -= OnCardPlayNextRequested;
+                card.RemoveRequested -= OnCardRemoveRequested;
+                card.Teardown();
+            }
+        }
         CardsPanel.Children.Clear();
 
         int? selectedSeasonFilter = null;
@@ -398,6 +730,7 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
 
         UpdateEpisodePlaybackStates();
         ScrollToCurrentEpisode();
+
     }
 
     private void OnCardPlayNextRequested(object? sender, TvEpisodeQueueItem epItem)
@@ -431,23 +764,32 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
 
     private void ScrollToCurrentEpisode()
     {
-        if (CardsScrollViewer == null) return;
+        if (CardsScrollViewer == null || CardsPanel == null) return;
 
         int activeIdx = -1;
-        for (int i = 0; i < CardsPanel.Children.Count; i++)
+        try
         {
-            if (CardsPanel.Children[i] is TvEpisodeQueueCard card && card.Item?.IsCurrent == true)
+            var cards = CardsPanel.Children.OfType<TvEpisodeQueueCard>().ToList();
+            for (int i = 0; i < cards.Count; i++)
             {
-                activeIdx = i;
-                break;
+                if (cards[i].Item?.IsCurrent == true)
+                {
+                    activeIdx = i;
+                    break;
+                }
             }
         }
+        catch { }
 
         if (activeIdx >= 0)
         {
             double cardWidth = 240.0 + 12.0; // card + spacing
             double targetOffset = Math.Max(0, (activeIdx * cardWidth) - 100.0);
-            CardsScrollViewer.ChangeView(targetOffset, null, null);
+            try
+            {
+                CardsScrollViewer.ChangeView(targetOffset, null, null);
+            }
+            catch { }
         }
     }
 
@@ -468,6 +810,7 @@ public sealed partial class TvEpisodeQueueOverlay : UserControl
 
     private void OnAutoplayToggled(object sender, RoutedEventArgs e)
     {
+        if (_isProgrammaticToggle) return;
         if (AppServices.Settings?.Current != null)
         {
             AppServices.Settings.Current.AutoAdvanceToNextTrack = AutoplayToggle.IsOn;

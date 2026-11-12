@@ -1325,6 +1325,92 @@ public static class MediaTrackFormatHelper
         return trimmed;
     }
 
+    /// <summary>
+    /// Returns the appropriate Segoe Fluent Icon glyph for a given audio output device name.
+    /// Headphones: \uE7F6
+    /// TV / Display / Receiver: \uE7F4
+    /// Digital Audio / Optical: \uE88E
+    /// Bluetooth: \uE702
+    /// USB / Audio Interface / DAC: \uE804
+    /// Speakers / Default: \uE7F5
+    /// </summary>
+    public static string GetAudioDeviceGlyph(string? deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName)) return "\uE7F5"; // Default Speakers
+
+        string lower = deviceName.ToLowerInvariant();
+
+        // 1. Headphones / Headsets / Earbuds / AirPods
+        if (lower.Contains("headphone") ||
+            lower.Contains("headset") ||
+            lower.Contains("earphone") ||
+            lower.Contains("earbud") ||
+            lower.Contains("airpod") ||
+            lower.Contains("buds") ||
+            lower.Contains("wh-1000") ||
+            lower.Contains("wf-1000") ||
+            lower.Contains("quietcomfort") ||
+            lower.Contains("pixel buds"))
+        {
+            return "\uE7F6"; // Headphone
+        }
+
+        // 2. TV / Monitor / HDMI / DisplayPort / Receiver / Soundbar
+        if (lower.Contains("tv") ||
+            lower.Contains("television") ||
+            lower.Contains("monitor") ||
+            lower.Contains("hdmi") ||
+            lower.Contains("displayport") ||
+            lower.Contains("display audio") ||
+            lower.Contains("display") ||
+            lower.Contains("soundbar") ||
+            lower.Contains("receiver") ||
+            lower.Contains("samsung") ||
+            lower.Contains("bravia") ||
+            lower.Contains("denon") ||
+            lower.Contains("yamaha") ||
+            lower.Contains("onkyo") ||
+            lower.Contains("marantz"))
+        {
+            return "\uE7F4"; // TV / Monitor
+        }
+
+        // 3. Digital Output / Optical / S/PDIF / TOSLINK
+        if (lower.Contains("optical") ||
+            lower.Contains("spdif") ||
+            lower.Contains("s/pdif") ||
+            lower.Contains("toslink") ||
+            lower.Contains("digital output") ||
+            lower.Contains("digital audio"))
+        {
+            return "\uE88E"; // Optical / Digital
+        }
+
+        // 4. Bluetooth (speakers / general Bluetooth endpoints not caught by headphone check)
+        if (lower.Contains("bluetooth") || lower.Contains(" bt ") || lower.StartsWith("bt ") || lower.EndsWith(" bt"))
+        {
+            return "\uE702"; // Bluetooth
+        }
+
+        // 5. USB DAC / Interface / Studio / External Soundcard
+        if (lower.Contains("usb") ||
+            lower.Contains("dac") ||
+            lower.Contains("fiio") ||
+            lower.Contains("focusrite") ||
+            lower.Contains("scarlett") ||
+            lower.Contains("audioquest") ||
+            lower.Contains("dragonfly") ||
+            lower.Contains("schiit") ||
+            lower.Contains("topping") ||
+            lower.Contains("interface"))
+        {
+            return "\uE804"; // USB / Audio Device
+        }
+
+        // 6. Default / Speakers (Realtek, High Definition Audio Device, Conexant, Nahimic, etc.)
+        return "\uE7F5"; // Speakers
+    }
+
     private ref struct HevcBitReader
     {
         private readonly ReadOnlySpan<byte> _data;

@@ -16,4 +16,5 @@ public static class PageKeys
     public const string StreamTvShows = "streamTvShows";
     public const string StreamYouTube = "streamYouTube";
     public const string StreamTwitch = "streamTwitch";
+    public const string StreamSports = "streamSports";
 }

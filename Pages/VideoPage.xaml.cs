@@ -27,6 +27,33 @@ public sealed partial class VideoPage : Page
     private bool _eventHandlersDetached = true;
     private int _videoTapClickCount = 0;
     private int _videoTapVersion = 0;
+    private System.Threading.CancellationTokenSource? _videoTapCts;
+    private long _lastVideoTapTicks = 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
+
+    private static int GetDoubleTapDelayMs()
+    {
+        try
+        {
+            uint time = GetDoubleClickTime();
+            if (time > 0) return (int)Math.Clamp(time, 250, 750);
+        }
+        catch { }
+        return 300;
+    }
+
+    private void CancelPendingVideoTap()
+    {
+        _videoTapClickCount = 0;
+        _videoTapVersion++;
+        if (_videoTapCts != null)
+        {
+            try { _videoTapCts.Cancel(); _videoTapCts.Dispose(); } catch { }
+            _videoTapCts = null;
+        }
+    }
     private RoutedEventHandler? _streamingClickHandler;
     private RoutedEventHandler? _fullscreenStreamingClickHandler;
 
@@ -48,20 +75,264 @@ public sealed partial class VideoPage : Page
         {
             CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
         }
-
-        SyncMediaPlayer(true);
-        UpdateUiLuminance();
     }
 
     private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (_isFullscreen) return;
         UpdateLayoutForWidth(e.NewSize.Width);
     }
 
+    private bool _isFullscreen;
+    public bool IsFullscreen => _isFullscreen;
+
+    public void SetFullscreenPresentation(bool isFullscreen)
+    {
+        _isFullscreen = isFullscreen;
+        ViewModel.IsFullscreen = isFullscreen;
+        if (HdrStatusBadge != null)
+        {
+            HdrStatusBadge.Visibility = isFullscreen ? Visibility.Collapsed : ViewModel.HdrBadgeVisibility;
+        }
+
+        if (isFullscreen)
+        {
+            if (QueueColumn != null) QueueColumn.Width = new GridLength(0);
+            if (PlayerSidebarGrid != null) PlayerSidebarGrid.ColumnSpacing = 0;
+            if (VideoListBorder != null) VideoListBorder.Visibility = Visibility.Collapsed;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = Visibility.Collapsed;
+
+            if (PageContent != null)
+            {
+                PageContent.Margin = new Thickness(0);
+                PageContent.RowSpacing = 0;
+            }
+            if (VideoPlayerContainer != null)
+            {
+                VideoPlayerContainer.BorderThickness = new Thickness(0);
+                VideoPlayerContainer.CornerRadius = new CornerRadius(0);
+            }
+            if (VideoPlayerHost != null)
+            {
+                VideoPlayerHost.CornerRadius = new CornerRadius(0);
+            }
+        }
+        else
+        {
+            if (PlayerColumn != null) PlayerColumn.Width = new GridLength(1, GridUnitType.Star);
+            if (QueueColumn != null) QueueColumn.Width = new GridLength(_isQueueVisible ? 340 : 0);
+            if (PlayerSidebarGrid != null) PlayerSidebarGrid.ColumnSpacing = _isQueueVisible ? 16 : 0;
+            if (VideoListBorder != null) VideoListBorder.Visibility = _isQueueVisible ? Visibility.Visible : Visibility.Collapsed;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = _isQueueVisible ? Visibility.Collapsed : Visibility.Visible;
+
+            if (PageContent != null)
+            {
+                bool isNarrow = ActualWidth > 0 ? ActualWidth < 960 : false;
+                string marginKey = isNarrow ? "PageContentMarginNarrow" : "PageContentMargin";
+                var normalMargin = Application.Current.Resources.TryGetValue(marginKey, out var m) && m is Thickness th
+                    ? th
+                    : (isNarrow ? new Thickness(16, 44, 16, 16) : new Thickness(32, 48, 32, 24));
+                PageContent.Margin = normalMargin;
+                PageContent.RowSpacing = 16;
+            }
+            if (VideoPlayerContainer != null)
+            {
+                var cornerRadius = Application.Current.Resources.TryGetValue("LargeCornerRadius", out var cr) && cr is CornerRadius r ? r : new CornerRadius(8);
+                VideoPlayerContainer.BorderThickness = new Thickness(1);
+                VideoPlayerContainer.CornerRadius = cornerRadius;
+            }
+            if (VideoPlayerHost != null)
+            {
+                var cornerRadius = Application.Current.Resources.TryGetValue("LargeCornerRadius", out var cr) && cr is CornerRadius r ? r : new CornerRadius(8);
+                VideoPlayerHost.CornerRadius = cornerRadius;
+            }
+        }
+    }
+
+    public void EnsurePlayerDocked()
+    {
+        var mainWin = App.MainWindowInstance;
+        if (mainWin == null || mainWin.GlobalVideoPlayer == null || VideoPlayerHost == null) return;
+
+        // Invariant: Cannot dock player into host if the page or host is not attached to the visual tree
+        if (!this.IsLoaded || this.XamlRoot == null || !VideoPlayerHost.IsLoaded)
+        {
+            return;
+        }
+
+        // Invariant: If app is currently in Fullscreen, transitioning, or in PiP,
+        // GlobalVideoPlayer belongs in FloatingVideoContainer / MiniVideoHost, NOT VideoPlayerHost!
+        if (_isFullscreen ||
+            (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay) ||
+            (mainWin.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (mainWin.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay) ||
+            (mainWin.CurrentPresentationMode == Models.PresentationMode.Pip) ||
+            mainWin.IsFullscreenTransitioning)
+        {
+            return;
+        }
+
+        try
+        {
+            if (mainWin.GlobalVideoPlayer.Parent != VideoPlayerHost)
+            {
+                if (mainWin.GlobalVideoPlayer.Parent is Microsoft.UI.Xaml.Controls.Panel p)
+                {
+                    p.Children.Remove(mainWin.GlobalVideoPlayer);
+                }
+                else if (mainWin.GlobalVideoPlayer.Parent is Microsoft.UI.Xaml.Controls.Border b)
+                {
+                    b.Child = null;
+                }
+                else if (mainWin.GlobalVideoPlayer.Parent is Microsoft.UI.Xaml.Controls.ContentControl cc)
+                {
+                    cc.Content = null;
+                }
+
+                mainWin.GlobalVideoPlayer.Width = double.NaN;
+                mainWin.GlobalVideoPlayer.Height = double.NaN;
+                mainWin.GlobalVideoPlayer.HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch;
+                mainWin.GlobalVideoPlayer.VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch;
+                mainWin.GlobalVideoPlayer.Stretch = AppServices.PlaybackViewModel.VideoStretch;
+                mainWin.GlobalVideoPlayer.Visibility = Visibility.Visible;
+                mainWin.GlobalVideoPlayer.IsHitTestVisible = true;
+
+                if (!VideoPlayerHost.Children.Contains(mainWin.GlobalVideoPlayer))
+                {
+                    VideoPlayerHost.Children.Insert(0, mainWin.GlobalVideoPlayer);
+                }
+            }
+
+            if (mainWin.FloatingVideoContainer != null)
+            {
+                mainWin.FloatingVideoContainer.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoPage] EnsurePlayerDocked handled exception: {ex.Message}");
+        }
+    }
+
+    public Windows.Foundation.Rect GetPlayerHostBoundsInWindow(UIElement rootGrid)
+    {
+        if (VideoPlayerHost == null || rootGrid == null)
+        {
+            return Windows.Foundation.Rect.Empty;
+        }
+
+        if (!VideoPlayerHost.IsLoaded || !(rootGrid is FrameworkElement rootFe && rootFe.IsLoaded) ||
+            VideoPlayerHost.XamlRoot == null || rootGrid.XamlRoot == null ||
+            VideoPlayerHost.XamlRoot != rootGrid.XamlRoot)
+        {
+            return Windows.Foundation.Rect.Empty;
+        }
+
+        try
+        {
+            if (VideoPlayerHost.ActualWidth > 0 && VideoPlayerHost.ActualHeight > 0)
+            {
+                var transform = VideoPlayerHost.TransformToVisual(rootGrid);
+                return transform.TransformBounds(new Windows.Foundation.Rect(0, 0, (float)VideoPlayerHost.ActualWidth, (float)VideoPlayerHost.ActualHeight));
+            }
+        }
+        catch { }
+
+        return Windows.Foundation.Rect.Empty;
+    }
+
+    public void FadeQueue(double targetOpacity, int durationMs = 120)
+    {
+        if (VideoListBorder == null) return;
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(VideoListBorder);
+            if (visual == null)
+            {
+                VideoListBorder.Opacity = targetOpacity;
+                return;
+            }
+
+            var compositor = visual.Compositor;
+            if (compositor == null || !ThemeHelper.IsAnimationEnabled || durationMs <= 0)
+            {
+                visual.StopAnimation("Opacity");
+                visual.Opacity = (float)targetOpacity;
+                VideoListBorder.Opacity = targetOpacity;
+                return;
+            }
+
+            visual.StopAnimation("Opacity");
+            var anim = compositor.CreateScalarKeyFrameAnimation();
+            anim.InsertKeyFrame(1.0f, (float)targetOpacity, compositor.CreateCubicBezierEasingFunction(
+                new System.Numerics.Vector2(0.16f, 1.0f),
+                new System.Numerics.Vector2(0.3f, 1.0f)));
+            anim.Duration = TimeSpan.FromMilliseconds(durationMs);
+
+            var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+            batch.Completed += (_, _) =>
+            {
+                DispatcherQueue?.TryEnqueue(() =>
+                {
+                    if (VideoListBorder != null)
+                    {
+                        VideoListBorder.Opacity = targetOpacity;
+                        visual.Opacity = (float)targetOpacity;
+                    }
+                });
+            };
+
+            visual.StartAnimation("Opacity", anim);
+            batch.End();
+        }
+        catch
+        {
+            VideoListBorder.Opacity = targetOpacity;
+        }
+    }
+
     private bool? _isNarrowHeader;
+    private bool _isQueueManuallyToggled;
+    private bool _isQueueVisible = true;
+    public bool IsQueueVisible => _isQueueVisible;
+
+    public void ToggleQueue()
+    {
+        _isQueueManuallyToggled = true;
+        SetQueueVisibility(!_isQueueVisible);
+    }
+
+    private void SetQueueVisibility(bool visible)
+    {
+        _isQueueVisible = visible;
+        if (VideoListBorder == null || QueueColumn == null || PlayerSidebarGrid == null) return;
+
+        if (visible)
+        {
+            QueueColumn.Width = new GridLength(340);
+            PlayerSidebarGrid.ColumnSpacing = 16;
+            VideoListBorder.Visibility = Visibility.Visible;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            QueueColumn.Width = new GridLength(0);
+            PlayerSidebarGrid.ColumnSpacing = 0;
+            VideoListBorder.Visibility = Visibility.Collapsed;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OnToggleQueueClick(object sender, RoutedEventArgs e)
+    {
+        ToggleQueue();
+    }
 
     private void UpdateLayoutForWidth(double width)
     {
+        if (_isFullscreen) return;
+
         if (width <= 0)
         {
             width = this.ActualWidth;
@@ -72,10 +343,19 @@ public sealed partial class VideoPage : Page
         }
 
         bool shouldBeNarrowHeader = width < 960;
-        if (_isNarrowHeader == shouldBeNarrowHeader) return;
-        _isNarrowHeader = shouldBeNarrowHeader;
+        if (_isNarrowHeader != shouldBeNarrowHeader)
+        {
+            _isNarrowHeader = shouldBeNarrowHeader;
+            VisualStateManager.GoToState(this, shouldBeNarrowHeader ? "NarrowHeader" : "WideHeader", true);
+        }
 
-        VisualStateManager.GoToState(this, shouldBeNarrowHeader ? "NarrowHeader" : "WideHeader", true);
+        // When window is narrow or snapped (< 1000px):
+        // Auto-collapse selector queue so video takes center stage
+        if (!_isQueueManuallyToggled)
+        {
+            bool shouldCollapseQueue = width < 1000;
+            SetQueueVisibility(!shouldCollapseQueue);
+        }
     }
 
     private void AttachEventHandlers()
@@ -113,12 +393,36 @@ public sealed partial class VideoPage : Page
             LibraryScrollViewer.PointerWheelChanged -= OnLibraryScrollViewerPointerWheelChanged;
             LibraryScrollViewer.PointerWheelChanged += OnLibraryScrollViewerPointerWheelChanged;
         }
+
+        if (VideoPlayerContainer != null)
+        {
+            VideoPlayerContainer.PointerPressed -= OnVideoPointerPressed;
+            VideoPlayerContainer.PointerPressed += OnVideoPointerPressed;
+        }
+
+        if (VideoPlayerHost != null)
+        {
+            VideoPlayerHost.LayoutUpdated -= OnVideoPlayerHostLayoutUpdated;
+            VideoPlayerHost.LayoutUpdated += OnVideoPlayerHostLayoutUpdated;
+        }
     }
 
     private void DetachEventHandlers()
     {
         if (_eventHandlersDetached) return;
         _eventHandlersDetached = true;
+        CancelPendingVideoTap();
+        if (VideoPlayerContainer != null)
+        {
+            VideoPlayerContainer.PointerPressed -= OnVideoPointerPressed;
+        }
+
+        if (VideoPlayerHost != null)
+        {
+            VideoPlayerHost.LayoutUpdated -= OnVideoPlayerHostLayoutUpdated;
+        }
+        _lastHostPosition = (-1, -1);
+        _lastHostSize = (-1, -1);
 
         if (LibraryScrollViewer != null)
         {
@@ -172,14 +476,33 @@ public sealed partial class VideoPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
-        AttachRibbonToHost();
-        AttachEventHandlers();
-        UpdateLayoutForWidth(this.ActualWidth);
-        SyncMediaPlayer(true);
-        UpdateUiLuminance();
-        UpdateEmptyState();
-        ComboBoxHelper.ApplyBackdropToVisualTree(this);
+        try
+        {
+            try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
+            AttachRibbonToHost();
+            AttachEventHandlers();
+            if (ViewModel.FilteredVideos.Any(v => v.IsSelected))
+            {
+                foreach (var v in ViewModel.FilteredVideos)
+                {
+                    v.IsSelected = false;
+                }
+                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
+                UpdateQueueSelectAllState();
+            }
+            EnsurePlayerDocked();
+            UpdateLayoutForWidth(this.ActualWidth);
+            SyncMediaPlayer(true);
+            UpdateUiLuminance();
+            UpdateEmptyState();
+            PageContent.Opacity = 1.0;
+            ComboBoxHelper.ApplyBackdropToVisualTree(this);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to load VideoPage: {ex.Message}");
+            PageContent.Opacity = 1.0;
+        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -252,13 +575,17 @@ public sealed partial class VideoPage : Page
         if (e.PropertyName is nameof(VideoViewModel.CurrentVideo)
             or nameof(VideoViewModel.HasSource))
         {
-            if (ViewModel.CurrentVideo != null)
-            {
-                VideoSelectionRibbon?.ClearSelection();
-                UpdateQueueSelectAllState();
-            }
+            bool clearSelection = ViewModel.CurrentVideo != null;
             bool force = e.PropertyName == nameof(VideoViewModel.CurrentVideo);
-            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (clearSelection)
+                {
+                    VideoSelectionRibbon?.ClearSelection();
+                    UpdateQueueSelectAllState();
+                }
+                SyncMediaPlayer(force);
+            });
         }
         else if (e.PropertyName is nameof(VideoViewModel.FilteredVideos)
                  or nameof(VideoViewModel.OverlayVisibility))
@@ -283,13 +610,16 @@ public sealed partial class VideoPage : Page
     {
         if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
         {
-            if (AppServices.PlaybackViewModel.IsVideoPlayerActive)
+            DispatcherQueue.TryEnqueue(() =>
             {
-                App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
-                VideoSelectionRibbon?.ClearSelection();
-                UpdateQueueSelectAllState();
-            }
-            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+                if (AppServices.PlaybackViewModel.IsVideoPlayerActive)
+                {
+                    App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+                    VideoSelectionRibbon?.ClearSelection();
+                    UpdateQueueSelectAllState();
+                }
+                SyncMediaPlayer(true);
+            });
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio)
                  || e.PropertyName == nameof(PlaybackViewModel.VideoStretch))
@@ -298,22 +628,29 @@ public sealed partial class VideoPage : Page
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrack))
         {
-            DispatcherQueue.TryEnqueue(async () =>
+            DispatcherQueue.SafeEnqueueAsync(async () =>
             {
-                SyncMediaPlayer(true);
-                if (AppServices.PlaybackViewModel.CurrentTrack == null)
+                try
                 {
-                    HideMetadataOverlay();
-                    return;
-                }
-                if (ViewModel.CurrentVideo != null)
-                {
-                    bool isFsVisible = App.MainWindowInstance != null && App.MainWindowInstance.FullscreenMetadataOverlay.Visibility == Visibility.Visible;
-                    bool isNormalVisible = MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible;
-                    if (isFsVisible || isNormalVisible)
+                    SyncMediaPlayer(true);
+                    if (AppServices.PlaybackViewModel.CurrentTrack == null)
                     {
-                        await FetchInternetMetadataAsync(ViewModel.CurrentVideo);
+                        HideMetadataOverlay();
+                        return;
                     }
+                    if (ViewModel.CurrentVideo != null)
+                    {
+                        bool isFsVisible = App.MainWindowInstance?.FullscreenMetadataOverlay?.Visibility == Visibility.Visible;
+                        bool isNormalVisible = MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible;
+                        if (isFsVisible || isNormalVisible)
+                        {
+                            await FetchInternetMetadataAsync(ViewModel.CurrentVideo);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[VideoPage] CurrentTrack sync error: {ex.Message}");
                 }
             });
         }
@@ -322,54 +659,67 @@ public sealed partial class VideoPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
-        AttachRibbonToHost();
-        AttachEventHandlers();
-        UpdateUiLuminance();
-        DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+        try
+        {
+            try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
+            AttachRibbonToHost();
+            AttachEventHandlers();
+            EnsurePlayerDocked();
+            UpdateUiLuminance();
+            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoPage.OnNavigatedTo] Handled: {ex.Message}");
+        }
     }
 
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
-        try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
-        VideoSelectionRibbon?.ClearSelection();
-        DetachRibbonFromHost();
-        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
-        DetachEventHandlers();
+        try
+        {
+            try { AppServices.HdrPipeline.SetVideoPageActive(false); } catch { }
+            VideoSelectionRibbon?.ClearSelection();
+            DetachRibbonFromHost();
+            App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+            var mainWin = App.MainWindowInstance;
+            if (mainWin?.GlobalVideoPlayer != null && mainWin.FloatingVideoContainer != null && mainWin.GlobalVideoPlayer.Parent != mainWin.FloatingVideoContainer)
+            {
+                if (mainWin.GlobalVideoPlayer.Parent is Microsoft.UI.Xaml.Controls.Panel p)
+                {
+                    p.Children.Remove(mainWin.GlobalVideoPlayer);
+                }
+                if (!mainWin.FloatingVideoContainer.Children.Contains(mainWin.GlobalVideoPlayer))
+                {
+                    mainWin.FloatingVideoContainer.Children.Add(mainWin.GlobalVideoPlayer);
+                }
+            }
+            DetachEventHandlers();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VideoPage.OnNavigatedFrom] Handled: {ex.Message}");
+        }
     }
 
     public event EventHandler? VideoPlayerHostLayoutChanged;
 
     public void SyncMediaPlayer(bool forceRefresh = false)
     {
+        if (!this.IsLoaded || this.XamlRoot == null) return;
+        if (_isFullscreen ||
+            (App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (App.MainWindowInstance?.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (App.MainWindowInstance?.IsFullscreenTransitioning ?? false))
+        {
+            return;
+        }
+        EnsurePlayerDocked();
         VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnPageLoaded(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            AttachRibbonToHost();
-            if (ViewModel.FilteredVideos.Any(v => v.IsSelected))
-            {
-                foreach (var v in ViewModel.FilteredVideos)
-                {
-                    v.IsSelected = false;
-                }
-                VideoSelectionRibbon?.UpdateSelection(ViewModel.FilteredVideos);
-                UpdateQueueSelectAllState();
-            }
-            UpdateEmptyState();
-            PageContent.Opacity = 1.0;
-            SyncMediaPlayer(true);
-        }
-        catch (System.Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to load VideoPage: {ex.Message}");
-            PageContent.Opacity = 1.0;
-        }
-    }
+
 
     private async void OnClearAllVideosClick(object sender, RoutedEventArgs e)
     {
@@ -396,9 +746,17 @@ public sealed partial class VideoPage : Page
         }
     }
 
+    private long _metadataRequestVersion;
+    private System.Threading.CancellationTokenSource? _metadataCts;
+
     internal async System.Threading.Tasks.Task FetchInternetMetadataAsync(Models.MediaItem video)
     {
         if (video == null || string.IsNullOrWhiteSpace(video.Title)) return;
+
+        long reqVer = System.Threading.Interlocked.Increment(ref _metadataRequestVersion);
+        try { _metadataCts?.Cancel(); _metadataCts?.Dispose(); } catch { }
+        var metadataCts = new System.Threading.CancellationTokenSource();
+        _metadataCts = metadataCts;
 
         var mainWin = App.MainWindowInstance;
 
@@ -406,7 +764,6 @@ public sealed partial class VideoPage : Page
         InternetMetadataProgress.IsActive = true;
         InternetMetadataPanel.Visibility = Visibility.Collapsed;
         InternetMetadataContent.Visibility = Visibility.Collapsed;
-        InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
         InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
 
         if (mainWin != null)
@@ -417,13 +774,12 @@ public sealed partial class VideoPage : Page
             mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
             mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
             mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
-            mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
         }
 
         try
         {
             var (cleanTitle, year, isTvShow) = Helpers.VideoMetadataHelper.CleanTitleAndExtractYear(video.Title, video.SourcePath);
-            if (string.IsNullOrWhiteSpace(cleanTitle)) return;
+            if (string.IsNullOrWhiteSpace(cleanTitle) || metadataCts.IsCancellationRequested || reqVer != System.Threading.Volatile.Read(ref _metadataRequestVersion)) return;
 
             List<TmdbMedia>? searchResults = null;
             if (isTvShow)
@@ -450,8 +806,17 @@ public sealed partial class VideoPage : Page
                 if (searchResults == null || !searchResults.Any())
                 {
                     searchResults = await _tmdbService.SearchTvShowsAsync(cleanTitle);
-                    if (searchResults != null && searchResults.Any()) isTvShow = true;
+                    if (searchResults != null && searchResults.Any() &&
+                        (video.IsSeries || video.SeasonNumber > 0 || !string.IsNullOrWhiteSpace(video.SeriesTitle) || Helpers.TvShowHelper.ExtractTvEpisodeInfo(video) != null))
+                    {
+                        isTvShow = true;
+                    }
                 }
+            }
+
+            if (metadataCts.IsCancellationRequested || reqVer != System.Threading.Volatile.Read(ref _metadataRequestVersion))
+            {
+                return;
             }
 
             var bestMatch = Helpers.VideoMetadataHelper.PickBestTmdbMatch(searchResults, cleanTitle, year);
@@ -478,15 +843,15 @@ public sealed partial class VideoPage : Page
 
                 if (!string.IsNullOrEmpty(bestMatch.PosterPath))
                 {
-                    var posterUri = new Uri($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}");
-                    InternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
-                    InternetMetadataPoster.Visibility = Visibility.Visible;
-                    if (InternetMetadataPosterBorder != null) InternetMetadataPosterBorder.Visibility = Visibility.Visible;
+                    var posterSource = Helpers.ImageBindHelper.SafeImageFromUrl($"https://image.tmdb.org/t/p/w185{bestMatch.PosterPath}", 185);
+                    InternetMetadataPoster.Source = posterSource;
+                    InternetMetadataPoster.Visibility = posterSource != null ? Visibility.Visible : Visibility.Collapsed;
+                    if (InternetMetadataPosterBorder != null) InternetMetadataPosterBorder.Visibility = posterSource != null ? Visibility.Visible : Visibility.Collapsed;
                     if (mainWin != null)
                     {
-                        mainWin.FullscreenInternetMetadataPoster.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(posterUri) { DecodePixelWidth = 185 };
-                        mainWin.FullscreenInternetMetadataPoster.Visibility = Visibility.Visible;
-                        if (mainWin.FullscreenInternetMetadataPosterBorder != null) mainWin.FullscreenInternetMetadataPosterBorder.Visibility = Visibility.Visible;
+                        mainWin.FullscreenInternetMetadataPoster.Source = posterSource;
+                        mainWin.FullscreenInternetMetadataPoster.Visibility = posterSource != null ? Visibility.Visible : Visibility.Collapsed;
+                        if (mainWin.FullscreenInternetMetadataPosterBorder != null) mainWin.FullscreenInternetMetadataPosterBorder.Visibility = posterSource != null ? Visibility.Visible : Visibility.Collapsed;
                     }
                 }
                 else
@@ -559,12 +924,15 @@ public sealed partial class VideoPage : Page
         }
         finally
         {
-            InternetMetadataProgress.IsActive = false;
-            InternetMetadataProgress.Visibility = Visibility.Collapsed;
-            if (mainWin != null)
+            if (reqVer == System.Threading.Volatile.Read(ref _metadataRequestVersion))
             {
-                mainWin.FullscreenInternetMetadataProgress.IsActive = false;
-                mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                InternetMetadataProgress.IsActive = false;
+                InternetMetadataProgress.Visibility = Visibility.Collapsed;
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                }
             }
         }
     }
@@ -575,6 +943,9 @@ public sealed partial class VideoPage : Page
     {
         if (MetadataOverlay.Visibility == Visibility.Collapsed)
         {
+            MetadataOverlay.RequestedTheme = ElementTheme.Dark;
+            MetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            MetadataOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
             MetadataOverlay.Visibility = Visibility.Visible;
             var current = ViewModel.CurrentVideo ?? AppServices.PlaybackViewModel.CurrentTrack;
             if (current != null)
@@ -608,9 +979,21 @@ public sealed partial class VideoPage : Page
         if (ViewModel.HasSource)
         {
             e.Handled = true;
-            _videoTapClickCount = 0;
-            _videoTapVersion++;
+            CancelPendingVideoTap();
+            _lastVideoTapTicks = 0;
             App.MainWindowInstance?.ToggleFullscreen();
+        }
+    }
+
+    private void OnVideoPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (_videoTapCts != null)
+        {
+            long elapsed = Environment.TickCount64 - _lastVideoTapTicks;
+            if (elapsed > 0 && elapsed < GetDoubleTapDelayMs())
+            {
+                CancelPendingVideoTap();
+            }
         }
     }
 
@@ -624,22 +1007,53 @@ public sealed partial class VideoPage : Page
                 {
                     HideMetadataOverlay();
                     e.Handled = true;
+
+                    long now = Environment.TickCount64;
+                    int delayMs = GetDoubleTapDelayMs();
+                    long elapsed = now - _lastVideoTapTicks;
+                    _lastVideoTapTicks = now;
+
                     _videoTapClickCount++;
 
-                    if (_videoTapClickCount == 1)
+                    if (_videoTapClickCount > 1 || (elapsed > 0 && elapsed < delayMs && _videoTapCts != null))
                     {
-                        int tapVersion = ++_videoTapVersion;
-                        await System.Threading.Tasks.Task.Delay(225);
-                        if (tapVersion != _videoTapVersion) return;
-                        _videoTapClickCount = 0;
-                        if (AppServices.PlaybackViewModel.IsPlaying)
+                        CancelPendingVideoTap();
+                        return;
+                    }
+
+                    CancelPendingVideoTap();
+                    _videoTapClickCount = 1;
+                    int tapVersion = ++_videoTapVersion;
+                    var cts = new System.Threading.CancellationTokenSource();
+                    _videoTapCts = cts;
+
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(delayMs, cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    finally
+                    {
+                        if (ReferenceEquals(_videoTapCts, cts))
                         {
-                            AppServices.PlaybackViewModel.Session.MediaPlayer.Pause();
+                            _videoTapCts = null;
                         }
-                        else
-                        {
-                            AppServices.PlaybackViewModel.Session.MediaPlayer.Play();
-                        }
+                        try { cts.Dispose(); } catch { }
+                    }
+
+                    if (tapVersion != _videoTapVersion || cts.IsCancellationRequested) return;
+
+                    _videoTapClickCount = 0;
+                    if (AppServices.PlaybackViewModel.IsPlaying)
+                    {
+                        AppServices.PlaybackViewModel.Pause();
+                    }
+                    else
+                    {
+                        AppServices.PlaybackViewModel.TogglePlayPauseCommand.Execute(null);
                     }
                 }
             }
@@ -684,6 +1098,64 @@ public sealed partial class VideoPage : Page
         }
     }
 
+    private (double X, double Y) _lastHostPosition = (-1, -1);
+    private (double Width, double Height) _lastHostSize = (-1, -1);
+
+    private void OnVideoPlayerHostLayoutUpdated(object? sender, object e)
+    {
+        if (VideoPlayerHost == null || !VideoPlayerHost.IsLoaded) return;
+        if (_isFullscreen) return;
+
+        double w = VideoPlayerHost.ActualWidth;
+        double h = VideoPlayerHost.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        bool sizeChanged = Math.Abs(w - _lastHostSize.Width) > 0.5 || Math.Abs(h - _lastHostSize.Height) > 0.5;
+        bool positionChanged = false;
+
+        var visualRoot = this.XamlRoot?.Content as UIElement ?? App.MainWindowInstance?.Content as UIElement;
+        if (visualRoot != null)
+        {
+            try
+            {
+                var transform = VideoPlayerHost.TransformToVisual(visualRoot);
+                var pt = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                if (Math.Abs(pt.X - _lastHostPosition.X) > 0.5 || Math.Abs(pt.Y - _lastHostPosition.Y) > 0.5)
+                {
+                    _lastHostPosition = (pt.X, pt.Y);
+                    positionChanged = true;
+                }
+            }
+            catch { }
+        }
+
+        if (sizeChanged || positionChanged)
+        {
+            _lastHostSize = (w, h);
+            VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void OnVideoPlayerHostLoaded(object sender, RoutedEventArgs e)
+    {
+        VisualDiagnosticsHelper.EnsureElementBackgroundIsTransparent(VideoPlayerContainer, "VideoPlayerContainer");
+        VisualDiagnosticsHelper.EnsureElementBackgroundIsTransparent(VideoPlayerHost, "VideoPlayerHost");
+        if (_isFullscreen ||
+            (App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (App.MainWindowInstance?.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (App.MainWindowInstance?.IsFullscreenTransitioning ?? false))
+        {
+            return;
+        }
+        EnsurePlayerDocked();
+        if (VideoPlayerHost != null)
+        {
+            VideoPlayerHost.LayoutUpdated -= OnVideoPlayerHostLayoutUpdated;
+            VideoPlayerHost.LayoutUpdated += OnVideoPlayerHostLayoutUpdated;
+        }
+        VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private void OnVideoPlayerHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
         // Prevent the properties flyout from bleeding off the bottom of the window
@@ -691,6 +1163,7 @@ public sealed partial class VideoPage : Page
         {
             MetadataOverlay.MaxHeight = Math.Max(100, e.NewSize.Height - 88); // 64 Top Margin + 24 Bottom Margin
         }
+        if (_isFullscreen) return;
         VideoPlayerHostLayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 

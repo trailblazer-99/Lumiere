@@ -14,6 +14,7 @@ namespace LumiereMediaPlayer.Controls;
 
 public sealed partial class TvEpisodeQueueCard : UserControl
 {
+    private static readonly SemaphoreSlim _episodeThumbnailGate = new(2, 2);
     private CancellationTokenSource? _thumbnailCts;
     private TvEpisodeQueueItem? _item;
 
@@ -46,7 +47,18 @@ public sealed partial class TvEpisodeQueueCard : UserControl
     public TvEpisodeQueueCard()
     {
         this.InitializeComponent();
-        this.Unloaded += (_, _) => CancelThumbnailLoading();
+        this.Unloaded += (_, _) => Teardown();
+    }
+
+    public void Teardown()
+    {
+        CancelThumbnailLoading();
+        if (_item != null)
+        {
+            _item.PropertyChanged -= OnItemPropertyChanged;
+        }
+        ThumbnailImage.Source = null;
+        FallbackIcon.Visibility = Visibility.Visible;
     }
 
     private void OnItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -166,34 +178,69 @@ public sealed partial class TvEpisodeQueueCard : UserControl
 
         try
         {
-            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            await _episodeThumbnailGate.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ct.IsCancellationRequested) return;
+
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path).AsTask().ConfigureAwait(false);
             if (ct.IsCancellationRequested) return;
 
             using var thumb = await file.GetThumbnailAsync(
                 Windows.Storage.FileProperties.ThumbnailMode.VideosView,
-                400,
-                Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                320,
+                Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale).AsTask().ConfigureAwait(false);
 
             if (ct.IsCancellationRequested || thumb == null || thumb.Size == 0) return;
 
-            var bmp = new BitmapImage { DecodePixelWidth = 260 };
-            using var stream = thumb.CloneStream();
-            await bmp.SetSourceAsync(stream);
-
-            if (ct.IsCancellationRequested) return;
-
             var dispatcher = this.DispatcherQueue ?? App.MainDispatcher;
-            dispatcher?.TryEnqueue(() =>
+            if (dispatcher == null) return;
+
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            bool enqueued = dispatcher.TryEnqueue(async () =>
             {
-                if (_item == item)
+                try
                 {
-                    item.ThumbnailSource = bmp;
-                    ThumbnailImage.Source = bmp;
-                    FallbackIcon.Visibility = Visibility.Collapsed;
+                    if (ct.IsCancellationRequested || _item != item)
+                    {
+                        tcs.TrySetResult();
+                        return;
+                    }
+
+                    var bmp = new BitmapImage { DecodePixelWidth = 240 };
+                    await bmp.SetSourceAsync(thumb);
+
+                    if (!ct.IsCancellationRequested && _item == item)
+                    {
+                        item.ThumbnailSource = bmp;
+                        ThumbnailImage.Source = bmp;
+                        FallbackIcon.Visibility = Visibility.Collapsed;
+                    }
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
                 }
             });
+
+            if (enqueued)
+            {
+                await tcs.Task.ConfigureAwait(false);
+            }
         }
+        catch (OperationCanceledException) { }
         catch { }
+        finally
+        {
+            _episodeThumbnailGate.Release();
+        }
     }
 
     private void OnCardPointerEntered(object sender, PointerRoutedEventArgs e)

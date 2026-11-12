@@ -54,7 +54,14 @@ public sealed partial class PlaylistsPage : Page
 
     private async void OnCreatePlaylistClick(object sender, RoutedEventArgs e)
     {
-        await Helpers.MediaFlyoutHelper.ShowNewPlaylistDialogAsync(System.Linq.Enumerable.Empty<LumiereMediaPlayer.Models.MediaItem>(), this.XamlRoot);
+        try
+        {
+            await Helpers.MediaFlyoutHelper.ShowNewPlaylistDialogAsync(System.Linq.Enumerable.Empty<LumiereMediaPlayer.Models.MediaItem>(), this.XamlRoot);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PlaylistsPage] OnCreatePlaylistClick error: {ex.Message}");
+        }
     }
 
     private void OnPlayPlaylistClick(object sender, RoutedEventArgs e)

@@ -111,11 +111,9 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="SpecularAccentRimBorderBrush" StartPoint="0.0,0.0" EndPoint="1.0,1.0">
-        <GradientStop Offset="0.0" Color="#DDFF8C00" />
-        <GradientStop Offset="1.0" Color="#44FF8C00" />
+        <GradientStop Offset="0.0" Color="{ThemeResource SystemAccentColorLight1}" />
+        <GradientStop Offset="1.0" Color="{ThemeResource SystemAccentColorDark1}" />
     </LinearGradientBrush>
-
-
 
     <!-- Glass Icon Button Style -->
     <Style x:Key="GlassIconButtonStyle" TargetType="Button">
@@ -123,8 +121,9 @@
         <Setter Property="Height" Value="36" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{StaticResource SpecularRimBorderBrush}" />
-        <Setter Property="Background" Value="#1CFFFFFF" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SpecularRimBorderBrush}" />
+        <Setter Property="Background" Value="{ThemeResource LiquidGlassControlFill}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
         <Setter Property="CornerRadius" Value="18" />
         <Setter Property="Template">
             <Setter.Value>
@@ -140,21 +139,29 @@
                                 <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="RootBorder.Background" Value="#38FFFFFF" />
-                                        <Setter Target="RootBorder.BorderBrush" Value="#A0FFFFFF" />
+                                        <Setter Target="RootBorder.Background" Value="{ThemeResource LiquidGlassControlPointerOverFill}" />
+                                        <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource SpecularRimBorderBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <VisualState.Setters>
-                                        <Setter Target="RootBorder.Background" Value="#15FFFFFF" />
-                                        <Setter Target="RootBorder.BorderBrush" Value="#50FFFFFF" />
+                                        <Setter Target="RootBorder.Background" Value="{ThemeResource LiquidGlassControlPressedFill}" />
+                                        <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource SpecularRimBorderBrush}" />
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Opacity" Value="0.4" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
                         <ContentPresenter
+                            x:Name="ContentPresenter"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}"
                             Content="{TemplateBinding Content}" />
                     </Border>
                 </ControlTemplate>
@@ -165,9 +172,9 @@
     <!-- Glass Accent Pill Button Style (Primary Action / Play Button) -->
     <Style x:Key="GlassAccentPillButtonStyle" TargetType="Button">
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{StaticResource SpecularAccentRimBorderBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SpecularAccentRimBorderBrush}" />
         <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
         <Setter Property="CornerRadius" Value="22" />
         <Setter Property="Template">
             <Setter.Value>
@@ -178,9 +185,31 @@
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="{TemplateBinding CornerRadius}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="PillBorder.Background" Value="{ThemeResource AccentFillColorSecondaryBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="PillBorder.Background" Value="{ThemeResource AccentFillColorTertiaryBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="PillBorder.Opacity" Value="0.4" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
                         <ContentPresenter
+                            x:Name="ContentPresenter"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}"
                             Content="{TemplateBinding Content}" />
                     </Border>
                 </ControlTemplate>
@@ -214,7 +243,7 @@
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
                                         <Setter Target="RootBorder.Background" Value="{ThemeResource LiquidGlassControlPointerOverFill}" />
-                                        <Setter Target="RootBorder.BorderBrush" Value="#FFFFFFFF" />
+                                        <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource SpecularRimBorderBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
@@ -223,11 +252,18 @@
                                         <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource SpecularRimBorderBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Opacity" Value="0.4" />
+                                    </VisualState.Setters>
+                                </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
                         <ContentPresenter
+                            x:Name="ContentPresenter"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}"
                             Content="{TemplateBinding Content}" />
                     </Border>
                 </ControlTemplate>
@@ -256,8 +292,8 @@
                                 Height="4"
                                 RadiusX="2"
                                 RadiusY="2"
-                                Fill="#30FFFFFF"
-                                Stroke="{StaticResource SpecularRimBorderBrush}"
+                                Fill="{ThemeResource ControlFillColorSecondaryBrush}"
+                                Stroke="{ThemeResource SpecularRimBorderBrush}"
                                 StrokeThickness="1"
                                 VerticalAlignment="Center" />
                             <Rectangle
@@ -274,9 +310,9 @@
                                 Width="16"
                                 Height="16"
                                 CornerRadius="8"
-                                Background="#FFFFFFFF"
+                                Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{StaticResource SpecularRimBorderBrush}"
+                                BorderBrush="{ThemeResource SpecularRimBorderBrush}"
                                 VerticalAlignment="Center" />
                         </Grid>
                     </Grid>

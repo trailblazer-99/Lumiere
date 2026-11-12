@@ -17,6 +17,10 @@ using Windows.Devices.Enumeration;
 using Windows.Media.Devices;
 using Windows.Media.Casting;
 using Windows.Media.Playback;
+using System.Numerics;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Xaml.Hosting;
+using Microsoft.Graphics.Canvas.Effects;
 
 namespace LumiereMediaPlayer.Controls;
 
@@ -53,6 +57,9 @@ public sealed partial class TransportBar : UserControl
     private MediaItem? _observedTrack;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _scrubThrottleTimer;
     private double _pendingScrubValue;
+    private static System.Collections.Generic.IReadOnlyList<DeviceInformation>? _cachedAudioDevices;
+    private static DateTime _cachedAudioDevicesTime = DateTime.MinValue;
+    private static bool _isRefreshingAudioDevices;
 
     private PointerEventHandler? _progressPointerEnteredHandler;
     private PointerEventHandler? _progressPointerMovedHandler;
@@ -85,6 +92,8 @@ public sealed partial class TransportBar : UserControl
     public event EventHandler? ShuffleRequested;
     public event EventHandler? RepeatRequested;
 
+    public bool HasOpenFlyout => (VolumeFlyout?.IsOpen == true) || (AudioMenuFlyout?.IsOpen == true) || (SubtitlesMenuFlyout?.IsOpen == true) || (MoreMenuFlyout?.IsOpen == true);
+
     public TransportBar()
     {
         InitializeComponent();
@@ -95,20 +104,31 @@ public sealed partial class TransportBar : UserControl
             ApplyAllFlyoutsTheming();
             UpdateVolumeIcon();
             UpdateShuffleVisual();
+            UpdateReplayVisual();
             UpdateRepeatVisual();
         };
         UpdateAcrylicBackground();
         UpdatePlayPauseIcon();
         ApplyAllFlyoutsTheming();
         SyncVolumeUi();
+        UpdateShuffleVisual();
+        UpdateReplayVisual();
+        UpdateRepeatVisual();
+        UpdateThumbVisibility(animate: false);
+        InitializeTransportIconTheming();
         Loaded += (_, _) =>
         {
+            UpdateAcrylicBackground();
             SyncVolumeUi();
+            UpdateShuffleVisual();
+            UpdateReplayVisual();
+            UpdateRepeatVisual();
             ApplyAllFlyoutsTheming();
             if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
             {
                 HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
             }
+            UpdateThumbVisibility(animate: false);
             EnsureSliderHaloUnclipped(ProgressSlider);
             EnsureSliderHaloUnclipped(VolumeSlider);
             UpdateResponsiveLayout(ActualWidth > 0 ? ActualWidth : 1000);
@@ -117,9 +137,13 @@ public sealed partial class TransportBar : UserControl
             {
                 ObserveCurrentTrack(null, CurrentTrack);
             }
+            RefreshAudioDevicesCacheInBackground();
         };
         Unloaded += OnUnloaded;
-        SizeChanged += (_, e) => UpdateResponsiveLayout(e.NewSize.Width);
+        SizeChanged += (_, e) =>
+        {
+            UpdateResponsiveLayout(e.NewSize.Width);
+        };
 
         _scrubThrottleTimer = DispatcherQueue.CreateTimer();
         _scrubThrottleTimer.Interval = TimeSpan.FromMilliseconds(33);
@@ -206,7 +230,11 @@ public sealed partial class TransportBar : UserControl
     }
 
     public Button QueueButtonControl => MoreButton;
-    public bool IsFullscreenPresentation => _isFullscreenPresentation;
+    public bool IsFullscreenPresentation => _isFullscreenPresentation ||
+        (App.MainWindowInstance?.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+        (App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+
+    public bool IsActiveFullscreenVideo => _isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive;
 
     public MediaItem? CurrentTrack
     {
@@ -256,7 +284,18 @@ public sealed partial class TransportBar : UserControl
 
     private static void OnIsPlayingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is TransportBar bar) bar.UpdatePlayPauseIcon();
+        if (d is TransportBar bar)
+        {
+            bar.UpdatePlayPauseIcon();
+            bar.UpdateThumbVisibility(animate: true);
+        }
+    }
+
+    public void UpdateThumbVisibility(bool animate = true)
+    {
+        if (ProgressSlider == null) return;
+        bool hasTrack = CurrentTrack != null && (CurrentTrack.Duration.TotalSeconds > 0 || IsPlaying);
+        SliderHelper.SetThumbVisibility(ProgressSlider, hasTrack, animate);
     }
 
     private static void OnPositionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -325,6 +364,7 @@ public sealed partial class TransportBar : UserControl
             ProgressSlider.Maximum = 100;
             _isProgrammaticChange = false;
             ProgressSlider.IsEnabled = false;
+            UpdateThumbVisibility(animate: true);
 
             SetMiniVideoPlayer(null);
             if (ArtImage != null)
@@ -392,6 +432,7 @@ public sealed partial class TransportBar : UserControl
         TotalTimeText.Text = CurrentTrack.DurationText;
         ProgressSlider.Maximum = CurrentTrack.Duration.TotalSeconds > 0 ? CurrentTrack.Duration.TotalSeconds : 100;
         ProgressSlider.IsEnabled = CurrentTrack.Duration.TotalSeconds > 0;
+        UpdateThumbVisibility(animate: true);
 
         // Preserve thumbnail art and populate poster image across both fullscreen and windowed modes
         if (MiniAlbumArt != null) MiniAlbumArt.Visibility = Visibility.Visible;
@@ -516,11 +557,24 @@ public sealed partial class TransportBar : UserControl
 
     private void UpdatePlayPauseIcon()
     {
-        PlayPauseIcon.Glyph = IsPlaying ? "\uE769" : "\uE768";
-        PlayPauseIcon.Margin = IsPlaying ? new Thickness(0, 0, 0, 0) : new Thickness(2, 0, 0, 0);
-        var actionName = IsPlaying ? "Pause" : "Play";
-        AutomationProperties.SetName(PlayPauseButton, actionName);
-        ToolTipService.SetToolTip(PlayPauseButton, actionName);
+        try
+        {
+            if (PlayPauseIcon != null)
+            {
+                PlayPauseIcon.Glyph = IsPlaying ? "\uE769" : "\uE768";
+                PlayPauseIcon.Margin = IsPlaying ? new Thickness(0, 0, 0, 0) : new Thickness(2, 0, 0, 0);
+            }
+            if (PlayPauseButton != null)
+            {
+                var actionName = IsPlaying ? "Pause" : "Play";
+                AutomationProperties.SetName(PlayPauseButton, actionName);
+                ToolTipService.SetToolTip(PlayPauseButton, actionName);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UpdatePlayPauseIcon] error: {ex.Message}");
+        }
     }
 
     private bool _isProgrammaticChange;
@@ -537,10 +591,20 @@ public sealed partial class TransportBar : UserControl
         ElapsedTimeText.Text = TimeFormatting.Format(TimeSpan.FromSeconds(Position));
     }
 
-    private void OnPlayPauseClick(object sender, RoutedEventArgs e) => PlayPauseRequested?.Invoke(this, EventArgs.Empty);
-    private void OnPreviousClick(object sender, RoutedEventArgs e) => PreviousRequested?.Invoke(this, EventArgs.Empty);
+    private void OnPlayPauseClick(object sender, RoutedEventArgs e)
+    {
+        if (PlayPauseIcon != null) TriggerIconClickAccent(PlayPauseIcon, PlayPauseButton);
+        try { PlayPauseRequested?.Invoke(this, EventArgs.Empty); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[OnPlayPauseClick] error: {ex.Message}"); }
+    }
+    private void OnPreviousClick(object sender, RoutedEventArgs e)
+    {
+        if (PreviousIcon != null) TriggerIconClickAccent(PreviousIcon, PreviousButton);
+        PreviousRequested?.Invoke(this, EventArgs.Empty);
+    }
     private void OnStopClick(object sender, RoutedEventArgs e)
     {
+        if (StopIcon != null) TriggerIconClickAccent(StopIcon, StopButton);
         if (StopButton != null)
         {
             Helpers.SpringAnimationHelper.AnimateSpringScale(StopButton, 1.0f);
@@ -550,7 +614,11 @@ public sealed partial class TransportBar : UserControl
             StopRequested?.Invoke(this, EventArgs.Empty);
         });
     }
-    private void OnNextClick(object sender, RoutedEventArgs e) => NextRequested?.Invoke(this, EventArgs.Empty);
+    private void OnNextClick(object sender, RoutedEventArgs e)
+    {
+        if (NextIcon != null) TriggerIconClickAccent(NextIcon, NextButton);
+        NextRequested?.Invoke(this, EventArgs.Empty);
+    }
     private void OnShuffleClick(object sender, RoutedEventArgs e) => ShuffleRequested?.Invoke(this, EventArgs.Empty);
     private void OnRepeatClick(object sender, RoutedEventArgs e) => RepeatRequested?.Invoke(this, EventArgs.Empty);
 
@@ -582,62 +650,130 @@ public sealed partial class TransportBar : UserControl
         }
     }
 
+    private Brush GetAccentForegroundBrush() =>
+        ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+            ?? new SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
+
+    private static SolidColorBrush CreateActiveTogglePillBackground(Brush accentBrush)
+    {
+        if (accentBrush is SolidColorBrush scb)
+        {
+            return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(34, scb.Color.R, scb.Color.G, scb.Color.B));
+        }
+        return new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(34, 0, 120, 212));
+    }
+
     private void UpdateShuffleVisual()
     {
         if (ShuffleIcon == null) return;
+        if (_iconDecayTimers.TryGetValue(ShuffleIcon, out var timer))
+        {
+            timer.Stop();
+            _iconDecayTimers.Remove(ShuffleIcon);
+        }
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            ShuffleButton?.ClearValue(Button.BackgroundProperty);
+            ShuffleIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            ToolTipService.SetToolTip(ShuffleButton, _isShuffleEnabled ? "Shuffle: On" : "Shuffle: Off");
+            return;
+        }
+
         if (_isShuffleEnabled)
         {
-            if (ShuffleButton != null)
-                ShuffleButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
-                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+            var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
+            if (ShuffleButton != null) ShuffleButton.Background = CreateActiveTogglePillBackground(accentBrush);
+            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: On");
         }
         else
         {
             ShuffleButton?.ClearValue(Button.BackgroundProperty);
-            ShuffleIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
-                ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+            ShuffleIcon.Foreground = GetAccentForegroundBrush();
             ToolTipService.SetToolTip(ShuffleButton, "Shuffle: Off");
         }
+    }
+
+    private void UpdateReplayVisual()
+    {
+        if (ReplayIcon == null) return;
+        if (_iconDecayTimers.TryGetValue(ReplayIcon, out var timer))
+        {
+            timer.Stop();
+            _iconDecayTimers.Remove(ReplayIcon);
+        }
+
+        ReplayIcon.Foreground = (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+            ? new SolidColorBrush(Microsoft.UI.Colors.White)
+            : GetAccentForegroundBrush();
     }
 
     private void UpdateRepeatVisual()
     {
         if (RepeatIcon == null) return;
+        if (_iconDecayTimers.TryGetValue(RepeatIcon, out var timer))
+        {
+            timer.Stop();
+            _iconDecayTimers.Remove(RepeatIcon);
+        }
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            RepeatButton?.ClearValue(Button.BackgroundProperty);
+            RepeatIcon.Glyph = _repeatMode == PlaybackRepeatMode.One ? "\uE8ED" : "\uE8EE";
+            RepeatIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            ToolTipService.SetToolTip(RepeatButton, _repeatMode switch
+            {
+                PlaybackRepeatMode.All => "Repeat: All",
+                PlaybackRepeatMode.One => "Repeat: One",
+                _ => "Repeat: Off"
+            });
+            return;
+        }
+
+        var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+            ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
+
         switch (_repeatMode)
         {
             case PlaybackRepeatMode.Off:
                 RepeatIcon.Glyph = "\uE8EE";
                 RepeatButton?.ClearValue(Button.BackgroundProperty);
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
+                RepeatIcon.Foreground = accentBrush;
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: Off");
                 break;
             case PlaybackRepeatMode.All:
                 RepeatIcon.Glyph = "\uE8EE";
-                if (RepeatButton != null)
-                    RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                if (RepeatButton != null) RepeatButton.Background = CreateActiveTogglePillBackground(accentBrush);
+                RepeatIcon.Foreground = accentBrush;
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: All");
                 break;
             case PlaybackRepeatMode.One:
                 RepeatIcon.Glyph = "\uE8ED";
-                if (RepeatButton != null)
-                    RepeatButton.Background = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
-                RepeatIcon.Foreground = ThemeResourceHelper.GetThemeBrush("TextOnAccentFillColorPrimaryBrush")
-                    ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                if (RepeatButton != null) RepeatButton.Background = CreateActiveTogglePillBackground(accentBrush);
+                RepeatIcon.Foreground = accentBrush;
                 ToolTipService.SetToolTip(RepeatButton, "Repeat: One");
                 break;
         }
     }
     private void OnQueueClick(object sender, RoutedEventArgs e) => QueueRequested?.Invoke(this, EventArgs.Empty);
-    private void OnTvEpisodeQueueButtonClick(object sender, RoutedEventArgs e) => TvEpisodeQueueRequested?.Invoke(this, EventArgs.Empty);
+    private void OnTvEpisodeQueueButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (TvEpisodeQueueIcon != null) TriggerIconClickAccent(TvEpisodeQueueIcon, TvEpisodeQueueButton);
+        TvEpisodeQueueRequested?.Invoke(this, EventArgs.Empty);
+    }
     private void OnTvShowQueueButtonClick(object sender, RoutedEventArgs e) => TvEpisodeQueueRequested?.Invoke(this, EventArgs.Empty);
-    private void OnPipClick(object sender, RoutedEventArgs e) => PipRequested?.Invoke(this, EventArgs.Empty);
+    private void OnPipClick(object sender, RoutedEventArgs e)
+    {
+        if (PipIcon != null) TriggerIconClickAccent(PipIcon, PipButton);
+        PipRequested?.Invoke(this, EventArgs.Empty);
+    }
     private void OnFullscreenClick(object sender, RoutedEventArgs e)
     {
+        if (FullscreenIcon != null) TriggerIconClickAccent(FullscreenIcon, FullscreenButton);
         if (!_isFullscreenPresentation && (CurrentTrack is null || !CurrentTrack.IsVideo)) return;
         FullscreenRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -651,12 +787,14 @@ public sealed partial class TransportBar : UserControl
         try
         {
             var slider = ProgressSlider;
-            if (slider == null || slider.ActualWidth <= 0 || !slider.IsEnabled) return;
-            if (CurrentTrack is null) return;
+            if (slider == null || slider.ActualWidth <= 0) return;
+            var playback = AppServices.PlaybackViewModel;
+            if (playback?.CurrentTrack == null) return;
 
-            if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+            var targetXamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            if (targetXamlRoot != null && HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot != targetXamlRoot)
             {
-                HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+                HoverPreviewPopup.XamlRoot = targetXamlRoot;
             }
 
             if (!_isSeeking)
@@ -664,7 +802,7 @@ public sealed partial class TransportBar : UserControl
                 var pt = e.GetCurrentPoint(slider);
                 double trackTravel = Math.Max(1.0, slider.ActualWidth - 20.0);
                 double percent = Math.Clamp((pt.Position.X - 10.0) / trackTravel, 0.0, 1.0);
-                double totalSeconds = slider.Maximum > 0 ? slider.Maximum : 100.0;
+                double totalSeconds = slider.Maximum > 0 ? slider.Maximum : (playback.CurrentTrack.Duration.TotalSeconds > 0 ? playback.CurrentTrack.Duration.TotalSeconds : 100.0);
                 UpdateSeekPreview(totalSeconds * percent, isDragging: false, pointerX: pt.Position.X);
             }
         }
@@ -676,7 +814,7 @@ public sealed partial class TransportBar : UserControl
         if (!_isSeeking && HoverPreviewPopup != null)
         {
             HoverPreviewPopup.IsOpen = false;
-            _exactThumbnailVersion++;
+            _pendingThumbnailSeconds = null;
             _activeHoverSeconds = -1;
             if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
             if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
@@ -685,15 +823,17 @@ public sealed partial class TransportBar : UserControl
 
     private void OnProgressPointerCapture(object sender, PointerRoutedEventArgs e)
     {
-        if (CurrentTrack is null || !ProgressSlider.IsEnabled)
+        var track = CurrentTrack ?? AppServices.PlaybackViewModel?.CurrentTrack;
+        if (track is null)
         {
             e.Handled = true;
             return;
         }
         _isSeeking = true;
-        if (HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot == null)
+        var targetXamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+        if (targetXamlRoot != null && HoverPreviewPopup != null && HoverPreviewPopup.XamlRoot != targetXamlRoot)
         {
-            HoverPreviewPopup.XamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            HoverPreviewPopup.XamlRoot = targetXamlRoot;
         }
         UpdateSeekPreview(ProgressSlider.Value, isDragging: true);
     }
@@ -709,7 +849,7 @@ public sealed partial class TransportBar : UserControl
         {
             HoverPreviewPopup.IsOpen = false;
         }
-        _exactThumbnailVersion++;
+        _pendingThumbnailSeconds = null;
         _activeHoverSeconds = -1;
         if (HoverThumbnailImage != null) HoverThumbnailImage.Source = null;
         if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Collapsed;
@@ -747,10 +887,15 @@ public sealed partial class TransportBar : UserControl
 
     private void UpdatePipState()
     {
+        if (PipButton != null)
+        {
+            ToolTipService.SetToolTip(PipButton, IsInPipMode ? "Exit Picture in Picture" : "Picture in Picture");
+        }
     }
 
     private void OnSkipBackClick(object sender, RoutedEventArgs e)
     {
+        if (SkipBackIcon != null) TriggerIconClickAccent(SkipBackIcon, SkipBackButton);
         var interval = AppServices.Settings.Current.SkipBackwardInterval;
         var newPos = Math.Max(0, Position - interval);
         PositionChanged?.Invoke(this, newPos);
@@ -758,6 +903,7 @@ public sealed partial class TransportBar : UserControl
 
     private void OnSkipForwardClick(object sender, RoutedEventArgs e)
     {
+        if (SkipForwardIcon != null) TriggerIconClickAccent(SkipForwardIcon, SkipForwardButton);
         var interval = AppServices.Settings.Current.SkipForwardInterval;
         var max = CurrentTrack?.Duration.TotalSeconds ?? 100;
         if (max <= 0)
@@ -772,20 +918,15 @@ public sealed partial class TransportBar : UserControl
     {
         if (BarGrid != null)
         {
-            if (_isFullscreenPresentation)
+            if (IsActiveFullscreenVideo)
             {
-                bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
-                    (AppServices.Playback?.CurrentTrack?.IsVideo == true);
-                if (isFullscreenVideo)
-                {
-                    BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
-                    BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
-                }
-                else
-                {
-                    BarGrid.BorderThickness = new Thickness(0);
-                    BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                }
+                BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+                BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
+            }
+            else if (_isFullscreenPresentation && App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+            {
+                BarGrid.BorderThickness = new Thickness(0);
+                BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             }
             else
             {
@@ -815,9 +956,7 @@ public sealed partial class TransportBar : UserControl
             }
             if (TrackTitleText != null)
             {
-                TrackTitleText.VerticalAlignment = string.IsNullOrWhiteSpace(CurrentTrack?.Artist)
-                    ? VerticalAlignment.Center
-                    : VerticalAlignment.Stretch;
+                TrackTitleText.VerticalAlignment = VerticalAlignment.Center;
                 TrackTitleText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
             }
 
@@ -832,7 +971,7 @@ public sealed partial class TransportBar : UserControl
             }
             if (ControlsRowGrid != null)
             {
-                ControlsRowGrid.Padding = new Thickness(24, 6, 24, 14);
+                ControlsRowGrid.Padding = new Thickness(24, 4, 24, 10);
             }
             if (ProgressSlider != null)
             {
@@ -853,7 +992,7 @@ public sealed partial class TransportBar : UserControl
             }
             if (TrackTitleText != null)
             {
-                TrackTitleText.VerticalAlignment = VerticalAlignment.Stretch;
+                TrackTitleText.VerticalAlignment = VerticalAlignment.Center;
                 TrackTitleText.ClearValue(TextBlock.ForegroundProperty);
             }
 
@@ -905,12 +1044,32 @@ public sealed partial class TransportBar : UserControl
         UpdateFullscreenFontColors(_isFullscreenPresentation);
         UpdateAcrylicBackground();
         ApplyAllFlyoutsTheming();
+        UpdateVolumeIcon();
+        UpdateShuffleVisual();
+        UpdateReplayVisual();
+        UpdateRepeatVisual();
         if (HoverPreviewPopup != null)
         {
             HoverPreviewPopup.RequestedTheme = RequestedTheme;
             if (HoverPreviewPopup.Child is FrameworkElement popupContent)
             {
                 popupContent.RequestedTheme = RequestedTheme;
+                if (popupContent is Border popupBorder)
+                {
+                    if (IsActiveFullscreenVideo)
+                    {
+                        popupBorder.Background = ThemeHelper.CreateFullscreenFlyoutBackgroundBrush();
+                        popupBorder.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                    }
+                    else
+                    {
+                        var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+                        var effectiveTheme = ThemeHelper.GetEffectiveElementTheme();
+                        popupBorder.Background = ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+                        popupBorder.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
+                    }
+                    popupBorder.BorderThickness = new Thickness(1);
+                }
             }
         }
     }
@@ -950,6 +1109,7 @@ public sealed partial class TransportBar : UserControl
             if (SubtitlesIcon != null) SubtitlesIcon.Foreground = whiteBrush;
             if (VolumeIcon != null) VolumeIcon.Foreground = whiteBrush;
             if (FlyoutVolumeIcon != null) FlyoutVolumeIcon.Foreground = whiteBrush;
+            if (TvEpisodeQueueIcon != null) TvEpisodeQueueIcon.Foreground = whiteBrush;
             if (FullscreenIcon != null) FullscreenIcon.Foreground = whiteBrush;
             if (PipIcon != null) PipIcon.Foreground = whiteBrush;
             if (MoreIcon != null) MoreIcon.Foreground = whiteBrush;
@@ -981,6 +1141,10 @@ public sealed partial class TransportBar : UserControl
             {
                 ApplyForegroundRecursively(BarGrid, true);
             }
+
+            UpdateShuffleVisual();
+            UpdateReplayVisual();
+            UpdateRepeatVisual();
         }
         else
         {
@@ -1002,6 +1166,8 @@ public sealed partial class TransportBar : UserControl
             SubtitlesIcon?.ClearValue(FontIcon.ForegroundProperty);
             VolumeIcon?.ClearValue(FontIcon.ForegroundProperty);
             FlyoutVolumeIcon?.ClearValue(FontIcon.ForegroundProperty);
+            TvEpisodeQueueIcon?.ClearValue(FontIcon.ForegroundProperty);
+            TvEpisodeQueueButton?.ClearValue(Button.ForegroundProperty);
             FullscreenIcon?.ClearValue(FontIcon.ForegroundProperty);
             PipIcon?.ClearValue(FontIcon.ForegroundProperty);
             MoreIcon?.ClearValue(FontIcon.ForegroundProperty);
@@ -1035,6 +1201,7 @@ public sealed partial class TransportBar : UserControl
 
             UpdateVolumeIcon();
             UpdateShuffleVisual();
+            UpdateReplayVisual();
             UpdateRepeatVisual();
         }
     }
@@ -1107,35 +1274,33 @@ public sealed partial class TransportBar : UserControl
             return;
         }
 
-        if (_isFullscreenPresentation)
+        if (IsActiveFullscreenVideo)
         {
-            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
-                (AppServices.Playback?.CurrentTrack?.IsVideo == true);
-
-            if (isFullscreenVideo)
+            BarGrid.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
+            BarGrid.BorderThickness = new Thickness(0, 1.5, 0, 0);
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+        }
+        else if (_isFullscreenPresentation && App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+        {
+            // Fullscreen audio / non-video fallback: smooth vertical gradient scrim float over video
+            BarGrid.Background = new LinearGradientBrush
             {
-                BarGrid.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
-                BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
-                BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
-            }
-            else
-            {
-                // Fullscreen audio / non-video fallback: smooth vertical gradient scrim float over video
-                BarGrid.Background = new LinearGradientBrush
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
                 {
-                    StartPoint = new Windows.Foundation.Point(0, 0),
-                    EndPoint = new Windows.Foundation.Point(0, 1),
-                    GradientStops =
-                    {
-                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
-                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
-                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
-                        new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
-                    }
-                };
-                BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                BarGrid.BorderThickness = new Thickness(0);
-            }
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
+                }
+            };
+            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            BarGrid.BorderThickness = new Thickness(0);
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
         }
         else
         {
@@ -1149,16 +1314,26 @@ public sealed partial class TransportBar : UserControl
             try { BarGrid.Shadow = null; } catch { }
 
             var backdrop = AppServices.Settings.Current.BackdropType;
+            bool isAcrylicEnabled = AppServices.Settings.Current.AcrylicTransportBar;
 
-            if (backdrop == AppThemeBackdrop.Acrylic)
+            if (backdrop == AppThemeBackdrop.BackdropStudio)
             {
-                // When window backdrop is Acrylic, apply frosted acrylic material to the transport bar
-                ApplyInAppFrostedAcrylic(isLight);
-            }
-            else if (backdrop == AppThemeBackdrop.FluentSymphony)
-            {
-                // Fluent Symphony: Translucent Frosted Acrylic floating over Mica window foundation
-                ApplyInAppFrostedAcrylic(isLight);
+                var studioBar = AppServices.Settings.Current.StudioTransportBar;
+                var studioBase = AppServices.Settings.Current.StudioWindowBase;
+                switch (studioBar)
+                {
+                    case StudioTransportBarStyle.FrostedAcrylic:
+                        ApplyInAppFrostedAcrylic(isLight);
+                        break;
+                    case StudioTransportBarStyle.Transparent:
+                        // Strictly keep transparent presentation exclusive to fullscreen mode.
+                        ApplyNonFullscreenBackdropBar(studioBase, isLight);
+                        break;
+                    case StudioTransportBarStyle.Solid:
+                    default:
+                        ApplySolidBar(isLight);
+                        break;
+                }
             }
             else if (backdrop == AppThemeBackdrop.CinematicAdaptive)
             {
@@ -1173,74 +1348,108 @@ public sealed partial class TransportBar : UserControl
                 }
                 else
                 {
-                    ApplyInAppFrostedAcrylic(isLight);
-                }
-            }
-            else if (backdrop == AppThemeBackdrop.BackdropStudio)
-            {
-                var studioBar = AppServices.Settings.Current.StudioTransportBar;
-                switch (studioBar)
-                {
-                    case StudioTransportBarStyle.FrostedAcrylic:
+                    if (isAcrylicEnabled)
+                    {
                         ApplyInAppFrostedAcrylic(isLight);
-                        break;
-                    case StudioTransportBarStyle.Transparent:
-                        BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(AppServices.Settings.Current.StudioWindowBase, ActualTheme);
-                        break;
-                    case StudioTransportBarStyle.Solid:
-                    default:
-                        ApplySolidBar(isLight);
-                        break;
+                    }
+                    else
+                    {
+                        ApplyMicaBar(isLight);
+                    }
                 }
             }
-            else if (AppServices.Settings.Current.AcrylicTransportBar)
+            else if (isAcrylicEnabled)
             {
-                // Explicit toggle in transport bar settings when window backdrop is not Acrylic:
+                // Explicit toggle in transport bar settings:
                 // Translucent Frosted Acrylic material
                 ApplyInAppFrostedAcrylic(isLight);
             }
             else
             {
-                // Default: Reflect the active window backdrop type
-                switch (backdrop)
-                {
-                    case AppThemeBackdrop.Mica:
-                    case AppThemeBackdrop.MicaAlt:
-                        // Reflect Mica / Mica Alt: seamless pass-through allowing the underlying Mica desktop
-                        // material to shine through natively with a subtle Fluent 2 elevation border
-                        BarGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, ActualTheme);
-                        break;
-
-                    case AppThemeBackdrop.Solid:
-                    default:
-                        // Reflect Solid: solid opaque bar matching the window surface theme
-                        ApplySolidBar(isLight);
-                        break;
-                }
+                // Match the active window backdrop without fullscreen transparency
+                ApplyNonFullscreenBackdropBar(backdrop, isLight);
             }
         }
     }
 
+    private void ApplyNonFullscreenBackdropBar(AppThemeBackdrop backdrop, bool isLight)
+    {
+        switch (backdrop)
+        {
+            case AppThemeBackdrop.Mica:
+                ApplyMicaBar(isLight);
+                break;
+
+            case AppThemeBackdrop.MicaAlt:
+                ApplyMicaAltBar(isLight);
+                break;
+
+            case AppThemeBackdrop.Acrylic:
+                ApplyInAppFrostedAcrylic(isLight);
+                break;
+
+            case AppThemeBackdrop.FluentSymphony:
+                ApplyFluentSymphonyBar(isLight);
+                break;
+
+            case AppThemeBackdrop.Solid:
+            default:
+                ApplySolidBar(isLight);
+                break;
+        }
+    }
+
+    private void ApplyMicaBar(bool isLight)
+    {
+        // Fluent 2 Mica chrome veil over DWM Mica base: never raw fullscreen transparency
+        BarGrid.Background = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(150, 246, 246, 250)
+            : Microsoft.UI.ColorHelper.FromArgb(135, 30, 30, 34));
+        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(AppThemeBackdrop.Mica, ActualTheme);
+        BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+    }
+
+    private void ApplyMicaAltBar(bool isLight)
+    {
+        // Fluent 2 Mica Alt elevated chrome veil over DWM Mica Alt base
+        BarGrid.Background = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(175, 242, 242, 246)
+            : Microsoft.UI.ColorHelper.FromArgb(165, 22, 22, 25));
+        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(AppThemeBackdrop.MicaAlt, ActualTheme);
+        BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+    }
+
+    private void ApplyFluentSymphonyBar(bool isLight)
+    {
+        BarGrid.Background = new SolidColorBrush(isLight
+            ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
+            : Microsoft.UI.ColorHelper.FromArgb(240, 20, 20, 24));
+        BarGrid.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(AppThemeBackdrop.FluentSymphony, ActualTheme);
+        BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+    }
+
     private void ApplyInAppFrostedAcrylic(bool isLight)
     {
+        // Fluent 2 Translucent Frosted Acrylic:
+        // Genuine AcrylicBrush with authentic Fluent 2 acrylic tint and specular luminosity,
+        // framed by a 1px specular highlight top border.
         BarGrid.Background = new AcrylicBrush
         {
             AlwaysUseFallback = false,
             TintColor = isLight
                 ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)
-                : Microsoft.UI.ColorHelper.FromArgb(255, 18, 20, 26),
-            TintOpacity = isLight ? 0.30 : 0.35,
-            TintLuminosityOpacity = isLight ? 0.85 : 0.80,
+                : Microsoft.UI.ColorHelper.FromArgb(255, 24, 26, 32),
+            TintOpacity = isLight ? 0.40 : 0.45,
+            TintLuminosityOpacity = isLight ? 0.85 : 0.75,
             FallbackColor = isLight
-                ? Microsoft.UI.ColorHelper.FromArgb(240, 248, 248, 252)
-                : Microsoft.UI.ColorHelper.FromArgb(240, 24, 24, 30)
+                ? Microsoft.UI.ColorHelper.FromArgb(140, 245, 245, 250)
+                : Microsoft.UI.ColorHelper.FromArgb(140, 20, 22, 28)
         };
-
-        BarGrid.BorderBrush = new SolidColorBrush(isLight
-            ? Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0)
-            : Microsoft.UI.ColorHelper.FromArgb(25, 255, 255, 255));
+        BarGrid.BorderBrush = ThemeResourceHelper.GetThemeBrush("DividerStrokeColorDefaultBrush",
+            new SolidColorBrush(isLight
+                ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
+                : Microsoft.UI.ColorHelper.FromArgb(40, 255, 255, 255)));
+        BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
     }
 
     private void ApplySolidBar(bool isLight)
@@ -1252,6 +1461,7 @@ public sealed partial class TransportBar : UserControl
         BarGrid.BorderBrush = new SolidColorBrush(isLight
             ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0)
             : Microsoft.UI.ColorHelper.FromArgb(35, 255, 255, 255));
+        BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
     }
 
     public void SetArtImageSource(ImageSource source)
@@ -1307,10 +1517,15 @@ public sealed partial class TransportBar : UserControl
 
     private void OnTrackClick(object sender, RoutedEventArgs e) => OnTrackInfoClick(sender, e);
     private void OnInfoClick(object sender, RoutedEventArgs e) => OnInfoButtonClick(sender, e);
-    private void OnReplayClick(object sender, RoutedEventArgs e) => PositionChanged?.Invoke(this, 0d);
+    private void OnReplayClick(object sender, RoutedEventArgs e)
+    {
+        if (ReplayIcon != null) TriggerIconClickAccent(ReplayIcon, ReplayButton);
+        PositionChanged?.Invoke(this, 0d);
+    }
 
     private void OnVolumeClick(object sender, RoutedEventArgs e)
     {
+        if (FlyoutVolumeIcon != null) TriggerIconClickAccent(FlyoutVolumeIcon, FlyoutVolumeButton);
         MuteToggled?.Invoke(this, EventArgs.Empty);
     }
 
@@ -1364,12 +1579,27 @@ public sealed partial class TransportBar : UserControl
         }
         catch { }
 
+        bool isFullscreenVideo = ThemeHelper.IsFullscreenPresentationActive;
+        if (VolumeFlyout != null)
+        {
+            VolumeFlyout.ShouldConstrainToRootBounds = ThemeHelper.ShouldConstrainFlyoutToRootBounds();
+        }
+        if (VolumeValueText != null)
+        {
+            if (isFullscreenVideo)
+            {
+                VolumeValueText.Foreground = ThemeHelper.GetFullscreenWhiteBrush();
+            }
+            else
+            {
+                VolumeValueText.ClearValue(TextBlock.ForegroundProperty);
+            }
+        }
         if (sender is Flyout f && f.Content is FrameworkElement fe)
         {
-            bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true;
             fe.RequestedTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
         }
-        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        if (IsActiveFullscreenVideo)
         {
             ThemeHelper.StartFullscreenPopupWatcher();
         }
@@ -1381,6 +1611,7 @@ public sealed partial class TransportBar : UserControl
     {
         ApplyVolumeFlyoutPresenterInstanceTheming();
         EnsureSliderHaloUnclipped(VolumeSlider);
+        ThemeHelper.ProcessFullscreenPopups();
     }
 
     private static void EnsureSliderHaloUnclipped(Slider? slider)
@@ -1411,9 +1642,18 @@ public sealed partial class TransportBar : UserControl
         return false;
     }
 
+    public static bool IsVolumeFlyout(FlyoutPresenter? presenter)
+    {
+        if (presenter == null) return false;
+        if (presenter.Content is FrameworkElement fe && fe.Name == "VolumeFlyoutContentGrid") return true;
+        if (presenter.Name == "VolumeFlyoutPresenter") return true;
+        return false;
+    }
+
     public static bool IsRootMenuPresenter(MenuFlyoutPresenter? presenter)
     {
         if (presenter == null) return false;
+        if (presenter.Tag is string s && s.StartsWith("ROOT_FLYOUT")) return true;
         var bar = App.MainWindowInstance?.TransportBarElement;
         if (bar != null)
         {
@@ -1442,6 +1682,61 @@ public sealed partial class TransportBar : UserControl
         return false;
     }
 
+    public static bool TryGetRootMenuPlacement(MenuFlyoutPresenter? presenter, double presenterWidth, double presenterHeight, double rootWidth, double margin, out double left, out double top)
+    {
+        left = 0;
+        top = 0;
+        var bar = App.MainWindowInstance?.TransportBarElement;
+        if (bar != null)
+        {
+            FrameworkElement? anchorBtn = null;
+            if (bar.MoreButton != null && (bar.MoreMenuFlyout?.IsOpen == true || IsRootMenuPresenter(presenter)))
+            {
+                anchorBtn = bar.MoreButton;
+            }
+            else if (bar.AudioButton != null && bar.AudioMenuFlyout?.IsOpen == true)
+            {
+                anchorBtn = bar.AudioButton;
+            }
+            else if (bar.SubtitlesButton != null && bar.SubtitlesMenuFlyout?.IsOpen == true)
+            {
+                anchorBtn = bar.SubtitlesButton;
+            }
+
+            if (anchorBtn != null && anchorBtn.IsLoaded)
+            {
+                try
+                {
+                    var btnTransform = anchorBtn.TransformToVisual(null);
+                    var btnPos = btnTransform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                    if (btnPos.X > 0)
+                    {
+                        left = Math.Clamp(btnPos.X + anchorBtn.ActualWidth - presenterWidth, margin, Math.Max(margin, rootWidth - margin - presenterWidth));
+                        top = Math.Max(margin, btnPos.Y - presenterHeight);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+        }
+        return false;
+    }
+
+    private void SafeSetLocalResource(string key, object value)
+    {
+        // No-op: In WinUI 3, accessing or mutating this.Resources while TransportBar is being
+        // reparented or during presentation mode transitions causes unmanaged WinRT IMap.HasKey
+        // Access Violations (0xc0000005). Flyouts are styled directly via declarative styles
+        // and ThemeHelper.
+    }
+
+    private static void SafeSetAppResource(string key, object value)
+    {
+        // No-op: In WinUI 3, App.MainWindowContent.Resources is sealed/immutable at runtime.
+        // Mutating it causes first-chance COMException 0x800F0902. Flyouts are styled via
+        // SafeSetLocalResource and declarative FlyoutPresenterStyles.
+    }
+
     public void ApplyVolumeFlyoutTheming()
     {
         UpdateVolumeIcon();
@@ -1458,7 +1753,7 @@ public sealed partial class TransportBar : UserControl
     {
         if (VolumeFlyout == null) return;
 
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        bool isFullscreenVideo = IsActiveFullscreenVideo;
         var effectiveTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
         var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
 
@@ -1466,44 +1761,52 @@ public sealed partial class TransportBar : UserControl
         Brush borderBrush = ThemeHelper.GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme, isFullscreenVideo);
         var borderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
 
-        try
-        {
-            this.Resources["VolumeFlyoutPresenterBackground"] = bgBrush;
-            this.Resources["VolumeFlyoutPresenterBorderBrush"] = borderBrush;
-        }
-        catch { }
+        SafeSetLocalResource("VolumeFlyoutPresenterBackground", bgBrush);
+        SafeSetLocalResource("VolumeFlyoutPresenterBorderBrush", borderBrush);
+        SafeSetAppResource("VolumeFlyoutPresenterBackground", bgBrush);
+        SafeSetAppResource("VolumeFlyoutPresenterBorderBrush", borderBrush);
 
         try
         {
-            if (Application.Current != null)
-            {
-                Application.Current.Resources["VolumeFlyoutPresenterBackground"] = bgBrush;
-                Application.Current.Resources["VolumeFlyoutPresenterBorderBrush"] = borderBrush;
-            }
+            VolumeFlyout.ShouldConstrainToRootBounds = ThemeHelper.ShouldConstrainFlyoutToRootBounds();
         }
         catch { }
 
-        try
+        if (!VolumeFlyout.IsOpen)
         {
-            var style = new Style(typeof(FlyoutPresenter));
-            if (Application.Current?.Resources.TryGetValue("DefaultFlyoutPresenterStyle", out var defStyle) == true && defStyle is Style baseStyle)
+            try
             {
-                style.BasedOn = baseStyle;
+                var style = new Style(typeof(FlyoutPresenter));
+                if (isFullscreenVideo &&
+                    Application.Current?.Resources.TryGetValue("FullscreenFlyoutPresenterStyle", out var fsStyleObj) == true &&
+                    fsStyleObj is Style fsStyle)
+                {
+                    style.BasedOn = fsStyle;
+                }
+                else if (Application.Current?.Resources.TryGetValue("DefaultFlyoutPresenterStyle", out var defStyle) == true &&
+                         defStyle is Style baseStyle)
+                {
+                    style.BasedOn = baseStyle;
+                }
+                style.Setters.Add(new Setter(FlyoutPresenter.RequestedThemeProperty, effectiveTheme));
+                if (isFullscreenVideo)
+                {
+                    style.Setters.Add(new Setter(Control.ForegroundProperty, ThemeHelper.GetFullscreenWhiteBrush()));
+                }
+                style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(12, 8, 12, 8)));
+                style.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, bgBrush));
+                style.Setters.Add(new Setter(FlyoutPresenter.BorderBrushProperty, borderBrush));
+                style.Setters.Add(new Setter(FlyoutPresenter.BorderThicknessProperty, borderThickness));
+                style.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
+                style.Setters.Add(new Setter(FlyoutPresenter.MinHeightProperty, 48.0));
+                style.Setters.Add(new Setter(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
+                style.Setters.Add(new Setter(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
+                VolumeFlyout.FlyoutPresenterStyle = style;
             }
-            style.Setters.Add(new Setter(FlyoutPresenter.RequestedThemeProperty, effectiveTheme));
-            style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(12, 8, 12, 8)));
-            style.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, bgBrush));
-            style.Setters.Add(new Setter(FlyoutPresenter.BorderBrushProperty, borderBrush));
-            style.Setters.Add(new Setter(FlyoutPresenter.BorderThicknessProperty, borderThickness));
-            style.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
-            style.Setters.Add(new Setter(FlyoutPresenter.MinHeightProperty, 48.0));
-            style.Setters.Add(new Setter(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
-            style.Setters.Add(new Setter(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
-            VolumeFlyout.FlyoutPresenterStyle = style;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ApplyVolumeFlyoutTheming] Style update failed: {ex.Message}");
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ApplyVolumeFlyoutTheming] Style update failed: {ex.Message}");
+            }
         }
 
         try
@@ -1545,12 +1848,13 @@ public sealed partial class TransportBar : UserControl
                     presenter.CornerRadius = new CornerRadius(8);
                     presenter.BorderThickness = borderThickness;
                     var borders = FindVisualChildren<Border>(presenter);
-                    foreach (var b in borders)
+                    if (borders.Count > 0)
                     {
-                        b.Background = bgBrush;
-                        b.BorderBrush = borderBrush;
-                        b.BorderThickness = borderThickness;
-                        b.CornerRadius = new CornerRadius(8);
+                        var rootBorder = borders[0];
+                        rootBorder.Background = bgBrush;
+                        rootBorder.BorderBrush = borderBrush;
+                        rootBorder.BorderThickness = borderThickness;
+                        rootBorder.CornerRadius = new CornerRadius(8);
                     }
                 }
             }
@@ -1564,77 +1868,71 @@ public sealed partial class TransportBar : UserControl
     public void ApplyAllFlyoutsTheming()
     {
         ApplyVolumeFlyoutTheming();
-        ApplyMenuFlyoutPresenterTheming(MoreMenuFlyout);
-        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
-        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(AudioButton?.Flyout as MenuFlyout ?? AudioMenuFlyout);
+        ApplyMenuFlyoutPresenterTheming(SubtitlesButton?.Flyout as MenuFlyout ?? SubtitlesMenuFlyout);
     }
 
     public void ApplyMenuFlyoutPresenterTheming(MenuFlyout? mf)
     {
         if (mf == null) return;
 
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        bool isFullscreenVideo = IsActiveFullscreenVideo;
         var backdrop = AppServices.Settings.Current.BackdropType;
         var effectiveTheme = isFullscreenVideo ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
 
-        Brush bgBrush = isFullscreenVideo 
-            ? ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush() 
-            : ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
-        Brush borderBrush = isFullscreenVideo 
-            ? ThemeHelper.CreateFullscreenSpecularBorderBrush() 
+        Brush bgBrush = isFullscreenVideo
+            ? ThemeHelper.CreateFullscreenFlyoutBackgroundBrush()
+            : ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme, hasSystemBackdrop: true);
+        Brush borderBrush = isFullscreenVideo
+            ? ThemeHelper.CreateFullscreenSpecularBorderBrush()
             : ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
         var borderThickness = new Thickness(isFullscreenVideo ? 1.5 : 1);
 
-        try
+        if (!mf.IsOpen)
         {
-            mf.ShouldConstrainToRootBounds = isFullscreenVideo;
-        }
-        catch { }
-
-        try
-        {
-            this.Resources["MenuFlyoutPresenterBackground"] = bgBrush;
-            this.Resources["MenuFlyoutPresenterBorderBrush"] = borderBrush;
-            this.Resources["SurfaceStrokeColorFlyoutBrush"] = borderBrush;
-        }
-        catch { }
-
-        try
-        {
-            if (Application.Current != null)
+            try
             {
-                Application.Current.Resources["MenuFlyoutPresenterBackground"] = bgBrush;
-                Application.Current.Resources["MenuFlyoutPresenterBorderBrush"] = borderBrush;
-                Application.Current.Resources["SurfaceStrokeColorFlyoutBrush"] = borderBrush;
+                mf.ShouldConstrainToRootBounds = ThemeHelper.ShouldConstrainFlyoutToRootBounds();
+            }
+            catch { }
+        }
+
+        SafeSetLocalResource("MenuFlyoutPresenterBackground", bgBrush);
+        SafeSetLocalResource("MenuFlyoutPresenterBorderBrush", borderBrush);
+        SafeSetLocalResource("SurfaceStrokeColorFlyoutBrush", borderBrush);
+        SafeSetAppResource("MenuFlyoutPresenterBackground", bgBrush);
+        SafeSetAppResource("MenuFlyoutPresenterBorderBrush", borderBrush);
+        SafeSetAppResource("SurfaceStrokeColorFlyoutBrush", borderBrush);
+
+        if (!mf.IsOpen)
+        {
+            try
+            {
                 if (isFullscreenVideo)
                 {
-                    Application.Current.Resources["MenuFlyoutSystemBackdrop"] = null;
+                    if (Application.Current?.Resources.TryGetValue("FullscreenCinematicMenuFlyoutPresenterStyle", out var fsStyle) == true && fsStyle is Style s && !ReferenceEquals(mf.MenuFlyoutPresenterStyle, s))
+                    {
+                        mf.MenuFlyoutPresenterStyle = s;
+                    }
+                }
+                else
+                {
+                    var themedStyle = ThemeHelper.CreateThemedMenuFlyoutPresenterStyle(
+                        bgBrush,
+                        borderBrush,
+                        borderThickness,
+                        effectiveTheme);
+                    if (!ReferenceEquals(mf.MenuFlyoutPresenterStyle, themedStyle))
+                    {
+                        mf.MenuFlyoutPresenterStyle = themedStyle;
+                    }
                 }
             }
-        }
-        catch { }
-
-        try
-        {
-            var style = new Style(typeof(MenuFlyoutPresenter));
-            if (Application.Current?.Resources.TryGetValue("CinematicMenuFlyoutPresenterStyle", out var defStyle) == true && defStyle is Style baseStyle)
+            catch (Exception ex)
             {
-                style.BasedOn = baseStyle;
+                System.Diagnostics.Debug.WriteLine($"[ApplyMenuFlyoutPresenterTheming] Style update failed: {ex.Message}");
             }
-            style.Setters.Add(new Setter(MenuFlyoutPresenter.RequestedThemeProperty, effectiveTheme));
-            style.Setters.Add(new Setter(MenuFlyoutPresenter.BackgroundProperty, bgBrush));
-            style.Setters.Add(new Setter(MenuFlyoutPresenter.BorderBrushProperty, borderBrush));
-            style.Setters.Add(new Setter(MenuFlyoutPresenter.BorderThicknessProperty, borderThickness));
-            style.Setters.Add(new Setter(MenuFlyoutPresenter.CornerRadiusProperty, new CornerRadius(8)));
-            if (isFullscreenVideo)
-            {
-                style.Setters.Add(new Setter(MenuFlyoutPresenter.SystemBackdropProperty, null));
-            }
-            mf.MenuFlyoutPresenterStyle = style;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ApplyMenuFlyoutPresenterTheming] Style update failed: {ex.Message}");
         }
 
         TraverseAndStyleMenuFlyout(mf);
@@ -1644,10 +1942,10 @@ public sealed partial class TransportBar : UserControl
     private void TraverseAndStyleMenuFlyout(MenuFlyout? mf)
     {
         if (mf == null) return;
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        bool isFullscreenVideo = IsActiveFullscreenVideo;
         if (!isFullscreenVideo) return;
 
-        var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+        var bgBrush = ThemeHelper.CreateFullscreenFlyoutBackgroundBrush();
         var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
 
         void StyleItems(System.Collections.Generic.IList<MenuFlyoutItemBase> items)
@@ -1688,7 +1986,7 @@ public sealed partial class TransportBar : UserControl
             if (App.MainWindowInstance?.TransportBarElement?.XamlRoot is { } xr3) xamlRoots.Add(xr3);
 
             FlyoutHelper.CollectActiveXamlRoots(xamlRoots);
-            bool isFullscreen = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+            bool isFullscreen = IsActiveFullscreenVideo;
             if (isFullscreen)
             {
                 FlyoutHelper.StyleAllActiveFlyoutPresenters(bgBrush, borderBrush);
@@ -1696,13 +1994,12 @@ public sealed partial class TransportBar : UserControl
 
             foreach (var xr in xamlRoots)
             {
-                var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                var openPopups = FlyoutHelper.SafeGetOpenPopupsForXamlRoot(xr);
                 if (openPopups == null) continue;
                 foreach (var p in openPopups)
                 {
                     if (p == null || !p.IsOpen) continue;
-                    p.RequestedTheme = effectiveTheme;
-                    if (p.Child is FrameworkElement childFe)
+                    if (p.Child is FrameworkElement childFe && childFe.ActualTheme != effectiveTheme && childFe.RequestedTheme != effectiveTheme)
                     {
                         childFe.RequestedTheme = effectiveTheme;
                     }
@@ -1717,7 +2014,16 @@ public sealed partial class TransportBar : UserControl
                     }
                     else if (p.Child is Border b)
                     {
-                        if (effectiveTheme == ElementTheme.Dark && (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true))
+                        var innerPresenter = FindVisualChild<Control>(b);
+                        if (innerPresenter is MenuFlyoutPresenter or FlyoutPresenter)
+                        {
+                            if (b.ActualTheme != effectiveTheme && b.RequestedTheme != effectiveTheme) b.RequestedTheme = effectiveTheme;
+                            if (b.Background != null) b.Background = null;
+                            if (b.BorderThickness.Left != 0) b.BorderThickness = new Thickness(0);
+                            if (b.BorderBrush != null) b.BorderBrush = null;
+                            ApplyPresenterProperties(innerPresenter, bgBrush, borderBrush, borderThickness, effectiveTheme);
+                        }
+                        else if (effectiveTheme == ElementTheme.Dark && IsActiveFullscreenVideo)
                         {
                             b.Background = bgBrush;
                             b.BorderBrush = borderBrush;
@@ -1747,8 +2053,7 @@ public sealed partial class TransportBar : UserControl
 
     private static void ApplyPresenterProperties(Control presenter, Brush bgBrush, Brush borderBrush, Thickness borderThickness, ElementTheme effectiveTheme)
     {
-        bool isFullscreenVideo = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
-                                 App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+        bool isFullscreenVideo = ThemeHelper.IsFullscreenPresentationActive;
 
         if (isFullscreenVideo)
         {
@@ -1756,12 +2061,27 @@ public sealed partial class TransportBar : UserControl
             return;
         }
 
-        presenter.RequestedTheme = effectiveTheme;
-        presenter.Background = bgBrush;
-        presenter.BorderBrush = borderBrush;
-        presenter.BorderThickness = borderThickness;
-        if (presenter is FlyoutPresenter fp) fp.CornerRadius = new CornerRadius(8);
-        else if (presenter is MenuFlyoutPresenter mfp)
+        if (presenter.ActualTheme != effectiveTheme && presenter.RequestedTheme != effectiveTheme)
+        {
+            presenter.RequestedTheme = effectiveTheme;
+        }
+        if (!ReferenceEquals(presenter.Background, bgBrush))
+        {
+            presenter.Background = bgBrush;
+        }
+        if (!ReferenceEquals(presenter.BorderBrush, borderBrush))
+        {
+            presenter.BorderBrush = borderBrush;
+        }
+        if (presenter.BorderThickness != borderThickness)
+        {
+            presenter.BorderThickness = borderThickness;
+        }
+        if (presenter is FlyoutPresenter fp && fp.CornerRadius.TopLeft != 8)
+        {
+            fp.CornerRadius = new CornerRadius(8);
+        }
+        else if (presenter is MenuFlyoutPresenter mfp && mfp.CornerRadius.TopLeft != 8)
         {
             mfp.CornerRadius = new CornerRadius(8);
         }
@@ -1769,36 +2089,32 @@ public sealed partial class TransportBar : UserControl
         try
         {
             var borders = FindVisualChildren<Border>(presenter);
-            foreach (var b in borders)
+            if (borders.Count > 0)
             {
-                b.ClearValue(Border.BackgroundProperty);
+                var rootBorder = borders[0];
+                if (!ReferenceEquals(rootBorder.Background, bgBrush)) rootBorder.Background = bgBrush;
+                if (!ReferenceEquals(rootBorder.BorderBrush, borderBrush)) rootBorder.BorderBrush = borderBrush;
+                if (rootBorder.BorderThickness != borderThickness) rootBorder.BorderThickness = borderThickness;
+                if (rootBorder.CornerRadius.TopLeft != 8) rootBorder.CornerRadius = new CornerRadius(8);
             }
         }
         catch { }
 
-        try
+
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
         {
-            bool isFullscreen = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
-                                App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
-            if (isFullscreen)
-            {
-                ThemeHelper.ApplyFullscreenThemeShadow(presenter);
-            }
-            else
-            {
-                if (presenter.Shadow is ThemeShadow ts)
-                {
-                    ts.Receivers.Clear();
-                    presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
-                }
-                else if (presenter.Shadow == null)
-                {
-                    presenter.Shadow = new ThemeShadow();
-                    presenter.Translation = new System.Numerics.Vector3(0, 0, 32);
-                }
-            }
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            var desc = FindVisualChild<T>(child);
+            if (desc != null) return desc;
         }
-        catch { }
+        return null;
     }
 
     private static System.Collections.Generic.List<T> FindVisualChildren<T>(DependencyObject? parent) where T : DependencyObject
@@ -1880,7 +2196,7 @@ public sealed partial class TransportBar : UserControl
         var themeBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
             ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
 
-        bool isFullscreen = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
+        bool isFullscreen = IsActiveFullscreenVideo;
 
         if (VolumeIcon != null)
         {
@@ -2109,6 +2425,7 @@ public sealed partial class TransportBar : UserControl
                     RequestedTheme = ThemeHelper.GetEffectiveElementTheme(),
                     CornerRadius = new CornerRadius(8)
                 };
+                ThemeHelper.ApplyThemeToContentDialog(dialog);
 
                 dialog.PrimaryButtonClick += (s, args) =>
                 {
@@ -2173,6 +2490,7 @@ public sealed partial class TransportBar : UserControl
         void AttachToSubItem(MenuFlyoutSubItem? sub)
         {
             if (sub == null) return;
+            FlyoutHelper.MakeSubMenuFast(sub);
             sub.PointerEntered -= OnSubItemPointerEntered;
             sub.PointerEntered += OnSubItemPointerEntered;
             foreach (var item in sub.Items)
@@ -2195,13 +2513,6 @@ public sealed partial class TransportBar : UserControl
     private void OnSubItemPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         ThemeHelper.StartFullscreenPopupWatcher();
-        ThemeHelper.ProcessFullscreenPopups();
-        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
-        {
-            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
-            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
-            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
-        }
     }
 
     private void OnMoreButtonClick(object sender, RoutedEventArgs e)
@@ -2211,22 +2522,36 @@ public sealed partial class TransportBar : UserControl
             App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
         }
         catch { }
+
+        if (IsActiveFullscreenVideo)
+        {
+            ThemeHelper.StartFullscreenPopupWatcher();
+        }
     }
 
     private void OnMoreMenuOpening(object sender, object e)
     {
+        if (MoreIcon != null)
+        {
+            if (_iconDecayTimers.TryGetValue(MoreIcon, out var timer))
+            {
+                timer.Stop();
+                _iconDecayTimers.Remove(MoreIcon);
+            }
+            MoreIcon.Foreground = IsActiveFullscreenVideo
+                ? ThemeHelper.GetFullscreenWhiteBrush()
+                : GetAccentForegroundBrush();
+        }
         try
         {
             App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
         }
         catch { }
 
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
-        if (isFullscreenVideo)
+        if (IsActiveFullscreenVideo)
         {
             ThemeHelper.StartFullscreenPopupWatcher();
         }
-        ApplyMenuFlyoutPresenterTheming(sender as MenuFlyout ?? MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout);
         EnsureSubmenuTransparencyListeners();
 
         bool hasMedia = CurrentTrack != null;
@@ -2265,7 +2590,6 @@ public sealed partial class TransportBar : UserControl
             MenuVideoSettingsSubItem.IsEnabled = isVideo;
         }
 
-
         if (isVideo)
         {
             OnAspectRatioMenuOpening(sender, e);
@@ -2275,20 +2599,10 @@ public sealed partial class TransportBar : UserControl
         OnAudioDevicesMenuOpening(sender, e);
         UpdateSleepTimerMenuChecks();
 
-        if (sender is MenuFlyout mfTarget)
-        {
-            ApplyDarkThemeToMenuFlyout(mfTarget);
-            ApplyMenuFlyoutPresenterTheming(mfTarget);
-        }
-        else if (MoreButton?.Flyout is MenuFlyout bmTarget)
-        {
-            ApplyDarkThemeToMenuFlyout(bmTarget);
-            ApplyMenuFlyoutPresenterTheming(bmTarget);
-        }
-        else
-        {
-            ApplyMenuFlyoutPresenterTheming(MoreMenuFlyout);
-        }
+        var targetFlyout = sender as MenuFlyout ?? MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout;
+        FlyoutHelper.ProcessSubMenuItems(targetFlyout?.Items);
+        ApplyDarkThemeToMenuFlyout(targetFlyout);
+        ApplyMenuFlyoutPresenterTheming(targetFlyout);
     }
 
     private void OnMoreMenuOpened(object sender, object e)
@@ -2300,77 +2614,275 @@ public sealed partial class TransportBar : UserControl
         catch { }
 
         var targetMf = sender as MenuFlyout ?? MoreButton?.Flyout as MenuFlyout ?? MoreMenuFlyout;
-        ApplyMenuFlyoutPresenterTheming(targetMf);
-        TraverseAndStyleMenuFlyout(targetMf);
-
-        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        if (IsActiveFullscreenVideo)
         {
+            TraverseAndStyleMenuFlyout(targetMf);
             ThemeHelper.StartFullscreenPopupWatcher();
-            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
-            var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
-            UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+            ThemeHelper.ProcessFullscreenPopups();
+        }
+        else
+        {
+            ApplyMenuFlyoutPresenterTheming(targetMf);
+            ThemeHelper.ProcessFullscreenPopups();
         }
     }
 
-    private async void OnAudioDevicesMenuOpening(object sender, object e)
+    private static FontFamily SymbolFontFamily =>
+        Application.Current?.Resources.TryGetValue("SymbolThemeFontFamily", out var sf) == true && sf is FontFamily ff
+            ? ff
+            : new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
+
+    private long _audioDevicesRefreshSeq;
+
+    private void RefreshAudioDevicesCacheInBackground(bool repopulateIfOpen = false)
     {
-        try
+        if (_isRefreshingAudioDevices) return;
+        _isRefreshingAudioDevices = true;
+        long seq = System.Threading.Interlocked.Increment(ref _audioDevicesRefreshSeq);
+        var dispatcher = DispatcherQueue;
+        _ = System.Threading.Tasks.Task.Run(async () =>
         {
             try
             {
-                AudioDevicesSubItem.Items.Clear();
-                try
+                var selector = MediaDevice.GetAudioRenderSelector();
+                var collection = await DeviceInformation.FindAllAsync(selector).AsTask().ConfigureAwait(false);
+                var list = new System.Collections.Generic.List<DeviceInformation>(collection.Count);
+                foreach (var d in collection)
                 {
-                    var selector = MediaDevice.GetAudioRenderSelector();
-                    var devices = await DeviceInformation.FindAllAsync(selector);
-
-                    var playback = AppServices.Playback;
-                    var currentDevice = playback.MediaPlayer.AudioDevice;
-
-                    if (devices.Count == 0)
+                    list.Add(d);
+                }
+                if (seq != System.Threading.Interlocked.Read(ref _audioDevicesRefreshSeq)) return;
+                _cachedAudioDevices = list;
+                _cachedAudioDevicesTime = DateTime.UtcNow;
+                if (repopulateIfOpen && dispatcher != null)
+                {
+                    dispatcher.TryEnqueue(() =>
                     {
-                        var noDevicesItem = new MenuFlyoutItem { Text = "No audio devices available", IsEnabled = false };
-                        AudioDevicesSubItem.Items.Add(noDevicesItem);
-                        ApplyDarkThemeToMenuItem(AudioDevicesSubItem);
-                        return;
-                    }
-
-                    foreach (var device in devices)
-                    {
-                        var name = device.Name;
-                        var trackItem = new ToggleMenuFlyoutItem
+                        try
                         {
-                            Text = name,
-                            IsChecked = currentDevice != null && currentDevice.Id == device.Id
-                        };
-
-                        trackItem.Click += (s, args) =>
-                        {
-                            try
+                            if (seq == System.Threading.Interlocked.Read(ref _audioDevicesRefreshSeq) &&
+                                MoreMenuFlyout?.IsOpen == true &&
+                                AudioDevicesSubItem != null)
                             {
-                                playback.MediaPlayer.AudioDevice = device;
+                                PopulateAudioDevicesSubItem(AudioDevicesSubItem, list);
+                                ApplyDarkThemeToMenuItem(AudioDevicesSubItem);
                             }
-                            catch { }
-                        };
-
-                        AudioDevicesSubItem.Items.Add(trackItem);
-                    }
+                        }
+                        catch { }
+                    });
                 }
-                catch (Exception ex)
-                {
-                    var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
-                    AudioDevicesSubItem.Items.Add(errorItem);
-                }
-                ApplyDarkThemeToMenuItem(AudioDevicesSubItem);
             }
-            catch (Exception ex)
+            catch
             {
-                System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
             }
+            finally
+            {
+                _isRefreshingAudioDevices = false;
+            }
+        });
+    }
+
+    private void OnAudioDevicesMenuOpening(object sender, object e)
+    {
+        try
+        {
+            var subItem = AudioDevicesSubItem;
+            if (subItem == null) return;
+
+            var cached = _cachedAudioDevices;
+            bool isStale = cached == null || (DateTime.UtcNow - _cachedAudioDevicesTime) > TimeSpan.FromSeconds(15);
+            if (isStale)
+            {
+                RefreshAudioDevicesCacheInBackground(repopulateIfOpen: cached == null);
+            }
+
+            PopulateAudioDevicesSubItem(subItem, cached ?? System.Array.Empty<DeviceInformation>());
+            ApplyDarkThemeToMenuItem(subItem);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Exception in OnAudioDevicesMenuOpening: {ex.Message}");
+        }
+    }
+
+    private void PopulateAudioDevicesSubItem(MenuFlyoutSubItem subItem, System.Collections.Generic.IReadOnlyList<DeviceInformation> devices)
+    {
+        try
+        {
+            subItem.Items.Clear();
+
+            var playback = AppServices.Playback;
+            var currentDevice = playback.MediaPlayer.AudioDevice;
+
+            bool isDark = ThemeHelper.IsFullscreenPresentationActive || ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+            var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush")
+                ?? new SolidColorBrush(ThemeHelper.GetAccentPalette(AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault).Default);
+            Brush normalBrush = isDark
+                ? ThemeHelper.GetFullscreenWhiteBrush()
+                : ThemeResourceHelper.GetThemeBrush("TextFillColorPrimaryBrush", new SolidColorBrush(Microsoft.UI.Colors.Black));
+
+            string? defaultDeviceId = null;
+            try
+            {
+                defaultDeviceId = MediaDevice.GetDefaultAudioRenderId(AudioDeviceRole.Default);
+            }
+            catch { }
+
+            DeviceInformation? defaultDevice = null;
+            if (!string.IsNullOrEmpty(defaultDeviceId))
+            {
+                foreach (var d in devices)
+                {
+                    if (string.Equals(d.Id, defaultDeviceId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        defaultDevice = d;
+                        break;
+                    }
+                }
+            }
+
+            bool isDefaultActive = (currentDevice == null);
+            string defaultGlyph = defaultDevice != null ? MediaTrackFormatHelper.GetAudioDeviceGlyph(defaultDevice.Name) : "\uE7F5";
+            string defaultText = defaultDevice != null ? $"Default ({defaultDevice.Name})" : "Default";
+
+            var defaultItem = new MenuFlyoutItem
+            {
+                Text = defaultText,
+                Icon = new FontIcon
+                {
+                    Glyph = defaultGlyph,
+                    FontFamily = SymbolFontFamily,
+                    Foreground = isDefaultActive ? accentBrush : normalBrush
+                },
+                KeyboardAcceleratorTextOverride = isDefaultActive ? "✓" : ""
+            };
+
+            defaultItem.Click += (s, args) =>
+            {
+                try
+                {
+                    playback.MediaPlayer.AudioDevice = null;
+                    if (AudioDevicesSubItem is { } currentSub)
+                    {
+                        foreach (var itm in currentSub.Items)
+                        {
+                            if (itm is MenuFlyoutItem mItm)
+                            {
+                                bool isThis = ReferenceEquals(mItm, defaultItem);
+                                mItm.KeyboardAcceleratorTextOverride = isThis ? "✓" : "";
+                                if (mItm.Icon is FontIcon fontIcon)
+                                {
+                                    fontIcon.Foreground = isThis ? accentBrush : normalBrush;
+                                }
+                            }
+                        }
+                        currentSub.Icon = new FontIcon
+                        {
+                            Glyph = defaultGlyph,
+                            FontFamily = SymbolFontFamily,
+                            Foreground = accentBrush
+                        };
+                    }
+                }
+                catch (Exception devEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AudioDevice] Switch to default failed: {devEx.Message}");
+                }
+            };
+
+            subItem.Items.Add(defaultItem);
+            subItem.Items.Add(new MenuFlyoutSeparator());
+
+            bool foundSelected = isDefaultActive;
+            if (isDefaultActive)
+            {
+                subItem.Icon = new FontIcon
+                {
+                    Glyph = defaultGlyph,
+                    FontFamily = SymbolFontFamily,
+                    Foreground = accentBrush
+                };
+            }
+
+            foreach (var device in devices)
+            {
+                var name = device.Name;
+                bool isSelected = !isDefaultActive && currentDevice != null && string.Equals(currentDevice.Id, device.Id, StringComparison.OrdinalIgnoreCase);
+
+                var glyph = MediaTrackFormatHelper.GetAudioDeviceGlyph(name);
+                var trackItem = new MenuFlyoutItem
+                {
+                    Text = name,
+                    Icon = new FontIcon
+                    {
+                        Glyph = glyph,
+                        FontFamily = SymbolFontFamily,
+                        Foreground = isSelected ? accentBrush : normalBrush
+                    },
+                    KeyboardAcceleratorTextOverride = isSelected ? "✓" : ""
+                };
+
+                if (isSelected)
+                {
+                    foundSelected = true;
+                    subItem.Icon = new FontIcon
+                    {
+                        Glyph = glyph,
+                        FontFamily = SymbolFontFamily,
+                        Foreground = accentBrush
+                    };
+                }
+
+                trackItem.Click += (s, args) =>
+                {
+                    try
+                    {
+                        playback.MediaPlayer.AudioDevice = device;
+                        if (AudioDevicesSubItem is { } currentSub)
+                        {
+                            foreach (var itm in currentSub.Items)
+                            {
+                                if (itm is MenuFlyoutItem mItm)
+                                {
+                                    bool isThis = ReferenceEquals(mItm, trackItem);
+                                    mItm.KeyboardAcceleratorTextOverride = isThis ? "✓" : "";
+                                    if (mItm.Icon is FontIcon fontIcon)
+                                    {
+                                        fontIcon.Foreground = isThis ? accentBrush : normalBrush;
+                                    }
+                                }
+                            }
+                            currentSub.Icon = new FontIcon
+                            {
+                                Glyph = glyph,
+                                FontFamily = SymbolFontFamily,
+                                Foreground = accentBrush
+                            };
+                        }
+                    }
+                    catch (Exception devEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AudioDevice] Switch failed: {devEx.Message}");
+                    }
+                };
+
+                subItem.Items.Add(trackItem);
+            }
+
+            if (!foundSelected)
+            {
+                subItem.Icon = new FontIcon
+                {
+                    Glyph = "\uE7F5",
+                    FontFamily = SymbolFontFamily,
+                    Foreground = accentBrush
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            var errorItem = new MenuFlyoutItem { Text = "Error loading devices: " + ex.Message, IsEnabled = false };
+            subItem.Items.Add(errorItem);
         }
     }
 
@@ -2440,6 +2952,17 @@ public sealed partial class TransportBar : UserControl
 
     private void OnSubtitlesMenuOpening(object sender, object e)
     {
+        if (SubtitlesIcon != null)
+        {
+            if (_iconDecayTimers.TryGetValue(SubtitlesIcon, out var timer))
+            {
+                timer.Stop();
+                _iconDecayTimers.Remove(SubtitlesIcon);
+            }
+            SubtitlesIcon.Foreground = IsActiveFullscreenVideo
+                ? ThemeHelper.GetFullscreenWhiteBrush()
+                : GetAccentForegroundBrush();
+        }
         try
         {
             App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
@@ -2448,12 +2971,10 @@ public sealed partial class TransportBar : UserControl
 
         if (SubtitlesMenuFlyout == null) return;
 
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
-        if (isFullscreenVideo)
+        if (IsActiveFullscreenVideo)
         {
             ThemeHelper.StartFullscreenPopupWatcher();
         }
-        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
 
         SubtitlesMenuFlyout.Items.Clear();
 
@@ -2541,7 +3062,14 @@ public sealed partial class TransportBar : UserControl
         };
         chooseFileItem.Click += async (s, args) =>
         {
-            await PickAndLoadSubtitleFileAsync();
+            try
+            {
+                await PickAndLoadSubtitleFileAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TransportBar] PickAndLoadSubtitleFileAsync error: {ex.Message}");
+            }
         };
         SubtitlesMenuFlyout.Items.Add(chooseFileItem);
 
@@ -2570,6 +3098,7 @@ public sealed partial class TransportBar : UserControl
         plus500.Click += (_, _) => playback.AdjustSubtitleDelay(0.5);
         delaySubItem.Items.Add(plus500);
 
+        FlyoutHelper.MakeSubMenuFast(delaySubItem);
         delaySubItem.PointerEntered += OnSubItemPointerEntered;
         SubtitlesMenuFlyout.Items.Add(delaySubItem);
 
@@ -2577,6 +3106,7 @@ public sealed partial class TransportBar : UserControl
         {
             Text = "Subtitles styles"
         };
+        FlyoutHelper.MakeSubMenuFast(stylesSubItem);
         stylesSubItem.PointerEntered += OnSubItemPointerEntered;
 
         var captionThemes = WindowsCaptionHelper.GetWindowsCaptionThemes();
@@ -2615,14 +3145,19 @@ public sealed partial class TransportBar : UserControl
 
     private void OnSubtitlesMenuOpened(object sender, object e)
     {
-        ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
-        TraverseAndStyleMenuFlyout(SubtitlesMenuFlyout);
-        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        if (IsActiveFullscreenVideo)
         {
+            TraverseAndStyleMenuFlyout(SubtitlesMenuFlyout);
             ThemeHelper.StartFullscreenPopupWatcher();
-            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var bgBrush = ThemeHelper.CreateFullscreenFlyoutBackgroundBrush();
             var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
             UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+            ThemeHelper.ProcessFullscreenPopups();
+        }
+        else
+        {
+            ApplyMenuFlyoutPresenterTheming(SubtitlesMenuFlyout);
+            ThemeHelper.ProcessFullscreenPopups();
         }
     }
 
@@ -2684,6 +3219,17 @@ public sealed partial class TransportBar : UserControl
 
     private void OnAudioMenuOpening(object sender, object e)
     {
+        if (AudioIcon != null)
+        {
+            if (_iconDecayTimers.TryGetValue(AudioIcon, out var timer))
+            {
+                timer.Stop();
+                _iconDecayTimers.Remove(AudioIcon);
+            }
+            AudioIcon.Foreground = IsActiveFullscreenVideo
+                ? ThemeHelper.GetFullscreenWhiteBrush()
+                : GetAccentForegroundBrush();
+        }
         try
         {
             App.MainWindowInstance?.TvEpisodeQueueOverlay?.Hide();
@@ -2692,12 +3238,10 @@ public sealed partial class TransportBar : UserControl
 
         if (AudioMenuFlyout == null) return;
 
-        bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
-        if (isFullscreenVideo)
+        if (IsActiveFullscreenVideo)
         {
             ThemeHelper.StartFullscreenPopupWatcher();
         }
-        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
 
         AudioMenuFlyout.Items.Clear();
 
@@ -2714,6 +3258,8 @@ public sealed partial class TransportBar : UserControl
             {
                 var noTracksItem = new MenuFlyoutItem { Text = "No audio tracks available", IsEnabled = false };
                 AudioMenuFlyout.Items.Add(noTracksItem);
+                ApplyDarkThemeToMenuFlyout(AudioMenuFlyout);
+                ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
                 return;
             }
 
@@ -2732,8 +3278,15 @@ public sealed partial class TransportBar : UserControl
 
                 trackItem.Click += async (s, args) =>
                 {
-                    await playback.SetExternalAudioTrackAsync(null);
-                    tracks.SelectedIndex = index;
+                    try
+                    {
+                        await playback.SetExternalAudioTrackAsync(null);
+                        tracks.SelectedIndex = index;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[TransportBar] Audio track switch error: {ex.Message}");
+                    }
                 };
 
                 AudioMenuFlyout.Items.Add(trackItem);
@@ -2759,7 +3312,14 @@ public sealed partial class TransportBar : UserControl
                     };
                     extItem.Click += async (s, args) =>
                     {
-                        await playback.SetExternalAudioTrackAsync(capturedTrack.FilePath);
+                        try
+                        {
+                            await playback.SetExternalAudioTrackAsync(capturedTrack.FilePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[TransportBar] External audio switch error: {ex.Message}");
+                        }
                     };
                     AudioMenuFlyout.Items.Add(extItem);
                 }
@@ -2776,14 +3336,19 @@ public sealed partial class TransportBar : UserControl
 
     private void OnAudioMenuOpened(object sender, object e)
     {
-        ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
-        TraverseAndStyleMenuFlyout(AudioMenuFlyout);
-        if (_isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true)
+        if (IsActiveFullscreenVideo)
         {
+            TraverseAndStyleMenuFlyout(AudioMenuFlyout);
             ThemeHelper.StartFullscreenPopupWatcher();
-            var bgBrush = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var bgBrush = ThemeHelper.CreateFullscreenFlyoutBackgroundBrush();
             var borderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
             UpdateOpenFlyoutPresenters(bgBrush, borderBrush, new Thickness(1.5), ElementTheme.Dark);
+            ThemeHelper.ProcessFullscreenPopups();
+        }
+        else
+        {
+            ApplyMenuFlyoutPresenterTheming(AudioMenuFlyout);
+            ThemeHelper.ProcessFullscreenPopups();
         }
     }
 
@@ -2824,10 +3389,13 @@ public sealed partial class TransportBar : UserControl
         e.Handled = true;
     }
 
-    private int _exactThumbnailVersion;
+    private double? _pendingThumbnailSeconds;
     private double _activeHoverSeconds = -1;
-    private bool _isThumbnailDecoding;
-    private double _decodingSeconds = -1;
+    private bool _isThumbnailWorkerRunning;
+    private DateTime _lastThumbnailDecodeUtc = DateTime.MinValue;
+
+
+
 
     private void OnProgressSliderPointerMoved(object sender, PointerRoutedEventArgs e)
     {
@@ -2881,35 +3449,50 @@ public sealed partial class TransportBar : UserControl
         double clampedX = Math.Clamp(centerX - (popupWidth / 2.0), 0.0, Math.Max(0.0, slider.ActualWidth - popupWidth));
         HoverPreviewPopup.HorizontalOffset = clampedX;
         HoverPreviewPopup.VerticalOffset = showThumbnail ? -126 : -44;
+
+        var targetXamlRoot = this.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+        if (targetXamlRoot != null && HoverPreviewPopup.XamlRoot != targetXamlRoot)
+        {
+            HoverPreviewPopup.XamlRoot = targetXamlRoot;
+        }
+
+        if (HoverPreviewPopup.Child is FrameworkElement popupChild)
+        {
+            popupChild.Opacity = 1.0;
+            try
+            {
+                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(popupChild);
+                if (visual != null)
+                {
+                    visual.Opacity = 1.0f;
+                }
+            }
+            catch { }
+
+            if (popupChild is Border popupBorder)
+            {
+                if (IsActiveFullscreenVideo)
+                {
+                    popupBorder.RequestedTheme = ElementTheme.Dark;
+                    popupBorder.Background = ThemeHelper.CreateFullscreenFlyoutBackgroundBrush();
+                    popupBorder.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+                    popupBorder.BorderThickness = new Thickness(1);
+                }
+                else
+                {
+                    var backdrop = AppServices.Settings?.Current?.BackdropType ?? AppThemeBackdrop.Mica;
+                    var effectiveTheme = ThemeHelper.GetEffectiveElementTheme();
+                    popupBorder.RequestedTheme = effectiveTheme;
+                    popupBorder.Background = ThemeHelper.GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+                    popupBorder.BorderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, effectiveTheme);
+                    popupBorder.BorderThickness = new Thickness(1);
+                }
+            }
+        }
+
         if (!HoverPreviewPopup.IsOpen)
         {
             HoverPreviewPopup.IsOpen = true;
-            if (HoverPreviewPopup.Child is Border popupBorder)
-            {
-                bool isFullscreenVideo = _isFullscreenPresentation || App.MainWindowInstance?.IsFullscreenVideoActive == true;
-                if (isFullscreenVideo)
-                {
-                    popupBorder.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
-                    popupBorder.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
-                    popupBorder.BorderThickness = new Thickness(1.5);
-                }
-            }
-            if (HoverPreviewPopup.Child is FrameworkElement popupChild && ThemeHelper.IsAnimationEnabled)
-            {
-                try
-                {
-                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(popupChild);
-                    if (visual != null)
-                    {
-                        visual.Opacity = 0f;
-                        var fadeAnim = visual.Compositor.CreateScalarKeyFrameAnimation();
-                        fadeAnim.InsertKeyFrame(1.0f, 1.0f);
-                        fadeAnim.Duration = TimeSpan.FromMilliseconds(120);
-                        visual.StartAnimation("Opacity", fadeAnim);
-                    }
-                }
-                catch { }
-            }
         }
     }
 
@@ -2941,29 +3524,54 @@ public sealed partial class TransportBar : UserControl
             if (track != null && track.IsVideo)
             {
                 var session = playback.Session;
-                // Check if we have a keyframe within 120 seconds of this exact scene
-                var cachedImg = session.GetCachedThumbnail(seconds, 120.0);
-                if (cachedImg != null)
+                bool isPrecisionEnabled = AppServices.Settings?.Current?.PreciseSeekThumbnails ?? true;
+
+                if (isPrecisionEnabled)
                 {
-                    HoverThumbnailImage.Source = cachedImg;
-                    HoverThumbnailBorder.Visibility = Visibility.Visible;
-                    showThumbnail = true;
-                }
-                else
-                {
-                    // Keep existing thumbnail image displayed while fetching the new one so popup doesn't jitter/collapse
-                    if (HoverThumbnailImage.Source != null)
+                    // 1. Look for a cached thumbnail near this scene (within 45s)
+                    var cachedImg = session.GetCachedThumbnail(seconds, 45.0);
+
+                    // 2. If near the beginning of the file (<= 60s), fall back to 0:00 Shell thumbnail
+                    if (cachedImg == null && seconds <= 60.0)
                     {
+                        cachedImg = session.GetCachedThumbnail(0, 60.0);
+                    }
+
+                    // 3. Fallback: if cache unexpectedly empty, ensure 0:00 Shell thumbnail is prefetched
+                    if (cachedImg == null && session.VideoThumbnailCache.Count == 0 && !string.IsNullOrEmpty(track.SourcePath))
+                    {
+                        session.PrefetchVideoThumbnails(track);
+                    }
+
+                    if (cachedImg != null)
+                    {
+                        HoverThumbnailImage.Source = cachedImg;
+                        HoverThumbnailBorder.Visibility = Visibility.Visible;
+                        showThumbnail = true;
+                    }
+                    else if (HoverThumbnailImage.Source != null)
+                    {
+                        // Keep current displayed thumbnail visible while next frame is actively decoding
+                        HoverThumbnailBorder.Visibility = Visibility.Visible;
                         showThumbnail = true;
                     }
                     else
                     {
-                        HoverThumbnailBorder.Visibility = Visibility.Collapsed;
-                        showThumbnail = false;
+                        // Show thumbnail container so layout doesn't jump, and let worker decode
+                        HoverThumbnailBorder.Visibility = Visibility.Visible;
+                        showThumbnail = true;
                     }
-                }
 
-                UpdateExactThumbnailAsync(seconds);
+                    // Queue exact thumbnail decoding for this position (both for hover and dragging)
+                    RequestExactThumbnail(seconds);
+                }
+                else
+                {
+                    // Precise seek thumbnails disabled: show sleek time capsule only
+                    HoverThumbnailImage.Source = null;
+                    HoverThumbnailBorder.Visibility = Visibility.Collapsed;
+                    showThumbnail = false;
+                }
             }
             else
             {
@@ -2980,86 +3588,93 @@ public sealed partial class TransportBar : UserControl
         }
     }
 
-    private async void UpdateExactThumbnailAsync(double seconds)
+    private void RequestExactThumbnail(double seconds)
+    {
+        _pendingThumbnailSeconds = seconds;
+
+        if (_isThumbnailWorkerRunning)
+        {
+            return;
+        }
+
+        _isThumbnailWorkerRunning = true;
+        _ = ProcessThumbnailQueueAsync();
+    }
+
+    private async Task ProcessThumbnailQueueAsync()
     {
         try
         {
-            var playback = AppServices.PlaybackViewModel;
-            var track = playback.CurrentTrack;
-            if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath)) return;
-
-            var session = playback.Session;
-            var timeSpan = TimeSpan.FromSeconds(seconds);
-
-            // 1. If an exact/near keyframe is already cached within 5 seconds, use it immediately
-            var cached = session.GetCachedThumbnail(seconds, 5.0);
-            if (cached != null)
+            while (_pendingThumbnailSeconds.HasValue)
             {
-                if (HoverThumbnailImage != null) HoverThumbnailImage.Source = cached;
-                if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
-                RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
-                return;
-            }
+                double targetSeconds = _pendingThumbnailSeconds.Value;
+                _pendingThumbnailSeconds = null;
 
-            // 2. If a decode is currently running for a timestamp within 15 seconds, let it finish
-            if (_isThumbnailDecoding && Math.Abs(_decodingSeconds - seconds) < 15.0)
-            {
-                return;
-            }
+                var playback = AppServices.PlaybackViewModel;
+                if (playback == null) break;
+                var track = playback.CurrentTrack;
+                if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath))
+                    break;
 
-            // 3. Debounce: increment request version and wait 100ms
-            int version = ++_exactThumbnailVersion;
+                var session = playback.Session;
+                if (session == null) break;
 
-            await Task.Delay(100);
-            if (version != _exactThumbnailVersion) return;
-
-            // 4. Double check cache after debounce in case background prefetch populated it
-            cached = session.GetCachedThumbnail(seconds, 5.0);
-            if (cached != null)
-            {
-                if (HoverThumbnailImage != null) HoverThumbnailImage.Source = cached;
-                if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
-                RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
-                return;
-            }
-
-            // 5. Begin decoding nearest keyframe
-            _isThumbnailDecoding = true;
-            _decodingSeconds = seconds;
-            Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
-            try
-            {
-                stream = await session.GetExactThumbnailAsync(seconds);
-                if (stream == null) return;
-
-                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage { DecodePixelWidth = 160 };
-                await bitmap.SetSourceAsync(stream);
-
-                // Always add successfully decoded frame to cache so subsequent seeks/hovers are 0ms
-                session.AddCachedThumbnail(timeSpan, bitmap);
-
-                // If user is still hovering near this scene, update the preview display
-                if (HoverPreviewPopup != null && HoverPreviewPopup.IsOpen)
+                // Debounce slightly (15ms) to let rapidly scrubbing pointer coalesce
+                await Task.Delay(15);
+                if (_pendingThumbnailSeconds.HasValue)
                 {
-                    double allowedDiff = Math.Max(60.0, (ProgressSlider?.Maximum ?? 100.0) * 0.04);
-                    if (Math.Abs(_activeHoverSeconds - seconds) <= allowedDiff)
+                    continue;
+                }
+
+                // Check cache within 5 seconds
+                var cached = session.GetCachedThumbnail(targetSeconds, 5.0);
+                if (cached != null)
+                {
+                    if (HoverThumbnailImage != null) HoverThumbnailImage.Source = cached;
+                    if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
+                    RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
+                    continue;
+                }
+
+                // Throttle: ensure at least 25ms between consecutive decodes
+                var elapsed = (DateTime.UtcNow - _lastThumbnailDecodeUtc).TotalMilliseconds;
+                if (elapsed < 25.0)
+                {
+                    await Task.Delay((int)(25.0 - elapsed));
+                    if (_pendingThumbnailSeconds.HasValue)
                     {
-                        if (HoverThumbnailImage != null) HoverThumbnailImage.Source = bitmap;
-                        if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
-                        RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
+                        continue;
                     }
                 }
-            }
-            finally
-            {
-                stream?.Dispose();
-                _isThumbnailDecoding = false;
+
+                _lastThumbnailDecodeUtc = DateTime.UtcNow;
+
+                // High-speed Hardware MediaFoundation extraction with graceful fallback
+                var image = await session.GetExactThumbnailImageAsync(targetSeconds);
+                if (image != null)
+                {
+                    // If user is still seeking/hovering near this scene, update the preview display
+                    if (HoverPreviewPopup != null && HoverPreviewPopup.IsOpen)
+                    {
+                        double allowedDiff = Math.Max(90.0, (ProgressSlider?.Maximum ?? 100.0) * 0.10);
+                        if (Math.Abs(_activeHoverSeconds - targetSeconds) <= allowedDiff)
+                        {
+                            if (HoverThumbnailImage != null) HoverThumbnailImage.Source = image;
+                            if (HoverThumbnailBorder != null) HoverThumbnailBorder.Visibility = Visibility.Visible;
+                            RepositionHoverPreview(_activeHoverSeconds, isThumbnailMode: true);
+                        }
+                    }
+                }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"UpdateExactThumbnailAsync error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"ProcessThumbnailQueueAsync error: {ex.Message}");
+        }
+        finally
+        {
+            _isThumbnailWorkerRunning = false;
         }
     }
 
@@ -3123,6 +3738,8 @@ public sealed partial class TransportBar : UserControl
 
         _currentLayoutState = targetState;
 
+        bool isVideo = CurrentTrack?.IsVideo == true;
+
         switch (targetState)
         {
             case TransportBarLayoutState.Wide:
@@ -3134,9 +3751,13 @@ public sealed partial class TransportBar : UserControl
                 if (RepeatButton != null) RepeatButton.Visibility = Visibility.Visible;
                 if (CenterControlsPanel != null) CenterControlsPanel.Spacing = 12;
 
-                if (AudioButton != null) AudioButton.Visibility = Visibility.Visible;
-                if (SubtitlesButton != null) SubtitlesButton.Visibility = Visibility.Visible;
-                if (FullscreenButton != null) FullscreenButton.Visibility = Visibility.Visible;
+                if (AudioButton != null) AudioButton.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+                if (SubtitlesButton != null) SubtitlesButton.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+                if (FullscreenButton != null)
+                {
+                    FullscreenButton.Visibility = Visibility.Visible;
+                    FullscreenButton.IsEnabled = isVideo;
+                }
                 if (PipButton != null) PipButton.Visibility = Visibility.Visible;
                 if (RightControlsPanel != null) RightControlsPanel.Spacing = 8;
 
@@ -3163,8 +3784,12 @@ public sealed partial class TransportBar : UserControl
                 if (CenterControlsPanel != null) CenterControlsPanel.Spacing = 8;
 
                 if (AudioButton != null) AudioButton.Visibility = Visibility.Collapsed;
-                if (SubtitlesButton != null) SubtitlesButton.Visibility = Visibility.Visible;
-                if (FullscreenButton != null) FullscreenButton.Visibility = Visibility.Visible;
+                if (SubtitlesButton != null) SubtitlesButton.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+                if (FullscreenButton != null)
+                {
+                    FullscreenButton.Visibility = Visibility.Visible;
+                    FullscreenButton.IsEnabled = isVideo;
+                }
                 if (PipButton != null) PipButton.Visibility = Visibility.Collapsed;
                 if (RightControlsPanel != null) RightControlsPanel.Spacing = 6;
 
@@ -3225,4 +3850,377 @@ public sealed partial class TransportBar : UserControl
         if (ElapsedTimeText != null) ElapsedTimeText.FontSize = width < 520.0 ? 11 : 12;
         if (TotalTimeText != null) TotalTimeText.FontSize = width < 520.0 ? 11 : 12;
     }
+
+    #region Transport Bar Icon Theming and Click Animation
+
+    private readonly Dictionary<Button, FontIcon> _transportButtonIcons = new();
+    private readonly Dictionary<FontIcon, DispatcherTimer> _iconDecayTimers = new();
+    private readonly HashSet<FontIcon> _pressedIcons = new();
+    private bool _isIconThemingInitialized;
+
+    public void InitializeTransportIconTheming()
+    {
+        if (_isIconThemingInitialized) return;
+        _isIconThemingInitialized = true;
+
+        RegisterTransportButton(PlayPauseButton, PlayPauseIcon);
+        RegisterTransportButton(ShuffleButton, ShuffleIcon);
+        RegisterTransportButton(PreviousButton, PreviousIcon);
+        RegisterTransportButton(SkipBackButton, SkipBackIcon);
+        RegisterTransportButton(ReplayButton, ReplayIcon);
+        RegisterTransportButton(StopButton, StopIcon);
+        RegisterTransportButton(SkipForwardButton, SkipForwardIcon);
+        RegisterTransportButton(NextButton, NextIcon);
+        RegisterTransportButton(RepeatButton, RepeatIcon);
+        RegisterTransportButton(AudioButton, AudioIcon);
+        RegisterTransportButton(SubtitlesButton, SubtitlesIcon);
+        RegisterTransportButton(VolumeButton, VolumeIcon);
+        RegisterTransportButton(FlyoutVolumeButton, FlyoutVolumeIcon);
+        RegisterTransportButton(FullscreenButton, FullscreenIcon);
+        RegisterTransportButton(PipButton, PipIcon);
+        RegisterTransportButton(TvEpisodeQueueButton, TvEpisodeQueueIcon);
+        RegisterTransportButton(MoreButton, MoreIcon);
+
+        if (AudioMenuFlyout != null)
+        {
+            AudioMenuFlyout.Closed += (_, _) =>
+            {
+                if (AudioIcon != null)
+                {
+                    if (IsActiveFullscreenVideo || ShouldIconStayAccent(AudioIcon))
+                    {
+                        RestoreIconIdleForeground(AudioIcon);
+                    }
+                    else
+                    {
+                        StartIconDecayAnimation(AudioIcon, GetCurrentAccentColor(), GetNormalIconColor(), () => RestoreIconIdleForeground(AudioIcon));
+                    }
+                }
+            };
+        }
+        if (SubtitlesMenuFlyout != null)
+        {
+            SubtitlesMenuFlyout.Closed += (_, _) =>
+            {
+                if (SubtitlesIcon != null)
+                {
+                    if (IsActiveFullscreenVideo || ShouldIconStayAccent(SubtitlesIcon))
+                    {
+                        RestoreIconIdleForeground(SubtitlesIcon);
+                    }
+                    else
+                    {
+                        StartIconDecayAnimation(SubtitlesIcon, GetCurrentAccentColor(), GetNormalIconColor(), () => RestoreIconIdleForeground(SubtitlesIcon));
+                    }
+                }
+            };
+        }
+        if (MoreMenuFlyout != null)
+        {
+            MoreMenuFlyout.Closed += (_, _) =>
+            {
+                if (MoreIcon != null)
+                {
+                    if (IsActiveFullscreenVideo || ShouldIconStayAccent(MoreIcon))
+                    {
+                        RestoreIconIdleForeground(MoreIcon);
+                    }
+                    else
+                    {
+                        StartIconDecayAnimation(MoreIcon, GetCurrentAccentColor(), GetNormalIconColor(), () => RestoreIconIdleForeground(MoreIcon));
+                    }
+                }
+            };
+        }
+        if (VolumeFlyout != null)
+        {
+            VolumeFlyout.Closed += (_, _) =>
+            {
+                if (VolumeIcon != null)
+                {
+                    RestoreIconIdleForeground(VolumeIcon);
+                }
+            };
+        }
+    }
+
+    private void RegisterTransportButton(Button? button, FontIcon? icon)
+    {
+        if (button == null || icon == null) return;
+
+        _transportButtonIcons[button] = icon;
+
+        button.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((s, e) =>
+        {
+            if (s is Button btn && _transportButtonIcons.TryGetValue(btn, out var ico))
+            {
+                OnTransportButtonPointerPressed(ico, btn);
+            }
+        }), handledEventsToo: true);
+
+        button.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((s, e) =>
+        {
+            if (s is Button btn && _transportButtonIcons.TryGetValue(btn, out var ico))
+            {
+                OnTransportButtonPointerReleased(ico, btn);
+            }
+        }), handledEventsToo: true);
+
+        button.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler((s, e) =>
+        {
+            if (s is Button btn && _transportButtonIcons.TryGetValue(btn, out var ico))
+            {
+                OnTransportButtonPointerCanceled(ico, btn);
+            }
+        }), handledEventsToo: true);
+
+        button.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((s, e) =>
+        {
+            if (s is Button btn && _transportButtonIcons.TryGetValue(btn, out var ico))
+            {
+                OnTransportButtonPointerCanceled(ico, btn);
+            }
+        }), handledEventsToo: true);
+
+        button.Click += (s, e) =>
+        {
+            if (s is Button btn && _transportButtonIcons.TryGetValue(btn, out var ico))
+            {
+                TriggerIconClickAccent(ico, btn);
+            }
+        };
+    }
+
+    private void OnTransportButtonPointerPressed(FontIcon icon, Button button)
+    {
+        if (icon == null) return;
+        _pressedIcons.Add(icon);
+
+        if (_iconDecayTimers.TryGetValue(icon, out var timer))
+        {
+            timer.Stop();
+            _iconDecayTimers.Remove(icon);
+        }
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            RestoreIconIdleForeground(icon);
+            return;
+        }
+
+        if (icon == VolumeIcon || icon == FlyoutVolumeIcon)
+        {
+            UpdateVolumeIcon();
+            return;
+        }
+
+        var accentColor = GetCurrentAccentColor();
+        icon.Foreground = new SolidColorBrush(accentColor);
+    }
+
+    private void OnTransportButtonPointerReleased(FontIcon icon, Button button)
+    {
+        if (icon == null) return;
+        _pressedIcons.Remove(icon);
+        TriggerIconClickAccent(icon, button);
+    }
+
+    private void OnTransportButtonPointerCanceled(FontIcon icon, Button button)
+    {
+        if (icon == null) return;
+        _pressedIcons.Remove(icon);
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            RestoreIconIdleForeground(icon);
+            return;
+        }
+
+        if (ShouldIconStayAccent(icon))
+        {
+            RestoreIconIdleForeground(icon);
+        }
+        else
+        {
+            var accentColor = GetCurrentAccentColor();
+            var normalColor = GetNormalIconColor();
+            StartIconDecayAnimation(icon, accentColor, normalColor, () => RestoreIconIdleForeground(icon));
+        }
+    }
+
+    public void TriggerIconClickAccent(FontIcon icon, Button? button = null)
+    {
+        if (icon == null) return;
+
+        if (_iconDecayTimers.TryGetValue(icon, out var timer))
+        {
+            timer.Stop();
+            _iconDecayTimers.Remove(icon);
+        }
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            RestoreIconIdleForeground(icon);
+            return;
+        }
+
+        var accentColor = GetCurrentAccentColor();
+        if (ShouldIconStayAccent(icon))
+        {
+            RestoreIconIdleForeground(icon);
+            return;
+        }
+
+        var normalColor = GetNormalIconColor();
+        StartIconDecayAnimation(icon, accentColor, normalColor, () => RestoreIconIdleForeground(icon));
+    }
+
+    private void StartIconDecayAnimation(FontIcon icon, Windows.UI.Color startColor, Windows.UI.Color targetColor, Action? onCompleted = null)
+    {
+        if (icon == null) return;
+
+        if (_iconDecayTimers.TryGetValue(icon, out var existingTimer))
+        {
+            existingTimer.Stop();
+            _iconDecayTimers.Remove(icon);
+        }
+
+        var animBrush = new SolidColorBrush(startColor);
+        icon.Foreground = animBrush;
+
+        const int durationMs = 320;
+        var startTime = DateTime.UtcNow;
+        var timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+
+        timer.Tick += (s, e) =>
+        {
+            double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            float progress = (float)(elapsedMs / durationMs);
+
+            if (progress >= 1.0f)
+            {
+                timer.Stop();
+                _iconDecayTimers.Remove(icon);
+                onCompleted?.Invoke();
+            }
+            else
+            {
+                float ease = 1.0f - (float)Math.Pow(1.0f - progress, 3);
+                byte r = (byte)(startColor.R + (targetColor.R - startColor.R) * ease);
+                byte g = (byte)(startColor.G + (targetColor.G - startColor.G) * ease);
+                byte b = (byte)(startColor.B + (targetColor.B - startColor.B) * ease);
+                byte a = (byte)(startColor.A + (targetColor.A - startColor.A) * ease);
+                animBrush.Color = Windows.UI.Color.FromArgb(a, r, g, b);
+            }
+        };
+
+        _iconDecayTimers[icon] = timer;
+        timer.Start();
+    }
+
+    private bool ShouldIconStayAccent(FontIcon icon)
+    {
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            return false;
+        }
+
+        if (icon == ShuffleIcon || icon == RepeatIcon || icon == ReplayIcon)
+        {
+            return true;
+        }
+
+        if (icon == VolumeIcon || icon == FlyoutVolumeIcon)
+        {
+            return !IsMuted && Volume > 0.001;
+        }
+
+        if (icon == AudioIcon && AudioMenuFlyout?.IsOpen == true)
+        {
+            return true;
+        }
+
+        if (icon == SubtitlesIcon && SubtitlesMenuFlyout?.IsOpen == true)
+        {
+            return true;
+        }
+
+        if (icon == MoreIcon && MoreMenuFlyout?.IsOpen == true)
+        {
+            return true;
+        }
+
+        // All non-fullscreen transport icons remain in app accent color (Matching Style TargetType="FontIcon")
+        return true;
+    }
+
+    private void RestoreIconIdleForeground(FontIcon icon)
+    {
+        if (icon == ShuffleIcon)
+        {
+            UpdateShuffleVisual();
+            return;
+        }
+
+        if (icon == RepeatIcon)
+        {
+            UpdateRepeatVisual();
+            return;
+        }
+
+        if (icon == ReplayIcon)
+        {
+            UpdateReplayVisual();
+            return;
+        }
+
+        if (icon == VolumeIcon || icon == FlyoutVolumeIcon)
+        {
+            UpdateVolumeIcon();
+            return;
+        }
+
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            icon.Foreground = ThemeHelper.GetFullscreenWhiteBrush();
+            return;
+        }
+
+        icon.Foreground = GetAccentForegroundBrush();
+    }
+
+    private Windows.UI.Color GetCurrentAccentColor()
+    {
+        try
+        {
+            var accentBrush = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
+            if (accentBrush is SolidColorBrush scb)
+            {
+                return scb.Color;
+            }
+
+            var opt = AppServices.Settings?.Current?.AccentColor ?? AccentColorOption.SystemDefault;
+            return ThemeHelper.GetAccentPalette(opt).Default;
+        }
+        catch
+        {
+            return Microsoft.UI.Colors.DeepSkyBlue;
+        }
+    }
+
+    private Windows.UI.Color GetNormalIconColor()
+    {
+        if (_isFullscreenPresentation || ThemeHelper.IsFullscreenPresentationActive)
+        {
+            return Microsoft.UI.Colors.White;
+        }
+
+        return GetCurrentAccentColor();
+    }
+
+    #endregion
 }
+

@@ -34,9 +34,9 @@
             MaxWidth="1440"
             CornerRadius="16"
             Background="Transparent"
-            BorderBrush="{StaticResource SpecularRimBorderBrush}"
-            BorderThickness="1"
-            Translation="0,0,32">
+            BorderBrush="{ThemeResource SpecularRimBorderBrush}"
+            BorderThickness="1.5"
+            Translation="0,0,48">
             <Border.Shadow>
                 <ThemeShadow />
             </Border.Shadow>

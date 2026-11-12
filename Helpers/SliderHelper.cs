@@ -1,19 +1,24 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 
 namespace LumiereMediaPlayer.Helpers;
 
 /// <summary>
 /// Attached helper to ensure Slider thumbs across the entire application remain
 /// perfectly circular (16x16 with corner radius 8), rather than the Windows 11 default vertical pill.
-/// Also insets the HorizontalTemplate to prevent the outer drag halo from clipping at min/max.
+/// Also insets the HorizontalTemplate to prevent the outer drag halo from clipping at min/max,
+/// and provides thumb visibility management to hide circular seek bulbs when playback is idle.
 /// </summary>
 public static class SliderHelper
 {
+    private static readonly ConditionalWeakTable<Thumb, Storyboard> _activeThumbAnimations = new();
+
     public static readonly DependencyProperty MakeThumbCircularProperty =
         DependencyProperty.RegisterAttached(
             "MakeThumbCircular",
@@ -27,6 +32,32 @@ public static class SliderHelper
     public static void SetMakeThumbCircular(DependencyObject obj, bool value) =>
         obj.SetValue(MakeThumbCircularProperty, value);
 
+    public static readonly DependencyProperty IsThumbVisibleProperty =
+        DependencyProperty.RegisterAttached(
+            "IsThumbVisible",
+            typeof(bool),
+            typeof(SliderHelper),
+            new PropertyMetadata(true, OnIsThumbVisibleChanged));
+
+    public static bool GetIsThumbVisible(DependencyObject obj) =>
+        (bool)obj.GetValue(IsThumbVisibleProperty);
+
+    public static void SetIsThumbVisible(DependencyObject obj, bool value) =>
+        obj.SetValue(IsThumbVisibleProperty, value);
+
+    public static readonly DependencyProperty HideThumbWhenDisabledProperty =
+        DependencyProperty.RegisterAttached(
+            "HideThumbWhenDisabled",
+            typeof(bool),
+            typeof(SliderHelper),
+            new PropertyMetadata(false, OnHideThumbWhenDisabledChanged));
+
+    public static bool GetHideThumbWhenDisabled(DependencyObject obj) =>
+        (bool)obj.GetValue(HideThumbWhenDisabledProperty);
+
+    public static void SetHideThumbWhenDisabled(DependencyObject obj, bool value) =>
+        obj.SetValue(HideThumbWhenDisabledProperty, value);
+
     private static void OnMakeThumbCircularChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is Slider slider && (bool)e.NewValue)
@@ -37,6 +68,35 @@ public static class SliderHelper
             slider.SizeChanged += OnSliderSizeChanged;
 
             ApplyCircularThumb(slider);
+        }
+    }
+
+    private static void OnIsThumbVisibleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Slider slider)
+        {
+            UpdateThumbVisibilityForSlider(slider, animate: true);
+        }
+    }
+
+    private static void OnHideThumbWhenDisabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Slider slider)
+        {
+            slider.IsEnabledChanged -= OnSliderIsEnabledChanged;
+            if ((bool)e.NewValue)
+            {
+                slider.IsEnabledChanged += OnSliderIsEnabledChanged;
+                UpdateThumbVisibilityForSlider(slider, animate: false);
+            }
+        }
+    }
+
+    private static void OnSliderIsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is Slider slider)
+        {
+            UpdateThumbVisibilityForSlider(slider, animate: true);
         }
     }
 
@@ -57,8 +117,157 @@ public static class SliderHelper
     }
 
     /// <summary>
+    /// Explicitly updates thumb visibility for a slider, with optional smooth animation.
+    /// </summary>
+    public static void SetThumbVisibility(Slider? slider, bool isVisible, bool animate = false)
+    {
+        if (slider == null) return;
+        SetIsThumbVisible(slider, isVisible);
+        UpdateThumbVisibilityForSlider(slider, animate);
+    }
+
+    /// <summary>
+    /// Evaluates the effective thumb visibility and applies it to all Thumbs in the slider.
+    /// </summary>
+    public static void UpdateThumbVisibilityForSlider(Slider? slider, bool animate)
+    {
+        if (slider == null) return;
+
+        void UpdateCore()
+        {
+            try
+            {
+                bool isVisible = GetIsThumbVisible(slider);
+                if (GetHideThumbWhenDisabled(slider) && !slider.IsEnabled)
+                {
+                    isVisible = false;
+                }
+
+                var thumbs = FindChildren<Thumb>(slider);
+                foreach (var thumb in thumbs)
+                {
+                    ApplyThumbVisibility(thumb, isVisible, animate);
+                }
+            }
+            catch { }
+        }
+
+        if (slider.DispatcherQueue != null && !slider.DispatcherQueue.HasThreadAccess)
+        {
+            slider.DispatcherQueue.TryEnqueue(UpdateCore);
+        }
+        else
+        {
+            UpdateCore();
+        }
+    }
+
+    private static void ApplyThumbVisibility(Thumb thumb, bool isVisible, bool animate)
+    {
+        try
+        {
+            if (_activeThumbAnimations.TryGetValue(thumb, out var runningSb))
+            {
+                runningSb.Stop();
+                _activeThumbAnimations.Remove(thumb);
+            }
+
+            if (isVisible)
+            {
+                thumb.Visibility = Visibility.Visible;
+                thumb.IsHitTestVisible = true;
+
+                if (!animate)
+                {
+                    thumb.Opacity = 1.0;
+                }
+                else
+                {
+                    if (Math.Abs(thumb.Opacity - 1.0) < 0.01 && thumb.Visibility == Visibility.Visible)
+                    {
+                        return;
+                    }
+
+                    double from = thumb.Opacity < 0.01 ? 0.0 : thumb.Opacity;
+                    thumb.Opacity = from;
+
+                    var anim = new DoubleAnimation
+                    {
+                        From = from,
+                        To = 1.0,
+                        Duration = TimeSpan.FromMilliseconds(220),
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                        EnableDependentAnimation = true
+                    };
+
+                    var sb = new Storyboard();
+                    sb.Children.Add(anim);
+                    Storyboard.SetTarget(anim, thumb);
+                    Storyboard.SetTargetProperty(anim, nameof(UIElement.Opacity));
+
+                    sb.Completed += (s, e) =>
+                    {
+                        _activeThumbAnimations.Remove(thumb);
+                        thumb.Opacity = 1.0;
+                    };
+
+                    _activeThumbAnimations.Add(thumb, sb);
+                    sb.Begin();
+                }
+            }
+            else
+            {
+                thumb.IsHitTestVisible = false;
+
+                if (!animate || thumb.Visibility == Visibility.Collapsed || thumb.Opacity <= 0.01)
+                {
+                    thumb.Opacity = 0.0;
+                    thumb.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    var anim = new DoubleAnimation
+                    {
+                        From = thumb.Opacity,
+                        To = 0.0,
+                        Duration = TimeSpan.FromMilliseconds(160),
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+                        EnableDependentAnimation = true
+                    };
+
+                    var sb = new Storyboard();
+                    sb.Children.Add(anim);
+                    Storyboard.SetTarget(anim, thumb);
+                    Storyboard.SetTargetProperty(anim, nameof(UIElement.Opacity));
+
+                    sb.Completed += (s, e) =>
+                    {
+                        _activeThumbAnimations.Remove(thumb);
+                        thumb.Opacity = 0.0;
+                        thumb.Visibility = Visibility.Collapsed;
+                    };
+
+                    _activeThumbAnimations.Add(thumb, sb);
+                    sb.Begin();
+                }
+            }
+        }
+        catch
+        {
+            try
+            {
+                thumb.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+                thumb.Opacity = isVisible ? 1.0 : 0.0;
+                thumb.IsHitTestVisible = isVisible;
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
     /// Traverses the Slider's visual template to configure all Thumb elements and their inner borders
-    /// into authentic circles with matching diameter and CornerRadius = diameter / 2.
+    /// into authentic circles with matching diameter and CornerRadius = diameter / 2,
+    /// and synchronizes thumb visibility state.
     /// </summary>
     public static void ApplyCircularThumb(Slider? slider)
     {
@@ -83,6 +292,12 @@ public static class SliderHelper
                 double thumbDiameter = (slider.Height > 0 && slider.Height < 24) ? 14 : (slider.Height >= 32 ? 18 : 16);
                 var cornerRadius = new CornerRadius(thumbDiameter / 2.0);
 
+                bool isVisible = GetIsThumbVisible(slider);
+                if (GetHideThumbWhenDisabled(slider) && !slider.IsEnabled)
+                {
+                    isVisible = false;
+                }
+
                 var thumbs = FindChildren<Thumb>(slider);
                 foreach (var thumb in thumbs)
                 {
@@ -97,6 +312,19 @@ public static class SliderHelper
                         if (Math.Abs(border.Width - thumbDiameter) > 0.01) border.Width = thumbDiameter;
                         if (Math.Abs(border.Height - thumbDiameter) > 0.01) border.Height = thumbDiameter;
                         if (border.CornerRadius != cornerRadius) border.CornerRadius = cornerRadius;
+                    }
+
+                    if (!isVisible)
+                    {
+                        thumb.Opacity = 0.0;
+                        thumb.Visibility = Visibility.Collapsed;
+                        thumb.IsHitTestVisible = false;
+                    }
+                    else if (thumb.Visibility != Visibility.Visible)
+                    {
+                        thumb.Visibility = Visibility.Visible;
+                        thumb.Opacity = 1.0;
+                        thumb.IsHitTestVisible = true;
                     }
                 }
             }
@@ -115,27 +343,37 @@ public static class SliderHelper
 
     private static T? FindChildByName<T>(DependencyObject parent, string childName) where T : FrameworkElement
     {
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        if (parent == null) return null;
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T fe && fe.Name == childName) return fe;
-            var sub = FindChildByName<T>(child, childName);
-            if (sub != null) return sub;
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T fe && fe.Name == childName) return fe;
+                var sub = FindChildByName<T>(child, childName);
+                if (sub != null) return sub;
+            }
         }
+        catch { }
         return null;
     }
 
     private static List<T> FindChildren<T>(DependencyObject parent) where T : DependencyObject
     {
         var list = new List<T>();
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        if (parent == null) return list;
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T target) list.Add(target);
-            list.AddRange(FindChildren<T>(child));
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T target) list.Add(target);
+                list.AddRange(FindChildren<T>(child));
+            }
         }
+        catch { }
         return list;
     }
 }

@@ -8,6 +8,13 @@ public enum OpenFileCorner
     BottomRight
 }
 
+public enum GpuPreference
+{
+    Auto = 0,
+    PowerSaving = 1,
+    HighPerformance = 2
+}
+
 public sealed class AppSettings
 {
     public AppThemeOption Theme { get; set; } = AppThemeOption.Default;
@@ -42,12 +49,18 @@ public sealed class AppSettings
     public AspectRatioOption DefaultAspectRatio { get; set; } = AspectRatioOption.Auto;
     /// <summary>Play an elevated animated preview of a scene when hovering over a video card.</summary>
     public bool EnableHoverVideoPreview { get; set; } = true;
+    /// <summary>Decodes individual video frames for seekbar preview (uses more memory). Keep off for instant, low-memory seekbar previews.</summary>
+    public bool PreciseSeekThumbnails { get; set; } = true;
+    /// <summary>Preferred GPU for hardware video decoding and pipeline acceleration.</summary>
+    public GpuPreference PreferredGpu { get; set; } = GpuPreference.Auto;
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     /// <summary>Controls when HDR output is engaged.</summary>
     public HdrMode HdrMode { get; set; } = HdrMode.Auto;
     /// <summary>Automatically boost screen brightness to 100% when HDR playback is active.</summary>
     public bool AutoBoostHdrBrightness { get; set; } = true;
+    /// <summary>Emergency fallback brightness level to restore if app terminated during HDR override.</summary>
+    public int? EmergencyHdrBaselineBrightness { get; set; }
     /// <summary>Tone-mapping operator used for HDR→SDR conversion or highlight roll-off.</summary>
     public ToneMappingMode ToneMappingMode { get; set; } = ToneMappingMode.DisplayAdaptive;
     /// <summary>Target peak brightness in nits for tone-mapping output (100–10000).</summary>
@@ -120,5 +133,16 @@ public sealed class AppSettings
     public bool SleepAtEndOfTrack { get; set; } = false;
     public string CustomEqualizerGains { get; set; } = "0,0,0,0,0,0,0,0,0,0";
     public string SelectedReverbPreset { get; set; } = "None";
+
+    // ── Updates & Maintenance ───────────────────────────────────────
+    /// <summary>
+    /// When true, the application periodically checks for updates in the background.
+    /// Default is false to conform to user privacy and explicit update checking preferences.
+    /// </summary>
+    public bool AutoCheckForUpdates { get; set; } = false;
+
+    // ── Sports & Live Events ────────────────────────────────────────
+    public List<string> FavoriteSportsLeagues { get; set; } = [];
+    public List<string> FavoriteSportsTeams { get; set; } = [];
 }
 

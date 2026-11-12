@@ -17,6 +17,12 @@ public partial class PlaylistsViewModel : ObservableObject, IDisposable
         _playback = playback;
         _libraryChangedHandler = (s, e) =>
         {
+            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(() => OnPropertyChanged(nameof(Playlists)));
+                return;
+            }
             OnPropertyChanged(nameof(Playlists));
         };
         MediaLibraryService.LibraryChanged += _libraryChangedHandler;

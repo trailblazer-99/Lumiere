@@ -219,13 +219,13 @@ public static class MediaLibraryService
 
     public static void NotifyLibraryChanged()
     {
-        if (App.MainDispatcher?.HasThreadAccess == true)
+        if (App.MainDispatcher == null || App.MainDispatcher.HasThreadAccess)
         {
             LibraryChanged?.Invoke(null, EventArgs.Empty);
         }
         else
         {
-            App.MainDispatcher?.TryEnqueue(() => LibraryChanged?.Invoke(null, EventArgs.Empty));
+            App.MainDispatcher.TryEnqueue(() => LibraryChanged?.Invoke(null, EventArgs.Empty));
         }
     }
     public static IReadOnlyList<string> Albums
@@ -268,7 +268,7 @@ public static class MediaLibraryService
         }
         StopAllWatchers();
         InvalidatePropertyCaches();
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
     }
 
     public static async Task ClearVideoTracksAsync()
@@ -288,7 +288,7 @@ public static class MediaLibraryService
             UpdateLocationRepresentations();
         }
         InvalidatePropertyCaches();
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
         await SaveLibraryAsync();
     }
 
@@ -321,7 +321,7 @@ public static class MediaLibraryService
             if (!string.IsNullOrEmpty(dir)) StartWatchingDirectory(dir);
         }
         InvalidatePropertyCaches();
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
         return await Task.FromResult(item);
     }
 
@@ -340,7 +340,7 @@ public static class MediaLibraryService
         {
             _playlists.Add(playlist);
         }
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
         RequestDebouncedSave();
         await Task.CompletedTask;
     }
@@ -364,7 +364,7 @@ public static class MediaLibraryService
                 playlist.Tracks = current;
             }
         }
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
         RequestDebouncedSave();
         await Task.CompletedTask;
     }
@@ -392,7 +392,7 @@ public static class MediaLibraryService
         }
         await AppServices.History.RemoveRangeFromHistoryAsync(toRemove);
         InvalidatePropertyCaches();
-        LibraryChanged?.Invoke(null, EventArgs.Empty);
+        NotifyLibraryChanged();
         RequestDebouncedSave();
     }
 
@@ -410,7 +410,7 @@ public static class MediaLibraryService
             if (await SynchronizeDirectoryAsync(folder.Path))
             {
                 InvalidatePropertyCaches();
-                LibraryChanged?.Invoke(null, EventArgs.Empty);
+                NotifyLibraryChanged();
                 _ = SaveLibraryAsync();
             }
         }
@@ -570,13 +570,16 @@ public static class MediaLibraryService
 
             if (token.IsCancellationRequested) return;
 
-            UpdateLocationRepresentations();
+            lock (_lock)
+            {
+                UpdateLocationRepresentations();
+            }
             UpdateWatchers();
 
             if (wasModified)
             {
                 InvalidatePropertyCaches();
-                LibraryChanged?.Invoke(null, EventArgs.Empty);
+                NotifyLibraryChanged();
                 _ = SaveLibraryAsync();
             }
         }
@@ -823,7 +826,7 @@ public static class MediaLibraryService
                         UpdateLocationRepresentations();
                     }
                     InvalidatePropertyCaches();
-                    try { LibraryChanged?.Invoke(null, EventArgs.Empty); } catch { }
+                    try { NotifyLibraryChanged(); } catch { }
 
                     if (wasModified)
                     {

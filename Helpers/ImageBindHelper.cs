@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -8,6 +10,33 @@ namespace LumiereMediaPlayer.Helpers;
 
 public static class ImageBindHelper
 {
+    public static readonly DependencyProperty SafeUrlProperty = DependencyProperty.RegisterAttached(
+        "SafeUrl",
+        typeof(string),
+        typeof(ImageBindHelper),
+        new PropertyMetadata(null, OnSafeUrlChanged));
+
+    public static readonly DependencyProperty DecodeWidthProperty = DependencyProperty.RegisterAttached(
+        "DecodeWidth",
+        typeof(int),
+        typeof(ImageBindHelper),
+        new PropertyMetadata(64));
+
+    public static string? GetSafeUrl(DependencyObject obj) => (string?)obj.GetValue(SafeUrlProperty);
+    public static void SetSafeUrl(DependencyObject obj, string? value) => obj.SetValue(SafeUrlProperty, value);
+
+    public static int GetDecodeWidth(DependencyObject obj) => (int)obj.GetValue(DecodeWidthProperty);
+    public static void SetDecodeWidth(DependencyObject obj, int value) => obj.SetValue(DecodeWidthProperty, value);
+
+    private static void OnSafeUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Image img)
+        {
+            int decodeWidth = GetDecodeWidth(img);
+            img.Source = SafeImageFromUrl(e.NewValue as string, decodeWidth);
+        }
+    }
+
     private static readonly object _cacheLock = new();
     private static readonly Dictionary<string, WeakReference<BitmapImage>> _weakCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly LinkedList<string> _lruKeys = new();

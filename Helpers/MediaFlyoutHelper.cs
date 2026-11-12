@@ -77,6 +77,7 @@ public static class MediaFlyoutHelper
             Text = "Add to playlist",
             Icon = new FontIcon { Glyph = "\uE8F4" }
         };
+        FlyoutHelper.MakeSubMenuFast(playlistSubMenu);
 
         var playlists = MediaLibraryService.Playlists;
         if (playlists.Count > 0)
@@ -91,7 +92,14 @@ public static class MediaFlyoutHelper
                 var targetPl = playlist;
                 plItem.Click += async (s, e) =>
                 {
-                    await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, new[] { item });
+                    try
+                    {
+                        await MediaLibraryService.AddTracksToPlaylistAsync(targetPl.Id, new[] { item });
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[MediaFlyoutHelper] AddToPlaylist error: {ex.Message}");
+                    }
                 };
                 playlistSubMenu.Items.Add(plItem);
             }
@@ -105,7 +113,14 @@ public static class MediaFlyoutHelper
         };
         newPlaylistItem.Click += async (s, e) =>
         {
-            await ShowNewPlaylistDialogAsync(new[] { item }, targetElement?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
+            try
+            {
+                await ShowNewPlaylistDialogAsync(new[] { item }, targetElement?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MediaFlyoutHelper] NewPlaylist error: {ex.Message}");
+            }
         };
         playlistSubMenu.Items.Add(newPlaylistItem);
         flyout.Items.Add(playlistSubMenu);
@@ -168,7 +183,14 @@ public static class MediaFlyoutHelper
         };
         propsItem.Click += async (s, e) =>
         {
-            await ShowPropertiesDialogAsync(item, targetElement?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
+            try
+            {
+                await ShowPropertiesDialogAsync(item, targetElement?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MediaFlyoutHelper] ShowProperties error: {ex.Message}");
+            }
         };
         flyout.Items.Add(propsItem);
 
@@ -186,9 +208,16 @@ public static class MediaFlyoutHelper
         };
         removeItem.Click += async (s, e) =>
         {
-            await MediaLibraryService.RemoveTrackAsync(item);
-            await AppServices.History.RemoveFromHistoryAsync(item);
-            onRemoved?.Invoke();
+            try
+            {
+                await MediaLibraryService.RemoveTrackAsync(item);
+                await AppServices.History.RemoveFromHistoryAsync(item);
+                onRemoved?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MediaFlyoutHelper] Remove error: {ex.Message}");
+            }
         };
         flyout.Items.Add(removeItem);
 
@@ -269,6 +298,8 @@ public static class MediaFlyoutHelper
 
     private static readonly System.Threading.SemaphoreSlim _dialogLock = new(1, 1);
     private static WeakReference<ContentDialog>? _activeDialog;
+
+    public static bool IsDialogOpen => _activeDialog != null && _activeDialog.TryGetTarget(out _);
 
     public static void RefreshActiveDialog()
     {
@@ -437,6 +468,7 @@ public static class MediaFlyoutHelper
             CornerRadius = new CornerRadius(8),
             RequestedTheme = ThemeHelper.GetEffectiveElementTheme()
         };
+        ThemeHelper.ApplyThemeToContentDialog(dialog);
 
         try
         {
@@ -468,9 +500,31 @@ public static class ThemeResourceHelper
             return fallback;
         }
 
-        bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
+        bool isHighContrast = false;
+        try
+        {
+            isHighContrast = AppServices.Settings?.Current?.HighContrastMode == true ||
+                             new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast;
+        }
+        catch { }
+
+        if (isHighContrast)
+        {
+            return key switch
+            {
+                "AccentFillColorDefaultBrush" or "AccentTextFillColorPrimaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent)),
+                "SolidBackgroundFillColorBaseBrush" or "CardBackgroundFillColorDefaultBrush" or "CardBackgroundFillColorSecondaryBrush"
+                    or "FlyoutPresenterBackground" or "MenuFlyoutPresenterBackground" =>
+                    new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black),
+                _ => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+            };
+        }
+
+        bool isDark = ThemeHelper.IsFullscreenPresentationActive || ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
         return key switch
         {
+            "TextFillColorPrimaryBrush" or "MenuFlyoutItemForeground" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255) : Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0)),
             "SolidBackgroundFillColorBaseBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32) : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243)),
             "CardBackgroundFillColorDefaultBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 38, 38, 42) : Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255)),
             "CardBackgroundFillColorSecondaryBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 36) : Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 248)),
@@ -487,8 +541,8 @@ public static class ThemeResourceHelper
             "TwitchBrandBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 145, 70, 255)),
             "HdrStatusGoldBrush" => new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 230, 200, 0)),
             "FlyoutPresenterBackground" or "MenuFlyoutPresenterBackground" =>
-                ThemeHelper.GetFlyoutPresenterBackground(AppServices.Settings.Current.BackdropType, isDark ? ElementTheme.Dark : ElementTheme.Light, hasSystemBackdrop: true),
-            _ => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255))
+                ThemeHelper.GetFlyoutPresenterBackground(AppServices.Settings?.Current?.BackdropType ?? Models.AppThemeBackdrop.Mica, isDark ? ElementTheme.Dark : ElementTheme.Light, hasSystemBackdrop: true),
+            _ => new Microsoft.UI.Xaml.Media.SolidColorBrush(isDark ? Microsoft.UI.ColorHelper.FromArgb(255, 255, 255, 255) : Microsoft.UI.ColorHelper.FromArgb(255, 0, 0, 0))
         };
     }
 
@@ -512,8 +566,18 @@ public static class ThemeResourceHelper
             }
 
             // 2. Check active ThemeDictionary in Application.Current.Resources
+            bool isHighContrast = false;
+            try
+            {
+                isHighContrast = AppServices.Settings?.Current?.HighContrastMode == true ||
+                                 new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast;
+            }
+            catch { }
+
             bool isDark = ThemeHelper.GetEffectiveElementTheme() == ElementTheme.Dark;
-            string[] themeKeys = isDark ? new[] { "Default", "Dark" } : new[] { "Light" };
+            string[] themeKeys = isHighContrast
+                ? new[] { "HighContrast", "Default", isDark ? "Dark" : "Light" }
+                : (isDark ? new[] { "Default", "Dark" } : new[] { "Light" });
 
             if (Application.Current?.Resources != null)
             {
@@ -551,13 +615,7 @@ public static class ThemeResourceHelper
                     }
                 }
 
-                // 4. Search merged dictionaries (including XamlControlsResources) with cycle and depth guards
-                var visited = new HashSet<ResourceDictionary>();
-                if (TryFindBrushInMergedDictionaries(Application.Current.Resources, key, themeKeys, visited, 0, out var mb))
-                {
-                    brush = mb;
-                    return true;
-                }
+                // Merged dictionaries traversal bypassed for stability
             }
         }
         catch

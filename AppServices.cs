@@ -109,6 +109,10 @@ public static class AppServices
         => App.Services.GetRequiredService<StreamingMusicViewModel>());
     public static StreamingMusicViewModel StreamingMusicViewModel => _streamingMusicViewModel.Value;
 
+    private static readonly Lazy<StreamingSportsViewModel> _streamingSportsViewModel = new(()
+        => App.Services.GetRequiredService<StreamingSportsViewModel>());
+    public static StreamingSportsViewModel StreamingSportsViewModel => _streamingSportsViewModel.Value;
+
     private static readonly Lazy<StreamingDetailsViewModel> _streamingDetailsViewModel = new(()
         => App.Services.GetRequiredService<StreamingDetailsViewModel>());
     public static StreamingDetailsViewModel StreamingDetailsViewModel => _streamingDetailsViewModel.Value;

@@ -109,11 +109,11 @@ public static class ComboBoxHelper
             if (xamlRoot != null)
             {
                 var backdrop = AppServices.Settings.Current.BackdropType;
-                var theme = ThemeHelper.GetEffectiveElementTheme();
+                var theme = ThemeHelper.IsFullscreenPresentationActive ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
                 var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
                 var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
-                var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot);
+                var openPopups = FlyoutHelper.SafeGetOpenPopupsForXamlRoot(xamlRoot);
                 foreach (var p in openPopups)
                 {
                     ThemeHelper.ApplySystemBackdropToPopup(p);
@@ -189,7 +189,7 @@ public static class ComboBoxHelper
             {
                 if (!popup.IsOpen)
                 {
-                    popup.ShouldConstrainToRootBounds = false;
+                    popup.ShouldConstrainToRootBounds = ThemeHelper.ShouldConstrainFlyoutToRootBounds();
                 }
                 ThemeHelper.ApplySystemBackdropToPopup(popup);
                 popup.Opened -= OnPopupOpened;
@@ -205,7 +205,7 @@ public static class ComboBoxHelper
         {
             if (!popup.IsOpen)
             {
-                popup.ShouldConstrainToRootBounds = false;
+                popup.ShouldConstrainToRootBounds = ThemeHelper.ShouldConstrainFlyoutToRootBounds();
             }
             ThemeHelper.ApplySystemBackdropToPopup(popup);
             ApplyThemeToPopupChild(popup);
@@ -264,7 +264,7 @@ public static class ComboBoxHelper
         try
         {
             var backdrop = AppServices.Settings.Current.BackdropType;
-            var theme = ThemeHelper.GetEffectiveElementTheme();
+            var theme = ThemeHelper.IsFullscreenPresentationActive ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
             var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
             var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
@@ -296,7 +296,7 @@ public static class ComboBoxHelper
         {
             try
             {
-                var openPopups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot);
+                var openPopups = FlyoutHelper.SafeGetOpenPopupsForXamlRoot(xamlRoot);
                 foreach (var p in openPopups)
                 {
                     ThemeHelper.ApplySystemBackdropToPopup(p);
@@ -359,7 +359,7 @@ public static class ComboBoxHelper
     {
         ThemeHelper.ApplySystemBackdropToPopup(popup);
         var backdrop = AppServices.Settings.Current.BackdropType;
-        var theme = ThemeHelper.GetEffectiveElementTheme();
+        var theme = ThemeHelper.IsFullscreenPresentationActive ? ElementTheme.Dark : ThemeHelper.GetEffectiveElementTheme();
         var bgBrush = ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
         var borderBrush = ThemeHelper.GetFlyoutBorderBrush(backdrop, theme);
 
@@ -404,12 +404,16 @@ public static class ComboBoxHelper
         if (parent == null) return list;
         if (parent is Border directBorder) list.Add(directBorder);
 
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            list.AddRange(FindAllBordersRecursively(child));
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                list.AddRange(FindAllBordersRecursively(child));
+            }
         }
+        catch { }
         return list;
     }
 
@@ -421,13 +425,17 @@ public static class ComboBoxHelper
         var list = new List<T>();
         if (parent == null) return list;
 
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T typedChild) list.Add(typedChild);
-            list.AddRange(FindAllVisualChildren<T>(child));
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T typedChild) list.Add(typedChild);
+                list.AddRange(FindAllVisualChildren<T>(child));
+            }
         }
+        catch { }
         return list;
     }
 
@@ -466,14 +474,18 @@ public static class ComboBoxHelper
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
     {
         if (parent == null) return null;
-        int count = VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        try
         {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T typedChild) return typedChild;
-            var desc = FindVisualChild<T>(child);
-            if (desc != null) return desc;
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T typedChild) return typedChild;
+                var desc = FindVisualChild<T>(child);
+                if (desc != null) return desc;
+            }
         }
+        catch { }
         return null;
     }
 }

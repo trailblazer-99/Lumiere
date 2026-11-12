@@ -45,7 +45,14 @@ namespace LumiereMediaPlayer.Pages
         {
             this.Unloaded -= OnUnloaded;
             ViewModel.OnSurpriseMeRequested -= OnSurpriseMePicked;
-            _heroTimer?.Stop();
+            try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+            _searchSuggestCts = null;
+            if (_heroTimer != null)
+            {
+                _heroTimer.Stop();
+                _heroTimer.Tick -= OnHeroTimerTick;
+                _heroTimer = null;
+            }
             if (TrendingHeroCarousel != null) TrendingHeroCarousel.ItemsSource = null;
             if (TrendingGridView != null) TrendingGridView.ItemsSource = null;
             if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
@@ -113,31 +120,37 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
+        private System.Threading.CancellationTokenSource? _searchSuggestCts;
+
         private async void OnSearchBoxTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
             try
             {
-                try
+                if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
                 {
-                    if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+                    try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+                    string query = sender.Text ?? string.Empty;
+                    if (query.Length >= 3)
                     {
-                        string query = sender.Text;
-                        if (query.Length >= 3)
+                        var cts = new System.Threading.CancellationTokenSource();
+                        _searchSuggestCts = cts;
+                        try
                         {
-                            try
+                            await System.Threading.Tasks.Task.Delay(250, cts.Token);
+                            var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
+                            if (!cts.IsCancellationRequested && sender.Text == query)
                             {
-                                var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
                                 sender.ItemsSource = suggestions;
                             }
-                            catch { }
                         }
-                        else
-                        {
-                            sender.ItemsSource = null;
-                        }
+                        catch (OperationCanceledException) { }
+                        catch { }
+                    }
+                    else
+                    {
+                        sender.ItemsSource = null;
                     }
                 }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
             }
             catch (Exception ex)
             {
@@ -349,17 +362,7 @@ namespace LumiereMediaPlayer.Pages
                 if (_heroTimer == null)
                 {
                     _heroTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-                    _heroTimer.Tick += (s, e) =>
-                    {
-                        try
-                        {
-                            if (TrendingHeroCarousel != null && TrendingHeroCarousel.ItemsSource is System.Collections.IList list && list.Count > 0)
-                            {
-                                TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
-                            }
-                        }
-                        catch { }
-                    };
+                    _heroTimer.Tick += OnHeroTimerTick;
                 }
                 _heroTimer.Start();
                 CollapseInternalFlipViewButtons(TrendingHeroCarousel);
@@ -368,6 +371,18 @@ namespace LumiereMediaPlayer.Pages
             {
                 System.Diagnostics.Debug.WriteLine($"LoadTrendingAsync movies error: {ex.Message}");
             }
+        }
+
+        private void OnHeroTimerTick(object? sender, object e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel != null && TrendingHeroCarousel.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
+                }
+            }
+            catch { }
         }
 
         private void CollapseInternalFlipViewButtons(DependencyObject? parent)
@@ -672,10 +687,17 @@ namespace LumiereMediaPlayer.Pages
                 {
                     try
                     {
-                        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
-                        if (visual?.Parent is Microsoft.UI.Composition.ContainerVisual container)
+                        if (holder.ShadowVisual.Parent is Microsoft.UI.Composition.ContainerVisual container)
                         {
                             container.Children.Remove(holder.ShadowVisual);
+                        }
+                        else
+                        {
+                            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                            if (visual?.Parent is Microsoft.UI.Composition.ContainerVisual fallbackContainer)
+                            {
+                                fallbackContainer.Children.Remove(holder.ShadowVisual);
+                            }
                         }
                     }
                     catch { }

@@ -18,6 +18,7 @@ public sealed partial class MusicLibraryPage : Page
     private DataTemplate? _wideTrackTemplate;
     private DataTemplate? _compactTrackTemplate;
     private bool _isCompactLayout = false;
+    private bool _isUpdatingSelectAll = false;
 
     public MusicLibraryPage()
     {
@@ -141,7 +142,7 @@ public sealed partial class MusicLibraryPage : Page
                 track.IsSelected = false;
             }
             MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
-            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            SetSelectAllCheckBoxState(false);
         }
 
         UpdateEmptyState();
@@ -312,27 +313,60 @@ public sealed partial class MusicLibraryPage : Page
         OnTrackCheckBoxChanged(sender, e);
     }
 
+    private void SetSelectAllCheckBoxState(bool? isChecked)
+    {
+        if (HeaderSelectAllCheckBox == null) return;
+        _isUpdatingSelectAll = true;
+        try
+        {
+            HeaderSelectAllCheckBox.IsChecked = isChecked;
+        }
+        finally
+        {
+            _isUpdatingSelectAll = false;
+        }
+    }
+
     private void OnTrackCheckBoxChanged(object sender, RoutedEventArgs e)
     {
+        if (_isUpdatingSelectAll) return;
         MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
         if (HeaderSelectAllCheckBox != null)
         {
             int selectedCount = ViewModel.Tracks.Count(t => t.IsSelected);
-            if (selectedCount == 0) HeaderSelectAllCheckBox.IsChecked = false;
-            else if (selectedCount == ViewModel.Tracks.Count) HeaderSelectAllCheckBox.IsChecked = true;
-            else HeaderSelectAllCheckBox.IsChecked = null;
+            if (selectedCount == 0) SetSelectAllCheckBoxState(false);
+            else if (selectedCount == ViewModel.Tracks.Count) SetSelectAllCheckBoxState(true);
+            else SetSelectAllCheckBoxState(null);
         }
     }
 
     private void OnHeaderSelectAllChecked(object sender, RoutedEventArgs e)
     {
-        foreach (var t in ViewModel.Tracks) t.IsSelected = true;
+        if (_isUpdatingSelectAll) return;
+        _isUpdatingSelectAll = true;
+        try
+        {
+            foreach (var t in ViewModel.Tracks) t.IsSelected = true;
+        }
+        finally
+        {
+            _isUpdatingSelectAll = false;
+        }
         MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
     }
 
     private void OnHeaderSelectAllUnchecked(object sender, RoutedEventArgs e)
     {
-        foreach (var t in ViewModel.Tracks) t.IsSelected = false;
+        if (_isUpdatingSelectAll) return;
+        _isUpdatingSelectAll = true;
+        try
+        {
+            foreach (var t in ViewModel.Tracks) t.IsSelected = false;
+        }
+        finally
+        {
+            _isUpdatingSelectAll = false;
+        }
         MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
     }
 
@@ -343,7 +377,7 @@ public sealed partial class MusicLibraryPage : Page
         {
             AppServices.PlaybackViewModel.SetQueue(selected, 0);
             MusicSelectionRibbon?.ClearSelection();
-            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            SetSelectAllCheckBoxState(false);
         }
     }
 
@@ -354,7 +388,7 @@ public sealed partial class MusicLibraryPage : Page
         {
             AppServices.PlaybackViewModel.PlayNextRange(selected);
             MusicSelectionRibbon?.ClearSelection();
-            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            SetSelectAllCheckBoxState(false);
         }
     }
 
@@ -365,7 +399,7 @@ public sealed partial class MusicLibraryPage : Page
         {
             AppServices.PlaybackViewModel.EnqueueRange(selected);
             MusicSelectionRibbon?.ClearSelection();
-            if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+            SetSelectAllCheckBoxState(false);
         }
     }
 
@@ -373,14 +407,14 @@ public sealed partial class MusicLibraryPage : Page
     {
         foreach (var t in ViewModel.Tracks) t.IsSelected = true;
         MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
-        if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = true;
+        SetSelectAllCheckBoxState(true);
     }
 
     private void OnMusicClearRequested(object? sender, EventArgs e)
     {
         foreach (var t in ViewModel.Tracks) t.IsSelected = false;
         MusicSelectionRibbon?.ClearSelection();
-        if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+        SetSelectAllCheckBoxState(false);
     }
 
     private async void OnMusicRemoveRequested(object? sender, EventArgs e)
@@ -392,7 +426,7 @@ public sealed partial class MusicLibraryPage : Page
             {
                 await MediaLibraryService.RemoveTracksAsync(selected);
                 MusicSelectionRibbon?.ClearSelection();
-                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+                SetSelectAllCheckBoxState(false);
             }
         }
         catch (Exception ex)
@@ -423,9 +457,9 @@ public sealed partial class MusicLibraryPage : Page
                 if (HeaderSelectAllCheckBox != null)
                 {
                     int selectedCount = ViewModel.Tracks.Count(t => t.IsSelected);
-                    if (selectedCount == 0) HeaderSelectAllCheckBox.IsChecked = false;
-                    else if (selectedCount == ViewModel.Tracks.Count) HeaderSelectAllCheckBox.IsChecked = true;
-                    else HeaderSelectAllCheckBox.IsChecked = null;
+                    if (selectedCount == 0) SetSelectAllCheckBoxState(false);
+                    else if (selectedCount == ViewModel.Tracks.Count) SetSelectAllCheckBoxState(true);
+                    else SetSelectAllCheckBoxState(null);
                 }
                 e.Handled = true;
             }
@@ -477,7 +511,7 @@ public sealed partial class MusicLibraryPage : Page
                     t.IsSelected = true;
                 }
                 MusicSelectionRibbon?.UpdateSelection(ViewModel.Tracks);
-                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = true;
+                SetSelectAllCheckBoxState(true);
                 return;
             }
             if (e.Key == Windows.System.VirtualKey.Escape)
@@ -488,7 +522,7 @@ public sealed partial class MusicLibraryPage : Page
                     t.IsSelected = false;
                 }
                 MusicSelectionRibbon?.ClearSelection();
-                if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+                SetSelectAllCheckBoxState(false);
                 return;
             }
             if (e.Key == Windows.System.VirtualKey.Delete)
@@ -499,7 +533,7 @@ public sealed partial class MusicLibraryPage : Page
                     e.Handled = true;
                     await MediaLibraryService.RemoveTracksAsync(selected);
                     MusicSelectionRibbon?.ClearSelection();
-                    if (HeaderSelectAllCheckBox != null) HeaderSelectAllCheckBox.IsChecked = false;
+                    SetSelectAllCheckBoxState(false);
                 }
             }
         }

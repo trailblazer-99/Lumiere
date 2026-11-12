@@ -45,7 +45,7 @@ public sealed class AdvancedColorDisplayManager : IDisplayManager
     public float MaxLuminanceInNits => _maxLuminanceInNits;
     public float MinLuminanceInNits => _minLuminanceInNits;
     public float MaxFullFrameLuminanceInNits => _maxFullFrameLuminanceInNits;
-    public bool SupportsHdr10 => _supportsHdr10 || _canStreamHdr;
+    public bool SupportsHdr10 => _supportsHdr10;
     public bool SupportsWcg => _supportsWcg;
     public DisplayProfileKind ActiveDisplayProfile => _activeProfile;
     public DisplayAdvancedColorKind CurrentColorKind => _currentColorKind;
@@ -55,7 +55,7 @@ public sealed class AdvancedColorDisplayManager : IDisplayManager
         DisplayProfileKind.TrueHdrOledOrMiniLed => $"High-End HDR Display ({_maxLuminanceInNits:F0} nits peak)",
         DisplayProfileKind.EntryHdr => $"Entry HDR Display ({_maxLuminanceInNits:F0} nits peak)",
         DisplayProfileKind.WideColorGamutSdr => $"Wide Color Gamut Display (DCI-P3 SDR)",
-        _ => $"Standard sRGB Display ({_sdrWhiteLevelInNits:F0} nits white)"
+        _ => _canStreamHdr ? $"Standard sRGB Display ({_sdrWhiteLevelInNits:F0} nits white, {_maxLuminanceInNits:F0} nits HDR Streaming)" : $"Standard sRGB Display ({_sdrWhiteLevelInNits:F0} nits white)"
     };
 
     public AdvancedColorDisplayManager() { }
@@ -98,10 +98,15 @@ public sealed class AdvancedColorDisplayManager : IDisplayManager
             _minLuminanceInNits = (float)Math.Max(0.0, aci.MinLuminanceInNits);
             _maxFullFrameLuminanceInNits = _maxLuminanceInNits;
 
+            // Laptop Windows EDR video streaming: if OS supports HDR streaming, ensure max luminance reflects EDR capability (300 nits)
+            if (_canStreamHdr && _maxLuminanceInNits < 300f)
+            {
+                _maxLuminanceInNits = 300f;
+            }
+
             _supportsHdr10 = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.HighDynamicRange
                           || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10)
-                          || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10Plus)
-                          || _canStreamHdr;
+                          || aci.IsHdrMetadataFormatCurrentlySupported(DisplayHdrMetadataFormat.Hdr10Plus);
 
             _supportsWcg = aci.CurrentAdvancedColorKind == DisplayAdvancedColorKind.WideColorGamut;
 
@@ -110,7 +115,7 @@ public sealed class AdvancedColorDisplayManager : IDisplayManager
             {
                 _activeProfile = DisplayProfileKind.TrueHdrOledOrMiniLed;
             }
-            else if (_isHdrActive || _canStreamHdr || (_maxLuminanceInNits >= 350f && _supportsHdr10))
+            else if (_isHdrActive || (_supportsHdr10 && _maxLuminanceInNits >= 350f))
             {
                 _activeProfile = DisplayProfileKind.EntryHdr;
             }

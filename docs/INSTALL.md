@@ -1,112 +1,84 @@
 # Installation Guide for Lumière Media Player
 
-This guide provides step-by-step instructions for installing Lumière Media Player on Windows 10 and Windows 11.
+This guide provides complete instructions for installing Lumière Media Player seamlessly on any Windows 10 or Windows 11 device, including **x64** (Intel/AMD) and **ARM64** (Snapdragon X Elite, Surface Pro, ThinkPad, Dell, HP Copilot+ PCs).
 
 ---
 
 ## System Requirements
 
 - **Operating System**: Windows 10 version 1809 (Build 17763) or newer / Windows 11 (Recommended).
-- **Architecture**: x64 or ARM64.
-- **Runtime**: Microsoft Edge WebView2 Runtime (Included by default in Windows 11 and recent Windows 10 updates).
+- **Architecture**: x64 (AMD64/Intel) or ARM64 (Qualcomm Snapdragon X Series / Microsoft SQ).
+- **Runtime**: Microsoft Edge WebView2 Runtime (Included by default in Windows 11 and recent Windows 10).
 
 ---
 
-## Method 1: Web / App Installer (Recommended One-Click Install)
+## Method 1: Universal One-Line PowerShell Install (Recommended for All Devices)
 
-If you downloaded the `.appinstaller` file or are installing from the release site:
+This method works automatically on **both ARM64 and x64** devices, fully handling certificate trust, sideloading permissions, and package deployment in a single step:
 
-1. Open the `.appinstaller` file or click **Install** on the web release page (`https://trailblazer-99.github.io/Lumiere/LumiereMediaPlayer.appinstaller`).
-2. The native **Windows App Installer** dialog will launch.
-3. Click **Install** (or **Update** if an earlier version is present).
-4. Launch **Lumière Media Player** from your Start Menu once complete!
+1. Press `Win + X` and select **Terminal (Admin)** or **Windows PowerShell (Admin)**.
+2. Paste and run:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -Command "irm https://trailblazer-99.github.io/Lumiere/install.ps1 | iex"
+   ```
+3. The installer detects your device architecture, trusts the release certificate into `LocalMachine\TrustedPeople`, and installs the native package.
 
 ---
 
-## Method 2: Sideloading the `.msixbundle` / `.msix` Release Package
+## Method 2: Sideloading the `.msixbundle` Release Package
 
-When downloading the pre-built `.msixbundle` or `.msix` package directly from GitHub Releases:
+When downloading the pre-built `.msixbundle` directly from GitHub Releases:
 
-### Step 1: Enable Developer Mode (Required for Sideloading)
-
-Because the app is package-signed with a project security certificate:
+### Step 1: Enable Developer Mode / Sideloading
 
 1. Open Windows **Settings** (`Win + I`).
 2. Navigate to:
    - **Windows 11**: **System** > **For developers** (or **Privacy & security** > **For developers**).
    - **Windows 10**: **Update & Security** > **For developers**.
-3. Toggle **Developer Mode** to **ON**.
-4. Click **Yes** on the prompt confirming you want to enable Developer Mode.
+3. Toggle **Developer Mode** to **ON** and confirm the prompt.
 
 ### Step 2: Install the Security Certificate
 
-Windows requires the package's public certificate (`LumiereMediaPlayer.cer`) to be installed in the **Trusted People** store. Do not add this self-signed package certificate to **Trusted Root Certification Authorities**.
+Windows requires the package certificate (`LumiereMediaPlayer.cer`) to be installed in the **Trusted People** store under **Local Machine**:
 
-1. Locate `LumiereMediaPlayer.cer` in your downloaded release folder (or inside `Signing/LumiereMediaPlayer.cer`).
-2. Right-click `LumiereMediaPlayer.cer` and select **Install Certificate**.
-3. In the Certificate Import Wizard:
-   - Select **Local Machine** and click **Next**. (Click **Yes** if prompted by User Account Control / UAC).
-   - Choose **Place all certificates in the following store**.
-   - Click **Browse...** and select **Trusted People**.
-   - Click **OK**, then click **Next**.
-   - Click **Finish**. You should see a message stating *"The import was successful."*
+1. Download `LumiereMediaPlayer.cer` from the release assets or portal.
+2. Double-click `LumiereMediaPlayer.cer` and click **Install Certificate...**.
+3. Select **Local Machine** (requires administrator elevation) and click **Next**.
+4. Choose **Place all certificates in the following store**.
+5. Click **Browse...** and select **Trusted People**.
+6. Click **OK**, then **Next**, then **Finish**.
 
 ### Step 3: Run the Package Installer
 
-Now install the application:
+- **Option A (Automated)**: Double-click `Install.cmd` or right-click `scripts\Install-Lumiere.ps1` and select **Run with PowerShell**.
+- **Option B (Direct MSIX)**: Double-click `LumiereMediaPlayer_*.msixbundle` and click **Install** in the Windows App Installer dialog.
+- **Option C (PowerShell CLI)**:
+  ```powershell
+  Add-AppxPackage -Path ".\LumiereMediaPlayer_1.0.1.X_x64_arm64.msixbundle"
+  ```
 
-#### Option A: Double-Click Package
-1. Double-click `LumiereMediaPlayer.msixbundle` (or `LumiereMediaPlayer.msix`).
-2. Click **Install** in the Windows App Installer window.
+---
 
-#### Option B: PowerShell Script (`Add-AppDevPackage.ps1`)
-If your download includes `Add-AppDevPackage.ps1`:
-1. Right-click `Add-AppDevPackage.ps1` and select **Run with PowerShell**.
-2. Follow the on-screen prompts to automatically trust the certificate and install the package dependencies.
+## In-App Updates & Privacy Policy
+
+Lumière conforms to modern Windows application regulations and respects user bandwidth:
+1. **User-Controlled Checking**: The installer does **not** perform unprompted background update checks on launch.
+2. **Explicit Toggle**: Update checks only run when explicitly triggered by clicking **Check for updates** in Settings, or when the user toggles on **Check for updates automatically** in Settings.
+3. **Seamless In-App Update**: When an update is detected, an update notification and badge appears. Users can click **Update** directly within the Settings page to download and apply the update without manually visiting external websites.
+4. **Development Device Protection**: On devices where the application source code is actively being developed, automatic update overwrites are safely suppressed to prevent replacing development builds with public releases.
 
 ---
 
 ## Troubleshooting Installation Issues
 
 ### Error: "This app package is not signed with a trusted certificate" (`0x800B0109`)
-- **Cause**: The `LumiereMediaPlayer.cer` certificate was not imported into the **Trusted People** store under **Local Machine**.
-- **Fix**: Follow **Step 2** above carefully. Make sure to choose **Local Machine** (not Current User) and select **Trusted People**.
+- **Cause**: `LumiereMediaPlayer.cer` was not imported into **Local Machine > Trusted People** (often imported into Current User by mistake).
+- **Fix**: Run Method 1 (Quick Install PowerShell command) or re-import the certificate selecting **Local Machine**.
 
-### Error: "Developer mode is disabled"
-- **Cause**: Windows blocks non-Store MSIX packages unless Developer Mode or Sideloading is enabled.
-- **Fix**: Follow **Step 1** above to turn on **Developer Mode** in Windows Settings.
+### Error on ARM64 Laptop: "The app package cannot be opened" (`0x80D03002`)
+- **Cause**: Windows 11 blocks opening `.appinstaller` files downloaded from web browsers (CVE-2021-43890), or AppInstaller fails on redirected download links.
+- **Fix**: Download the raw `.msixbundle` directly and double-click it, or run Method 1 (PowerShell one-liner).
 
 ### Error: "A higher version of this app is already installed"
-- **Cause**: An existing development copy or newer version is installed on your machine.
-- **Fix**: Uninstall any existing version of **Lumière Media Player** from **Settings > Apps > Installed apps**, then run the installer again.
-
-### Error: "App Installer failed to update"
-- **Fix**: Launch PowerShell as Administrator and run:
-  ```powershell
-  Add-AppxPackage -Path "C:\path\to\LumiereMediaPlayer.msixbundle"
-  ```
-
----
-
-## Method 3: Downloading & Tracking CI/CD Build Packages (For QA & Developers)
-
-Every automated GitHub Actions build tracks its generated MSIX/MSIXBundle packages with integrity checksums and downloadable artifacts:
-
-1. Open the **Actions** tab in the GitHub repository and click on any workflow run.
-2. In the **Summary** tab, review the **📦 Build Package Tracking Summary** table to inspect:
-   - Package filenames and target architecture (`x64` / `ARM64`)
-   - Package sizes (MB)
-   - SHA256 integrity checksums
-3. Scroll to the bottom of the run page to the **Artifacts** section and download:
-   - `LumiereMediaPlayer-PR-Packages-<run_number>` — Sideload packages for PR/dev branch verification.
-   - `LumiereMediaPlayer-Release-Bundle-<run_number>` — The signed `.msixbundle` and `LumiereMediaPlayer.cer` certificate for release builds.
-4. To verify integrity locally in PowerShell:
-   ```powershell
-   Get-FileHash -Path "LumiereMediaPlayer_*.msixbundle" -Algorithm SHA256
-   ```
-
----
-
-## Launching the App
-
-Once installed, **Lumière Media Player** will appear in your **Start Menu** and **Search**. You can pin it to your Taskbar for quick access!
+- **Cause**: A newer development build is installed on your device.
+- **Fix**: Uninstall any existing version from **Settings > Apps > Installed apps**, then run the installer.

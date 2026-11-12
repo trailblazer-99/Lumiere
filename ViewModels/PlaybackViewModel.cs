@@ -59,34 +59,66 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
     public IPlaybackSession Session => _session;
 
     [RelayCommand]
-    private void TogglePlayPause() => _session.TogglePlayPause();
+    private void TogglePlayPause()
+    {
+        try { _session.TogglePlayPause(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TogglePlayPause] error: {ex.Message}"); }
+    }
 
-    public void Pause() => _session.Pause();
+    public void Pause()
+    {
+        try { _session.Pause(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Pause] error: {ex.Message}"); }
+    }
 
     [RelayCommand]
     public void ToggleMute()
     {
-        _session.ToggleMute();
-        IsMuted = _session.IsMuted;
+        try
+        {
+            _session.ToggleMute();
+            IsMuted = _session.IsMuted;
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ToggleMute] error: {ex.Message}"); }
     }
 
     [RelayCommand]
-    private void Previous() => _session.Previous();
+    private void Previous()
+    {
+        try { _session.Previous(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Previous] error: {ex.Message}"); }
+    }
 
     [RelayCommand]
-    private void Next() => _session.Next();
+    private void Next()
+    {
+        try { _session.Next(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Next] error: {ex.Message}"); }
+    }
 
     [RelayCommand]
-    public void ToggleShuffle() => _session.ToggleShuffle();
+    public void ToggleShuffle()
+    {
+        try { _session.ToggleShuffle(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ToggleShuffle] error: {ex.Message}"); }
+    }
 
     [RelayCommand]
-    public void CycleRepeatMode() => _session.CycleRepeatMode();
+    public void CycleRepeatMode()
+    {
+        try { _session.CycleRepeatMode(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[CycleRepeatMode] error: {ex.Message}"); }
+    }
 
     [RelayCommand]
     public void Stop()
     {
-        IsVideoPlayerActive = false;
-        _session.Stop();
+        try
+        {
+            IsVideoPlayerActive = false;
+            _session.Stop();
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Stop] error: {ex.Message}"); }
     }
 
     public void Seek(double seconds)
@@ -116,39 +148,51 @@ public partial class PlaybackViewModel : ObservableObject, IDisposable
 
     public void PlayTrack(MediaItem track)
     {
-        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
-        IsVideoPlayerActive = track.IsVideo;
-        _session.PlayTrack(track);
+        try
+        {
+            App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+            IsVideoPlayerActive = track.IsVideo;
+            _session.PlayTrack(track);
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PlayTrack] error: {ex.Message}"); }
     }
 
     public void SetQueue(IEnumerable<MediaItem> items, int startIndex = 0)
     {
-        App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
-        var list = items.ToList();
-        if (startIndex >= 0 && startIndex < list.Count)
+        try
         {
-            IsVideoPlayerActive = list[startIndex].IsVideo;
+            App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
+            var list = items.ToList();
+            if (startIndex >= 0 && startIndex < list.Count)
+            {
+                IsVideoPlayerActive = list[startIndex].IsVideo;
+            }
+            _session.SetQueue(list, startIndex);
         }
-        _session.SetQueue(list, startIndex);
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SetQueue] error: {ex.Message}"); }
     }
 
-    public void Enqueue(MediaItem track) => _session.Enqueue(track);
-    public void EnqueueRange(IEnumerable<MediaItem> tracks) => _session.EnqueueRange(tracks);
+    public void Enqueue(MediaItem track) { try { _session.Enqueue(track); } catch { } }
+    public void EnqueueRange(IEnumerable<MediaItem> tracks) { try { _session.EnqueueRange(tracks); } catch { } }
 
-    public void PlayNext(MediaItem track) => _session.PlayNext(track);
-    public void PlayNextRange(IEnumerable<MediaItem> tracks) => _session.PlayNextRange(tracks);
+    public void PlayNext(MediaItem track) { try { _session.PlayNext(track); } catch { } }
+    public void PlayNextRange(IEnumerable<MediaItem> tracks) { try { _session.PlayNextRange(tracks); } catch { } }
 
-    public void RemoveFromQueueAt(int index) => _session.RemoveFromQueueAt(index);
-    public void MoveQueueItem(int oldIndex, int newIndex) => _session.MoveQueueItem(oldIndex, newIndex);
-    public void ReorderQueue(IEnumerable<MediaItem> items) => _session.ReorderQueue(items);
+    public void RemoveFromQueueAt(int index) { try { _session.RemoveFromQueueAt(index); } catch { } }
+    public void MoveQueueItem(int oldIndex, int newIndex) { try { _session.MoveQueueItem(oldIndex, newIndex); } catch { } }
+    public void ReorderQueue(IEnumerable<MediaItem> items) { try { _session.ReorderQueue(items); } catch { } }
 
     public void PlayQueueItemAt(int index)
     {
-        if (index >= 0 && index < Queue.Count)
+        try
         {
-            IsVideoPlayerActive = Queue[index].IsVideo;
+            if (index >= 0 && index < Queue.Count)
+            {
+                IsVideoPlayerActive = Queue[index].IsVideo;
+            }
+            _session.PlayQueueItemAt(index);
         }
-        _session.PlayQueueItemAt(index);
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PlayQueueItemAt] error: {ex.Message}"); }
     }
 
     private void SyncFromSession()

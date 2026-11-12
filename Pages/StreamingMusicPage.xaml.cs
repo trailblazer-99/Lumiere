@@ -32,6 +32,8 @@ namespace LumiereMediaPlayer.Pages
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             this.Unloaded -= OnUnloaded;
+            try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+            _searchSuggestCts = null;
             if (MusicGridView != null) MusicGridView.ItemsSource = null;
             if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
         }
@@ -60,25 +62,42 @@ namespace LumiereMediaPlayer.Pages
             PageContent.Opacity = 1.0;
         }
 
+        private System.Threading.CancellationTokenSource? _searchSuggestCts;
+
         private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
-            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+            try
             {
-                ViewModel.SearchQuery = sender.Text;
-                string query = sender.Text;
-                if (query.Length >= 3)
+                if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
                 {
-                    try
+                    try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+                    string query = sender.Text ?? string.Empty;
+                    ViewModel.SearchQuery = query;
+                    if (query.Length >= 3)
                     {
-                        var suggestions = await ViewModel.GetSearchSuggestionsAsync(query);
-                        sender.ItemsSource = suggestions;
+                        var cts = new System.Threading.CancellationTokenSource();
+                        _searchSuggestCts = cts;
+                        try
+                        {
+                            await Task.Delay(250, cts.Token);
+                            var suggestions = await ViewModel.GetSearchSuggestionsAsync(query);
+                            if (!cts.IsCancellationRequested && sender.Text == query)
+                            {
+                                sender.ItemsSource = suggestions;
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                        catch { }
                     }
-                    catch { }
+                    else
+                    {
+                        sender.ItemsSource = null;
+                    }
                 }
-                else
-                {
-                    sender.ItemsSource = null;
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingMusicPage] OnSearchTextChanged error: {ex.Message}");
             }
         }
 
@@ -501,13 +520,29 @@ namespace LumiereMediaPlayer.Pages
                             }
 
                             string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
+                            if (!Uri.TryCreate(cleanUrl, UriKind.Absolute, out var safeUri) ||
+                                (!string.Equals(safeUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                                 !string.Equals(safeUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                return;
+                            }
+
                             var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
                             await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
                         }
                         catch
                         {
-                            string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
-                            await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
+                            try
+                            {
+                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(linkUrl);
+                                if (Uri.TryCreate(cleanUrl, UriKind.Absolute, out var safeUri) &&
+                                    (string.Equals(safeUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                                     string.Equals(safeUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    await Windows.System.Launcher.LaunchUriAsync(safeUri);
+                                }
+                            }
+                            catch { }
                         }
                     };
 
@@ -560,45 +595,58 @@ namespace LumiereMediaPlayer.Pages
                     var provName = p.Name;
                     btn.Click += async (s, args) =>
                     {
-                        if (provName.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                        try
                         {
-                            string itemType = track.ResultType?.ToLowerInvariant() switch
+                            if (provName.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
                             {
-                                "artist" => "artist",
-                                "album" => "album",
-                                "playlist" => "playlist",
-                                _ => "track"
+                                string itemType = track.ResultType?.ToLowerInvariant() switch
+                                {
+                                    "artist" => "artist",
+                                    "album" => "album",
+                                    "playlist" => "playlist",
+                                    _ => "track"
+                                };
+
+                                var (spNative, spWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                                    track.Name,
+                                    itemType,
+                                    track.DisplayArtist,
+                                    track.Album);
+                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spNative, spWeb);
+                                return;
+                            }
+
+                            string searchUrl = provName switch
+                            {
+                                "Apple Music" => $"https://music.apple.com/search?term={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
+                                "YouTube Music" => $"https://music.youtube.com/search?q={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
+                                _ => ""
                             };
 
-                            var (spNative, spWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
-                                track.Name,
-                                itemType,
-                                track.DisplayArtist,
-                                track.Album);
-                            await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spNative, spWeb);
-                            return;
+                            if (!string.IsNullOrEmpty(searchUrl))
+                            {
+                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
+                                if (!Uri.TryCreate(cleanUrl, UriKind.Absolute, out var safeUri) ||
+                                    (!string.Equals(safeUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                                     !string.Equals(safeUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    return;
+                                }
+
+                                try
+                                {
+                                    var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
+                                    await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
+                                }
+                                catch
+                                {
+                                    await Windows.System.Launcher.LaunchUriAsync(safeUri);
+                                }
+                            }
                         }
-
-                        string searchUrl = provName switch
+                        catch (Exception ex)
                         {
-                            "Apple Music" => $"https://music.apple.com/search?term={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
-                            "YouTube Music" => $"https://music.youtube.com/search?q={Uri.EscapeDataString(track.Name + " " + track.DisplayArtist)}",
-                            _ => ""
-                        };
-
-                        if (!string.IsNullOrEmpty(searchUrl))
-                        {
-                            try
-                            {
-                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
-                                var nativeUri = LumiereMediaPlayer.Helpers.StreamingRouter.GetNativeUri(cleanUrl);
-                                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, cleanUrl);
-                            }
-                            catch
-                            {
-                                string cleanUrl = LumiereMediaPlayer.Helpers.StreamingRouter.CleanFallbackUrl(searchUrl);
-                                await Windows.System.Launcher.LaunchUriAsync(new Uri(cleanUrl));
-                            }
+                            System.Diagnostics.Debug.WriteLine($"[StreamingMusicPage] Provider click error: {ex.Message}");
                         }
                     };
 

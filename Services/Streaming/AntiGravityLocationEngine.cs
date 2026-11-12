@@ -72,7 +72,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             return "US"; // Fallback
         }
 
-        private static string ParseField(ReadOnlySpan<byte> utf8Json, string fieldName)
+        internal static string ParseField(ReadOnlySpan<byte> utf8Json, string fieldName)
         {
             // Zero-allocation search for the JSON key
             Span<byte> targetKeyBytes = stackalloc byte[fieldName.Length + 2]; // + quotes
@@ -102,6 +102,17 @@ namespace LumiereMediaPlayer.Services.Streaming
             if (secondQuote == -1) return string.Empty;
 
             ReadOnlySpan<byte> codeBytes = remaining.Slice(0, secondQuote);
+
+            // Guard against large malicious payloads causing stack overflow via stackalloc
+            if (codeBytes.Length == 0 || codeBytes.Length > 256)
+            {
+                return string.Empty;
+            }
+
+            if (codeBytes.Length > 64)
+            {
+                return System.Text.Encoding.UTF8.GetString(codeBytes);
+            }
 
             // Assuming ASCII country code (e.g. "US")
             Span<char> codeChars = stackalloc char[codeBytes.Length];

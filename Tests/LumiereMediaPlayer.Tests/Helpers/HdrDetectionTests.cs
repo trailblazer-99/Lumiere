@@ -160,7 +160,7 @@ namespace LumiereMediaPlayer.Tests.Helpers
         {
             string filePath = Path.Combine(_tempDir, "synthetic_hevc_hdr10.mkv");
             byte[] spsBytes = Convert.FromHexString("420101022000000090000000000099a001e020021c4d96566924caf016a1220120800001f480002ee004");
-            
+
             var hvcC = new List<byte> { 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 1, 33, 0, 1, 0, (byte)spsBytes.Length };
             hvcC.AddRange(spsBytes);
 

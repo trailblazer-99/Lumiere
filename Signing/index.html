@@ -340,27 +340,37 @@
             <div class="logo-dot"></div>
             Lumière
         </div>
-        <div class="version-badge">vAPP_VERSION</div>
+        <div class="version-badge">vAPP_VERSION • x64 &amp; ARM64</div>
     </header>
 
     <main>
         <section class="hero">
             <h1>Lumière Media Player</h1>
-            <p>Experience ultra-premium local media playback on Windows. Download and sideload directly with automated background updates.</p>
+            <p>Experience ultra-premium local media playback on Windows. High-performance native support for both <strong>x64</strong> (Intel/AMD) and <strong>ARM64</strong> (Qualcomm Snapdragon X Elite / Copilot+ PCs).</p>
+            
             <div class="cta-container">
-                <!-- Using MSIX protocol for modern OS if enabled, but referencing static download too -->
-                <a href="APP_INSTALLER_FILENAME" class="btn btn-primary">
+                <a href="MSIX_BUNDLE_FILENAME" class="btn btn-primary">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Install Lumière Player
+                    Download Package (.msixbundle)
                 </a>
                 <a href="LumiereMediaPlayer.cer" class="btn btn-secondary">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                    Download Certificate
+                    Download Certificate (.cer)
                 </a>
             </div>
-            <!-- Alternates backup download -->
+
+            <!-- One-liner Command for Seamless Universal Installation -->
+            <div style="margin-top: 2rem; width: 100%; max-width: 680px; background: rgba(0,0,0,0.4); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 12px; padding: 1rem 1.25rem; text-align: left;">
+                <div style="font-size: 0.85rem; font-weight: 600; color: #c0a9ff; margin-bottom: 0.5rem;">
+                    ⚡ Quick Install (PowerShell Administrator - x64 &amp; ARM64):
+                </div>
+                <code style="font-family: Consolas, monospace; font-size: 0.88rem; color: #38bdf8; word-break: break-all; display: block; user-select: all;">
+                    powershell -ExecutionPolicy Bypass -Command "irm https://trailblazer-99.github.io/Lumiere/install.ps1 | iex"
+                </code>
+            </div>
+
             <p style="margin-top: 1.5rem; font-size: 0.9rem; color: rgba(169, 163, 194, 0.6);">
-                Having trouble? You can also <a href="MSIX_BUNDLE_FILENAME" style="color: var(--accent-purple); text-decoration: underline;">download the raw .msixbundle file</a> directly.
+                Prefer web installer? You can also <a href="APP_INSTALLER_FILENAME" style="color: var(--accent-purple); text-decoration: underline;">download the .appinstaller file</a> directly.
             </p>
         </section>
 
@@ -374,8 +384,8 @@
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-content">
-                        <h3>Enable Developer Mode (One-Time)</h3>
-                        <p>Windows requires Developer Mode to be enabled before sideloading apps. This only needs to be done once:</p>
+                        <h3>Enable Developer Mode / Sideloading</h3>
+                        <p>Windows requires Developer Mode or sideloading trust for non-Store applications:</p>
                         <div class="step-details">
                             <ol>
                                 <li>Open Windows <strong>Settings</strong> (<code>Win + I</code>).</li>
@@ -389,16 +399,16 @@
                 <div class="step">
                     <div class="step-number">2</div>
                     <div class="step-content">
-                        <h3>Download and Trust the Security Certificate</h3>
-                        <p>Because Lumière is sideloaded, Windows requires trusting its developer certificate before installation. Click <strong>Download Certificate</strong> above to download <code>LumiereMediaPlayer.cer</code>, then:</p>
+                        <h3>Trust the Security Certificate</h3>
+                        <p>Because Lumière is cryptographically signed with our project release certificate, Windows requires trusting it in the <strong>Trusted People</strong> store:</p>
                         <div class="step-details">
                             <ol>
-                                <li>Double-click the downloaded <strong><code>LumiereMediaPlayer.cer</code></strong> file.</li>
-                                <li>In the Dialog box that opens, click the <strong>Install Certificate...</strong> button.</li>
+                                <li>Click <strong>Download Certificate</strong> above to save <strong><code>LumiereMediaPlayer.cer</code></strong>.</li>
+                                <li>Double-click the downloaded certificate file and click <strong>Install Certificate...</strong>.</li>
                                 <li>Select <strong>Local Machine</strong> (requires administrator access) and click <strong>Next</strong>.</li>
                                 <li>Choose <strong>Place all certificates in the following store</strong> and click <strong>Browse...</strong>.</li>
                                 <li>Select the <strong>Trusted People</strong> store and click <strong>OK</strong>.</li>
-                                <li>Click <strong>Next</strong>, then <strong>Finish</strong>. You should see a confirmation saying "The import was successful."</li>
+                                <li>Click <strong>Next</strong>, then <strong>Finish</strong> to complete the import.</li>
                             </ol>
                         </div>
                     </div>
@@ -407,12 +417,12 @@
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-content">
-                        <h3>Run the App Installer</h3>
-                        <p>Click the <strong>Install Lumière Player</strong> button to download and run the <code>.appinstaller</code> file. Windows App Installer will launch automatically to download the correct bundle for your system (x64 or ARM64) and install it.</p>
+                        <h3>Install Lumière Media Player (x64 or ARM64)</h3>
+                        <p>Click <strong>Download Package (.msixbundle)</strong> and double-click the file to install with Windows App Installer. The bundle automatically deploys the native binary for your device's architecture.</p>
                         
                         <div class="highlight-box">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                            <p><strong>Note:</strong> If Windows complains about the file or says it cannot open the appinstaller, double-click the raw <code>.msixbundle</code> file downloaded via the backup link to install it directly.</p>
+                            <p><strong>ARM64 Notice:</strong> On ARM64 laptops (e.g. Snapdragon X Elite), if Windows App Installer fails due to protocol blocks (CVE-2021-43890), run the Quick Install PowerShell command above for 100% automated installation.</p>
                         </div>
                     </div>
                 </div>
@@ -420,8 +430,8 @@
                 <div class="step">
                     <div class="step-number">4</div>
                     <div class="step-content">
-                        <h3>Automated Background Updates</h3>
-                        <p>Once installed using the App Installer, Windows will periodically check the repository's portal on GitHub Pages for updates. When a new version is available, you'll see a prompt offering to update. The app is built, signed, and published automatically every time changes are pushed to the repository!</p>
+                        <h3>User-Controlled Updates</h3>
+                        <p>Lumière respects your bandwidth and preferences: update checks are <strong>strictly user-controlled</strong>. The installer will only check for updates when you explicitly check in Settings or toggle automatic checking on. When an update is ready, a notification badge and toast will let you update directly from within the app.</p>
                     </div>
                 </div>
             </div>

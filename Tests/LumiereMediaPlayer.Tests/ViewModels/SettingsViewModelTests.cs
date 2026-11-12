@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
 using LumiereMediaPlayer.ViewModels;
+using LumiereMediaPlayer.Helpers;
 using Moq;
 
 namespace LumiereMediaPlayer.Tests.ViewModels;
@@ -183,6 +184,89 @@ public class SettingsViewModelTests
         Assert.AreEqual(StudioTransportBarStyle.Solid, vm.StudioTransportBar);
         Assert.AreEqual(StudioTransportBarStyle.Solid, appSettings.StudioTransportBar);
     }
+
+    [TestMethod]
+    public void SettingsViewModel_SettingsInitialization_SucceedsWithoutPrism()
+    {
+        var appSettings = new AppSettings
+        {
+            AlwaysShowTransportBar = true,
+            AcrylicTransportBar = true
+        };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        Assert.IsTrue(vm.AlwaysShowTransportBar);
+        Assert.IsTrue(vm.AcrylicTransportBar);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_GpuPreference_InitializesAndUpdates()
+    {
+        var appSettings = new AppSettings
+        {
+            PreferredGpu = GpuPreference.HighPerformance
+        };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        Assert.AreEqual(GpuPreference.HighPerformance, vm.SelectedGpuPreference);
+        Assert.AreEqual(2, vm.SelectedGpuPreferenceIndex);
+
+        // Switch to PowerSaving (iGPU)
+        vm.SelectedGpuPreferenceIndex = (int)GpuPreference.PowerSaving;
+        Assert.AreEqual(GpuPreference.PowerSaving, vm.SelectedGpuPreference);
+        Assert.AreEqual(GpuPreference.PowerSaving, appSettings.PreferredGpu);
+        mockSettings.Verify(s => s.Save(), Times.AtLeastOnce);
+
+        // Switch to Auto
+        vm.SelectedGpuPreferenceIndex = (int)GpuPreference.Auto;
+        Assert.AreEqual(GpuPreference.Auto, vm.SelectedGpuPreference);
+        Assert.AreEqual(GpuPreference.Auto, appSettings.PreferredGpu);
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task HardwareDetection_DetectGpuEnvironment_ReturnsActiveAdapters()
+    {
+        var env = await HardwareDetectionService.DetectGpuEnvironmentAsync();
+        Assert.IsNotNull(env);
+        Assert.IsNotNull(env.AvailableGpus);
+
+        // On dual GPU machines, summary indicates dual GPU
+        if (env.HasDualGpu)
+        {
+            StringAssert.Contains(env.Summary, "Dual GPU");
+        }
+    }
+
+    [TestMethod]
+    public void HardwareDetection_ApplyGpuPreferenceToWindows_UpdatesAndReadsRegistry()
+    {
+        try
+        {
+            HardwareDetectionService.ApplyGpuPreferenceToWindows(GpuPreference.PowerSaving);
+            var readPref = HardwareDetectionService.GetCurrentWindowsGpuPreference();
+            Assert.AreEqual(GpuPreference.PowerSaving, readPref);
+
+            HardwareDetectionService.ApplyGpuPreferenceToWindows(GpuPreference.HighPerformance);
+            readPref = HardwareDetectionService.GetCurrentWindowsGpuPreference();
+            Assert.AreEqual(GpuPreference.HighPerformance, readPref);
+        }
+        finally
+        {
+            // Reset to Auto (clean state)
+            HardwareDetectionService.ApplyGpuPreferenceToWindows(GpuPreference.Auto);
+            var resetPref = HardwareDetectionService.GetCurrentWindowsGpuPreference();
+            Assert.AreEqual(GpuPreference.Auto, resetPref);
+        }
+    }
 }
+
 
 

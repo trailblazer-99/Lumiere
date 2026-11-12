@@ -36,6 +36,14 @@ public static class TvShowHelper
         @"\b[sS](?<season>\d{1,2})[-._\s]*[eE](?<episode>\d{1,3})\b|\b(?<season>\d{1,2})x(?<episode>\d{1,3})\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    private static readonly Regex NonTvClipPattern = new(
+        @"(?:^|[\s._-])(?:Screen[\s._-]?Recording|Screen[\s._-]?Capture|Recording|Capture|Webcam|Zoom[\s._-]?\d+|VID_\d+|Clip[\s._-]?\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex MovieYearPattern = new(
+        @"[\(\[]\s*(19\d{2}|20\d{2})\s*[\)\]]|\b(19\d{2}|20\d{2})\b(?:\s+(?:1080p|720p|4k|2160p|8k|uhd|hdr|bluray|web|brrip|remux|dvd))",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>
     /// Analyzes a media item's title, filename, and directory structure to determine if it belongs to a TV series.
     /// Returns extracted series title, season number, episode number, and episode title if matched; otherwise null.
@@ -50,6 +58,16 @@ public static class TvShowHelper
             : (!string.IsNullOrWhiteSpace(item.Title) ? item.Title : string.Empty);
 
         if (string.IsNullOrWhiteSpace(filename)) return null;
+
+        // Fast-path guard: Clips, screen recordings, and camera captures are never TV episodes
+        if (NonTvClipPattern.IsMatch(filename)) return null;
+
+        // Fast-path guard: Files with clear movie year tags and no SxxExx/Season indicators are movies
+        if (MovieYearPattern.IsMatch(filename) &&
+            !Regex.IsMatch(filename, @"\b(?:[sS]\d{1,2}[eE]\d{1,3}|\d{1,2}x\d{1,3}|(?:Season|Series)\s*\d+)\b", RegexOptions.IgnoreCase))
+        {
+            return null;
+        }
 
         string rawSeries = string.Empty;
         int season = 1;
@@ -123,11 +141,17 @@ public static class TvShowHelper
             {
                 int? inferredSeason = VideoMetadataHelper.TryInferSeasonFromPath(path);
                 string inferredSeries = VideoMetadataHelper.InferSeriesTitleFromPath(path);
-                if (!string.IsNullOrWhiteSpace(inferredSeries))
+                int.TryParse(epMatch.Groups["episode"].Value, out episode);
+
+                bool hasExplicitEpWord = Regex.IsMatch(filename, @"^(?:Episode|Ep)[-._\s]*\d{1,3}\b", RegexOptions.IgnoreCase);
+                bool hasSeasonFolder = inferredSeason.HasValue;
+
+                // Only consider this a TV episode if it explicitly says "Episode/Ep",
+                // OR it is located in a dedicated Season/Series directory, AND the number is not a release year
+                if ((hasExplicitEpWord || hasSeasonFolder) && episode < 300 && !string.IsNullOrWhiteSpace(inferredSeries))
                 {
                     rawSeries = inferredSeries;
                     season = inferredSeason ?? 1;
-                    int.TryParse(epMatch.Groups["episode"].Value, out episode);
                     rawEpTitle = epMatch.Groups["title"].Success ? epMatch.Groups["title"].Value : string.Empty;
                     foundMatch = true;
                 }

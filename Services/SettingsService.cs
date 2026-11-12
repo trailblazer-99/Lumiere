@@ -28,6 +28,7 @@ public sealed class SettingsService : ISettingsService
     // Video
     private const string DefaultAspectRatioKey = "DefaultAspectRatio";
     private const string EnableHoverVideoPreviewKey = "EnableHoverVideoPreview";
+    private const string PreciseSeekThumbnailsKey = "PreciseSeekThumbnails";
 
     // HDR & Color Pipeline
     private const string HdrModeKey = "HdrMode";
@@ -99,11 +100,22 @@ public sealed class SettingsService : ISettingsService
     private const string CustomEqualizerGainsKey = "CustomEqualizerGains";
     private const string SelectedReverbPresetKey = "SelectedReverbPreset";
 
+    // Graphics, Navigation, Updates, Streaming & Sports Preferences
+    private const string PreferredGpuKey = "PreferredGpu";
+    private const string PreferredStreamingRegionKey = "PreferredStreamingRegion";
+    private const string UseLocationForRegionKey = "UseLocationForRegion";
+    private const string EnableSwipeNavigationKey = "EnableSwipeNavigation";
+    private const string AutoCheckForUpdatesKey = "AutoCheckForUpdates";
+    private const string FavoriteSportsLeaguesKey = "FavoriteSportsLeagues";
+    private const string FavoriteSportsTeamsKey = "FavoriteSportsTeams";
+
     private static readonly string FallbackSettingsDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LumiereMediaPlayer");
     private static readonly string FallbackSettingsPath = Path.Combine(FallbackSettingsDirectory, "settings.json");
+    private readonly object _fileLock = new();
     private bool _useFileFallback;
+    private string? _lastSavedGeminiKey;
 
     public AppSettings Current { get; private set; } = new();
 
@@ -160,6 +172,7 @@ public sealed class SettingsService : ISettingsService
             // Video
             DefaultAspectRatio = ParseEnum(settingsValues, DefaultAspectRatioKey, AspectRatioOption.Auto),
             EnableHoverVideoPreview = ReadBool(settingsValues, EnableHoverVideoPreviewKey, true),
+            PreciseSeekThumbnails = ReadBool(settingsValues, PreciseSeekThumbnailsKey, true),
 
             // HDR & Color Pipeline
             HdrMode = ParseEnum(settingsValues, HdrModeKey, HdrMode.Auto),
@@ -231,7 +244,27 @@ public sealed class SettingsService : ISettingsService
             SleepAtEndOfTrack = ReadBool(settingsValues, SleepAtEndOfTrackKey, false),
             CustomEqualizerGains = settingsValues.TryGetValue(CustomEqualizerGainsKey, out var eqGains) && eqGains is string sEqGains ? sEqGains : "0,0,0,0,0,0,0,0,0,0",
             SelectedReverbPreset = settingsValues.TryGetValue(SelectedReverbPresetKey, out var reverb) && reverb is string sReverb ? sReverb : "None",
+
+            // Graphics, Navigation, Updates, Streaming & Sports Preferences
+            PreferredGpu = ParseEnum(settingsValues, PreferredGpuKey, GpuPreference.Auto),
+            PreferredStreamingRegion = settingsValues.TryGetValue(PreferredStreamingRegionKey, out var psr) && psr is string sPsr ? sPsr : string.Empty,
+            UseLocationForRegion = ReadBool(settingsValues, UseLocationForRegionKey, false),
+            EnableSwipeNavigation = ReadBool(settingsValues, EnableSwipeNavigationKey, true),
+            AutoCheckForUpdates = ReadBool(settingsValues, AutoCheckForUpdatesKey, false),
+            FavoriteSportsLeagues = settingsValues.TryGetValue(FavoriteSportsLeaguesKey, out var fsl) && fsl is string sFsl ? DeserializeFolders(sFsl) : [],
+            FavoriteSportsTeams = settingsValues.TryGetValue(FavoriteSportsTeamsKey, out var fst) && fst is string sFst ? DeserializeFolders(sFst) : [],
         };
+
+        var storedGeminiKey = Helpers.SecureStorageHelper.GetSecret("GeminiApiKey");
+        if (!string.IsNullOrEmpty(storedGeminiKey))
+        {
+            Current.GeminiApiKey = storedGeminiKey;
+        }
+        else if (settingsValues.TryGetValue(GeminiApiKeyKey, out var legacyKey) && legacyKey is string sLegacyKey && !string.IsNullOrWhiteSpace(sLegacyKey))
+        {
+            Current.GeminiApiKey = sLegacyKey;
+        }
+        _lastSavedGeminiKey = Current.GeminiApiKey ?? string.Empty;
     }
 
     private Microsoft.UI.Xaml.DispatcherTimer? _saveDebounceTimer;
@@ -269,9 +302,17 @@ public sealed class SettingsService : ISettingsService
         var propSet = new Windows.Foundation.Collections.PropertySet();
         try
         {
-            if (File.Exists(FallbackSettingsPath))
+            string? json = null;
+            lock (_fileLock)
             {
-                var json = File.ReadAllText(FallbackSettingsPath);
+                if (File.Exists(FallbackSettingsPath))
+                {
+                    json = File.ReadAllText(FallbackSettingsPath);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(json))
+            {
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
@@ -313,7 +354,12 @@ public sealed class SettingsService : ISettingsService
 
     private void ExecuteSave()
     {
-        Helpers.SecureStorageHelper.SaveSecret("GeminiApiKey", Current.GeminiApiKey);
+        string currentGeminiKey = Current.GeminiApiKey ?? string.Empty;
+        if (!string.Equals(_lastSavedGeminiKey, currentGeminiKey, StringComparison.Ordinal))
+        {
+            Helpers.SecureStorageHelper.SaveSecret("GeminiApiKey", currentGeminiKey);
+            _lastSavedGeminiKey = currentGeminiKey;
+        }
 
         if (_useFileFallback)
         {
@@ -373,6 +419,7 @@ public sealed class SettingsService : ISettingsService
         // Video
         values[DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString();
         values[EnableHoverVideoPreviewKey] = Current.EnableHoverVideoPreview;
+        values[PreciseSeekThumbnailsKey] = Current.PreciseSeekThumbnails;
 
         // HDR & Color Pipeline
         values[HdrModeKey] = Current.HdrMode.ToString();
@@ -445,6 +492,15 @@ public sealed class SettingsService : ISettingsService
         values[SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack;
         values[CustomEqualizerGainsKey] = Current.CustomEqualizerGains;
         values[SelectedReverbPresetKey] = Current.SelectedReverbPreset;
+
+        // Graphics, Navigation, Updates, Streaming & Sports Preferences
+        values[PreferredGpuKey] = Current.PreferredGpu.ToString();
+        values[PreferredStreamingRegionKey] = Current.PreferredStreamingRegion ?? string.Empty;
+        values[UseLocationForRegionKey] = Current.UseLocationForRegion;
+        values[EnableSwipeNavigationKey] = Current.EnableSwipeNavigation;
+        values[AutoCheckForUpdatesKey] = Current.AutoCheckForUpdates;
+        values[FavoriteSportsLeaguesKey] = System.Text.Json.JsonSerializer.Serialize(Current.FavoriteSportsLeagues);
+        values[FavoriteSportsTeamsKey] = System.Text.Json.JsonSerializer.Serialize(Current.FavoriteSportsTeams);
     }
 
     private void SaveToFileFallback()
@@ -474,6 +530,7 @@ public sealed class SettingsService : ISettingsService
                 // Video
                 [DefaultAspectRatioKey] = Current.DefaultAspectRatio.ToString(),
                 [EnableHoverVideoPreviewKey] = Current.EnableHoverVideoPreview,
+                [PreciseSeekThumbnailsKey] = Current.PreciseSeekThumbnails,
 
                 // HDR & Color Pipeline
                 [HdrModeKey] = Current.HdrMode.ToString(),
@@ -542,12 +599,26 @@ public sealed class SettingsService : ISettingsService
                 [SleepTimerMinutesKey] = Current.SleepTimerMinutes,
                 [SleepAtEndOfTrackKey] = Current.SleepAtEndOfTrack,
                 [CustomEqualizerGainsKey] = Current.CustomEqualizerGains,
-                [SelectedReverbPresetKey] = Current.SelectedReverbPreset
+                [SelectedReverbPresetKey] = Current.SelectedReverbPreset,
+
+                // Graphics, Navigation, Updates, Streaming & Sports Preferences
+                [PreferredGpuKey] = Current.PreferredGpu.ToString(),
+                [PreferredStreamingRegionKey] = Current.PreferredStreamingRegion ?? string.Empty,
+                [UseLocationForRegionKey] = Current.UseLocationForRegion,
+                [EnableSwipeNavigationKey] = Current.EnableSwipeNavigation,
+                [AutoCheckForUpdatesKey] = Current.AutoCheckForUpdates,
+                [FavoriteSportsLeaguesKey] = System.Text.Json.JsonSerializer.Serialize(Current.FavoriteSportsLeagues),
+                [FavoriteSportsTeamsKey] = System.Text.Json.JsonSerializer.Serialize(Current.FavoriteSportsTeams)
             };
 
-            Directory.CreateDirectory(FallbackSettingsDirectory);
             var json = System.Text.Json.JsonSerializer.Serialize(dict, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(FallbackSettingsPath, json);
+            lock (_fileLock)
+            {
+                Directory.CreateDirectory(FallbackSettingsDirectory);
+                var tmpPath = FallbackSettingsPath + ".tmp";
+                File.WriteAllText(tmpPath, json);
+                File.Move(tmpPath, FallbackSettingsPath, overwrite: true);
+            }
         }
         catch (Exception ex)
         {
@@ -600,13 +671,14 @@ public sealed class SettingsService : ISettingsService
                     AutoAdvanceToNextTrackKey, RememberLastPlayedTrackKey,
                     CrossfadeEnabledKey, CrossfadeDurationKey,
                     EqualizerPresetKey, DefaultVolumeKey,
-                    DefaultAspectRatioKey, EnableHoverVideoPreviewKey,
+                    DefaultAspectRatioKey, EnableHoverVideoPreviewKey, PreciseSeekThumbnailsKey,
                     HdrModeKey, AutoBoostHdrBrightnessKey, ToneMappingModeKey, PeakBrightnessNitsKey, ShowHdrBadgeKey,
-                    BackdropTypeKey,
-                    AccentColorKey, AlwaysShowTransportBarKey, AcrylicTransportBarKey, AutoHideTransportBarInStreamingKey,
+                    BackdropTypeKey, StudioWindowBaseKey, StudioNavRailKey, StudioCanvasKey, StudioTransportBarKey,
+                    AccentColorKey, CustomAccentColorHexKey, ActiveThemePresetIdKey, CustomThemePresetsKey,
+                    AlwaysShowTransportBarKey, AcrylicTransportBarKey, AutoHideTransportBarInStreamingKey,
                     ShowOpenFilesOnHomeKey, OpenFilePositionCornerKey,
-                    AutomaticLibraryScanKey,
-                    RememberPlaybackPositionPerTrackKey,
+                    EnableSoundEffectsKey, AutomaticLibraryScanKey,
+                    RememberPlaybackPositionPerTrackKey, EnableAppLockKey, AppLockWhenMinimizedKey,
                     HighContrastModeKey, TextScaleKey, ReduceMotionKey,
                     ScreenReaderOptimizationKey, CaptionsAlwaysOnKey, VisualNotificationsForSoundKey,
                     KeyboardNavigationHighlightKey, FocusIndicatorThicknessKey, AutoReadControlsKey,
@@ -614,7 +686,9 @@ public sealed class SettingsService : ISettingsService
                     AiLyricsTranslationEnabledKey, AiTranslationTargetLanguageKey, AiSemanticSearchEnabledKey, GeminiApiKeyKey,
                     UseLocalAiKey, OllamaModelNameKey,
                     AiEqualizerMatcherEnabledKey, VoiceClarityEnabledKey, NightModeEnabledKey,
-                    SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey
+                    SleepTimerMinutesKey, SleepAtEndOfTrackKey, CustomEqualizerGainsKey, SelectedReverbPresetKey,
+                    PreferredGpuKey, PreferredStreamingRegionKey, UseLocationForRegionKey, EnableSwipeNavigationKey,
+                    AutoCheckForUpdatesKey, FavoriteSportsLeaguesKey, FavoriteSportsTeamsKey
                 ];
 
                 foreach (var key in allKeys)
@@ -629,10 +703,14 @@ public sealed class SettingsService : ISettingsService
         }
 
         Helpers.SecureStorageHelper.DeleteSecret("GeminiApiKey");
+        _lastSavedGeminiKey = string.Empty;
 
-        if (File.Exists(FallbackSettingsPath))
+        lock (_fileLock)
         {
-            try { File.Delete(FallbackSettingsPath); } catch { }
+            if (File.Exists(FallbackSettingsPath))
+            {
+                try { File.Delete(FallbackSettingsPath); } catch { }
+            }
         }
 
         Load();

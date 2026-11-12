@@ -1,4 +1,5 @@
 using System;
+using LumiereMediaPlayer.Models;
 using Microsoft.UI.Windowing;
 
 namespace LumiereMediaPlayer.Services;
@@ -16,6 +17,15 @@ public class FullscreenManager : IFullscreenManager
         {
             var win = App.MainWindowInstance;
             return win?.AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+        }
+    }
+
+    public PresentationMode CurrentMode
+    {
+        get
+        {
+            var win = App.MainWindowInstance;
+            return win?.CurrentPresentationMode ?? PresentationMode.Windowed;
         }
     }
 

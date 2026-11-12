@@ -1,12 +1,12 @@
 ﻿# Lumiere Media Player - Codebase Health Report
-**Generated:** 2026-10-17 10:56:41  
+**Generated:** 2026-11-12 13:19:34  
 **Overall Status:** PASSED - ALL SYSTEMS HEALTHY  
 
 ### Summary Metrics
 | Metric | Count |
 |---|---|
-| **Total Checks** | 32 |
-| **Passed** | 32 |
+| **Total Checks** | 34 |
+| **Passed** | 34 |
 | **Warnings** | 0 |
 | **Failed** | 0 |
 
@@ -26,22 +26,24 @@
 | Memory | ViewModel Event Lifecycle: StreamingDetailsViewModel (Stateless/No Events) | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: StreamingMoviesViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: StreamingMusicViewModel (Stateless/No Events) | PASS | - | - |
+| Memory | ViewModel Event Lifecycle: StreamingSportsViewModel (Stateless/No Events) | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: StreamingTvShowsViewModel | PASS | - | - |
 | Memory | ViewModel Event Lifecycle: VideoViewModel | PASS | - | - |
 | Memory | GlassContainer visual decoupling on disposal | PASS | - | - |
 | Memory | Composition Shadow recycling teardown in Pages/StreamingMoviesPage.xaml.cs | PASS | - | - |
 | Memory | Composition Shadow recycling teardown in Pages/StreamingTvShowsPage.xaml.cs | PASS | - | - |
 | Memory | Composition Shadow recycling teardown in Pages/StreamingMusicPage.xaml.cs | PASS | - | - |
-| Memory | WMI Resource Disposal in Services/HardwareDetectionService.cs | PASS | - | - |
-| Memory | WMI Resource Disposal in Services/HdrPipelineService.cs | PASS | - | - |
-| Memory | WMI Resource Disposal in Services/BrightnessOverrideHelper.cs | PASS | - | - |
+| Memory | WMI Resource Disposal (ManagementObjectSearcher/ManagementClass wrapped in using) | PASS | - | - |
+| Memory | Zero Application.Current.Resources dictionary mutations (0x800F0902 safe) | PASS | - | - |
 | UI/Virtualization | Zero ElementName bindings across DataTemplate namescopes | PASS | - | - |
 | UI/Virtualization | GlassTransportBar slider feedback loop guarded | PASS | - | - |
 | UI/Virtualization | ListView Item CheckBox uses Click event (Virtualization Safe) | PASS | - | - |
 | UI/Virtualization | CinematicMenuFlyoutPresenterStyle has legible background | PASS | - | - |
+| UI/Virtualization | VideoPlayerContainer has Transparent background (FloatingVideoContainer not occluded) | PASS | - | - |
+| UI/Virtualization | Floating video swapchain Z-index layering & animation reset guards | PASS | - | - |
+| UI/Virtualization | VideoViewModel subscribes to both IsVideoPlayerActive and CurrentTrack | PASS | - | - |
+| UI/Virtualization | All RepeatBehavior=Forever storyboards have explicit .Stop() teardown | PASS | - | - |
 | DataContract | MediaItem unified IdentityKey Equals/GetHashCode contract | PASS | - | - |
 | Security | Zero insecure remote http:// network calls (all remote APIs use TLS/HTTPS) | PASS | - | - |
 | UpdateSystem | UpdateService uses user-prompted notification pattern | PASS | - | - |
-| Telemetry | Crash logging rollover protection (bounded log size <= 2MB) | PASS | - | - |
-| Build | LumiereMediaPlayer compiles with 0 Warnings and 0 Errors | PASS | - | - |
-| Tests | All unit and stress tests passed (246/246) | PASS | - | - |
+| Telemetry | Crash & COM exception logging rollover protection (bounded <= 2MB) | PASS | - | - |

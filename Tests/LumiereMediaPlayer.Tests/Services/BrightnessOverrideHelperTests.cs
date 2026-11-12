@@ -83,4 +83,18 @@ public class BrightnessOverrideHelperTests
         mockHdr.Verify(h => h.SetSuspended(true), Times.Once);
         mockHdr.Verify(h => h.SetSuspended(false), Times.Once);
     }
+
+    [TestMethod]
+    public void IHdrPipelineService_BeginAndCompleteFullscreenTransition_CanBeCalledOnMock()
+    {
+        var mockHdr = new Mock<IHdrPipelineService>();
+        mockHdr.Setup(h => h.BeginFullscreenTransition()).Verifiable();
+        mockHdr.Setup(h => h.CompleteFullscreenTransition(It.IsAny<bool>())).Verifiable();
+
+        mockHdr.Object.BeginFullscreenTransition();
+        mockHdr.Object.CompleteFullscreenTransition(true);
+
+        mockHdr.Verify(h => h.BeginFullscreenTransition(), Times.Once);
+        mockHdr.Verify(h => h.CompleteFullscreenTransition(true), Times.Once);
+    }
 }

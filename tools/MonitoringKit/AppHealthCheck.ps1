@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Lumière Media Player - Codebase Health & Integrity Sentinel
     
@@ -26,6 +26,7 @@
 param(
     [switch]$Quick,
     [switch]$SkipTests,
+    [switch]$SmokeTest,
     [string]$OutputReport = "tools/MonitoringKit/reports/HealthReport_Latest.md"
 )
 
@@ -136,13 +137,15 @@ $asyncVoidIssues = @()
 foreach ($file in $csFiles) {
     $lines = Get-Content $file.FullName
     $isUiCodeBehind = ($file.Name -match "\.xaml\.cs$")
+    $relPath = Get-RelPath $rootDir $file.FullName
     
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
+        if ($line.TrimStart().StartsWith("//")) { continue }
+
         if ($line -match "async\s+void\s+([A-Za-z0-9_]+)\s*\((.*)\)") {
             $methodName = $Matches[1]
             $params = $Matches[2]
-            $relPath = Get-RelPath $rootDir $file.FullName
 
             if (-not $isUiCodeBehind) {
                 # Never permitted in non-UI code
@@ -154,27 +157,37 @@ foreach ($file in $csFiles) {
                     Code = $line.Trim()
                 }
             } else {
-                # In UI code-behind, must be an event handler OR have try/catch boundary
-                $isEventHandler = ($params -match "sender" -or $params -match "EventArgs" -or $params -match "object\s+e" -or $methodName -match "Click" -or $methodName -match "Loaded" -or $methodName -match "Unloaded" -or $methodName -match "Changed")
+                # In UI code-behind, must be a standard event handler AND have top-level try/catch boundary
+                $isEventHandler = ($params -match "sender" -or $params -match "EventArgs" -or $params -match "Args\b" -or $params -match "object\s+e" -or $methodName -match "Click" -or $methodName -match "Loaded" -or $methodName -match "Unloaded" -or $methodName -match "Changed")
                 
-                # Check next 8 lines for 'try' block if not a standard event handler
-                $hasTry = $false
+                # Check joined lookahead window (supports both Allman and same-line brace style)
                 $maxLookahead = [System.Math]::Min($lines.Count - 1, $i + 8)
-                for ($j = $i + 1; $j -le $maxLookahead; $j++) {
-                    if ($lines[$j] -match "try\s*\{|\btry\b") {
-                        $hasTry = $true
-                        break
-                    }
-                }
+                $lookaheadBlock = ($lines[$i..$maxLookahead] -join "`n")
+                $hasTry = ($lookaheadBlock -match "\btry\s*\{")
                 
-                if (-not $isEventHandler -and -not $hasTry) {
+                if (-not $isEventHandler -or -not $hasTry) {
                     $asyncVoidIssues += [PSCustomObject]@{
                         File = $relPath
                         Line = ($i + 1)
                         Method = $methodName
-                        Reason = "UI async void lacks try-catch exception boundary and is not an event handler"
+                        Reason = "UI async void must be a standard event handler AND have a top-level try-catch boundary"
                         Code = $line.Trim()
                     }
+                }
+            }
+        }
+        elseif ($line -match "\+=\s*async\s*(?:\([^)]*\)|[A-Za-z0-9_]+)\s*=>") {
+            # Check async lambda event subscriptions for try/catch protection
+            $maxLookahead = [System.Math]::Min($lines.Count - 1, $i + 8)
+            $lookaheadBlock = ($lines[$i..$maxLookahead] -join "`n")
+            $hasLambdaTry = ($lookaheadBlock -match "\btry\s*\{")
+            if (-not $hasLambdaTry) {
+                $asyncVoidIssues += [PSCustomObject]@{
+                    File = $relPath
+                    Line = ($i + 1)
+                    Method = "async lambda"
+                    Reason = "async event lambda lacks top-level try-catch exception boundary"
+                    Code = $line.Trim()
                 }
             }
         }
@@ -264,18 +277,39 @@ foreach ($sp in $streamingPages) {
     }
 }
 
-# 2.4 WMI & Monitor Handle cleanup
-$wmiFiles = @("Services/HardwareDetectionService.cs", "Services/HdrPipelineService.cs", "Services/BrightnessOverrideHelper.cs")
-foreach ($wf in $wmiFiles) {
-    $wfPath = Join-Path $rootDir $wf
-    if (Test-Path $wfPath) {
-        $wfContent = Get-Content $wfPath -Raw
-        if ($wfContent -match "ManagementObjectSearcher" -and ($wfContent -notmatch "using\s*var\s*searcher" -and $wfContent -notmatch "using\s*\(\s*var\s*searcher")) {
-            Record-Result "Memory" "WMI Resource Disposal in $wf" "FAIL" "ManagementObjectSearcher is not wrapped in using statement" $wf
-        } else {
-            Record-Result "Memory" "WMI Resource Disposal in $wf" "PASS"
+# 2.4 WMI & Monitor Handle cleanup (repo-wide ManagementObjectSearcher and ManagementClass)
+$wmiIssues = @()
+foreach ($file in $csFiles) {
+    $lines = Get-Content $file.FullName
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if ($line -match "new\s+(?:ManagementObjectSearcher|ManagementClass)\s*\(" -and
+            $line -notmatch "\busing\s+") {
+            $relPath = Get-RelPath $rootDir $file.FullName
+            $wmiIssues += "$relPath`:$($i + 1)"
         }
     }
+}
+if ($wmiIssues.Count -eq 0) {
+    Record-Result "Memory" "WMI Resource Disposal (ManagementObjectSearcher/ManagementClass wrapped in using)" "PASS"
+} else {
+    Record-Result "Memory" "WMI Resource Disposal" "FAIL" "Missing using statement around WMI objects: $($wmiIssues -join ', ')"
+}
+
+# 2.5 Sealed Application.Current.Resources Mutation Ban
+$sealedMutationIssues = @()
+foreach ($file in $csFiles) {
+    $relPath = Get-RelPath $rootDir $file.FullName
+    $content = Get-Content $file.FullName -Raw
+    if ($content -match "Application\.Current\.Resources\s*\[[^\]]+\]\s*=" -or
+        $content -match "(InjectAccentResources|ApplyToDictionary|UpdateBrushResource|ApplyThemeScopes|UpdateResourceIfPresent)\s*\(\s*Application\.Current\.Resources") {
+        $sealedMutationIssues += $relPath
+    }
+}
+if ($sealedMutationIssues.Count -eq 0) {
+    Record-Result "Memory" "Zero Application.Current.Resources dictionary mutations (0x800F0902 safe)" "PASS"
+} else {
+    Record-Result "Memory" "Sealed Application.Current.Resources mutation" "FAIL" "Found direct/helper mutation on Application.Current.Resources in: $($sealedMutationIssues -join ', ')"
 }
 
 # -----------------------------------------------------------------------------
@@ -348,6 +382,66 @@ if (Test-Path $mediaPlayerStylesPath) {
     } else {
         Record-Result "UI/Virtualization" "CinematicMenuFlyoutPresenterStyle legibility" "WARN" "CinematicMenuFlyoutPresenterStyle might lack opaque background resource" "Styles/MediaPlayerStyles.xaml"
     }
+}
+
+# 3.5 SwapChain Host Transparency & Visual Occlusion Invariant
+$videoPagePath = Join-Path $rootDir "Pages/VideoPage.xaml"
+if (Test-Path $videoPagePath) {
+    $vpContent = Get-Content $videoPagePath -Raw
+    if ($vpContent -match 'x:Name="VideoPlayerContainer"[^>]*Background="Transparent"') {
+        Record-Result "UI/Virtualization" "VideoPlayerContainer has Transparent background (FloatingVideoContainer not occluded)" "PASS"
+    } elseif ($vpContent -match 'x:Name="VideoPlayerContainer"[^>]*Background="#FF000000"' -or $vpContent -match 'x:Name="VideoPlayerContainer"[^>]*Background="Black"') {
+        Record-Result "UI/Virtualization" "VideoPlayerContainer has opaque background occluding video" "FAIL" "VideoPlayerContainer must be Background='Transparent', found opaque brush which occludes FloatingVideoContainer." "Pages/VideoPage.xaml"
+    } else {
+        Record-Result "UI/Virtualization" "VideoPlayerContainer transparency check" "PASS"
+    }
+}
+
+# 3.6 Floating Video Layering & Z-Order Dynamic Elevation Invariant
+$mainWindowPath = Join-Path $rootDir "MainWindow.xaml"
+$mainWindowCsPath = Join-Path $rootDir "MainWindow.xaml.cs"
+if ((Test-Path $mainWindowPath) -and (Test-Path $mainWindowCsPath)) {
+    $mwContent = Get-Content $mainWindowPath -Raw
+    $mwCsContent = Get-Content $mainWindowCsPath -Raw
+    
+    $hasFullscreenHost = ($mwContent -match 'x:Name="FullscreenVideoContainer"')
+    $hasFloatingContainer = ($mwCsContent -match 'FloatingVideoContainer')
+    $hasZIndexManagement = ($mwCsContent -match 'Canvas\.SetZIndex\s*\(\s*FloatingVideoContainer')
+    $hasAnimReset = ($mwCsContent -match 'visual\.StopAnimation\s*\(\s*"Offset"\s*\)' -and $mwCsContent -match 'visual\.StopAnimation\s*\(\s*"Scale"\s*\)')
+    
+    if ($hasFullscreenHost -and $hasFloatingContainer -and $hasZIndexManagement -and $hasAnimReset) {
+        Record-Result "UI/Virtualization" "Floating video swapchain Z-index layering & animation reset guards" "PASS"
+    } else {
+        Record-Result "UI/Virtualization" "Floating video swapchain Z-index layering" "FAIL" "MainWindow lacks FullscreenVideoContainer, FloatingVideoContainer, dynamic Z-index management, or composition animation resets" "MainWindow.xaml.cs"
+    }
+}
+
+# 3.7 Video Media ViewModel Playback Event Subscription Invariant
+$videoVmPath = Join-Path $rootDir "ViewModels/VideoViewModel.cs"
+if (Test-Path $videoVmPath) {
+    $vvmContent = Get-Content $videoVmPath -Raw
+    if ($vvmContent -match 'IsVideoPlayerActive' -and $vvmContent -match 'CurrentTrack') {
+        Record-Result "UI/Virtualization" "VideoViewModel subscribes to both IsVideoPlayerActive and CurrentTrack" "PASS"
+    } else {
+        Record-Result "UI/Virtualization" "VideoViewModel media playback synchronization" "FAIL" "VideoViewModel must subscribe to both IsVideoPlayerActive and CurrentTrack to synchronize playback state." "ViewModels/VideoViewModel.cs"
+    }
+}
+
+# 3.8 Infinite RepeatBehavior="Forever" Storyboards must have Stop() lifecycle in paired code-behind
+$foreverIssues = @()
+foreach ($xaml in $xamlFiles) {
+    $xamlRaw = Get-Content $xaml.FullName -Raw
+    if ($xamlRaw -match 'RepeatBehavior="Forever"') {
+        $pairedCs = "$($xaml.FullName).cs"
+        if (-not (Test-Path $pairedCs) -or ((Get-Content $pairedCs -Raw) -notmatch '\.Stop\s*\(')) {
+            $foreverIssues += (Get-RelPath $rootDir $xaml.FullName)
+        }
+    }
+}
+if ($foreverIssues.Count -eq 0) {
+    Record-Result "UI/Virtualization" "All RepeatBehavior=Forever storyboards have explicit .Stop() teardown" "PASS"
+} else {
+    Record-Result "UI/Virtualization" "RepeatBehavior=Forever storyboard teardown" "FAIL" "Missing .Stop() teardown in paired code-behind for: $($foreverIssues -join ', ')"
 }
 
 # -----------------------------------------------------------------------------
@@ -425,10 +519,12 @@ if (Test-Path $updateSvcPath) {
 $appXamlCsPath = Join-Path $rootDir "App.xaml.cs"
 if (Test-Path $appXamlCsPath) {
     $appContent = Get-Content $appXamlCsPath -Raw
-    if (($appContent -match "crash\.(?:txt|log)") -and ($appContent -match "Length\s*>" -or $appContent -match "2\s*\*\s*1024\s*\*\s*1024" -or $appContent -match "\.bak")) {
-        Record-Result "Telemetry" "Crash logging rollover protection (bounded log size <= 2MB)" "PASS"
+    $hasCrashRollover = ($appContent -match "crash\.(?:txt|log)") -and ($appContent -match "Length\s*>=" -or $appContent -match "Length\s*>" -or $appContent -match "2\s*\*\s*1024\s*\*\s*1024" -or $appContent -match "\.bak")
+    $hasComRollover = ($appContent -match "com_exceptions\.log") -and ($appContent -match "2\s*\*\s*1024\s*\*\s*1024")
+    if ($hasCrashRollover -and $hasComRollover) {
+        Record-Result "Telemetry" "Crash & COM exception logging rollover protection (bounded <= 2MB)" "PASS"
     } else {
-        Record-Result "Telemetry" "Crash logging rollover protection" "FAIL" "App.xaml.cs crash logger does not implement bounded file size rollover" "App.xaml.cs"
+        Record-Result "Telemetry" "Crash logging rollover protection" "FAIL" "App.xaml.cs crash/COM logger does not implement bounded <= 2MB rollover" "App.xaml.cs"
     }
 }
 
@@ -475,6 +571,22 @@ if (-not $Quick) {
     }
 } else {
     Write-Section "7 & 8. Build & Unit Tests (SKIPPED by -Quick parameter)"
+}
+
+# -----------------------------------------------------------------------------
+# 9. NATIVE UI AUTOMATION SMOKE TEST (If -SmokeTest specified)
+# -----------------------------------------------------------------------------
+if ($SmokeTest) {
+    Write-Section "9. Native UI Automation Smoke Suite"
+    $smokeScript = Join-Path $PSScriptRoot "Run-UiSmokeTest.ps1"
+    if (Test-Path $smokeScript) {
+        $smokeOutput = & powershell -ExecutionPolicy Bypass -File $smokeScript 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0) {
+            Record-Result "SmokeTest" "Native UI Automation Smoke Scenarios passed (10/10)" "PASS"
+        } else {
+            Record-Result "SmokeTest" "Native UI Automation Smoke Scenarios" "FAIL" "UI Automation smoke test reported failures" "tools/MonitoringKit/Run-UiSmokeTest.ps1"
+        }
+    }
 }
 
 # -----------------------------------------------------------------------------

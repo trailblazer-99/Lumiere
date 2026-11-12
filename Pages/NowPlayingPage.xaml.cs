@@ -11,6 +11,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Linq;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using LumiereMediaPlayer.Services.Streaming;
 
 namespace LumiereMediaPlayer.Pages;
@@ -88,6 +89,10 @@ public sealed partial class NowPlayingPage : Page
         {
             LyricsCard.Height = isCompact ? Math.Clamp(height - targetArtSize - 180.0, 140.0, 240.0) : 240.0;
         }
+        if (ContentGrid != null)
+        {
+            ContentGrid.Margin = isCompact ? new Thickness(16, 0, 16, 24) : new Thickness(32, 0, 32, 24);
+        }
     }
 
     private void UpdateEmptyState()
@@ -104,7 +109,7 @@ public sealed partial class NowPlayingPage : Page
 
     private void OnIdleOpenFileClick(object sender, RoutedEventArgs e)
     {
-        App.MainWindowInstance?.OpenFilePickerAndPlay();
+        _ = App.MainWindowInstance?.OpenFilePickerAndPlay();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -296,7 +301,7 @@ public sealed partial class NowPlayingPage : Page
         }
     }
 
-    public async void ToggleMetadataOverlay()
+    public async Task ToggleMetadataOverlay()
     {
         try
         {
@@ -861,19 +866,24 @@ public sealed partial class NowPlayingPage : Page
 
     private static T? FindVisualChild<T>(DependencyObject obj) where T : DependencyObject
     {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
+        if (obj == null) return null;
+        try
         {
-            var child = VisualTreeHelper.GetChild(obj, i);
-            if (child is T t)
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
             {
-                return t;
-            }
-            var childOfChild = FindVisualChild<T>(child);
-            if (childOfChild != null)
-            {
-                return childOfChild;
+                var child = VisualTreeHelper.GetChild(obj, i);
+                if (child is T t)
+                {
+                    return t;
+                }
+                var childOfChild = FindVisualChild<T>(child);
+                if (childOfChild != null)
+                {
+                    return childOfChild;
+                }
             }
         }
+        catch { }
         return null;
     }
 }

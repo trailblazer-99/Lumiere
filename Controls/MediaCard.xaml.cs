@@ -45,9 +45,16 @@ public sealed partial class MediaCard : UserControl
             new PropertyMetadata(null, (d, e) => ((MediaCard)d).OnItemChanged(e.NewValue as MediaItem)));
 
     public static readonly DependencyProperty LocationRepProperty =
-        DependencyProperty.Register(nameof(LocationRep), typeof(string), typeof(MediaCard), new PropertyMetadata(null));
+        DependencyProperty.Register(nameof(LocationRep), typeof(string), typeof(MediaCard),
+            new PropertyMetadata(null, (d, e) => ((MediaCard)d).RefreshLocationBindings()));
 
     public event EventHandler? SelectionChanged;
+    private bool _suppressSelectionChanged;
+
+    private void RefreshLocationBindings()
+    {
+        try { this.Bindings.Update(); } catch { }
+    }
 
     public bool IsSelected
     {
@@ -85,16 +92,31 @@ public sealed partial class MediaCard : UserControl
         {
             _subscribedItem = newItem;
             _subscribedItem.PropertyChanged += OnSubscribedItemPropertyChanged;
-            IsSelected = newItem.IsSelected;
-            if (string.IsNullOrEmpty(LocationRep))
+            _suppressSelectionChanged = true;
+            try
             {
-                LocationRep = newItem.LocationRep;
+                IsSelected = newItem.IsSelected;
             }
+            finally
+            {
+                _suppressSelectionChanged = false;
+            }
+            LocationRep = newItem.LocationRep;
         }
         else
         {
-            IsSelected = false;
+            _suppressSelectionChanged = true;
+            try
+            {
+                IsSelected = false;
+            }
+            finally
+            {
+                _suppressSelectionChanged = false;
+            }
+            LocationRep = null;
         }
+        RefreshLocationBindings();
     }
 
     private void OnSubscribedItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -136,7 +158,10 @@ public sealed partial class MediaCard : UserControl
             ctxItem.IsSelected = isSelected;
         }
 
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        if (!_suppressSelectionChanged)
+        {
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private MediaItem? GetAssociatedMediaItem()

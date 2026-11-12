@@ -31,6 +31,48 @@ public partial class App : Application
 
         _logger = Services.GetService<ILogger<App>>();
 
+        // First-chance COMException diagnostic logger
+        int firstChanceComCount = 0;
+        AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
+        {
+            if (e.Exception is System.Runtime.InteropServices.COMException comEx)
+            {
+                int hr = comEx.HResult;
+                // Suppress expected internal COM queries (0x80004002 E_NOINTERFACE) and XAML resource mutation busy/fail (0x800F0902)
+                if (hr == unchecked((int)0x80004002) || hr == unchecked((int)0x800F0902))
+                {
+                    return;
+                }
+
+                int count = System.Threading.Interlocked.Increment(ref firstChanceComCount);
+                if (count <= 30)
+                {
+                    var threadStack = new System.Diagnostics.StackTrace(false);
+                    var details = $"[FIRST-CHANCE COMException #{count}] HResult: 0x{comEx.HResult:X8}, Message: {comEx.Message}\nSource: {comEx.Source}\nTargetSite: {comEx.TargetSite}\nThreadStack:\n{threadStack}\n";
+                    System.Diagnostics.Debug.WriteLine(details);
+                    var logText = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {details}\n";
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer");
+                            var comLogPath = System.IO.Path.Combine(dir, "com_exceptions.log");
+                            lock (_comLogLock)
+                            {
+                                System.IO.Directory.CreateDirectory(dir);
+                                if (System.IO.File.Exists(comLogPath) && new System.IO.FileInfo(comLogPath).Length >= 2 * 1024 * 1024)
+                                {
+                                    System.IO.File.Move(comLogPath, comLogPath + ".old", overwrite: true);
+                                }
+                                System.IO.File.AppendAllText(comLogPath, logText);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+            }
+        };
+
         // ── Unhandled exception handlers ────────────────────────────
         this.UnhandledException += (s, e) =>
         {
@@ -42,18 +84,24 @@ public partial class App : Application
             _logger?.LogCritical(ex, "Unhandled UI exception: {Message}", e.Message);
             LogCrash("UI", e.Message, details);
 
-            // Do not handle catastrophic COM or corrupted-state errors to avoid zombie compositor freezes
-            if (ex is OutOfMemoryException or AccessViolationException or System.Runtime.InteropServices.SEHException)
+            // Guard against masking catastrophic failures (unrecoverable layout cycle, heap corruption, access violation, OOM)
+            // that cause permanent black-screen "zombie" states where the window stops drawing and hangs.
+            bool isCatastrophic = ex is OutOfMemoryException
+                || ex is AccessViolationException
+                || ex is LayoutCycleException
+                || (ex != null && (ex.HResult == unchecked((int)0x80004005) || ex.HResult == unchecked((int)0x88980800))
+                    && ex.Message?.Contains("layout cycle", StringComparison.OrdinalIgnoreCase) == true)
+                || (ex != null && ((uint)ex.HResult == 0xC0000374 || ex.Message?.Contains("heap corruption", StringComparison.OrdinalIgnoreCase) == true));
+
+            if (isCatastrophic)
             {
                 e.Handled = false;
+                TerminateProcessCleanly();
                 return;
             }
-            if (ex is System.Runtime.InteropServices.COMException comEx &&
-                ((uint)comEx.HResult is 0x8000FFFF /* E_UNEXPECTED */ or 0x887A0005 /* DXGI_ERROR_DEVICE_REMOVED */))
-            {
-                e.Handled = false;
-                return;
-            }
+
+            // For transient recoverable COMExceptions (RPC disconnected, E_UNEXPECTED, E_FAIL) or UI exceptions,
+            // allow the WinUI compositor to recover gracefully on subsequent dispatch frames.
             e.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -80,15 +128,23 @@ public partial class App : Application
     }
 
     private static readonly object _crashLogLock = new();
+    private static readonly object _comLogLock = new();
+    private static readonly object _startupCtsLock = new();
     private static System.Threading.CancellationTokenSource? _startupCts = new();
 
     public static void CancelBackgroundTasks()
     {
+        System.Threading.CancellationTokenSource? ctsToDispose;
+        lock (_startupCtsLock)
+        {
+            ctsToDispose = _startupCts;
+            _startupCts = null;
+        }
+
         try
         {
-            _startupCts?.Cancel();
-            _startupCts?.Dispose();
-            _startupCts = null;
+            ctsToDispose?.Cancel();
+            ctsToDispose?.Dispose();
         }
         catch { }
     }
@@ -138,35 +194,43 @@ public partial class App : Application
         });
     }
 
-    private static void LogCrash(string category, string? message, string details)
+    public static void LogCrash(string category, string? message, string details)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
         var logEntry = $"[{timestamp}] [{category}] {message}\n{details}\n\n";
         System.Diagnostics.Debug.WriteLine(logEntry);
 
-        lock (_crashLogLock)
+        // Offload disk I/O to background task so crashes or exceptions do not block UI thread message pump
+        Task.Run(() =>
         {
-            string[] candidateDirs = [
-                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer"),
-                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "LumiereMediaPlayer")
-            ];
-
-            foreach (var dir in candidateDirs)
+            try
             {
-                try
+                lock (_crashLogLock)
                 {
-                    System.IO.Directory.CreateDirectory(dir);
-                    var filePath = System.IO.Path.Combine(dir, "crash.txt");
-                    var fileInfo = new System.IO.FileInfo(filePath);
-                    if (fileInfo.Exists && fileInfo.Length > 2 * 1024 * 1024)
+                    string[] candidateDirs = [
+                        System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LumiereMediaPlayer"),
+                        System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "LumiereMediaPlayer")
+                    ];
+
+                    foreach (var dir in candidateDirs)
                     {
-                        System.IO.File.Move(filePath, System.IO.Path.Combine(dir, "crash.bak.txt"), true);
+                        try
+                        {
+                            System.IO.Directory.CreateDirectory(dir);
+                            var filePath = System.IO.Path.Combine(dir, "crash.txt");
+                            var fileInfo = new System.IO.FileInfo(filePath);
+                            if (fileInfo.Exists && fileInfo.Length > 2 * 1024 * 1024)
+                            {
+                                System.IO.File.Move(filePath, System.IO.Path.Combine(dir, "crash.bak.txt"), true);
+                            }
+                            System.IO.File.AppendAllText(filePath, logEntry);
+                        }
+                        catch { }
                     }
-                    System.IO.File.AppendAllText(filePath, logEntry);
                 }
-                catch { }
             }
-        }
+            catch { }
+        });
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -192,7 +256,11 @@ public partial class App : Application
                 try { AccessibilityHelper.Apply(AppServices.Settings.Current); } catch (Exception ex) { _logger?.LogWarning(ex, "Failed to apply accessibility settings"); }
             });
 
-            var token = _startupCts?.Token ?? System.Threading.CancellationToken.None;
+            System.Threading.CancellationToken token;
+            lock (_startupCtsLock)
+            {
+                token = _startupCts?.Token ?? System.Threading.CancellationToken.None;
+            }
 
             // Background initialization after window is visible on screen
             _ = Task.Run(async () =>
@@ -223,6 +291,27 @@ public partial class App : Application
                         if (token.IsCancellationRequested) return;
 
                         await LumiereMediaPlayer.Services.MediaLibraryService.ScanAllLibraryFoldersAsync(token);
+                    }
+
+                    // User-controlled background update check: only runs if explicitly toggled on by user and not on authoring device
+                    if (AppServices.Settings.Current.AutoCheckForUpdates && !UpdateService.IsDevelopmentDevice)
+                    {
+                        await Task.Delay(4000, token);
+                        if (!token.IsCancellationRequested)
+                        {
+                            var updateInfo = await UpdateService.CheckForUpdatesAsync();
+                            if (updateInfo.IsUpdateAvailable && !updateInfo.IsDevelopmentDevice)
+                            {
+                                MainDispatcher?.TryEnqueue(() =>
+                                {
+                                    mainWindow.ShowUpdateNotification(updateInfo);
+                                    mainWindow.ShowBottomToast(
+                                        "Update available",
+                                        $"v{updateInfo.LatestVersion} is available to install",
+                                        "\uE896");
+                                });
+                            }
+                        }
                     }
                 }
                 catch (OperationCanceledException)

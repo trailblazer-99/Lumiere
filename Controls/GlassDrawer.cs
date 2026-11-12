@@ -115,14 +115,19 @@ public class GlassDrawer : ContentControl
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
     {
-        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
-        for (int i = 0; i < count; i++)
+        if (parent == null) return null;
+        try
         {
-            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
-            if (child is T typed) return typed;
-            var sub = FindVisualChild<T>(child);
-            if (sub != null) return sub;
+            int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is T typed) return typed;
+                var sub = FindVisualChild<T>(child);
+                if (sub != null) return sub;
+            }
         }
+        catch { }
         return null;
     }
 }

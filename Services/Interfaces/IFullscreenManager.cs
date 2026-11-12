@@ -1,4 +1,5 @@
 using System;
+using LumiereMediaPlayer.Models;
 
 namespace LumiereMediaPlayer.Services;
 
@@ -9,6 +10,7 @@ public interface IFullscreenManager
 {
     bool IsFullScreen { get; }
     bool IsStreamingFullScreen { get; set; }
+    PresentationMode CurrentMode { get; }
     event EventHandler<bool>? FullscreenChanged;
 
     void ToggleFullscreen();

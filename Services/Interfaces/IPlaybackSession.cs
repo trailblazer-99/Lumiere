@@ -61,6 +61,7 @@ public interface IPlaybackSession : IDisposable
 
     void ApplyAudioEffects();
     void CancelThumbnailPrefetch();
+    void CleanupActiveComposition();
     void ApplyVoiceClarity(bool enabled);
     void ApplyNightMode(bool enabled);
     void StartSleepTimer(int minutes, bool stopAtEnd);
@@ -68,5 +69,6 @@ public interface IPlaybackSession : IDisposable
     void AddCachedThumbnail(TimeSpan time, Microsoft.UI.Xaml.Media.ImageSource image);
     void PrefetchVideoThumbnails(MediaItem track);
     Task<Windows.Storage.Streams.IRandomAccessStreamWithContentType?> GetExactThumbnailAsync(double seconds);
+    Task<Microsoft.UI.Xaml.Media.ImageSource?> GetExactThumbnailImageAsync(double seconds);
     Microsoft.UI.Xaml.Media.ImageSource? GetCachedThumbnail(double seconds, double maxToleranceSeconds = 120.0);
 }

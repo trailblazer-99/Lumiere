@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using System;
 
 using System.Collections.Generic;
@@ -132,6 +133,59 @@ public sealed class PlaybackSession : IPlaybackSession
     private IMediaPlaybackSource? _preloadedNextSource;
 
     private IMediaPlaybackSource? _currentPlaybackSource;
+    private void CleanupPlaybackSource(ref IMediaPlaybackSource? sourceRef)
+    {
+        if (sourceRef == null) return;
+        var old = sourceRef;
+        sourceRef = null;
+
+        try
+        {
+            if (old is MediaPlaybackItem item)
+            {
+                if (item.Source != null)
+                {
+                    DisposeMediaSource(item.Source);
+                }
+            }
+            else if (old is MediaSource ms)
+            {
+                DisposeMediaSource(ms);
+            }
+            else if (old is IDisposable disp)
+            {
+                disp.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"CleanupPlaybackSource error: {ex.Message}");
+        }
+    }
+
+    private static void DisposeMediaSource(MediaSource ms)
+    {
+        try
+        {
+            if (ms.CustomProperties.TryGetValue("ActiveStreams", out var strObj) && strObj is List<IDisposable> streams)
+            {
+                foreach (var stream in streams)
+                {
+                    try { stream.Dispose(); } catch { }
+                }
+                streams.Clear();
+            }
+        }
+        catch { }
+
+        try
+        {
+            ms.Reset();
+            ms.Dispose();
+        }
+        catch { }
+    }
+
 
     private string? _preloadedTrackId;
 
@@ -223,6 +277,10 @@ public sealed class PlaybackSession : IPlaybackSession
         _mediaPlayer.MediaEnded += OnMediaPlayerMediaEnded;
 
         _mediaPlayer.PlaybackSession.PlaybackStateChanged += OnMediaPlayerStateChanged;
+
+        _mediaPlayer.PlaybackSession.PlaybackRateChanged += OnMediaPlayerPlaybackRateChanged;
+
+        _mediaPlayer.PlaybackSession.SeekCompleted += OnMediaPlayerSeekCompleted;
 
         _mediaPlayer.MediaOpened += OnMediaPlayerMediaOpened;
 
@@ -318,6 +376,7 @@ public sealed class PlaybackSession : IPlaybackSession
             if (CurrentTrack == null) return 0.0;
             try
             {
+                CheckExternalAudioDrift();
                 return _mediaPlayer?.PlaybackSession?.Position.TotalSeconds ?? 0.0;
             }
             catch
@@ -632,79 +691,44 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
+    private long _externalAudioRequestVersion;
+
     public async Task SetExternalAudioTrackAsync(string? filePath)
-
     {
-
+        long requestVersion = Interlocked.Increment(ref _externalAudioRequestVersion);
         _externalAudioTrackPath = filePath;
 
-        if (_externalAudioPlayer != null)
-
-        {
-
-            try
-
-            {
-
-                _externalAudioPlayer.Pause();
-
-                _externalAudioPlayer.Source = null;
-
-                _externalAudioPlayer.Dispose();
-
-            }
-
-            catch (Exception ex)
-            {
-                Log($"Disposing external player error: {ex.Message}");
-            }
-
-            _externalAudioPlayer = null;
-
-        }
-
-
-
         if (string.IsNullOrEmpty(filePath))
-
         {
+            DisposeExternalAudioPlayer();
 
             if (_mediaPlayer.Source is MediaPlaybackItem item && item.AudioTracks.Count > 0)
-
             {
-
                 item.AudioTracks.SelectedIndex = 0;
-
             }
 
             _mediaPlayer.IsMuted = IsMuted;
-
             return;
-
         }
 
-
-
+        MediaPlayer? player = null;
         try
-
         {
-
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(filePath);
-
-            var player = new MediaPlayer
-
+            if (requestVersion != Interlocked.Read(ref _externalAudioRequestVersion))
             {
+                return;
+            }
 
+            player = new MediaPlayer
+            {
                 AudioCategory = MediaPlayerAudioCategory.Media,
-
                 AutoPlay = false,
-
                 Volume = _mediaPlayer.Volume,
-
                 IsMuted = _mediaPlayer.IsMuted
-
             };
 
+            player.MediaFailed += OnExternalAudioMediaFailed;
             player.Source = MediaSource.CreateFromStorageFile(file);
 
             try
@@ -712,6 +736,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 if (_mediaPlayer?.PlaybackSession != null && player.PlaybackSession != null)
                 {
                     player.PlaybackSession.Position = _mediaPlayer.PlaybackSession.Position;
+                    player.PlaybackSession.PlaybackRate = _mediaPlayer.PlaybackSession.PlaybackRate;
                 }
             }
             catch (Exception ex)
@@ -719,28 +744,148 @@ public sealed class PlaybackSession : IPlaybackSession
                 Log($"Syncing external audio player position failed: {ex.Message}");
             }
 
+            if (requestVersion != Interlocked.Read(ref _externalAudioRequestVersion))
+            {
+                player.MediaFailed -= OnExternalAudioMediaFailed;
+                player.Source = null;
+                player.Dispose();
+                player = null;
+                return;
+            }
+
             if (_mediaPlayer?.Source is MediaPlaybackItem item)
             {
                 item.AudioTracks.SelectedIndex = -1;
             }
 
+            DisposeExternalAudioPlayer();
+
             _externalAudioPlayer = player;
 
             if (IsPlaying)
             {
-                _externalAudioPlayer.Play();
+                try { _externalAudioPlayer.Play(); } catch (Exception ex) { Log($"_externalAudioPlayer.Play() error: {ex.Message}"); }
             }
-
         }
-
         catch (Exception ex)
-
         {
-
+            if (player != null && _externalAudioPlayer != player)
+            {
+                try
+                {
+                    player.MediaFailed -= OnExternalAudioMediaFailed;
+                    player.Pause();
+                    player.Source = null;
+                    player.Dispose();
+                }
+                catch { }
+            }
             Log($"SetExternalAudioTrackAsync error: {ex.Message}");
+        }
+    }
 
+    private void DisposeExternalAudioPlayer()
+    {
+        if (_externalAudioPlayer == null) return;
+        var player = _externalAudioPlayer;
+        _externalAudioPlayer = null;
+
+        try
+        {
+            player.MediaFailed -= OnExternalAudioMediaFailed;
+        }
+        catch { }
+
+        try
+        {
+            player.Pause();
+        }
+        catch (Exception ex)
+        {
+            Log($"Pausing external player error: {ex.Message}");
         }
 
+        try
+        {
+            player.Source = null;
+        }
+        catch (Exception ex)
+        {
+            Log($"Unbinding external player source error: {ex.Message}");
+        }
+
+        try
+        {
+            player.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log($"Disposing external player error: {ex.Message}");
+        }
+    }
+
+    private void OnExternalAudioMediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
+    {
+        Log($"External audio playback failed: {args.Error} - {args.ErrorMessage} (HResult: 0x{args.ExtendedErrorCode?.HResult:X8})");
+    }
+
+    private void OnMediaPlayerPlaybackRateChanged(MediaPlaybackSession sender, object args)
+    {
+        try
+        {
+            if (_externalAudioPlayer?.PlaybackSession != null && sender != null)
+            {
+                _externalAudioPlayer.PlaybackSession.PlaybackRate = sender.PlaybackRate;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Syncing external audio playback rate error: {ex.Message}");
+        }
+    }
+
+    private void OnMediaPlayerSeekCompleted(MediaPlaybackSession sender, object args)
+    {
+        try
+        {
+            if (_externalAudioPlayer?.PlaybackSession != null && sender != null)
+            {
+                if (_externalAudioPlayer.PlaybackSession.CanSeek)
+                {
+                    _externalAudioPlayer.PlaybackSession.Position = sender.Position;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Syncing external audio position on SeekCompleted error: {ex.Message}");
+        }
+    }
+
+    private void CheckExternalAudioDrift()
+    {
+        if (_externalAudioPlayer == null) return;
+        try
+        {
+            var mainSession = _mediaPlayer?.PlaybackSession;
+            var extSession = _externalAudioPlayer?.PlaybackSession;
+            if (mainSession != null && extSession != null && extSession.CanSeek)
+            {
+                if (mainSession.PlaybackState == MediaPlaybackState.Playing &&
+                    extSession.PlaybackState == MediaPlaybackState.Playing)
+                {
+                    double driftMs = Math.Abs((extSession.Position - mainSession.Position).TotalMilliseconds);
+                    if (driftMs > 50)
+                    {
+                        extSession.Position = mainSession.Position;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"External audio drift check error: {ex.Message}");
+        }
     }
 
 
@@ -813,7 +958,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
             try
             {
-                CleanupPlaybackSource(_preloadedNextSource);
+                CleanupPlaybackSource(ref _preloadedNextSource);
             }
             catch (Exception ex)
             {
@@ -904,7 +1049,16 @@ public sealed class PlaybackSession : IPlaybackSession
                 Log($"Pausing media player error: {ex.Message}");
             }
 
-            _currentPlaybackSource = null;
+            try
+            {
+                _mediaPlayer.Source = null; // Unbind first before stream disposal!
+            }
+            catch (Exception ex)
+            {
+                Log($"Unbinding media player source error: {ex.Message}");
+            }
+
+            CleanupPlaybackSource(ref _currentPlaybackSource);
         }
         catch (Exception ex)
         {
@@ -943,14 +1097,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 _videoThumbnailCache.Clear();
             }
 
-            lock (_compositionLock)
-            {
-                if (_activeComposition != null)
-                {
-                    try { _activeComposition.Clips.Clear(); } catch (Exception ex) { Log($"Clearing active composition clips error: {ex.Message}"); }
-                    _activeComposition = null;
-                }
-            }
+            CleanupActiveComposition();
 
 
 
@@ -966,7 +1113,16 @@ public sealed class PlaybackSession : IPlaybackSession
 
         IMediaPlaybackSource? source = null;
 
-        if (_preloadedNextSource != null && _preloadedTrackId == track.Id)
+        if (track.IsVideo)
+        {
+            if (_preloadedNextSource != null)
+            {
+                CleanupPlaybackSource(ref _preloadedNextSource);
+                _preloadedTrackId = null;
+            }
+        }
+
+        if (!track.IsVideo && _preloadedNextSource != null && _preloadedTrackId == track.Id)
 
         {
 
@@ -1044,8 +1200,9 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
+            try { _mediaPlayer.Source = null; } catch { }
+            CleanupPlaybackSource(ref _currentPlaybackSource);
             _currentPlaybackSource = source;
-
             _mediaPlayer.Source = source;
 
 
@@ -1061,6 +1218,10 @@ public sealed class PlaybackSession : IPlaybackSession
                     {
                         _mediaPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(targetPos);
                     }
+                    if (_externalAudioPlayer?.PlaybackSession?.CanSeek == true)
+                    {
+                        _externalAudioPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(targetPos);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1073,7 +1234,14 @@ public sealed class PlaybackSession : IPlaybackSession
             if (startPlayback)
             {
                 Log("LoadCurrentTrackSourceAsync: Calling Play()");
-                _mediaPlayer?.Play();
+                try
+                {
+                    _mediaPlayer?.Play();
+                }
+                catch (Exception exPlay)
+                {
+                    Log($"LoadCurrentTrackSourceAsync _mediaPlayer.Play() error: {exPlay.Message}");
+                }
             }
 
             // Run audio effects and equalizer matching asynchronously without delaying playback start
@@ -1082,11 +1250,11 @@ public sealed class PlaybackSession : IPlaybackSession
                 try { await RunAiEqualizerMatcherAsync(track); } catch (Exception ex) { Log($"RunAiEqualizerMatcherAsync error: {ex.Message}"); }
             });
 
-            ApplyAudioEffects();
+            try { ApplyAudioEffects(); } catch (Exception ex) { Log($"ApplyAudioEffects error: {ex.Message}"); }
 
             if (_mediaPlayer != null)
             {
-                AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer);
+                try { AccessibilityHelper.ApplyCaptionsPreference(_mediaPlayer); } catch (Exception ex) { Log($"ApplyCaptionsPreference error: {ex.Message}"); }
             }
 
             if (saveLastPlayed)
@@ -1296,11 +1464,8 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
                         if (CurrentTrack.IsVideo)
-
                         {
-
                             PrefetchVideoThumbnails(CurrentTrack);
-
                         }
 
                     }
@@ -1548,39 +1713,39 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
     private void OnMediaPlayerStateChanged(MediaPlaybackSession sender, object args)
-
     {
-
         try
-
         {
-
             var state = sender.PlaybackState;
-
             Log($"OnMediaPlayerStateChanged triggered. State={state}");
 
             if (_externalAudioPlayer != null)
-
             {
-
                 try
-
                 {
-
-                    if (state == MediaPlaybackState.Playing && _externalAudioPlayer.PlaybackSession.PlaybackState != MediaPlaybackState.Playing)
-
+                    var extSession = _externalAudioPlayer.PlaybackSession;
+                    if (extSession != null)
                     {
+                        if (state == MediaPlaybackState.Playing)
+                        {
+                            if (extSession.CanSeek && Math.Abs((extSession.Position - sender.Position).TotalMilliseconds) > 50)
+                            {
+                                extSession.Position = sender.Position;
+                            }
+                            extSession.PlaybackRate = sender.PlaybackRate;
 
-                        _externalAudioPlayer.Play();
-
-                    }
-
-                    else if (state == MediaPlaybackState.Paused && _externalAudioPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
-
-                    {
-
-                        _externalAudioPlayer.Pause();
-
+                            if (extSession.PlaybackState != MediaPlaybackState.Playing)
+                            {
+                                _externalAudioPlayer.Play();
+                            }
+                        }
+                        else if (state is MediaPlaybackState.Buffering or MediaPlaybackState.Opening or MediaPlaybackState.Paused or MediaPlaybackState.None)
+                        {
+                            if (extSession.PlaybackState == MediaPlaybackState.Playing)
+                            {
+                                _externalAudioPlayer.Pause();
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1616,6 +1781,30 @@ public sealed class PlaybackSession : IPlaybackSession
     }
 
 
+
+    private static string GetMediaContentType(string path)
+    {
+        var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".mkv" => "video/x-matroska",
+            ".mp4" => "video/mp4",
+            ".m4v" => "video/mp4",
+            ".avi" => "video/avi",
+            ".mov" => "video/quicktime",
+            ".wmv" => "video/x-ms-wmv",
+            ".webm" => "video/webm",
+            ".ts" => "video/mp2t",
+            ".mp3" => "audio/mpeg",
+            ".flac" => "audio/flac",
+            ".wav" => "audio/wav",
+            ".aac" => "audio/aac",
+            ".m4a" => "audio/mp4",
+            ".ogg" => "audio/ogg",
+            ".opus" => "audio/opus",
+            _ => "video/mp4"
+        };
+    }
 
     private async System.Threading.Tasks.Task<IMediaPlaybackSource?> CreatePlaybackSourceAsync(MediaItem track)
 
@@ -1668,110 +1857,74 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
             // If it's a local file path
-
             try
-
             {
+                Windows.Storage.StorageFile? storageFile = null;
 
-                if (System.IO.File.Exists(playablePath))
-
+                // Tier 1: Try FutureAccessList first (fast, retains broker access for picked files)
+                try
                 {
+                    if (!string.IsNullOrEmpty(track.Id) &&
+                        Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.ContainsItem(track.Id))
+                    {
+                        storageFile = await Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.GetFileAsync(track.Id);
+                        if (storageFile != null)
+                        {
+                            Log($"CreatePlaybackSourceAsync: Obtained StorageFile from FutureAccessList for: {playablePath}");
+                        }
+                    }
+                }
+                catch (Exception exFal)
+                {
+                    Log($"CreatePlaybackSourceAsync: FutureAccessList lookup error: {exFal.Message}");
+                }
 
+                // Tier 2: Try StorageFile.GetFileFromPathAsync (standard WinRT brokered access)
+                if (storageFile == null)
+                {
                     try
-
                     {
-
-                        var fileUri = new Uri(playablePath);
-
-                        mediaSource = MediaSource.CreateFromUri(fileUri);
-
-                        Log($"CreatePlaybackSourceAsync: Direct URI source created instantly for: {playablePath}");
-
+                        storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
+                        if (storageFile != null)
+                        {
+                            Log($"CreatePlaybackSourceAsync: Obtained StorageFile from path for: {playablePath}");
+                        }
                     }
-
-                    catch (Exception exUri)
-
+                    catch (Exception exStorage)
                     {
-
-                        Log($"CreatePlaybackSourceAsync: CreateFromUri fallback: {exUri.Message}");
-
-                        // Instant direct Win32 file stream creation bypassing slow brokered WinRT StorageFile
-
-                        var fileStream = new System.IO.FileStream(playablePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
-
-                        var randomAccessStream = System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
-
-                        var contentType = "video/mp4";
-
-                        if (playablePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-matroska";
-
-                        else if (playablePath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)) contentType = "video/avi";
-
-                        else if (playablePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)) contentType = "video/quicktime";
-
-                        else if (playablePath.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase)) contentType = "video/x-ms-wmv";
-
-                        else if (playablePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)) contentType = "audio/mpeg";
-
-                        else if (playablePath.EndsWith(".flac", StringComparison.OrdinalIgnoreCase)) contentType = "audio/flac";
-
-                        else if (playablePath.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) contentType = "audio/wav";
-
-                        else if (playablePath.EndsWith(".aac", StringComparison.OrdinalIgnoreCase)) contentType = "audio/aac";
-
-                        else if (playablePath.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)) contentType = "audio/mp4";
-
-
-
-                        mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
-
-                        var activeStreams = new List<IDisposable> { randomAccessStream, fileStream };
-
-                        mediaSource.CustomProperties["ActiveStreams"] = activeStreams;
-
-                        Log($"CreatePlaybackSourceAsync: Stream created instantly for: {playablePath}");
-
+                        Log($"CreatePlaybackSourceAsync: StorageFile.GetFileFromPathAsync fallback needed: {exStorage.Message}");
                     }
-
                 }
 
-                else
-
+                if (storageFile != null)
                 {
-
-                    var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
-
-                    Log($"CreatePlaybackSourceAsync: Obtained StorageFile for: {playablePath}");
-
                     mediaSource = MediaSource.CreateFromStorageFile(storageFile);
-
+                    Log($"CreatePlaybackSourceAsync: StorageFile MediaSource created successfully for: {playablePath}");
                 }
-
-
+                else if (System.IO.File.Exists(playablePath))
+                {
+                    // Tier 3: Direct Win32 FileStream (bypasses WinRT storage broker, works for arbitrary disk paths)
+                    var fileStream = new System.IO.FileStream(playablePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+                    var randomAccessStream = System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
+                    var contentType = GetMediaContentType(playablePath);
+                    mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
+                    var activeStreams = new List<IDisposable> { randomAccessStream, fileStream };
+                    mediaSource.CustomProperties["ActiveStreams"] = activeStreams;
+                    Log($"CreatePlaybackSourceAsync: Direct Win32 stream created successfully for: {playablePath}");
+                }
 
                 if (track.IsVideo && mediaSource != null)
-
                 {
-
                     // Scan metadata in background
-
                     _ = Helpers.MediaMetadataScanner.ScanMetadataAsync(track);
 
-
-
                     // Scan and attach sidecar subtitles asynchronously to avoid blocking media playback start
-
                     AttachExternalSubtitlesAsync(mediaSource, playablePath);
-
                 }
-
             }
-
             catch (Exception ex)
-
             {
-
-                Log($"CreatePlaybackSourceAsync direct load failed: {ex.Message}. Attempting fallback.");
+                Log($"CreatePlaybackSourceAsync direct load failed: {ex.Message}. Attempting stream fallback.");
 
                 if (mediaSource != null)
                 {
@@ -1781,8 +1934,16 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 try
                 {
-                    var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(playablePath);
-                    mediaSource = MediaSource.CreateFromStorageFile(storageFile);
+                    if (System.IO.File.Exists(playablePath))
+                    {
+                        var fileStream = new System.IO.FileStream(playablePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+                        var randomAccessStream = System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
+                        var contentType = GetMediaContentType(playablePath);
+                        mediaSource = MediaSource.CreateFromStream(randomAccessStream, contentType);
+                        var activeStreams = new List<IDisposable> { randomAccessStream, fileStream };
+                        mediaSource.CustomProperties["ActiveStreams"] = activeStreams;
+                        Log($"CreatePlaybackSourceAsync: Fallback stream created successfully for: {playablePath}");
+                    }
                 }
                 catch (Exception fallbackEx)
                 {
@@ -1974,39 +2135,36 @@ public sealed class PlaybackSession : IPlaybackSession
     public void SetSubtitleTrack(int trackIndex)
 
     {
-
         _selectedSubtitleTrackIndex = trackIndex;
-
-        if (_mediaPlayer.Source is MediaPlaybackItem playbackItem)
-
+        try
         {
-
-            var tracks = playbackItem.TimedMetadataTracks;
-
-            for (uint i = 0; i < tracks.Count; i++)
-
+            if (_mediaPlayer.Source is MediaPlaybackItem playbackItem)
             {
-
-                var targetMode = (trackIndex >= 0 && i == (uint)trackIndex)
-
-                    ? TimedMetadataTrackPresentationMode.PlatformPresented
-
-                    : TimedMetadataTrackPresentationMode.Disabled;
-
-
-
-                if (tracks.GetPresentationMode(i) != targetMode)
-
+                var tracks = playbackItem.TimedMetadataTracks;
+                for (uint i = 0; i < tracks.Count; i++)
                 {
+                    var targetMode = (trackIndex >= 0 && i == (uint)trackIndex)
+                        ? TimedMetadataTrackPresentationMode.PlatformPresented
+                        : TimedMetadataTrackPresentationMode.Disabled;
 
-                    tracks.SetPresentationMode(i, targetMode);
-
+                    try
+                    {
+                        if (tracks.GetPresentationMode(i) != targetMode)
+                        {
+                            tracks.SetPresentationMode(i, targetMode);
+                        }
+                    }
+                    catch (Exception exTrack)
+                    {
+                        Log($"SetSubtitleTrack presentation mode error for track {i}: {exTrack.Message}");
+                    }
                 }
-
             }
-
         }
-
+        catch (Exception ex)
+        {
+            Log($"SetSubtitleTrack error: {ex.Message}");
+        }
     }
 
 
@@ -2069,13 +2227,20 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public void TogglePlayPause()
     {
-        if (IsPlaying)
+        try
         {
-            Pause();
+            if (IsPlaying)
+            {
+                Pause();
+            }
+            else
+            {
+                Play();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Play();
+            Log($"TogglePlayPause handled error: {ex.Message}");
         }
     }
 
@@ -2084,31 +2249,80 @@ public sealed class PlaybackSession : IPlaybackSession
     public void Play()
 
     {
-
-        if (_mediaPlayer.Source != null)
+        try
         {
-            _mediaPlayer.Play();
-            _externalAudioPlayer?.Play();
-            if (_crossfadeCheckTimer != null && !_crossfadeCheckTimer.IsRunning)
+            if (_mediaPlayer.Source != null)
             {
-                _crossfadeCheckTimer.Start();
-            }
-            UpdateDisplayRequestState();
-            AccessibilityHelper.NotifySoundCue();
-        }
+                try
+                {
+                    _mediaPlayer.Play();
+                }
+                catch (Exception exPlay)
+                {
+                    Log($"_mediaPlayer.Play() error: {exPlay.Message}");
+                }
 
+                if (_externalAudioPlayer != null)
+                {
+                    try
+                    {
+                        _externalAudioPlayer.Play();
+                    }
+                    catch (Exception exExt)
+                    {
+                        Log($"_externalAudioPlayer.Play() error: {exExt.Message}");
+                    }
+                }
+
+                if (_crossfadeCheckTimer != null && !_crossfadeCheckTimer.IsRunning)
+                {
+                    try { _crossfadeCheckTimer.Start(); } catch { }
+                }
+                try { UpdateDisplayRequestState(); } catch { }
+                try { AccessibilityHelper.NotifySoundCue(); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Play handled error: {ex.Message}");
+        }
     }
 
 
 
     public void Pause()
     {
-        if (_mediaPlayer.Source != null)
+        try
         {
-            _mediaPlayer.Pause();
-            _externalAudioPlayer?.Pause();
-            SaveCurrentResumePosition();
-            UpdateDisplayRequestState();
+            if (_mediaPlayer.Source != null)
+            {
+                try
+                {
+                    _mediaPlayer.Pause();
+                }
+                catch (Exception exPause)
+                {
+                    Log($"_mediaPlayer.Pause() error: {exPause.Message}");
+                }
+
+                if (_externalAudioPlayer != null)
+                {
+                    try
+                    {
+                        _externalAudioPlayer.Pause();
+                    }
+                    catch (Exception exExt)
+                    {
+                        Log($"_externalAudioPlayer.Pause() error: {exExt.Message}");
+                    }
+                }
+                try { SaveCurrentResumePosition(); } catch { }
+                try { UpdateDisplayRequestState(); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Pause handled error: {ex.Message}");
         }
     }
 
@@ -2308,16 +2522,13 @@ public sealed class PlaybackSession : IPlaybackSession
             }
             else
             {
-                _currentPlaybackSource = null;
                 try
                 {
                     _mediaPlayer.Pause();
-                    if (_mediaPlayer.PlaybackSession?.CanSeek == true)
-                    {
-                        _mediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
-                    }
+                    _mediaPlayer.Source = null;
                 }
                 catch (Exception ex) { Log($"Pausing _mediaPlayer failed: {ex.Message}"); }
+                CleanupPlaybackSource(ref _currentPlaybackSource);
             }
 
             RaiseStateChanged();
@@ -2372,16 +2583,13 @@ public sealed class PlaybackSession : IPlaybackSession
 
         if (count == 0)
         {
-            _currentPlaybackSource = null;
             try
             {
                 _mediaPlayer.Pause();
-                if (_mediaPlayer.PlaybackSession?.CanSeek == true)
-                {
-                    _mediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
-                }
+                _mediaPlayer.Source = null;
             }
             catch (Exception ex) { Log($"Pausing mediaPlayer in RemoveFromQueueAt failed: {ex.Message}"); }
+            CleanupPlaybackSource(ref _currentPlaybackSource);
         }
         else if (nextIndexToPlay >= 0)
         {
@@ -2705,37 +2913,12 @@ public sealed class PlaybackSession : IPlaybackSession
             _videoThumbnailCache.Clear();
         }
 
-        lock (_compositionLock)
-        {
-            _activeComposition = null;
-        }
+        CleanupActiveComposition();
 
         try
         {
-            if (_externalAudioPlayer != null)
-            {
-                var extPlayer = _externalAudioPlayer;
-                _externalAudioPlayer = null;
-                _externalAudioTrackPath = null;
-                try
-                {
-                    extPlayer.Pause();
-                }
-                catch (Exception ex)
-                {
-                    Log($"Pausing external player in Stop failed: {ex.Message}");
-                }
-
-                _ = Task.Run(() =>
-                {
-                    try
-                    {
-                        extPlayer.Source = null;
-                        extPlayer.Dispose();
-                    }
-                    catch { }
-                });
-            }
+            DisposeExternalAudioPlayer();
+            _externalAudioTrackPath = null;
 
             try
             {
@@ -2754,7 +2937,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
         CurrentTrack = null;
         _currentIndex = -1;
-        _currentPlaybackSource = null;
+        CleanupPlaybackSource(ref _currentPlaybackSource);
 
         if (_crossfadeCheckTimer != null)
         {
@@ -2774,7 +2957,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
         if (_preloadedNextSource != null)
         {
-            _preloadedNextSource = null;
+            CleanupPlaybackSource(ref _preloadedNextSource);
             _preloadedTrackId = null;
         }
 
@@ -2859,6 +3042,10 @@ public sealed class PlaybackSession : IPlaybackSession
             _mediaPlayer.MediaFailed -= OnMediaPlayerMediaFailed;
 
             _mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnMediaPlayerStateChanged;
+
+            _mediaPlayer.PlaybackSession.PlaybackRateChanged -= OnMediaPlayerPlaybackRateChanged;
+
+            _mediaPlayer.PlaybackSession.SeekCompleted -= OnMediaPlayerSeekCompleted;
             try { _mediaPlayer.Pause(); _mediaPlayer.Source = null; } catch { }
         }
         catch (Exception ex)
@@ -2866,8 +3053,8 @@ public sealed class PlaybackSession : IPlaybackSession
             Log($"Dispose unhooking media player events failed: {ex.Message}");
         }
 
-        _currentPlaybackSource = null;
-        _preloadedNextSource = null;
+        CleanupPlaybackSource(ref _currentPlaybackSource);
+        CleanupPlaybackSource(ref _preloadedNextSource);
         _preloadedTrackId = null;
 
 
@@ -2895,6 +3082,9 @@ public sealed class PlaybackSession : IPlaybackSession
         }
 
 
+
+
+        CleanupActiveComposition();
 
         try
 
@@ -2940,21 +3130,8 @@ public sealed class PlaybackSession : IPlaybackSession
 
         {
 
-            if (_externalAudioPlayer != null)
-
-            {
-
-                _externalAudioPlayer.Pause();
-
-                _externalAudioPlayer.Source = null;
-
-                _externalAudioPlayer.Dispose();
-
-                _externalAudioPlayer = null;
-
-                _externalAudioTrackPath = null;
-
-            }
+            DisposeExternalAudioPlayer();
+            _externalAudioTrackPath = null;
 
             _mediaPlayer.Dispose();
 
@@ -3277,7 +3454,14 @@ public sealed class PlaybackSession : IPlaybackSession
 
 
 
-            _transitionPlayer.Source = _mediaPlayer.Source;
+            try
+            {
+                _transitionPlayer.Source = _mediaPlayer.Source;
+            }
+            catch (Exception ex)
+            {
+                Log($"Setting transition player source failed: {ex.Message}");
+            }
 
             try
             {
@@ -3325,6 +3509,23 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 nextSource = await CreatePlaybackSourceAsync(nextTrack);
 
+                if (!IsCurrentPlaybackRequest(requestVersion))
+                {
+                    _isCrossfading = false;
+                    if (_transitionPlayer != null)
+                    {
+                        try
+                        {
+                            _transitionPlayer.Pause();
+                            _transitionPlayer.Source = null;
+                            _transitionPlayer.Dispose();
+                        }
+                        catch { }
+                        _transitionPlayer = null;
+                    }
+                    return;
+                }
+
             }
 
 
@@ -3337,7 +3538,14 @@ public sealed class PlaybackSession : IPlaybackSession
                 {
                     _mediaPlayer.Source = nextSource;
                     _mediaPlayer.Volume = 0.0;
-                    _mediaPlayer.Play();
+                    try
+                    {
+                        _mediaPlayer.Play();
+                    }
+                    catch (Exception exPlay)
+                    {
+                        Log($"Crossfade _mediaPlayer.Play() error: {exPlay.Message}");
+                    }
                 }
 
 
@@ -3352,7 +3560,7 @@ public sealed class PlaybackSession : IPlaybackSession
 
                 int intervalMs = 50;
 
-                int steps = durationMs / intervalMs;
+                int steps = Math.Max(1, durationMs / intervalMs);
 
                 double initialTransitionVolume = _transitionPlayer?.Volume ?? (Volume / 100.0);
 
@@ -3396,7 +3604,8 @@ public sealed class PlaybackSession : IPlaybackSession
 
                         if (_mediaPlayer != null)
                         {
-                            _mediaPlayer.Volume = Math.Clamp(finalTargetVolume * progress, 0.0, 1.0);
+                            double liveTargetVolume = Volume / 100.0;
+                            _mediaPlayer.Volume = Math.Clamp(liveTargetVolume * progress, 0.0, 1.0);
                         }
 
 
@@ -3453,6 +3662,9 @@ public sealed class PlaybackSession : IPlaybackSession
         {
             if (!IsPlaying) return; // Rule 5: conserve CPU/battery when paused
 
+            // [Finding 3.1] Prevent clock drift between external audio and main video
+            CheckExternalAudioDrift();
+
             var settings = AppServices.Settings.Current;
             var track = CurrentTrack;
             if (track == null || _isChangingSource || _isCrossfading) return;
@@ -3480,7 +3692,7 @@ public sealed class PlaybackSession : IPlaybackSession
                 }
             }
 
-            if (nextTrack != null)
+            if (nextTrack != null && !track.IsVideo && !nextTrack.IsVideo)
             {
                 if (_preloadedTrackId != nextTrack.Id && pos >= dur * 0.8)
                 {
@@ -3492,8 +3704,13 @@ public sealed class PlaybackSession : IPlaybackSession
                             var src = await CreatePlaybackSourceAsync(nextTrack);
                             if (nextTrack.Id == _preloadedTrackId)
                             {
+                                CleanupPlaybackSource(ref _preloadedNextSource);
                                 _preloadedNextSource = src;
                                 Log($"Pre-loaded next track '{nextTrack.Title}' for gapless playback.");
+                            }
+                            else
+                            {
+                                CleanupPlaybackSource(src);
                             }
                         }
                         catch (Exception ex)
@@ -3674,51 +3891,38 @@ public sealed class PlaybackSession : IPlaybackSession
 
     private System.Threading.CancellationTokenSource? _prefetchCts;
 
-    private Windows.Media.Editing.MediaComposition? _activeComposition;
-
-    private readonly object _compositionLock = new();
-
-    private readonly SemaphoreSlim _thumbnailGate = new(1, 1);
-
-    private volatile bool _hasInteractiveThumbnailRequest;
+    public bool HasActiveComposition => false;
 
 
 
-    public bool HasActiveComposition
-
+    public IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache
     {
-
         get
-
         {
-
-            lock (_compositionLock)
-
+            lock (VideoThumbnailCacheLock)
             {
-
-                return _activeComposition != null;
-
+                return _videoThumbnailCache.ToList();
             }
-
         }
-
     }
-
-
-
-    public IReadOnlyList<(TimeSpan Time, Microsoft.UI.Xaml.Media.ImageSource Image)> VideoThumbnailCache => _videoThumbnailCache;
 
     public void TrimThumbnailCache(int targetCount = 0)
     {
         lock (VideoThumbnailCacheLock)
         {
-            if (targetCount <= 0)
+            // If playing a video track, always preserve at least the baseline 0:00 Shell thumbnail (~57 KB)
+            // so the seekbar preview thumbnail is never wiped out by background memory trims
+            int minPreserve = (CurrentTrack?.IsVideo == true) ? 1 : 0;
+            int effectiveTarget = Math.Max(minPreserve, targetCount);
+
+            while (_videoThumbnailCache.Count > effectiveTarget)
             {
-                _videoThumbnailCache.Clear();
-            }
-            else
-            {
-                while (_videoThumbnailCache.Count > targetCount)
+                int removeIdx = _videoThumbnailCache.FindIndex(x => x.Time > TimeSpan.Zero);
+                if (removeIdx >= 0)
+                {
+                    _videoThumbnailCache.RemoveAt(removeIdx);
+                }
+                else
                 {
                     _videoThumbnailCache.RemoveAt(0);
                 }
@@ -3732,7 +3936,7 @@ public sealed class PlaybackSession : IPlaybackSession
         {
             _videoThumbnailCache.RemoveAll(x => Math.Abs((x.Time - time).TotalSeconds) < 0.5);
             _videoThumbnailCache.Add((time, image));
-            while (_videoThumbnailCache.Count > 240)
+            while (_videoThumbnailCache.Count > 30)
             {
                 _videoThumbnailCache.RemoveAt(0);
             }
@@ -3740,6 +3944,15 @@ public sealed class PlaybackSession : IPlaybackSession
     }
 
 
+
+    public void CleanupActiveComposition()
+    {
+        try
+        {
+            Helpers.MediaFoundationThumbnailExtractor.CleanupActiveReader();
+        }
+        catch { }
+    }
 
     public void CancelThumbnailPrefetch()
     {
@@ -3753,526 +3966,129 @@ public sealed class PlaybackSession : IPlaybackSession
         {
             Log($"CancelThumbnailPrefetch error: {ex.Message}");
         }
+        CleanupActiveComposition();
     }
 
     public void PrefetchVideoThumbnails(MediaItem track)
-
     {
-
-        if (_prefetchCts != null)
-
-        {
-
-            try
-            {
-                _prefetchCts.Cancel();
-                _prefetchCts.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Log($"PrefetchVideoThumbnails cancelling previous token error: {ex.Message}");
-            }
-
-        }
+        CancelThumbnailPrefetch();
 
         _prefetchCts = new System.Threading.CancellationTokenSource();
-
         var token = _prefetchCts.Token;
 
-
-
         lock (VideoThumbnailCacheLock)
-
         {
-
             _videoThumbnailCache.Clear();
-
         }
-
-
-
-        lock (_compositionLock)
-
-        {
-
-            if (_activeComposition != null)
-
-            {
-
-                try
-                {
-                    _activeComposition.Clips.Clear();
-                }
-                catch (Exception ex)
-                {
-                    Log($"Clearing active composition clips failed: {ex.Message}");
-                }
-
-                _activeComposition = null;
-
-            }
-
-        }
-
-
 
         if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath))
-
         {
-
             return;
-
         }
-
-
 
         _ = Task.Run(async () =>
-
         {
-
-            Windows.Media.Editing.MediaComposition? composition = null;
-
             try
-
             {
-
-                // Defer thumbnail prefetching slightly so initial playback begins with zero disk I/O contention
-                await Task.Delay(1500);
                 if (token.IsCancellationRequested) return;
 
-
-
-                Log($"PrefetchVideoThumbnails: Starting for track '{track.Title}'");
-
+                // Rapidly extract shell thumbnail for 0:00 without allocating MediaComposition transcode pipeline
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(track.SourcePath);
-
                 if (token.IsCancellationRequested) return;
 
-
-
-                try
-
+                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
+                if (thumb != null && !token.IsCancellationRequested)
                 {
-
-                    var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-
-                    if (token.IsCancellationRequested)
-
+                    var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+                    dispatcher?.SafeEnqueueAsync(async () =>
                     {
-
-                        clip = null;
-
-                        return;
-
-                    }
-
-
-
-                    composition = new Windows.Media.Editing.MediaComposition();
-
-                    composition.Clips.Add(clip);
-
-
-
-                    lock (_compositionLock)
-
-                    {
-
-                        if (token.IsCancellationRequested)
-
-                        {
-
-                            try
-                            {
-                                composition.Clips.Clear();
-                            }
-                            catch (Exception ex)
-                            {
-                                Log($"Clearing composition clips on cancellation failed: {ex.Message}");
-                            }
-
-                            composition = null;
-
-                            return;
-
-                        }
-
-                        _activeComposition = composition;
-
-                    }
-
-
-
-                    double totalSec = clip.OriginalDuration.TotalSeconds;
-
-                    if (totalSec > 0)
-
-                    {
-
-                        // Rapidly extract shell thumbnail for 0:00 so start of timeline is instantly available
-
                         try
-
                         {
-
-                            var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
-
-                            if (thumb != null && !token.IsCancellationRequested)
-
+                            using (thumb)
                             {
-
-                                App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-                                {
-                                    try
-                                    {
-                                        using (thumb)
-                                        {
-                                            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-                                            await bitmap.SetSourceAsync(thumb);
-                                            AddCachedThumbnail(TimeSpan.Zero, bitmap);
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Log($"Setting initial thumbnail source failed: {ex.Message}");
-                                    }
-                                });
-
+                                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
+                                await bitmap.SetSourceAsync(thumb);
+                                AddCachedThumbnail(TimeSpan.Zero, bitmap);
                             }
-
                         }
-
                         catch (Exception ex)
                         {
-                            Log($"Getting initial thumbnail failed: {ex.Message}");
+                            Log($"Setting initial thumbnail source failed: {ex.Message}");
                         }
-
-
-
-                        // Generate a two-pass keyframe cache across the timeline
-
-                        // Pass 1: Fast global coverage (12-18 keyframes) so the whole timeline is covered in ~5-8 seconds
-
-                        int coarseCount = Math.Clamp((int)(totalSec / 300.0), 12, 18);
-
-                        double coarseStep = totalSec / (coarseCount + 1);
-
-
-
-                        // Pass 2: Fine detail coverage (~1.5-2 min intervals)
-
-                        int fineCount = Math.Clamp((int)(totalSec / 100.0), 20, 50);
-
-                        double fineStep = totalSec / (fineCount + 1);
-
-
-
-                        var sampleTimes = new List<double>();
-
-                        for (int i = 0; i <= coarseCount; i++)
-
-                        {
-
-                            sampleTimes.Add(Math.Min(i * coarseStep, Math.Max(0, totalSec - 0.5)));
-
-                        }
-
-                        for (int i = 1; i <= fineCount; i++)
-
-                        {
-
-                            double sec = Math.Min(i * fineStep, Math.Max(0, totalSec - 0.5));
-
-                            if (!sampleTimes.Any(s => Math.Abs(s - sec) < 20.0))
-
-                            {
-
-                                sampleTimes.Add(sec);
-
-                            }
-
-                        }
-
-
-
-                        for (int i = 0; i < sampleTimes.Count; i++)
-
-                        {
-
-                            if (token.IsCancellationRequested) break;
-
-
-
-                            // Pause background prefetch immediately if the user is hovering or seeking
-
-                            while (_hasInteractiveThumbnailRequest && !token.IsCancellationRequested)
-                            {
-                                await Task.Delay(150);
-                            }
-
-                            if (token.IsCancellationRequested) break;
-
-                            double sec = sampleTimes[i];
-                            var time = TimeSpan.FromSeconds(sec);
-
-                            try
-                            {
-                                if (token.IsCancellationRequested) break;
-
-                                Windows.Storage.Streams.IRandomAccessStreamWithContentType? stream = null;
-                                await _thumbnailGate.WaitAsync();
-                                try
-                                {
-                                    if (token.IsCancellationRequested) break;
-                                    stream = await composition.GetThumbnailAsync(time, 160, 90, Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
-                                }
-                                finally
-                                {
-                                    _thumbnailGate.Release();
-                                }
-
-
-
-                                if (token.IsCancellationRequested)
-
-                                {
-
-                                    stream?.Dispose();
-
-                                    break;
-
-                                }
-
-
-
-                                if (stream != null)
-                                {
-                                    bool enqueued = App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-                                    {
-                                        try
-                                        {
-                                            using (stream)
-                                            {
-                                                if (token.IsCancellationRequested) return;
-
-                                                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-                                                await bitmap.SetSourceAsync(stream);
-                                                AddCachedThumbnail(time, bitmap);
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Log($"Rendering thumbnail at {time} failed: {ex.Message}");
-                                        }
-                                    }) ?? false;
-
-                                    if (!enqueued)
-                                    {
-                                        stream.Dispose();
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log($"Generating thumbnail at {time} failed: {ex.Message}");
-                            }
-
-                            await Task.Delay(150);
-                            if (token.IsCancellationRequested) break;
-                        }
-                    }
+                    });
                 }
-                catch (OperationCanceledException)
-                {
-                    // Cancellation requested - stop prefetch loop gracefully
-                }
-                catch (Exception ex)
-                {
-                    Log($"MediaComposition prefetch failed, falling back to shell thumbnail: {ex.Message}");
-                    // Fallback for MKV / other formats: extract shell video thumbnail only if not cancelled
-                    if (!token.IsCancellationRequested)
-                    {
-                        try
-                        {
-                            var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 160);
-                            if (thumb != null && !token.IsCancellationRequested)
-                            {
-                                App.MainWindowInstance?.DispatcherQueue.TryEnqueue(async () =>
-                                {
-                                    try
-                                    {
-                                        using (thumb)
-                                        {
-                                            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage() { DecodePixelWidth = 160 };
-                                            await bitmap.SetSourceAsync(thumb);
-                                            AddCachedThumbnail(TimeSpan.Zero, bitmap);
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Log($"Setting fallback thumbnail source failed: {ex.Message}");
-                                    }
-                                });
-                            }
-                        }
-                        catch (Exception fallbackEx)
-                        {
-                            Log($"Getting fallback thumbnail failed: {fallbackEx.Message}");
-                        }
-                    }
-                }
-
-                finally
-
-                {
-
-                    lock (_compositionLock)
-
-                    {
-
-                        if (_activeComposition == composition)
-
-                        {
-
-                            _activeComposition = null;
-
-                        }
-
-                    }
-
-                    try
-                    {
-                        composition?.Clips.Clear();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"Clearing composition clips in finally failed: {ex.Message}");
-                    }
-
-                    composition = null;
-
-                }
-
-
-
-                Log("PrefetchVideoThumbnails: Thread finished enqueuing tasks.");
-
             }
-
+            catch (OperationCanceledException)
+            {
+            }
             catch (Exception ex)
-
             {
-
                 Log($"PrefetchVideoThumbnails error: {ex.Message}");
-
             }
-
-            finally
-
-            {
-
-                lock (_compositionLock)
-
-                {
-
-                    if (_activeComposition == composition)
-
-                    {
-
-                        _activeComposition = null;
-
-                    }
-
-                }
-
-                try
-                {
-                    composition?.Clips.Clear();
-                }
-                catch (Exception ex)
-                {
-                    Log($"Clearing composition clips in outer finally failed: {ex.Message}");
-                }
-
-                composition = null;
-
-            }
-
         });
+    }
 
+    public Task<Windows.Storage.Streams.IRandomAccessStreamWithContentType?> GetExactThumbnailAsync(double seconds)
+    {
+        // MediaComposition transcode pipeline removed to prevent 1.5GB memory spikes on 4K video.
+        // Fast, bounded thumbnail extraction is handled via GetExactThumbnailImageAsync (Hardware Media Foundation).
+        return Task.FromResult<Windows.Storage.Streams.IRandomAccessStreamWithContentType?>(null);
     }
 
 
-
-    public async Task<Windows.Storage.Streams.IRandomAccessStreamWithContentType?> GetExactThumbnailAsync(double seconds)
-
+    public async Task<Microsoft.UI.Xaml.Media.ImageSource?> GetExactThumbnailImageAsync(double seconds)
     {
-
-        Windows.Media.Editing.MediaComposition? comp;
-
-        lock (_compositionLock)
-
-        {
-
-            comp = _activeComposition;
-
-        }
-
-
-
-        if (comp == null) return null;
-
-
-
-        _hasInteractiveThumbnailRequest = true;
-
-        try
-
-        {
-
-            if (!await _thumbnailGate.WaitAsync(5000)) return null;
-
-            try
-
-            {
-
-                var timeSpan = TimeSpan.FromSeconds(seconds);
-
-                return await comp.GetThumbnailAsync(timeSpan, 160, 90, Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
-
-            }
-
-            finally
-
-            {
-
-                _thumbnailGate.Release();
-
-            }
-
-        }
-
-        catch (Exception ex)
-
-        {
-
-            System.Diagnostics.Debug.WriteLine($"GetExactThumbnailAsync error: {ex.Message}");
-
+        var track = CurrentTrack;
+        if (track == null || !track.IsVideo || string.IsNullOrEmpty(track.SourcePath))
             return null;
 
-        }
+        if (AppServices.Settings?.Current?.PreciseSeekThumbnails != true)
+            return null;
 
-        finally
-
+        double duration = track.Duration.TotalSeconds;
+        if (duration > 0)
         {
-
-            _hasInteractiveThumbnailRequest = false;
-
+            seconds = Math.Clamp(seconds, 0.0, duration);
         }
 
+        // 1. Check in-memory thumbnail cache (within 2 seconds tolerance)
+        var cached = GetCachedThumbnail(seconds, 2.0);
+        if (cached != null) return cached;
+
+        // 2. High-speed Hardware Media Foundation Extraction (57.6 KB)
+        try
+        {
+            if (File.Exists(track.SourcePath))
+            {
+                byte[]? pixelBytes = await Task.Run(() =>
+                {
+                    return Helpers.MediaFoundationThumbnailExtractor.ExtractThumbnailBgra(track.SourcePath, seconds, 160, 90);
+                });
+
+                if (pixelBytes != null && pixelBytes.Length == 160 * 90 * 4)
+                {
+                    var writeableBmp = new Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap(160, 90);
+                    using (var pixelStream = writeableBmp.PixelBuffer.AsStream())
+                    {
+                        await pixelStream.WriteAsync(pixelBytes, 0, pixelBytes.Length);
+                    }
+                    writeableBmp.Invalidate();
+                    AddCachedThumbnail(TimeSpan.FromSeconds(seconds), writeableBmp);
+                    return writeableBmp;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"MediaFoundation fast thumbnail extraction fallback: {ex.Message}");
+        }
+
+        // 3. Fallback: Return nearest cached thumbnail (e.g. 0:00 shell thumbnail) without spinning up a 1.5GB MediaComposition pipeline
+        var fallbackCached = GetCachedThumbnail(seconds, 120.0);
+        if (fallbackCached != null) return fallbackCached;
+
+        return null;
     }
-
-
 
     public Microsoft.UI.Xaml.Media.ImageSource? GetCachedThumbnail(double seconds, double maxToleranceSeconds = 120.0)
 
@@ -4339,14 +4155,8 @@ public sealed class PlaybackSession : IPlaybackSession
     private void CleanupPlaybackSource(IMediaPlaybackSource? source)
     {
         if (source == null) return;
-
-        // In WinRT / CsWinRT, MediaPlaybackItem and MediaSource are reference-counted COM objects.
-        // Explicitly calling IClosable.Close() (.Dispose()) while Media Foundation's asynchronous
-        // pipeline is unbinding causes E_ABORT (0x80004004) in combase.dll and Access Violations (0xC0000005).
-        // Furthermore, abruptly closing underlying stream handles while decoder threads are reading
-        // triggers unmanaged fail-fast stowed exceptions (0xC000027B).
-        // By allowing the CLR Garbage Collector and native COM reference count to reclaim them,
-        // cleanup proceeds safely without tearing down native pipelines.
+        var src = source;
+        CleanupPlaybackSource(ref src);
     }
 
 }

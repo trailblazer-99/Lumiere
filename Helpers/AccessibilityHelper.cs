@@ -291,16 +291,21 @@ public static class AccessibilityHelper
 
     private static void EnsureSnapshotsRecursive(FrameworkElement element)
     {
+        if (element == null) return;
         Snapshots.GetValue(element, CreateSnapshot);
 
-        var childrenCount = VisualTreeHelper.GetChildrenCount(element);
-        for (var i = 0; i < childrenCount; i++)
+        try
         {
-            if (VisualTreeHelper.GetChild(element, i) is FrameworkElement child)
+            var childrenCount = VisualTreeHelper.GetChildrenCount(element);
+            for (var i = 0; i < childrenCount; i++)
             {
-                EnsureSnapshotsRecursive(child);
+                if (VisualTreeHelper.GetChild(element, i) is FrameworkElement child)
+                {
+                    EnsureSnapshotsRecursive(child);
+                }
             }
         }
+        catch { }
     }
 
     private static void ApplySettingsRecursive(FrameworkElement element, AppSettings settings)
@@ -318,14 +323,18 @@ public static class AccessibilityHelper
             VirtualizedContainerMarkers.Add(ir, true);
         }
 
-        var childrenCount = VisualTreeHelper.GetChildrenCount(element);
-        for (var i = 0; i < childrenCount; i++)
+        try
         {
-            if (VisualTreeHelper.GetChild(element, i) is FrameworkElement child)
+            var childrenCount = VisualTreeHelper.GetChildrenCount(element);
+            for (var i = 0; i < childrenCount; i++)
             {
-                ApplySettingsRecursive(child, settings);
+                if (VisualTreeHelper.GetChild(element, i) is FrameworkElement child)
+                {
+                    ApplySettingsRecursive(child, settings);
+                }
             }
         }
+        catch { }
     }
 
     private static void ApplyElementSettings(FrameworkElement element, AppSettings settings)
@@ -368,7 +377,9 @@ public static class AccessibilityHelper
             // 2. Larger Click Targets (Min 44x44px touch/click target)
             if (element is Control control)
             {
-                bool isTargetControl = (element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase && element is not HyperlinkButton) ||
+                bool isTargetControl = (element is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase &&
+                                        element is not HyperlinkButton &&
+                                        element is not CheckBox) ||
                      element is ToggleSwitch ||
                      element is Slider ||
                      element is ComboBox ||
@@ -594,7 +605,10 @@ public static class AccessibilityHelper
     {
         try
         {
-            Application.Current.Resources[key] = value;
+            if (App.MainWindowContent != null)
+            {
+                App.MainWindowContent.Resources[key] = value;
+            }
         }
         catch (Exception ex)
         {
@@ -604,7 +618,10 @@ public static class AccessibilityHelper
 
     private static void UpdateBrushResource(string key, Color color)
     {
-        UpdateBrushResource(Application.Current.Resources, key, color, addIfMissing: true);
+        if (App.MainWindowContent != null)
+        {
+            UpdateBrushResource(App.MainWindowContent.Resources, key, color, addIfMissing: true);
+        }
     }
 
     private static void UpdateBrushResource(ResourceDictionary dictionary, string key, Color color, bool addIfMissing)
@@ -626,12 +643,12 @@ public static class AccessibilityHelper
 
         foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
         {
-            UpdateBrushResource(themeDictionary, key, color, addIfMissing: false);
-        }
-
-        foreach (var mergedDictionary in dictionary.MergedDictionaries)
-        {
-            UpdateBrushResource(mergedDictionary, key, color, addIfMissing: false);
+            try
+            {
+                if (themeDictionary.Source == null)
+                    UpdateBrushResource(themeDictionary, key, color, addIfMissing: false);
+            }
+            catch { }
         }
     }
 
@@ -648,6 +665,10 @@ public static class AccessibilityHelper
     {
         try
         {
+            if (App.MainWindowContent?.Resources is not null)
+            {
+                RemoveBrushResource(App.MainWindowContent.Resources, key);
+            }
             if (Application.Current is not null)
             {
                 RemoveBrushResource(Application.Current.Resources, key);
@@ -668,12 +689,12 @@ public static class AccessibilityHelper
 
         foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
         {
-            RemoveBrushResource(themeDictionary, key);
-        }
-
-        foreach (var mergedDictionary in dictionary.MergedDictionaries)
-        {
-            RemoveBrushResource(mergedDictionary, key);
+            try
+            {
+                if (themeDictionary.Source == null)
+                    RemoveBrushResource(themeDictionary, key);
+            }
+            catch { }
         }
     }
 

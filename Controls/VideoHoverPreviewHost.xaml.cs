@@ -203,6 +203,19 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         }
 
         ClosePreview();
+
+        lock (_playerLock)
+        {
+            if (_sharedPlayer != null)
+            {
+                DetachPlayerEvents(_sharedPlayer);
+                try { _sharedPlayer.MediaEnded -= OnPlayerMediaEnded; } catch { }
+                try { _sharedPlayer.Pause(); } catch { }
+                try { _sharedPlayer.Source = null; } catch { }
+                try { _sharedPlayer.Dispose(); } catch { }
+                _sharedPlayer = null;
+            }
+        }
     }
 
     private void OnPlaybackViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -1695,6 +1708,9 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         catch { }
     }
 
+    public void HidePreview() => ClosePreview();
+    public void DismissPreview() => ClosePreview();
+
     public void ClosePreview()
     {
         _activeGlideStoryboard?.Stop();
@@ -1797,12 +1813,15 @@ public sealed partial class VideoHoverPreviewHost : UserControl
         try
         {
             PreviewVideoPlayer.Visibility = Visibility.Visible;
-            if (_sharedPlayer != null)
+            lock (_playerLock)
             {
-                DetachPlayerEvents(_sharedPlayer);
-                try { _sharedPlayer.MediaEnded -= OnPlayerMediaEnded; } catch { }
-                try { _sharedPlayer.Pause(); } catch { }
-                try { _sharedPlayer.Source = null; } catch { }
+                if (_sharedPlayer != null)
+                {
+                    DetachPlayerEvents(_sharedPlayer);
+                    try { _sharedPlayer.MediaEnded -= OnPlayerMediaEnded; } catch { }
+                    try { _sharedPlayer.Pause(); } catch { }
+                    try { _sharedPlayer.Source = null; } catch { }
+                }
             }
             PreviewVideoPlayer.Opacity = 0.0;
             PreviewPosterBrush.ImageSource = null;
@@ -2154,8 +2173,6 @@ public sealed partial class VideoHoverPreviewHost : UserControl
             UpdateSelectionVisuals(displayItem.IsSelected);
             UpdateMuteVisuals();
 
-            CardBorder.UpdateLayout();
-            this.UpdateLayout();
             EnsureHardwareRoundedClip();
 
             // Ensure preview video playback is running in the expanded modal
@@ -2354,8 +2371,6 @@ public sealed partial class VideoHoverPreviewHost : UserControl
                 }
 
                 ApplyBackdropTheming();
-                CardBorder.UpdateLayout();
-                this.UpdateLayout();
                 EnsureHardwareRoundedClip();
 
                 // Play reverse morph: start at expanded scale/translation, animate to compact (1.0)

@@ -8,7 +8,7 @@ Whenever you or an AI assistant make changes to Lumière, running this kit guara
 1. No memory leaks are introduced in ViewModels, XAML pages, composition visuals, or Win32 handles.
 2. No UI thread freezes or virtualization bottlenecks are introduced.
 3. No concurrency race conditions or unhandled `async void` crashes are committed.
-4. All 82 unit and stress tests pass with 0 errors and 0 warnings under Release x64 compilation.
+4. All 394 unit and stress tests pass with 0 errors and 0 warnings under Release x64 compilation.
 
 ---
 
@@ -45,12 +45,12 @@ Keep a terminal open while writing code to receive instant feedback whenever a `
 
 ## 3. The 8 Audit Domains & Architectural Invariants
 
-The sentinel automatically enforces 32 strict architectural rules across 8 domains:
+The sentinel automatically enforces 36 automated checks (34 static checks in `-Quick` mode) across 8 domains:
 
 ### Domain 1: Concurrency & Thread-Safety
 - **Rogue `async void` Prevention:**
   - Services, ViewModels, Models, and Helpers must **never** declare `async void` (they must return `Task` or `ValueTask`).
-  - In UI code-behind (`*.xaml.cs`), `async void` is only permitted if it is a standard event handler (`object sender, ...EventArgs e`) OR is strictly guarded by a top-level `try { ... } catch` exception boundary.
+  - In UI code-behind (`*.xaml.cs`), `async void` is only permitted if it is a standard event handler (`object sender, ...EventArgs e`) AND is strictly guarded by a top-level `try { ... } catch` exception boundary (async event lambdas must likewise be wrapped in top-level `try { ... } catch`).
 - **Shared Service Caching:** Shared state (e.g., `WatchmodeService`) must use thread-safe collections (`ConcurrentDictionary`) to prevent race conditions during concurrent API calls.
 - **Library Collection Snapshots:** `MediaLibraryService` must use lock-synchronized snapshotting (`lock (_lock)`) when exposing public track collections to prevent `Collection was modified` exceptions during background scans.
 
@@ -88,7 +88,7 @@ The sentinel automatically enforces 32 strict architectural rules across 8 domai
 - **User-Prompted Updates:**
   - `UpdateService` alerts the user with an "Update Available" notification prompt instead of silently replacing running binaries in the background.
 - **Bounded Crash Logging:**
-  - Unhandled crash logs (`crash.txt` / `crash.log`) must be bounded with automated 2MB file rollover to `crash.bak.txt` to prevent disk starvation.
+  - Unhandled crash logs (`crash.txt` / `crash.log`) and `com_exceptions.log` must be bounded with automated 2MB file rollover (`.old` / `.bak`) to prevent disk starvation.
 
 ### Domain 7: Build & Compiler Verification
 - **Zero Warnings, Zero Errors:**
@@ -96,7 +96,7 @@ The sentinel automatically enforces 32 strict architectural rules across 8 domai
 
 ### Domain 8: Unit & Regression Suite
 - **100% Test Pass Rate:**
-  - All 82 unit tests in `Tests/LumiereMediaPlayer.Tests` must execute and pass without failure.
+  - All 394 unit tests in `Tests/LumiereMediaPlayer.Tests` must execute and pass without failure.
 
 ---
 

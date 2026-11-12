@@ -25,19 +25,37 @@ public sealed partial class GlassTransportBar : UserControl
     {
         PlayPauseIcon.Glyph = isPlaying ? "\uE769" : "\uE768";
 
-        if (durationSeconds > 0)
+        if (!double.IsNaN(durationSeconds) && !double.IsInfinity(durationSeconds) && durationSeconds > 0)
         {
+            double clampedPos = double.IsNaN(positionSeconds) || double.IsInfinity(positionSeconds)
+                ? 0.0
+                : Math.Clamp(positionSeconds, 0.0, durationSeconds);
+
             _isProgrammaticUpdate = true;
             try
             {
                 ScrubSlider.Maximum = durationSeconds;
-                ScrubSlider.Value = positionSeconds;
-                TimeTextBlock.Text = $"{FormatTime(positionSeconds)} / {FormatTime(durationSeconds)}";
+                ScrubSlider.Value = clampedPos;
+                TimeTextBlock.Text = $"{FormatTime(clampedPos)} / {FormatTime(durationSeconds)}";
             }
             finally
             {
                 _isProgrammaticUpdate = false;
             }
+        }
+    }
+
+    public void SetVolume(double volume)
+    {
+        if (double.IsNaN(volume) || double.IsInfinity(volume)) return;
+        _isProgrammaticUpdate = true;
+        try
+        {
+            VolumeSlider.Value = Math.Clamp(volume, VolumeSlider.Minimum, VolumeSlider.Maximum);
+        }
+        finally
+        {
+            _isProgrammaticUpdate = false;
         }
     }
 
@@ -62,11 +80,20 @@ public sealed partial class GlassTransportBar : UserControl
 
     private void OnVolumeSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
+        if (_isProgrammaticUpdate) return;
         VolumeChanged?.Invoke(this, e.NewValue);
     }
 
     private static string FormatTime(double sec)
     {
+        if (double.IsNaN(sec) || double.IsInfinity(sec) || sec < 0)
+        {
+            return "00:00";
+        }
+        if (sec > 359999)
+        {
+            sec = 359999;
+        }
         var ts = TimeSpan.FromSeconds(sec);
         return ts.TotalHours >= 1 ? ts.ToString(@"hh\:mm\:ss") : ts.ToString(@"mm\:ss");
     }

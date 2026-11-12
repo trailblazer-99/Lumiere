@@ -32,7 +32,7 @@
                     CornerRadius="28"
                     BorderThickness="1"
                     Background="Transparent"
-                    BorderBrush="{StaticResource SpecularRimBorderBrush}">
+                    BorderBrush="{ThemeResource SpecularRimBorderBrush}">
 
                     <Grid Padding="20,0" ColumnSpacing="16" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
@@ -46,6 +46,7 @@
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Button
                                 x:Name="PrevButton"
+                                AutomationProperties.Name="Previous track"
                                 Style="{StaticResource GlassIconButtonStyle}"
                                 Click="OnPreviousClicked">
                                 <FontIcon Glyph="&#xE892;" FontSize="16" />
@@ -53,15 +54,17 @@
 
                             <Button
                                 x:Name="PlayPauseButton"
+                                AutomationProperties.Name="Play or Pause"
                                 Style="{StaticResource GlassAccentPillButtonStyle}"
                                 Width="44"
                                 Height="44"
                                 Click="OnPlayPauseClicked">
-                                <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="20" />
+                                <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="20" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                             </Button>
 
                             <Button
                                 x:Name="NextButton"
+                                AutomationProperties.Name="Next track"
                                 Style="{StaticResource GlassIconButtonStyle}"
                                 Click="OnNextClicked">
                                 <FontIcon Glyph="&#xE893;" FontSize="16" />
@@ -73,6 +76,7 @@
                             <Canvas x:Name="ChapterMarkersCanvas" Height="4" HorizontalAlignment="Stretch" IsHitTestVisible="False" />
                             <Slider
                                 x:Name="ScrubSlider"
+                                AutomationProperties.Name="Playback progress"
                                 VerticalAlignment="Center"
                                 Maximum="100"
                                 Padding="8,0,8,0"
@@ -94,6 +98,7 @@
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Button
                                 x:Name="MuteButton"
+                                AutomationProperties.Name="Mute or unmute"
                                 Style="{StaticResource GlassIconButtonStyle}"
                                 Click="OnMuteClicked">
                                 <FontIcon Glyph="&#xE767;" FontSize="16" />
@@ -101,6 +106,7 @@
 
                             <Slider
                                 x:Name="VolumeSlider"
+                                AutomationProperties.Name="Volume"
                                 Width="84"
                                 Value="80"
                                 Maximum="100"
@@ -111,6 +117,7 @@
 
                             <Button
                                 x:Name="FullscreenButton"
+                                AutomationProperties.Name="Toggle fullscreen"
                                 Style="{StaticResource GlassIconButtonStyle}"
                                 Click="OnFullscreenClicked">
                                 <FontIcon Glyph="&#xE740;" FontSize="16" />

@@ -244,12 +244,12 @@ public sealed partial class HomePage : Page
 
     private void OnOpenFileClick(SplitButton sender, SplitButtonClickEventArgs args)
     {
-        App.MainWindowInstance?.OpenFilePickerAndPlay();
+        _ = App.MainWindowInstance?.OpenFilePickerAndPlay();
     }
 
     private void OnOpenFileMenuItemClick(object sender, RoutedEventArgs e)
     {
-        App.MainWindowInstance?.OpenFilePickerAndPlay();
+        _ = App.MainWindowInstance?.OpenFilePickerAndPlay();
     }
 
     private void OnOpenFolderMenuItemClick(object sender, RoutedEventArgs e)

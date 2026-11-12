@@ -18,7 +18,7 @@ namespace LumiereMediaPlayer.Pages
 {
     public sealed partial class StreamingDetailsPage : Page
     {
-        public StreamingDetailsViewModel ViewModel { get; } = new();
+        public StreamingDetailsViewModel ViewModel { get; } = AppServices.StreamingDetailsViewModel;
 
         public string? CurrentTitleType => ViewModel.CurrentTitleType;
 
@@ -109,6 +109,7 @@ namespace LumiereMediaPlayer.Pages
                 try
                 {
                     await ViewModel.LoadDetailsAsync(watchmodeId, selectedRegion, fallback);
+                    if (!this.IsLoaded) return;
                     ApplyViewModelToUI();
                 }
                 finally
@@ -545,8 +546,11 @@ namespace LumiereMediaPlayer.Pages
                 btn.Tag = targetUrl;
                 btn.Click += async (s, args) =>
                 {
-                    if (s is Button clickBtn && clickBtn.Tag is string url && !string.IsNullOrEmpty(url))
+                    try
                     {
+                        if (s is not Button clickBtn || clickBtn.Tag is not string url || string.IsNullOrEmpty(url))
+                            return;
+
                         try
                         {
                             string cleanUrl = StreamingRouter.CleanFallbackUrl(url);
@@ -620,6 +624,10 @@ namespace LumiereMediaPlayer.Pages
                                 AntiGravityLogger.Log($"Failed fallback launch URI: {fallbackEx.Message}");
                             }
                         }
+                    }
+                    catch (Exception outerEx)
+                    {
+                        AntiGravityLogger.Log($"Provider click error: {outerEx.Message}");
                     }
                 };
 
@@ -731,14 +739,19 @@ namespace LumiereMediaPlayer.Pages
                 var trailer = ViewModel.Details?.Trailer;
                 if (!string.IsNullOrEmpty(trailer))
                 {
-                    if (trailer.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
-                        trailer.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                    if (Uri.TryCreate(trailer, UriKind.Absolute, out var trailerUri) &&
+                        (string.Equals(trailerUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(trailerUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
                     {
-                        App.MainWindowInstance?.NavigateToYouTube(trailer);
-                    }
-                    else
-                    {
-                        await Windows.System.Launcher.LaunchUriAsync(new Uri(trailer));
+                        if (trailerUri.Host.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+                            trailerUri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+                        {
+                            App.MainWindowInstance?.NavigateToYouTube(trailerUri.ToString());
+                        }
+                        else
+                        {
+                            await Windows.System.Launcher.LaunchUriAsync(trailerUri);
+                        }
                     }
                 }
             }
@@ -794,7 +807,8 @@ namespace LumiereMediaPlayer.Pages
             {
                 if (clickedTitle.TmdbId.HasValue && (clickedTitle.Id == 0 || clickedTitle.Id == clickedTitle.TmdbId.Value))
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
+                    string prefix = (clickedTitle.Type is "tv" or "tv_series" or "tv_miniseries") ? "tmdb_tv-" : "tmdb_movie-";
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"{prefix}{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
                 }
                 else
                 {
@@ -805,12 +819,14 @@ namespace LumiereMediaPlayer.Pages
 
         private async void CastGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
-            if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
-                return;
-
+            bool acquiredLock = false;
             try
             {
+                if (_isPersonDialogOpen || !(e.ClickedItem is WatchmodeCastCrew person))
+                    return;
+
                 _isPersonDialogOpen = true;
+                acquiredLock = true;
 
                 var progressRing = new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Center, Width = 36, Height = 36, Margin = new Thickness(0, 24, 0, 24) };
                 var container = new StackPanel { Spacing = 12 };
@@ -866,7 +882,8 @@ namespace LumiereMediaPlayer.Pages
                                             dialog.Hide();
                                             if (clickedTitle.TmdbId.HasValue && (clickedTitle.Id == 0 || clickedTitle.Id == clickedTitle.TmdbId.Value))
                                             {
-                                                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_movie-{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
+                                                string prefix = (clickedTitle.Type is "tv" or "tv_series" or "tv_miniseries") ? "tmdb_tv-" : "tmdb_movie-";
+                                                Frame.Navigate(typeof(StreamingDetailsPage), ($"{prefix}{clickedTitle.TmdbId.Value}", ViewModel.SelectedRegion));
                                             }
                                             else
                                             {
@@ -906,7 +923,7 @@ namespace LumiereMediaPlayer.Pages
             }
             finally
             {
-                _isPersonDialogOpen = false;
+                if (acquiredLock) _isPersonDialogOpen = false;
             }
         }
 

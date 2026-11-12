@@ -10,8 +10,9 @@ public static class MemoryTrimHelper
 {
     private static int _isTrimming;
 
-    [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
-    private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, IntPtr dwMinimumWorkingSetSize, IntPtr dwMaximumWorkingSetSize);
+    [DllImport("psapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
     public static void TrimWorkingSet(bool deep = false)
     {
@@ -53,14 +54,11 @@ public static class MemoryTrimHelper
 
             if (deep)
             {
-                // Deep trim: Collect Gen 2 and compact Large Object Heap (LOH)
-                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(2, GCCollectionMode.Optimized, blocking: false, compacting: true);
-
+                // Non-blocking Gen 2 collection without LOH compaction
+                GC.Collect(2, GCCollectionMode.Optimized, blocking: false, compacting: false);
                 try
                 {
-                    using var proc = Process.GetCurrentProcess();
-                    SetProcessWorkingSetSize(proc.Handle, (IntPtr)(-1), (IntPtr)(-1));
+                    EmptyWorkingSet(Process.GetCurrentProcess().Handle);
                 }
                 catch { }
             }

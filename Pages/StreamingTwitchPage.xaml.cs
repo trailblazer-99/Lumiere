@@ -12,6 +12,8 @@ namespace LumiereMediaPlayer.Pages
     {
         private WebView2? _webView;
         private bool _isInitialized = false;
+        private bool _isInitializing = false;
+        private bool _isDisposed = false;
         private const string TwitchHomeUrl = "https://www.twitch.tv";
 
         public bool CanGoBack => _webView?.CanGoBack ?? false;
@@ -31,6 +33,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
+            _isDisposed = false;
             _ = InitializeTwitchWebViewAsync();
         }
 
@@ -47,6 +50,8 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task InitializeTwitchWebViewAsync()
         {
+            if (_isDisposed || _isInitializing) return;
+            _isInitializing = true;
             try
             {
                 if (_webView == null)
@@ -58,7 +63,7 @@ namespace LumiereMediaPlayer.Pages
                         _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
                     };
 
-                    _webView = new WebView2
+                    var webView = new WebView2
                     {
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         VerticalAlignment = VerticalAlignment.Stretch,
@@ -67,29 +72,44 @@ namespace LumiereMediaPlayer.Pages
                             : Windows.UI.Color.FromArgb(255, 248, 248, 248)
                     };
 
-                    WebViewContainer.Children.Add(_webView);
+                    _webView = webView;
+                    WebViewContainer.Children.Add(webView);
 
                     // Configure profile and persistent folder to save login state
                     var localAppData = ApplicationData.Current.LocalFolder.Path;
                     var userDataFolder = System.IO.Path.Combine(localAppData, "WebView2Data");
                     var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, userDataFolder, null);
+                    if (_isDisposed || !ReferenceEquals(_webView, webView))
+                    {
+                        WebViewContainer.Children.Remove(webView);
+                        try { webView.Close(); } catch { }
+                        return;
+                    }
 
-                    await _webView.EnsureCoreWebView2Async(env);
-                    if (_webView == null) return;
+                    await webView.EnsureCoreWebView2Async(env);
+                    if (_isDisposed || !ReferenceEquals(_webView, webView) || webView.CoreWebView2 == null)
+                    {
+                        WebViewContainer.Children.Remove(webView);
+                        try { webView.Close(); } catch { }
+                        return;
+                    }
 
                     // Sync dark/light theme with Twitch profile
-                    _webView.CoreWebView2.Profile.PreferredColorScheme = isDark
+                    webView.CoreWebView2.Profile.PreferredColorScheme = isDark
                         ? CoreWebView2PreferredColorScheme.Dark
                         : CoreWebView2PreferredColorScheme.Light;
 
                     // Hook navigation lifecycle
-                    _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
-                    _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
-                    _webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
+                    webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                    webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+                    webView.CoreWebView2.ContainsFullScreenElementChanged += OnWebViewContainsFullScreenElementChanged;
+                    webView.CoreWebView2.HistoryChanged += OnWebViewHistoryChanged;
+                    webView.CoreWebView2.ProcessFailed += OnWebViewProcessFailed;
+                    webView.CoreWebView2.NewWindowRequested += OnWebViewNewWindowRequested;
                     _isInitialized = true;
                 }
 
-                if (_isInitialized)
+                if (_isInitialized && !_isDisposed && _webView?.CoreWebView2 != null)
                 {
                     _webView.CoreWebView2.Navigate(TwitchHomeUrl);
                 }
@@ -97,8 +117,35 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TwitchPage] WebView2 initialization error: {ex.Message}");
+                if (!_isDisposed)
+                {
+                    LoadingOverlay.Visibility = Visibility.Collapsed;
+                    ErrorOverlay.Visibility = Visibility.Visible;
+                }
+            }
+            finally
+            {
+                _isInitializing = false;
+            }
+        }
+
+        private void OnWebViewProcessFailed(CoreWebView2 sender, CoreWebView2ProcessFailedEventArgs args)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_isDisposed) return;
                 LoadingOverlay.Visibility = Visibility.Collapsed;
                 ErrorOverlay.Visibility = Visibility.Visible;
+            });
+        }
+
+        private void OnWebViewNewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs args)
+        {
+            args.Handled = true;
+            if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) &&
+                string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                try { sender.Navigate(uri.ToString()); } catch { }
             }
         }
 
@@ -140,6 +187,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void DisposeWebView()
         {
+            _isDisposed = true;
             PageContent.Margin = new Thickness(0, 48, 0, 0);
             App.MainWindowInstance?.SetFullScreenMode(false);
 
@@ -152,6 +200,9 @@ namespace LumiereMediaPlayer.Pages
                         _webView.CoreWebView2.NavigationStarting -= OnNavigationStarting;
                         _webView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
                         _webView.CoreWebView2.ContainsFullScreenElementChanged -= OnWebViewContainsFullScreenElementChanged;
+                        _webView.CoreWebView2.HistoryChanged -= OnWebViewHistoryChanged;
+                        _webView.CoreWebView2.ProcessFailed -= OnWebViewProcessFailed;
+                        _webView.CoreWebView2.NewWindowRequested -= OnWebViewNewWindowRequested;
                     }
                     _webView.Close();
                 }
@@ -167,12 +218,25 @@ namespace LumiereMediaPlayer.Pages
             }
         }
 
+        public void SetFullscreenPresentation(bool isFullScreen)
+        {
+            PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
+        }
+
+        private void OnWebViewHistoryChanged(CoreWebView2 sender, object args)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                App.MainWindowInstance?.UpdateBackButtonState();
+            });
+        }
+
         private void OnWebViewContainsFullScreenElementChanged(CoreWebView2 sender, object args)
         {
             var isFullScreen = sender.ContainsFullScreenElement;
             DispatcherQueue.TryEnqueue(() =>
             {
-                PageContent.Margin = isFullScreen ? new Thickness(0) : new Thickness(0, 48, 0, 0);
+                SetFullscreenPresentation(isFullScreen);
                 App.MainWindowInstance?.SetFullScreenMode(isFullScreen);
             });
         }

@@ -23,9 +23,9 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
-            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+            <!-- MenuFlyoutSystemBackdrop removed to prevent auto-acrylic on frame 0 -->
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#2AFFFFFF" />
@@ -192,9 +192,9 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#60FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#30FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#18000000" />
-            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
-            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
-            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.60" TintLuminosityOpacity="0.70" FallbackColor="#FAF8F8FC" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.60" TintLuminosityOpacity="0.70" FallbackColor="#FAF8F8FC" />
+            <!-- MenuFlyoutSystemBackdrop removed to prevent auto-acrylic on frame 0 -->
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#28000000" />
@@ -361,9 +361,9 @@
             <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0CFFFFFF" />
             <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1FFFFFFF" />
-            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-            <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
+            <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+            <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+            <!-- MenuFlyoutSystemBackdrop removed to prevent auto-acrylic on frame 0 -->
             <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
             <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
             <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#48FFFFFF" />
@@ -782,12 +782,40 @@
         <Setter Property="CornerRadius" Value="8" />
     </Style>
 
+    <ControlTemplate x:Key="CinematicMenuFlyoutPresenterTemplate" TargetType="MenuFlyoutPresenter">
+        <Grid>
+            <Grid x:Name="ShadowCastGrid" Margin="-36" Background="#01000000" IsHitTestVisible="False" />
+            <Border x:Name="LayoutRoot"
+                    Translation="0,0,48"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                <Border.Shadow>
+                    <ThemeShadow x:Name="FlyoutThemeShadow" />
+                </Border.Shadow>
+                <Grid CornerRadius="{TemplateBinding CornerRadius}">
+                    <ScrollViewer x:Name="MenuFlyoutPresenterScrollViewer"
+                                  HorizontalScrollMode="Disabled"
+                                  VerticalScrollMode="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  ZoomMode="Disabled"
+                                  Padding="{TemplateBinding Padding}">
+                        <ItemsPresenter />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
     <Style TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
-        <Setter Property="SystemBackdrop" Value="{ThemeResource MenuFlyoutSystemBackdrop}" />
+        <Setter Property="SystemBackdrop" Value="{x:Null}" />
         <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
         <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Template" Value="{StaticResource CinematicMenuFlyoutPresenterTemplate}" />
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
@@ -801,11 +829,47 @@
         <Setter Property="CornerRadius" Value="8" />
     </Style>
 
+    <Style x:Key="BaseThemedMenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="SystemBackdrop" Value="{x:Null}" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
     <Style x:Key="CinematicMenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
-        <Setter Property="SystemBackdrop" Value="{ThemeResource MenuFlyoutSystemBackdrop}" />
+        <Setter Property="SystemBackdrop" Value="{x:Null}" />
         <Setter Property="Background" Value="{ThemeResource MenuFlyoutPresenterBackground}" />
         <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Template" Value="{StaticResource CinematicMenuFlyoutPresenterTemplate}" />
+    </Style>
+
+    <!-- Fullscreen Dedicated Flyout Presenter Style & Brushes: Guarantees Frame-0 translucency & specular rim -->
+    <LinearGradientBrush x:Key="FullscreenSpecularBorderBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#E6FFFFFF" Offset="0.0" />
+        <GradientStop Color="#82FFFFFF" Offset="0.30" />
+        <GradientStop Color="#3CFFFFFF" Offset="0.70" />
+        <GradientStop Color="#6EFFFFFF" Offset="1.0" />
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="FullscreenFlyoutPresenterBackgroundBrush" Color="Transparent" />
+
+    <Style x:Key="FullscreenCinematicMenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="RequestedTheme" Value="Dark" />
+        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="SystemBackdrop" Value="{x:Null}" />
+        <Setter Property="Background" Value="{StaticResource FullscreenFlyoutPresenterBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource FullscreenSpecularBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Template" Value="{StaticResource CinematicMenuFlyoutPresenterTemplate}" />
+    </Style>
+
+    <Style x:Key="FullscreenFlyoutPresenterStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+        <Setter Property="RequestedTheme" Value="Dark" />
+        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="Background" Value="{StaticResource FullscreenFlyoutPresenterBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource FullscreenSpecularBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
         <Setter Property="CornerRadius" Value="8" />
     </Style>
 
@@ -1305,6 +1369,9 @@
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContentBackground" Storyboard.TargetProperty="Background">
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                        </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
@@ -1355,7 +1422,7 @@
                             <Grid x:Name="InnerCircle"
                                   CornerRadius="20"
                                   Background="{ThemeResource ControlFillColorDefaultBrush}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <ContentPresenter x:Name="ContentPresenter" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
                             </Grid>
                         </Border>
                         
@@ -1380,6 +1447,9 @@
                                         <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="0.94" Duration="0:0:0.05" />
                                         <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="0.94" Duration="0:0:0.05" />
                                         <DoubleAnimation Storyboard.TargetName="InnerCircle" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.05" />
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                        </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
@@ -1461,7 +1531,7 @@
                         PointerOverBackground="Transparent"
                         SelectedBackground="Transparent"
                         SelectedForeground="{TemplateBinding Foreground}"
-                        FocusBorderBrush="Transparent"
+                        FocusBorderBrush="{ThemeResource FocusVisualPrimaryBrush}"
                         SelectedBorderThickness="0"
                         CornerRadius="{StaticResource CardCornerRadiusFull}" />
                 </ControlTemplate>

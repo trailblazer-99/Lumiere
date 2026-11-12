@@ -240,7 +240,11 @@ namespace LumiereMediaPlayer.Services
                 try
                 {
                     var json = JsonSerializer.Serialize(items);
-                    await File.WriteAllTextAsync(HistoryFilePath, json).ConfigureAwait(false);
+                    var dir = Path.GetDirectoryName(HistoryFilePath);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    var tmpPath = HistoryFilePath + ".tmp";
+                    await File.WriteAllTextAsync(tmpPath, json).ConfigureAwait(false);
+                    File.Move(tmpPath, HistoryFilePath, overwrite: true);
                 }
                 finally
                 {

@@ -89,6 +89,7 @@ public class GlassContainer : ContentControl, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _isDisposed = false;
         InitializeCompositionTree();
         RegisterWindowFocusWatcher();
     }
@@ -101,6 +102,7 @@ public class GlassContainer : ContentControl, IDisposable
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (_isDisposed || !IsLoaded) return;
         if (_compositor == null && e.NewSize.Width > 0 && e.NewSize.Height > 0)
         {
             InitializeCompositionTree(new Vector2((float)e.NewSize.Width, (float)e.NewSize.Height));
@@ -120,8 +122,7 @@ public class GlassContainer : ContentControl, IDisposable
     {
         float width = explicitSize?.X ?? (float)ActualWidth;
         float height = explicitSize?.Y ?? (float)ActualHeight;
-        if (_compositor != null || width <= 0 || height <= 0) return;
-        _isDisposed = false;
+        if (_isDisposed || _compositor != null || width <= 0 || height <= 0) return;
 
         var hostVisual = ElementCompositionPreview.GetElementVisual(this);
         _compositor = hostVisual.Compositor;
@@ -169,9 +170,10 @@ public class GlassContainer : ContentControl, IDisposable
             InitializeSpecularRimLight(hostVisual);
 
             // 6. Connect composition visuals to XAML element visual tree
+            // InsertAbove(newChild, sibling): _tintVisual goes above _backdropVisual
             _rootContainerVisual = _compositor.CreateContainerVisual();
             _rootContainerVisual.Children.InsertAtBottom(_backdropVisual);
-            _rootContainerVisual.Children.InsertAbove(_backdropVisual, _tintVisual);
+            _rootContainerVisual.Children.InsertAbove(_tintVisual, _backdropVisual);
 
             ElementCompositionPreview.SetElementChildVisual(this, _rootContainerVisual);
             UpdateCornerClips();
@@ -236,60 +238,80 @@ public class GlassContainer : ContentControl, IDisposable
             var size = _backdropVisual.Size;
             if (size.X <= 0 || size.Y <= 0) return;
 
-            var radius = (float)GlassCornerRadius.TopLeft;
+            var cr = GlassCornerRadius;
+            bool isUniform = Math.Abs(cr.TopLeft - cr.TopRight) < 0.01
+                          && Math.Abs(cr.TopLeft - cr.BottomRight) < 0.01
+                          && Math.Abs(cr.TopLeft - cr.BottomLeft) < 0.01;
 
-            if (_backdropVisual.Clip is CompositionGeometricClip existingBackdropClip &&
-                existingBackdropClip.Geometry is CompositionRoundedRectangleGeometry existingBackdropGeom)
+            if (isUniform)
             {
-                existingBackdropGeom.Size = size;
-                existingBackdropGeom.CornerRadius = new Vector2(radius, radius);
+                var radius = (float)cr.TopLeft;
+                ApplyUniformRoundedClip(_backdropVisual, size, radius);
+                if (_tintVisual != null) ApplyUniformRoundedClip(_tintVisual, size, radius);
+                if (_rootContainerVisual != null) ApplyUniformRoundedClip(_rootContainerVisual, size, radius);
             }
             else
             {
-                var geom = _compositor.CreateRoundedRectangleGeometry();
-                geom.Size = size;
-                geom.CornerRadius = new Vector2(radius, radius);
-                _backdropVisual.Clip = _compositor.CreateGeometricClip(geom);
-            }
-
-            if (_tintVisual != null)
-            {
-                if (_tintVisual.Clip is CompositionGeometricClip existingTintClip &&
-                    existingTintClip.Geometry is CompositionRoundedRectangleGeometry existingTintGeom)
-                {
-                    existingTintGeom.Size = size;
-                    existingTintGeom.CornerRadius = new Vector2(radius, radius);
-                }
-                else
-                {
-                    var tintGeom = _compositor.CreateRoundedRectangleGeometry();
-                    tintGeom.Size = size;
-                    tintGeom.CornerRadius = new Vector2(radius, radius);
-                    _tintVisual.Clip = _compositor.CreateGeometricClip(tintGeom);
-                }
-            }
-
-            if (_rootContainerVisual != null)
-            {
-                if (_rootContainerVisual.Clip is CompositionGeometricClip existingRootClip &&
-                    existingRootClip.Geometry is CompositionRoundedRectangleGeometry existingRootGeom)
-                {
-                    existingRootGeom.Size = size;
-                    existingRootGeom.CornerRadius = new Vector2(radius, radius);
-                }
-                else
-                {
-                    var rootGeom = _compositor.CreateRoundedRectangleGeometry();
-                    rootGeom.Size = size;
-                    rootGeom.CornerRadius = new Vector2(radius, radius);
-                    _rootContainerVisual.Clip = _compositor.CreateGeometricClip(rootGeom);
-                }
+                ApplyAsymmetricRoundedClip(_backdropVisual, size, cr);
+                if (_tintVisual != null) ApplyAsymmetricRoundedClip(_tintVisual, size, cr);
+                if (_rootContainerVisual != null) ApplyAsymmetricRoundedClip(_rootContainerVisual, size, cr);
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[GlassContainer.UpdateCornerClips] Handled: {ex.Message}");
         }
+    }
+
+    private void ApplyUniformRoundedClip(Visual target, Vector2 size, float radius)
+    {
+        if (_compositor == null) return;
+        if (target.Clip is CompositionGeometricClip existingClip &&
+            existingClip.Geometry is CompositionRoundedRectangleGeometry existingGeom)
+        {
+            existingGeom.Size = size;
+            existingGeom.CornerRadius = new Vector2(radius, radius);
+            return;
+        }
+
+        var geom = _compositor.CreateRoundedRectangleGeometry();
+        geom.Size = size;
+        geom.CornerRadius = new Vector2(radius, radius);
+        target.Clip = _compositor.CreateGeometricClip(geom);
+    }
+
+    private void ApplyAsymmetricRoundedClip(Visual target, Vector2 size, CornerRadius cr)
+    {
+        if (_compositor == null) return;
+        float w = size.X;
+        float h = size.Y;
+        float tl = (float)Math.Clamp(cr.TopLeft, 0, Math.Min(w, h) * 0.5f);
+        float tr = (float)Math.Clamp(cr.TopRight, 0, Math.Min(w, h) * 0.5f);
+        float br = (float)Math.Clamp(cr.BottomRight, 0, Math.Min(w, h) * 0.5f);
+        float bl = (float)Math.Clamp(cr.BottomLeft, 0, Math.Min(w, h) * 0.5f);
+
+        using var builder = new Microsoft.Graphics.Canvas.Geometry.CanvasPathBuilder(null);
+        builder.BeginFigure(tl, 0);
+        builder.AddLine(w - tr, 0);
+        if (tr > 0) builder.AddArc(new Vector2(w, tr), tr, tr, 0, Microsoft.Graphics.Canvas.Geometry.CanvasSweepDirection.Clockwise, Microsoft.Graphics.Canvas.Geometry.CanvasArcSize.Small);
+        else builder.AddLine(w, 0);
+
+        builder.AddLine(w, h - br);
+        if (br > 0) builder.AddArc(new Vector2(w - br, h), br, br, 0, Microsoft.Graphics.Canvas.Geometry.CanvasSweepDirection.Clockwise, Microsoft.Graphics.Canvas.Geometry.CanvasArcSize.Small);
+        else builder.AddLine(w, h);
+
+        builder.AddLine(bl, h);
+        if (bl > 0) builder.AddArc(new Vector2(0, h - bl), bl, bl, 0, Microsoft.Graphics.Canvas.Geometry.CanvasSweepDirection.Clockwise, Microsoft.Graphics.Canvas.Geometry.CanvasArcSize.Small);
+        else builder.AddLine(0, h);
+
+        builder.AddLine(0, tl);
+        if (tl > 0) builder.AddArc(new Vector2(tl, 0), tl, tl, 0, Microsoft.Graphics.Canvas.Geometry.CanvasSweepDirection.Clockwise, Microsoft.Graphics.Canvas.Geometry.CanvasArcSize.Small);
+        builder.EndFigure(Microsoft.Graphics.Canvas.Geometry.CanvasFigureLoop.Closed);
+
+        using var canvasGeom = Microsoft.Graphics.Canvas.Geometry.CanvasGeometry.CreatePath(builder);
+        var compPath = new CompositionPath(canvasGeom);
+        var pathGeom = _compositor.CreatePathGeometry(compPath);
+        target.Clip = _compositor.CreateGeometricClip(pathGeom);
     }
 
     public void UpdateTintColor()
@@ -383,7 +405,11 @@ public class GlassContainer : ContentControl, IDisposable
             if (args.WindowActivationState == WindowActivationState.Deactivated)
             {
                 // Drop live backdrop sampling to static fallback color to conserve GPU fill rate when inactive
-                _fallbackBrush ??= _compositor.CreateColorBrush(Windows.UI.Color.FromArgb(200, 20, 22, 28));
+                var inactiveColor = ActualTheme == ElementTheme.Light
+                    ? Windows.UI.Color.FromArgb(220, 244, 244, 248)
+                    : Windows.UI.Color.FromArgb(200, 20, 22, 28);
+                _fallbackBrush ??= _compositor.CreateColorBrush(inactiveColor);
+                _fallbackBrush.Color = inactiveColor;
                 _backdropVisual.Brush = _fallbackBrush;
                 if (_specularLight != null) _specularLight.Intensity = 0.0f;
             }
@@ -496,6 +522,7 @@ public class GlassContainer : ContentControl, IDisposable
     {
         if (_isDisposed) return;
         _isDisposed = true;
+        UnregisterWindowFocusWatcher();
 
         try
         {

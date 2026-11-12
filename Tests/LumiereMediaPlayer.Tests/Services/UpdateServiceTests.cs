@@ -191,4 +191,66 @@ public class UpdateServiceTests
             Console.WriteLine(log);
         }
     }
+    [TestMethod]
+    public void SettingsViewModel_ApplyUpdateInfo_DevelopmentDevice_SuppressesUpdatePrompt()
+    {
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new global::LumiereMediaPlayer.Models.AppSettings());
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        var info = new AppUpdateInfo
+        {
+            CheckSucceeded = true,
+            IsUpdateAvailable = true,
+            IsDevelopmentDevice = true,
+            CurrentVersion = "1.0.1.0",
+            LatestVersion = "1.0.1.143",
+            DownloadUri = "https://example.com/bundle.msixbundle"
+        };
+
+        vm.ApplyUpdateInfo(info);
+
+        // On development/authoring machine, update prompts must be suppressed
+        Assert.IsFalse(vm.IsUpdateAvailable);
+        Assert.IsTrue(vm.IsNoUpdatesAvailable);
+        Assert.IsTrue(vm.UpdateStatusText.Contains("Authoring Device", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(vm.UpdateStatusText.Contains("1.0.1.0"));
+        Assert.IsTrue(vm.UpdateStatusText.Contains("1.0.1.143"));
+    }
+
+    [TestMethod]
+    public void UpdateService_IsDevelopmentDevice_DetectsAuthoringEnvironment()
+    {
+        // On this workstation where V:\Projects\Lumiere exists, it must identify as authoring device
+        Assert.IsTrue(UpdateService.IsDevelopmentDevice);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_AutoCheckForUpdates_TogglesAndPersistsSetting()
+    {
+        var appSettings = new global::LumiereMediaPlayer.Models.AppSettings { AutoCheckForUpdates = false };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+        Assert.IsFalse(vm.AutoCheckForUpdates);
+
+        vm.AutoCheckForUpdates = true;
+        Assert.IsTrue(appSettings.AutoCheckForUpdates);
+        mockSettings.Verify(s => s.Save(), Times.Once);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_IsDevelopmentDevice_ExposesProperty()
+    {
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new global::LumiereMediaPlayer.Models.AppSettings());
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+        Assert.AreEqual(UpdateService.IsDevelopmentDevice, vm.IsDevelopmentDevice);
+    }
 }

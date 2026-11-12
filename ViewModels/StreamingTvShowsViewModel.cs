@@ -11,8 +11,20 @@ namespace LumiereMediaPlayer.ViewModels
 {
     public partial class StreamingTvShowsViewModel : ObservableObject, System.IDisposable
     {
-        private readonly WatchmodeService _watchmodeService = new();
-        private readonly TmdbService _tmdbService = new();
+        private readonly WatchmodeService _watchmodeService = ResolveDefaultWatchmodeService();
+        private readonly TmdbService _tmdbService = ResolveDefaultTmdbService();
+
+        private static WatchmodeService ResolveDefaultWatchmodeService()
+        {
+            try { if (App.Services?.GetService(typeof(WatchmodeService)) is WatchmodeService svc) return svc; } catch { }
+            return new WatchmodeService();
+        }
+
+        private static TmdbService ResolveDefaultTmdbService()
+        {
+            try { if (App.Services?.GetService(typeof(TmdbService)) is TmdbService svc) return svc; } catch { }
+            return new TmdbService();
+        }
         private int _contentRequestVersion;
         private bool _initialized;
         private bool _suppressReload = false;

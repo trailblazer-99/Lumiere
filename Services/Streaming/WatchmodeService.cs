@@ -10,7 +10,7 @@ using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Services.Streaming
 {
-    public class WatchmodeService
+    public partial class WatchmodeService
     {
         private static string ApiKey => "";
         private const string BaseUrl = "https://api.watchmode.com/v1";
@@ -18,6 +18,8 @@ namespace LumiereMediaPlayer.Services.Streaming
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string? ImdbId, string? TmdbId, string? Type)> IdMap = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime CachedAt, List<WatchmodeLiveEvent> Events)> _liveEventsCache = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, List<WatchmodeLiveSource>> _eventSourcesCache = new();
 
         private static void CacheId(int id, (string? ImdbId, string? TmdbId, string? Type) value)
         {
@@ -746,8 +748,8 @@ namespace LumiereMediaPlayer.Services.Streaming
 
         public async Task<WatchmodeChangesResponse?> GetChangesAsync(string startDate, string endDate)
         {
-            var servicePath = $"watchmode/changes/?startDate={startDate}&endDate={endDate}";
-            var url = $"{BaseUrl}/changes/?apiKey={ApiKey}&startDate={startDate}&endDate={endDate}";
+            var servicePath = $"watchmode/changes/?start_date={startDate}&end_date={endDate}";
+            var url = $"{BaseUrl}/changes/?apiKey={ApiKey}&start_date={startDate}&end_date={endDate}";
             try
             {
                 var response = await HttpHelper.GetStringAsync(servicePath, url);

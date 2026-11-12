@@ -156,27 +156,34 @@ public static class VideoMetadataHelper
         bool isTvShow = false;
         string? seriesTitle = null;
 
-        var tvMatch = Regex.Match(
-            filename,
-            @"^(?<series>.*?)\b(?:S(?<season>\d{1,2})\s*E(?<episode>\d{1,3})|(?<season>\d{1,2})x(?<episode>\d{1,3})|(?:Season|Series)\s*(?<season>\d{1,2})\s*(?:Episode|Ep)\s*(?<episode>\d{1,3}))\b",
-            RegexOptions.IgnoreCase);
+        bool isClip = Regex.IsMatch(filename, @"(?:^|[\s._-])(?:Screen[\s._-]?Recording|Screen[\s._-]?Capture|Recording|Capture|Webcam|Zoom[\s._-]?\d+|VID_\d+|Clip[\s._-]?\d+)", RegexOptions.IgnoreCase);
+        bool hasMovieYear = Regex.IsMatch(filename, @"[\(\[]\s*(19\d{2}|20\d{2})\s*[\)\]]|\b(19\d{2}|20\d{2})\b(?:\s+(?:1080p|720p|4k|2160p|8k|uhd|hdr|bluray|web|brrip|remux|dvd))", RegexOptions.IgnoreCase);
+        bool hasExplicitTvPattern = Regex.IsMatch(filename, @"\b(?:[sS]\d{1,2}[-._\s]*[eE]\d{1,3}|\d{1,2}x\d{1,3}|(?:Season|Series)\s*\d+)\b", RegexOptions.IgnoreCase);
 
-        if (tvMatch.Success)
+        if (!isClip && (!hasMovieYear || hasExplicitTvPattern))
         {
-            isTvShow = true;
-            var captured = tvMatch.Groups["series"].Value;
-            if (!string.IsNullOrWhiteSpace(captured))
+            var tvMatch = Regex.Match(
+                filename,
+                @"^(?<series>.*?)\b(?:S(?<season>\d{1,2})\s*E(?<episode>\d{1,3})|(?<season>\d{1,2})x(?<episode>\d{1,3})|(?:Season|Series)\s*(?<season>\d{1,2})\s*(?:Episode|Ep)\s*(?<episode>\d{1,3}))\b",
+                RegexOptions.IgnoreCase);
+
+            if (tvMatch.Success)
             {
-                seriesTitle = CleanVideoTitle(captured);
+                isTvShow = true;
+                var captured = tvMatch.Groups["series"].Value;
+                if (!string.IsNullOrWhiteSpace(captured))
+                {
+                    seriesTitle = CleanVideoTitle(captured);
+                }
             }
-        }
-        else if (Regex.IsMatch(filename, @"\b(?:S\d{1,2}E\d{1,2}|\d{1,2}x\d{1,2}|Episode\s*\d+)\b", RegexOptions.IgnoreCase))
-        {
-            isTvShow = true;
-        }
-        else if (TryInferSeasonFromPath(sourcePath) != null)
-        {
-            isTvShow = true;
+            else if (Regex.IsMatch(filename, @"\b(?:S\d{1,2}E\d{1,2}|\d{1,2}x\d{1,2}|(?:Episode|Ep)\s*\d+)\b", RegexOptions.IgnoreCase))
+            {
+                isTvShow = true;
+            }
+            else if (TryInferSeasonFromPath(sourcePath) != null)
+            {
+                isTvShow = true;
+            }
         }
 
         if (isTvShow)

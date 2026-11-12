@@ -90,6 +90,68 @@ public class TvShowHelperTests
     }
 
     [TestMethod]
+    public void ExtractTvEpisodeInfo_NumericMovieTitles_ReturnsNull()
+    {
+        var movie1917 = new MediaItem
+        {
+            Id = "m1",
+            Title = "1917",
+            SourcePath = @"C:\Movies\1917 (2019) 1080p Bluray.mkv",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(movie1917));
+
+        var movie300 = new MediaItem
+        {
+            Id = "m2",
+            Title = "300",
+            SourcePath = @"C:\Movies\300.2006.1080p.mkv",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(movie300));
+
+        var movie2001 = new MediaItem
+        {
+            Id = "m3",
+            Title = "2001 A Space Odyssey",
+            SourcePath = @"C:\Movies\2001.A.Space.Odyssey.1968.mkv",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(movie2001));
+    }
+
+    [TestMethod]
+    public void ExtractTvEpisodeInfo_ScreenRecordingsAndClips_ReturnsNull()
+    {
+        var recording = new MediaItem
+        {
+            Id = "clip1",
+            Title = "Screen Recording 2026-10-15 14-30",
+            SourcePath = @"C:\Users\User\Videos\Screen Recording 2026-10-15 14-30-22.mp4",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(recording));
+
+        var phoneClip = new MediaItem
+        {
+            Id = "clip2",
+            Title = "VID_20261015_120401",
+            SourcePath = @"C:\Users\User\Videos\VID_20261015_120401.mp4",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(phoneClip));
+
+        var zoom = new MediaItem
+        {
+            Id = "clip3",
+            Title = "Zoom Meeting Recording",
+            SourcePath = @"C:\Users\User\Documents\Zoom\Zoom_0.mp4",
+            Kind = MediaKind.Video
+        };
+        Assert.IsNull(TvShowHelper.ExtractTvEpisodeInfo(zoom));
+    }
+
+    [TestMethod]
     public void ConsolidateVideoLibrary_ConsolidatesTvEpisodesUnderOneTitleCard()
     {
         var videos = new List<MediaItem>
@@ -287,4 +349,60 @@ public class TvShowHelperTests
         // Verify SetQueue was called with the full series episodes list starting at index 1 (Episode 2)
         mockSession.Verify(s => s.SetQueue(It.Is<IEnumerable<MediaItem>>(q => q != null && q.SequenceEqual(seriesCard.Episodes)), 1), Moq.Times.Once);
     }
+
+    [TestMethod]
+    public void VideoViewModel_PlayVideo_StandaloneMovie_QueuesOnlyMovie()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new List<MediaItem>());
+        mockSession.Setup(s => s.CurrentIndex).Returns(-1);
+        var playback = new PlaybackViewModel(mockSession.Object);
+
+        var mockHdr = new Mock<IHdrPipelineService>();
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new AppSettings());
+
+        var vm = new VideoViewModel(playback, mockHdr.Object, mockSettings.Object);
+
+        var movie1 = new MediaItem { Id = "m1", Title = "Inception", SourcePath = "C:/Movies/Inception.mp4", Kind = MediaKind.Video };
+        var movie2 = new MediaItem { Id = "m2", Title = "Interstellar", SourcePath = "C:/Movies/Interstellar.mp4", Kind = MediaKind.Video };
+        vm.FilteredVideos.Add(movie1);
+        vm.FilteredVideos.Add(movie2);
+
+        vm.PlayVideo(movie1);
+
+        Assert.IsTrue(playback.IsVideoPlayerActive);
+        Assert.AreEqual(movie1, vm.CurrentVideo);
+
+        // Verify SetQueue queued only movie1
+        mockSession.Verify(s => s.SetQueue(It.Is<IEnumerable<MediaItem>>(q => q != null && q.Count() == 1 && q.First().Id == "m1"), 0), Moq.Times.Once);
+    }
+
+    [TestMethod]
+    public void VideoViewModel_SyncFromPlayback_PlaylistSession_PopulatesUpNextVideos()
+    {
+        var item1 = new MediaItem { Id = "p1", Title = "Track 1", SourcePath = "C:/Videos/1.mp4", Kind = MediaKind.Video };
+        var item2 = new MediaItem { Id = "p2", Title = "Track 2", SourcePath = "C:/Videos/2.mp4", Kind = MediaKind.Video };
+        var playlistQueue = new List<MediaItem> { item1, item2 };
+
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(playlistQueue);
+        mockSession.Setup(s => s.CurrentIndex).Returns(0);
+        mockSession.Setup(s => s.CurrentTrack).Returns(item1);
+
+        var playback = new PlaybackViewModel(mockSession.Object);
+        var mockHdr = new Mock<IHdrPipelineService>();
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(new AppSettings());
+
+        var vm = new VideoViewModel(playback, mockHdr.Object, mockSettings.Object);
+
+        vm.SyncFromPlayback();
+
+        // UpNextVideos must reflect the playlist queue, not library
+        Assert.AreEqual(2, vm.UpNextVideos.Count);
+        Assert.AreEqual("p1", vm.UpNextVideos[0].Id);
+        Assert.AreEqual("p2", vm.UpNextVideos[1].Id);
+    }
 }
+

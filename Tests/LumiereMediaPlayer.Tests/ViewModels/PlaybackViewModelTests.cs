@@ -98,4 +98,62 @@ public class PlaybackViewModelTests
         mockSession.Verify(s => s.Stop(), Times.Once);
         Assert.IsFalse(vm.IsVideoPlayerActive);
     }
+
+    [TestMethod]
+    public void PlaybackViewModel_TogglePlayPause_DoesNotThrow_WhenSessionThrows()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new System.Collections.Generic.List<MediaItem>());
+        mockSession.Setup(s => s.TogglePlayPause()).Throws(new System.Runtime.InteropServices.COMException("Mock COMException"));
+        var vm = new PlaybackViewModel(mockSession.Object);
+
+        // Must not rethrow unhandled exception
+        vm.TogglePlayPauseCommand.Execute(null);
+
+        mockSession.Verify(s => s.TogglePlayPause(), Times.Once);
+    }
+
+    [TestMethod]
+    public void PlaybackViewModel_PlayTrack_DoesNotThrow_WhenSessionThrows()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new System.Collections.Generic.List<MediaItem>());
+        mockSession.Setup(s => s.PlayTrack(It.IsAny<MediaItem>())).Throws(new InvalidOperationException("Mock failure"));
+        var vm = new PlaybackViewModel(mockSession.Object);
+
+        var track = new MediaItem { Id = "test-1", Title = "Test Video", SourcePath = "D:\test.mkv", Kind = MediaKind.Video };
+        vm.PlayTrack(track);
+
+        mockSession.Verify(s => s.PlayTrack(track), Times.Once);
+    }
+
+    [TestMethod]
+    public void PlaybackViewModel_SetQueue_DoesNotThrow_WhenSessionThrows()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new System.Collections.Generic.List<MediaItem>());
+        mockSession.Setup(s => s.SetQueue(It.IsAny<System.Collections.Generic.IEnumerable<MediaItem>>(), It.IsAny<int>())).Throws(new Exception("Mock queue failure"));
+        var vm = new PlaybackViewModel(mockSession.Object);
+
+        var items = new[] { new MediaItem { Id = "1", Title = "Item 1" } };
+        vm.SetQueue(items, 0);
+
+        mockSession.Verify(s => s.SetQueue(It.IsAny<System.Collections.Generic.IEnumerable<MediaItem>>(), 0), Times.Once);
+    }
+
+    [TestMethod]
+    public void PlaybackViewModel_Navigation_DoesNotThrow_WhenSessionThrows()
+    {
+        var mockSession = new Mock<IPlaybackSession>();
+        mockSession.Setup(s => s.Queue).Returns(new System.Collections.Generic.List<MediaItem>());
+        mockSession.Setup(s => s.Next()).Throws(new System.Runtime.InteropServices.COMException("Mock next error"));
+        mockSession.Setup(s => s.Previous()).Throws(new System.Runtime.InteropServices.COMException("Mock prev error"));
+        var vm = new PlaybackViewModel(mockSession.Object);
+
+        vm.NextCommand.Execute(null);
+        vm.PreviousCommand.Execute(null);
+
+        mockSession.Verify(s => s.Next(), Times.Once);
+        mockSession.Verify(s => s.Previous(), Times.Once);
+    }
 }

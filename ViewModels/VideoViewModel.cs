@@ -31,6 +31,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
     private readonly EventHandler _libraryChangedHandler;
 
     [ObservableProperty] public partial ObservableCollection<MediaItem> FilteredVideos { get; set; } = new();
+    [ObservableProperty] public partial ObservableCollection<MediaItem> UpNextVideos { get; set; } = new();
 
     public ObservableCollection<string> SortOptions { get; } = new()
     {
@@ -72,8 +73,13 @@ public partial class VideoViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string HdrContentLabel { get; set; } = "SDR";
     [ObservableProperty] public partial string DisplayCapabilityLabel { get; set; } = "SDR Display";
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
+    [ObservableProperty] public partial bool IsFullscreen { get; set; }
+    partial void OnIsFullscreenChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HdrBadgeVisibility));
+    }
 
-    public Visibility HdrBadgeVisibility => VisibilityHelper.FromBoolean(ShowHdrBadge && (IsHdrActive || (HdrContentLabel != "SDR" && !string.IsNullOrWhiteSpace(HdrContentLabel))));
+    public Visibility HdrBadgeVisibility => VisibilityHelper.FromBoolean(!IsFullscreen && ShowHdrBadge && (IsHdrActive || (HdrContentLabel != "SDR" && !string.IsNullOrWhiteSpace(HdrContentLabel))));
     public Visibility OverlayVisibility => VisibilityHelper.FromBoolean(ShowNoSourceOverlay);
     public Visibility PlayerVisibility => VisibilityHelper.FromBoolean(!ShowNoSourceOverlay);
 
@@ -88,7 +94,8 @@ public partial class VideoViewModel : ObservableObject, IDisposable
 
         _playbackPropertyChangedHandler = (s, e) =>
         {
-            if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
+            if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive)
+                || e.PropertyName == nameof(PlaybackViewModel.CurrentTrack))
             {
                 SyncFromPlayback();
             }
@@ -102,14 +109,22 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         SyncFromPlayback();
         _libraryChangedHandler = (s, e) =>
         {
-            _rawVideos = MediaLibraryService.VideoTracks.ToList();
-            _ = PopulateAllTmdbDataAsync(_rawVideos);
+            List<MediaItem> snapshot;
+            lock (_rawVideos)
+            {
+                _rawVideos = MediaLibraryService.VideoTracks.ToList();
+                snapshot = _rawVideos.ToList();
+            }
+            _ = PopulateAllTmdbDataAsync(snapshot);
             ApplySortAndFilter();
         };
         MediaLibraryService.LibraryChanged += _libraryChangedHandler;
 
-        _rawVideos = MediaLibraryService.VideoTracks.ToList();
-        _ = PopulateAllTmdbDataAsync(_rawVideos);
+        lock (_rawVideos)
+        {
+            _rawVideos = MediaLibraryService.VideoTracks.ToList();
+        }
+        _ = PopulateAllTmdbDataAsync(_rawVideos.ToList());
         ApplySortAndFilter();
     }
 
@@ -206,7 +221,12 @@ public partial class VideoViewModel : ObservableObject, IDisposable
 
     private void ApplySortAndFilter()
     {
-        var consolidated = TvShowHelper.ConsolidateVideoLibrary(_rawVideos);
+        List<MediaItem> snapshot;
+        lock (_rawVideos)
+        {
+            snapshot = _rawVideos.ToList();
+        }
+        var consolidated = TvShowHelper.ConsolidateVideoLibrary(snapshot);
         var filtered = consolidated.AsEnumerable();
 
         if (ShowFavoritesOnly || SelectedFilterExtension == "Favorites")
@@ -243,23 +263,25 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         };
 
         var newItems = filtered.ToList();
-        if (FilteredVideos.SequenceEqual(newItems))
+
+        void ApplyOnUi()
         {
-            return;
+            if (FilteredVideos.SequenceEqual(newItems))
+            {
+                return;
+            }
+
+            FilteredVideos.UpdateInPlace(newItems);
+            OnPropertyChanged(nameof(FilteredVideos));
         }
 
         if (App.MainDispatcher != null && !App.MainDispatcher.HasThreadAccess)
         {
-            App.MainDispatcher.TryEnqueue(() =>
-            {
-                FilteredVideos.UpdateInPlace(newItems);
-                OnPropertyChanged(nameof(FilteredVideos));
-            });
+            App.MainDispatcher.TryEnqueue(ApplyOnUi);
         }
         else
         {
-            FilteredVideos.UpdateInPlace(newItems);
-            OnPropertyChanged(nameof(FilteredVideos));
+            ApplyOnUi();
         }
     }
 
@@ -370,14 +392,20 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         if (video is null) return;
         App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
 
+        // Capture multi-selection before clearing IsSelected for player mode
+        var selected = FilteredVideos.Where(v => v.IsSelected && !v.IsSeries).ToList();
+
         // Deselect any selected items so selection ribbons do not persist into player mode
         foreach (var v in FilteredVideos)
         {
             v.IsSelected = false;
         }
-        foreach (var v in _rawVideos)
+        lock (_rawVideos)
         {
-            v.IsSelected = false;
+            foreach (var v in _rawVideos)
+            {
+                v.IsSelected = false;
+            }
         }
 
         // Instantly switch UI to player mode (0ms latency feedback)
@@ -412,10 +440,11 @@ public partial class VideoViewModel : ObservableObject, IDisposable
             }
             else
             {
-                int index = FilteredVideos.IndexOf(video);
-                if (index >= 0)
+                // Standalone movie or normal video:
+                if (selected.Count > 1 && selected.Contains(video))
                 {
-                    _playback.SetQueue(FilteredVideos, index);
+                    int selIdx = selected.IndexOf(video);
+                    _playback.SetQueue(selected, Math.Max(0, selIdx));
                 }
                 else
                 {
@@ -423,6 +452,45 @@ public partial class VideoViewModel : ObservableObject, IDisposable
                 }
             }
         }
+        RefreshUpNextQueue();
+    }
+
+    public void RefreshUpNextQueue()
+    {
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(RefreshUpNextQueue);
+            return;
+        }
+
+        var currentQueue = _playback.Session.Queue;
+        var current = _playback.CurrentTrack;
+
+        List<MediaItem> itemsToDisplay;
+        if (currentQueue != null && currentQueue.Count > 1)
+        {
+            // Playlist, Series, or multi-item queue is active!
+            itemsToDisplay = currentQueue.Where(q => q.IsVideo).ToList();
+            if (itemsToDisplay.Count == 0) itemsToDisplay = currentQueue.ToList();
+        }
+        else if (current != null && (current.IsSeries || current.SeasonNumber > 0 || !string.IsNullOrWhiteSpace(current.SeriesTitle)))
+        {
+            // Playing a TV series: find series episodes
+            var parentSeries = FilteredVideos.FirstOrDefault(s => s.IsSeries && s.Episodes?.Any(e =>
+                e.Equals(current) ||
+                (!string.IsNullOrEmpty(e.Id) && string.Equals(e.Id, current.Id, StringComparison.Ordinal)) ||
+                (!string.IsNullOrEmpty(e.SourcePath) && string.Equals(e.SourcePath, current.SourcePath, StringComparison.OrdinalIgnoreCase))) == true);
+            itemsToDisplay = parentSeries?.Episodes?.ToList() ?? new List<MediaItem> { current };
+        }
+        else
+        {
+            // Standalone video or library view: display filtered videos
+            itemsToDisplay = FilteredVideos.Where(v => !v.IsSeries).ToList();
+        }
+
+        UpNextVideos.UpdateInPlace(itemsToDisplay);
+        OnPropertyChanged(nameof(UpNextVideos));
     }
 
     public void PlayEpisodeFromSeries(MediaItem? series, MediaItem episode)
@@ -434,9 +502,12 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         {
             v.IsSelected = false;
         }
-        foreach (var v in _rawVideos)
+        lock (_rawVideos)
         {
-            v.IsSelected = false;
+            foreach (var v in _rawVideos)
+            {
+                v.IsSelected = false;
+            }
         }
 
         // Instantly switch UI to player mode (0ms latency feedback)
@@ -501,7 +572,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
 
     public string? CurrentPosterUrl => CurrentVideo?.PosterUrl;
 
-    private void SyncFromPlayback()
+    public void SyncFromPlayback()
     {
         if (_playback.IsVideoPlayerActive && _playback.CurrentTrack is { IsVideo: true } track)
         {
@@ -517,6 +588,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(OverlayVisibility));
             OnPropertyChanged(nameof(PlayerVisibility));
             OnPropertyChanged(nameof(CurrentPosterUrl));
+            RefreshUpNextQueue();
             return;
         }
 
@@ -532,6 +604,7 @@ public partial class VideoViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(PlayerVisibility));
         OnPropertyChanged(nameof(HdrBadgeVisibility));
         OnPropertyChanged(nameof(CurrentPosterUrl));
+        RefreshUpNextQueue();
     }
 
     private sealed record EpisodeLookup(string SeriesTitle, int SeasonNumber, int EpisodeNumber);

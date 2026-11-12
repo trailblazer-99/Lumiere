@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Application
     x:Class="LumiereMediaPlayer.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -19,11 +19,10 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Default) -->
-                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-                    <DesktopAcrylicBackdrop x:Key="MenuFlyoutSystemBackdrop" />
+                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
                     <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
+                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F024242A" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
 
                     <!-- Selection Ribbon Elevated Background (Default/Dark) -->
@@ -96,10 +95,10 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Light) -->
-                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
-                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
+                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.60" TintLuminosityOpacity="0.70" FallbackColor="#FAF8F8FC" />
+                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.60" TintLuminosityOpacity="0.70" FallbackColor="#FAF8F8FC" />
                     <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#FAF8F8FC" />
+                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#FAF8F8FC" TintOpacity="0.60" TintLuminosityOpacity="0.70" FallbackColor="#FAF8F8FC" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FAF8F8FC" />
 
                     <!-- Selection Ribbon Elevated Background (Light) -->
@@ -169,10 +168,10 @@
                     <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled" Color="Transparent" />
 
                     <!-- Flyout, MenuFlyout, ComboBox & AutoSuggestBox Surface Brushes (Dark) -->
-                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
-                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F01E1E22" />
+                    <AcrylicBrush x:Key="FlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
+                    <AcrylicBrush x:Key="MenuFlyoutPresenterBackground" AlwaysUseFallback="False" TintColor="#1E1E22" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F01E1E22" />
                     <SolidColorBrush x:Key="FlyoutPresenterWindowBackground" Color="Transparent" />
-                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.80" TintLuminosityOpacity="0.85" FallbackColor="#F024242A" />
+                    <AcrylicBrush x:Key="ComboBoxDropDownBackground" AlwaysUseFallback="False" TintColor="#24242A" TintOpacity="0.45" TintLuminosityOpacity="0.55" FallbackColor="#F024242A" />
                     <SolidColorBrush x:Key="AutoSuggestBoxSuggestionsListBackground" Color="#FA24242A" />
 
                     <!-- Selection Ribbon Elevated Background (Dark) -->
