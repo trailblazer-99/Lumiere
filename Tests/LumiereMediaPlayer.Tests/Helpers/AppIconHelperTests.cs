@@ -28,7 +28,15 @@ public class AppIconHelperTests
         string? path = AppIconHelper.ResolveDiskPath(icoFileName);
         if (path == null)
         {
-            path = Path.Combine(@"V:\Projects\Lumiere\Assets\Icons", icoFileName);
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+            {
+                dir = dir.Parent;
+            }
+            if (dir != null)
+            {
+                path = Path.Combine(dir.FullName, "Assets", "Icons", icoFileName);
+            }
         }
 
         Assert.IsTrue(File.Exists(path), $"ICO file {icoFileName} should exist on disk");

@@ -81,8 +81,15 @@ public static class UpdateService
                 var baseDir = AppContext.BaseDirectory;
                 if (!string.IsNullOrEmpty(baseDir))
                 {
-                    var candidate = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\..\LumiereMediaPlayer.csproj"));
-                    if (File.Exists(candidate)) return true;
+                    var dir = new DirectoryInfo(baseDir);
+                    while (dir != null)
+                    {
+                        if (File.Exists(Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+                        {
+                            return true;
+                        }
+                        dir = dir.Parent;
+                    }
                 }
 
                 if (Debugger.IsAttached) return true;

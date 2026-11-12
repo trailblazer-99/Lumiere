@@ -744,21 +744,21 @@ public class FlyoutThemingAndScrollTests
 
     {
 
-        string baseDir = AppContext.BaseDirectory;
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
 
-        string projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
-
-        string xamlPath = Path.Combine(projectRoot, "Styles", "MediaPlayerStyles.xaml");
-
-        if (!File.Exists(xamlPath))
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
 
         {
 
-            xamlPath = Path.Combine("v:\\Projects\\Lumiere", "Styles", "MediaPlayerStyles.xaml");
+            dir = dir.Parent;
 
         }
 
+        Assert.IsNotNull(dir, "Project root must be found");
 
+
+
+        string xamlPath = Path.Combine(dir.FullName, "Styles", "MediaPlayerStyles.xaml");
 
         Assert.IsTrue(File.Exists(xamlPath), $"MediaPlayerStyles.xaml must exist at: {xamlPath}");
 

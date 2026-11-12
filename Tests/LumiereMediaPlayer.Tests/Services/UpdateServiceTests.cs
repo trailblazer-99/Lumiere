@@ -223,7 +223,7 @@ public class UpdateServiceTests
     [TestMethod]
     public void UpdateService_IsDevelopmentDevice_DetectsAuthoringEnvironment()
     {
-        // On this workstation where V:\Projects\Lumiere exists, it must identify as authoring device
+        // Running from a source checkout/build tree, it must identify as authoring/development device
         Assert.IsTrue(UpdateService.IsDevelopmentDevice);
     }
 
