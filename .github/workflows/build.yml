@@ -158,6 +158,9 @@ jobs:
     - name: Code Format Check (Release Gate)
       run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
 
+    - name: Build Core Application (Release Gate)
+      run: dotnet build LumiereMediaPlayer.csproj -c Release -p:Platform=x64 --nologo
+
     - name: Run Unit Tests (Release Gate)
       run: dotnet test Tests\LumiereMediaPlayer.Tests\LumiereMediaPlayer.Tests.csproj -p:Platform=x64 -c Release
 
