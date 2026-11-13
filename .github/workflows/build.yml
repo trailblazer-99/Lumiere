@@ -43,11 +43,11 @@ jobs:
       run: copy appsettings.json.example appsettings.json
       shell: cmd
 
-    - name: Code Format Check
-      run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
-
     - name: Restore NuGet Packages
       run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
+
+    - name: Code Format Check
+      run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
 
     - name: Build Verification (x64 Package)
       run: |
