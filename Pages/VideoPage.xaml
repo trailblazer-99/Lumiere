@@ -371,6 +371,7 @@
                                 </Grid>
                             </StackPanel>
 
+<<<<<<< Updated upstream
                             <!-- Internet Metadata Match -->
                             <StackPanel x:Name="InternetMetadataPanel" Spacing="12" Visibility="Collapsed">
                                 <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -385,6 +386,52 @@
                                     <StackPanel Grid.Column="1" Spacing="8">
                                         <TextBlock x:Name="InternetMetadataTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                         <TextBlock x:Name="InternetMetadataOverview" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+=======
+                                             <TextBlock Grid.Row="6" Grid.Column="0" Text="Subtitles" Foreground="#D0FFFFFF" FontSize="12" />
+                                             <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SubtitlesSummary, Mode=OneWay, FallbackValue='None', TargetNullValue='None'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+
+                                             <TextBlock Grid.Row="7" Grid.Column="0" Text="Bitrate / FPS" Foreground="#D0FFFFFF" FontSize="12" />
+                                             <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.BitrateText, Mode=OneWay, FallbackValue='Unknown', TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                                                 <TextBlock Text="&#x2022;" FontSize="12" Foreground="#80FFFFFF" />
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.FrameRateText, Mode=OneWay, FallbackValue='Unknown', TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                                             </StackPanel>
+
+                                             <TextBlock Grid.Row="8" Grid.Column="0" Text="File Format" Foreground="#D0FFFFFF" FontSize="12" />
+                                             <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.ContainerFormat, Mode=OneWay, FallbackValue='Unknown', TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                                                 <TextBlock Text="&#x2022;" FontSize="12" Foreground="#80FFFFFF" />
+                                                 <TextBlock Text="{x:Bind ViewModel.CurrentVideo.FileSizeText, Mode=OneWay, FallbackValue='Unknown', TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                                             </StackPanel>
+
+                                             <TextBlock Grid.Row="9" Grid.Column="0" Text="File Path" Foreground="#D0FFFFFF" FontSize="12" />
+                                             <TextBlock Grid.Row="9" Grid.Column="1" Text="{x:Bind ViewModel.CurrentVideo.SourcePath, Mode=OneWay, FallbackValue='Unknown', TargetNullValue='Unknown'}" FontSize="12" FontWeight="SemiBold" MaxWidth="220" TextWrapping="Wrap" Foreground="White" />
+                                         </Grid>
+                                     </StackPanel>
+
+                                    <!-- Internet Metadata Match -->
+                                    <StackPanel x:Name="InternetMetadataPanel" Spacing="12" Visibility="Collapsed">
+                                        <TextBlock Text="Internet Match" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
+                                        <ProgressRing x:Name="InternetMetadataProgress" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,20,0,20" Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                        
+                                        <Grid x:Name="InternetMetadataContent" ColumnSpacing="12" Visibility="Collapsed">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border x:Name="InternetMetadataPosterBorder" Grid.Column="0" CornerRadius="8" VerticalAlignment="Top" Visibility="Collapsed">
+                                                <Image x:Name="InternetMetadataPoster" Width="90" Stretch="UniformToFill" MaxHeight="135" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Top">
+                                                <TextBlock x:Name="InternetMetadataTitle" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="White" />
+                                                <TextBlock x:Name="InternetMetadataOverview" FontSize="12" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" LineHeight="16" Foreground="#E0FFFFFF" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel x:Name="InternetMetadataProvidersPanel" Spacing="8" Visibility="Collapsed">
+                                            <Button x:Name="StreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Style="{StaticResource AccentButtonStyle}" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Foreground="White" FontWeight="SemiBold" Click="OnStreamingDetailsButtonClick" />
+                                        </StackPanel>
+>>>>>>> Stashed changes
                                     </StackPanel>
                                 </Grid>
 

@@ -327,6 +327,7 @@ public sealed partial class TransportBar : UserControl
             return;
         }
 
+<<<<<<< Updated upstream
         bool isLight = ActualTheme == ElementTheme.Light;
         var tintColor = isLight
             ? Microsoft.UI.Colors.White
@@ -334,6 +335,46 @@ public sealed partial class TransportBar : UserControl
         var fallbackColor = isLight
             ? Microsoft.UI.ColorHelper.FromArgb(235, 255, 255, 255)
             : Microsoft.UI.ColorHelper.FromArgb(230, 32, 32, 32);
+=======
+        if (IsActiveFullscreenVideo)
+        {
+            BarGrid.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();
+            BarGrid.BorderBrush = ThemeHelper.CreateFullscreenSpecularTopHighlightBrush();
+            BarGrid.BorderThickness = new Thickness(0, 1.5, 0, 0);
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+        }
+        else if (_isFullscreenPresentation && App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+        {
+            // Fullscreen audio / non-video fallback: smooth vertical gradient scrim float over video
+            BarGrid.Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(0, 0, 0, 0), Offset = 0.0 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(60, 0, 0, 0), Offset = 0.25 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(160, 0, 0, 0), Offset = 0.65 },
+                    new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(230, 0, 0, 0), Offset = 1.0 }
+                }
+            };
+            BarGrid.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            BarGrid.BorderThickness = new Thickness(0);
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+        }
+        else
+        {
+            // Normal Windowed mode: layout defaults
+            bool isLight = ActualTheme == ElementTheme.Light ||
+                (ActualTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
+            BarGrid.Margin = new Thickness(0);
+            BarGrid.CornerRadius = new CornerRadius(0);
+            BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
+            BarGrid.Translation = System.Numerics.Vector3.Zero;
+            try { BarGrid.Shadow = null; } catch { }
+>>>>>>> Stashed changes
 
         BarGrid.Background = new AcrylicBrush
         {

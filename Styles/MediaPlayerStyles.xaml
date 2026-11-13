@@ -437,6 +437,44 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
+<<<<<<< Updated upstream
+=======
+         ROUNDED CARD GRIDVIEW ITEM STYLE
+         Eliminates default WinUI square hover/selection borders and 
+         ensures smooth rounded corners matching the home page cards.
+    ═══════════════════════════════════════════════════════════════ -->
+    <Style x:Key="RoundedCardGridViewItemStyle" TargetType="GridViewItem">
+        <Setter Property="Margin" Value="6" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadiusFull}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewItem">
+                    <GridViewItemPresenter
+                        Content="{TemplateBinding Content}"
+                        ContentTransitions="{TemplateBinding ContentTransitions}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}"
+                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                        Margin="{TemplateBinding Padding}"
+                        SelectionCheckMarkVisualEnabled="False"
+                        PointerOverBackground="Transparent"
+                        SelectedBackground="Transparent"
+                        SelectedForeground="{TemplateBinding Foreground}"
+                        FocusBorderBrush="Transparent"
+                        SelectedBorderThickness="0"
+                        CornerRadius="{StaticResource CardCornerRadiusFull}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+>>>>>>> Stashed changes
          ACCENT PLAY BUTTON — used on playlist cards
     ═══════════════════════════════════════════════════════════════ -->
     <Style x:Key="AccentPlayButtonStyle" TargetType="Button">

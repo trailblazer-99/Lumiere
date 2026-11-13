@@ -67,10 +67,26 @@ public sealed class AppSettings
     public bool ShowMediaCardGlow { get; set; } = true;
     public bool ShowTimelinePreview { get; set; } = true;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
+<<<<<<< Updated upstream
     public bool CompactDensityMode { get; set; } = false;
     public bool ShowAlbumArtInTransportBar { get; set; } = true;
     public bool AnimatedTransitions { get; set; } = true;
     public bool AlwaysShowTransportBar { get; set; } = true;
+=======
+    public string? CustomAccentColorHex { get; set; }
+    public string? ActiveThemePresetId { get; set; }
+    public List<ThemePreset> CustomThemePresets { get; set; } = [];
+    /// <summary>Whether the user has consented to creating shell shortcuts (Desktop, Start Menu).</summary>
+    public bool CreateShellShortcuts { get; set; } = false;
+    public bool AlwaysShowTransportBar { get; set; } = false;
+    public bool AcrylicTransportBar { get; set; } = false;
+    public bool AutoHideTransportBarInStreaming { get; set; } = true;
+    /// <summary>Translucency percentage for fullscreen transport bar, flyouts, and overlays (0 = pure transparent, 100 = deep frosted acrylic).</summary>
+    public int FullscreenControlsTranslucency { get; set; } = 0;
+    public string PreferredStreamingRegion { get; set; } = "";
+    /// <summary>Use Windows location services to automatically detect the streaming region.</summary>
+    public bool UseLocationForRegion { get; set; } = false;
+>>>>>>> Stashed changes
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

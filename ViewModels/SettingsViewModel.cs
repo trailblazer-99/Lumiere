@@ -58,6 +58,52 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool ShowAlbumArtInTransportBar { get; set; }
     [ObservableProperty] public partial bool AnimatedTransitions { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
+<<<<<<< Updated upstream
+=======
+    [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
+    public bool IsAcrylicTransportBarOptionEnabled => AlwaysShowTransportBar
+        && SelectedBackdrop != AppThemeBackdrop.Acrylic
+        && SelectedBackdrop != AppThemeBackdrop.FluentSymphony
+        && SelectedBackdrop != AppThemeBackdrop.CinematicAdaptive
+        && SelectedBackdrop != AppThemeBackdrop.BackdropStudio;
+
+    public bool AcrylicTransportBarEffective
+    {
+        get => SelectedBackdrop == AppThemeBackdrop.Acrylic
+            || SelectedBackdrop == AppThemeBackdrop.FluentSymphony
+            || SelectedBackdrop == AppThemeBackdrop.CinematicAdaptive
+            || (SelectedBackdrop == AppThemeBackdrop.BackdropStudio && StudioTransportBar == StudioTransportBarStyle.FrostedAcrylic)
+            || AcrylicTransportBar;
+        set
+        {
+            if (SelectedBackdrop != AppThemeBackdrop.Acrylic
+                && SelectedBackdrop != AppThemeBackdrop.FluentSymphony
+                && SelectedBackdrop != AppThemeBackdrop.CinematicAdaptive
+                && SelectedBackdrop != AppThemeBackdrop.BackdropStudio)
+            {
+                if (AcrylicTransportBar != value)
+                {
+                    AcrylicTransportBar = value;
+                    OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+                }
+            }
+        }
+    }
+    [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
+    [ObservableProperty] public partial int FullscreenControlsTranslucency { get; set; }
+    public string FullscreenControlsTranslucencyText => FullscreenControlsTranslucency switch
+    {
+        0 => "0% (Pure Transparent)",
+        <= 25 => $"{FullscreenControlsTranslucency}% (Subtle Glass)",
+        <= 70 => $"{FullscreenControlsTranslucency}% (Frosted Acrylic)",
+        _ => $"{FullscreenControlsTranslucency}% (Deep Acrylic)"
+    };
+    public Brush PreviewControlsBackgroundBrush => ThemeHelper.GetTranslucencyBrush(FullscreenControlsTranslucency);
+    public Brush PreviewSpecularBorderBrush => ThemeHelper.CreateFullscreenSpecularBorderBrush();
+    [ObservableProperty] public partial bool UseLocationForRegion { get; set; }
+    [ObservableProperty] public partial bool CreateShellShortcuts { get; set; }
+    [ObservableProperty] public partial bool IsBatterySaverActive { get; set; }
+>>>>>>> Stashed changes
 
     // ── Controls & Interface ───────────────────────────────────────
     [ObservableProperty] public partial bool ShowShuffleButton { get; set; }
@@ -492,10 +538,89 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
     }
 
+<<<<<<< Updated upstream
     partial void OnCompactDensityModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CompactDensityMode = value; _settingsService.Save(); } }
     partial void OnShowAlbumArtInTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowAlbumArtInTransportBar = value; _settingsService.Save(); } }
     partial void OnAnimatedTransitionsChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AnimatedTransitions = value; _settingsService.Save(); } }
     partial void OnAlwaysShowTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AlwaysShowTransportBar = value; _settingsService.Save(); } }
+=======
+    partial void OnAlwaysShowTransportBarChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AlwaysShowTransportBar = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.ApplyTransportBarVisibility(value);
+        }
+    }
+
+    partial void OnAcrylicTransportBarChanged(bool value)
+    {
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AcrylicTransportBar = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+        }
+    }
+
+    partial void OnAutoHideTransportBarInStreamingChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AutoHideTransportBarInStreaming = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.UpdateTransportBarVisibility();
+        }
+    }
+
+    partial void OnFullscreenControlsTranslucencyChanged(int value)
+    {
+        OnPropertyChanged(nameof(FullscreenControlsTranslucencyText));
+        OnPropertyChanged(nameof(PreviewControlsBackgroundBrush));
+        OnPropertyChanged(nameof(PreviewSpecularBorderBrush));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.FullscreenControlsTranslucency = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+            bool isFs = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                        App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+            ThemeHelper.ApplyFullscreenSpecularTheming(isFs, force: true);
+            App.MainWindowInstance?.ApplyFullscreenSpecularOverlays();
+        }
+    }
+
+    partial void OnUseLocationForRegionChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.UseLocationForRegion = value;
+            _settingsService.Save();
+            if (value)
+            {
+                _ = LocationRegionService.Instance.StartMonitoringAsync();
+            }
+            else
+            {
+                LocationRegionService.Instance.StopMonitoring();
+            }
+        }
+    }
+
+    partial void OnCreateShellShortcutsChanged(bool value)
+    {
+        if (_isSyncing) return;
+        _settingsService.Current.CreateShellShortcuts = value;
+        _settingsService.Save();
+        if (value)
+        {
+            AppIconHelper.UpdateAppIcon();
+        }
+    }
+>>>>>>> Stashed changes
 
     // Controls & Interface
     partial void OnShowShuffleButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowShuffleButton = value; _settingsService.Save(); } }
@@ -717,6 +842,15 @@ public partial class SettingsViewModel : ObservableObject
         ShowAlbumArtInTransportBar = c.ShowAlbumArtInTransportBar;
         AnimatedTransitions = c.AnimatedTransitions;
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
+<<<<<<< Updated upstream
+=======
+        AcrylicTransportBar = c.AcrylicTransportBar;
+        IsBatterySaverActive = ThemeHelper.IsBatterySaverActive;
+        AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;
+        FullscreenControlsTranslucency = c.FullscreenControlsTranslucency;
+        UseLocationForRegion = c.UseLocationForRegion;
+        CreateShellShortcuts = c.CreateShellShortcuts;
+>>>>>>> Stashed changes
 
         ShowShuffleButton = c.ShowShuffleButton;
         ShowRepeatButton = c.ShowRepeatButton;
@@ -784,7 +918,29 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedToneMappingModeIndex));
         OnPropertyChanged(nameof(PeakBrightnessText));
         OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex));
+<<<<<<< Updated upstream
         AccessibilityHelper.Apply(c);
+=======
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        OnPropertyChanged(nameof(IsBackdropStudioSelected));
+        OnPropertyChanged(nameof(SelectedStudioWindowBaseIndex));
+        OnPropertyChanged(nameof(SelectedStudioNavRailIndex));
+        OnPropertyChanged(nameof(SelectedStudioCanvasIndex));
+        OnPropertyChanged(nameof(SelectedStudioTransportBarIndex));
+        OnPropertyChanged(nameof(SelectedThemePreset));
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        OnPropertyChanged(nameof(FullscreenControlsTranslucencyText));
+        OnPropertyChanged(nameof(PreviewControlsBackgroundBrush));
+        try
+        {
+            AccessibilityHelper.Apply(c);
+        }
+        catch
+        {
+            // Non-UI context or unit testing environment
+        }
+>>>>>>> Stashed changes
     }
 }
 
