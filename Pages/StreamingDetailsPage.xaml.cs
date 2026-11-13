@@ -27,6 +27,8 @@ namespace LumiereMediaPlayer.Pages
         public StreamingDetailsPage()
         {
             this.InitializeComponent();
+<<<<<<< Updated upstream
+=======
             this.NavigationCacheMode = NavigationCacheMode.Disabled;
             this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
             this.Unloaded += OnUnloaded;
@@ -37,7 +39,17 @@ namespace LumiereMediaPlayer.Pages
         {
             if (e.PropertyName == nameof(ViewModel.LocalMatch))
             {
-                DispatcherQueue?.TryEnqueue(() => BuildProvidersSection());
+                DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        BuildProvidersSection();
+                    }
+                    catch (Exception ex)
+                    {
+                        AntiGravityLogger.Log($"[StreamingDetailsPage.OnViewModelPropertyChanged] Error: {ex}");
+                    }
+                });
             }
         }
 
@@ -52,6 +64,7 @@ namespace LumiereMediaPlayer.Pages
             this.Unloaded -= OnUnloaded;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             CleanupResources();
+>>>>>>> Stashed changes
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -106,11 +119,37 @@ namespace LumiereMediaPlayer.Pages
 
                 if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Visible;
 
+<<<<<<< Updated upstream
+                await LoadDetailsAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnNavigatedTo error: {ex.Message}");
+=======
                 try
                 {
                     await ViewModel.LoadDetailsAsync(watchmodeId, selectedRegion, fallback);
-                    if (!this.IsLoaded) return;
-                    ApplyViewModelToUI();
+                    if (!this.IsLoaded)
+                    {
+                        RoutedEventHandler? onLoaded = null;
+                        onLoaded = (s, args) =>
+                        {
+                            try
+                            {
+                                this.Loaded -= onLoaded;
+                                ApplyViewModelToUI();
+                            }
+                            catch (Exception ex)
+                            {
+                                AntiGravityLogger.Log($"[StreamingDetailsPage.onLoaded] Error: {ex}");
+                            }
+                        };
+                        this.Loaded += onLoaded;
+                    }
+                    else
+                    {
+                        ApplyViewModelToUI();
+                    }
                 }
                 finally
                 {
@@ -119,15 +158,38 @@ namespace LumiereMediaPlayer.Pages
             }
             catch (Exception ex)
             {
+                AntiGravityLogger.Log($"[StreamingDetailsPage.OnNavigatedTo] Exception: {ex}");
                 System.Diagnostics.Debug.WriteLine($"Exception in OnNavigatedTo: {ex.Message}");
                 if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+>>>>>>> Stashed changes
             }
         }
 
         private void ApplyViewModelToUI()
         {
-            var details = ViewModel.Details;
-            if (details == null)
+<<<<<<< Updated upstream
+            // parallel fetch to optimize load time
+            var detailsTask = _watchmodeService.GetDetailsAsync(_watchmodeId);
+            var castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
+            var seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
+            var episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
+            var sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
+            var similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
+            var scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
+            var releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
+
+            await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask, similarTask, scoresTask, releasesTask);
+
+            _details = await detailsTask;
+            var cast = await castTask;
+            var seasons = await seasonsTask;
+            var episodes = await episodesTask;
+            var sources = await sourcesTask;
+            var similarTitles = await similarTask;
+            var scores = await scoresTask;
+            var releases = await releasesTask;
+
+            if (_details == null)
             {
                 TitleText.Text = ViewModel.ErrorMessage ?? "Failed to load details.";
                 return;
@@ -152,118 +214,144 @@ namespace LumiereMediaPlayer.Pages
                 GenresText.Text = string.Join(" • ", details.GenreNames);
             }
 
-            // Multi-platform scores
-            PopulateScores(ViewModel.Scores);
-
-            OverviewText.Text = details.PlotOverview ?? "No synopsis available.";
-
-            // Poster
-            if (!string.IsNullOrEmpty(details.DisplayPoster))
-            {
-                var bmp = new BitmapImage { DecodePixelWidth = 360, UriSource = new Uri(details.DisplayPoster) };
-                PosterImage.Source = bmp;
-            }
-
-            // Watchlist status
-            UpdateLibraryButtonStatus();
-
-            // Trailer button
-            TrailerButton.Visibility = ViewModel.HasTrailer ? Visibility.Visible : Visibility.Collapsed;
-
-            // Region Detail Dropdown
-            RegionDetailComboBox.ItemsSource = RegionHelper.GetAllRegions();
-            RegionDetailComboBox.SelectedValue = ViewModel.SelectedRegion;
-
-            // Where to Watch section
-            BuildProvidersSection();
-
-            // Cast & Crew
-            CastGridView.ItemsSource = ViewModel.Cast;
-            CrewGridView.ItemsSource = ViewModel.Crew;
-            if (ViewModel.Crew.Count == 0)
-            {
-                SafeRemovePivotItem(CrewPivotItem);
-            }
-            else
-            {
-                int castIndex = DetailsPivot.Items.IndexOf(CastPivotItem);
-                int insertIndex = Math.Clamp(castIndex >= 0 ? castIndex + 1 : 1, 0, DetailsPivot.Items.Count);
-                SafeAddPivotItem(CrewPivotItem, insertIndex);
-            }
-
-            // Similar titles
-            if (ViewModel.SimilarTitles.Count > 0)
-            {
-                SimilarTitlesGridView.ItemsSource = ViewModel.SimilarTitles;
-                SafeAddPivotItem(SimilarPivotItem);
-            }
-            else
-            {
-                SafeRemovePivotItem(SimilarPivotItem);
-            }
-
-            // Releases
-            if (ViewModel.Releases.Count > 0)
-            {
-                ReleasesListView.ItemsSource = ViewModel.Releases;
-                SafeAddPivotItem(ReleasesPivotItem);
-            }
-            else
-            {
-                SafeRemovePivotItem(ReleasesPivotItem);
-            }
-
-            // TV show hierarchy TreeView
-            if (details.Type == "tv_series" || details.Type == "tv_miniseries")
-            {
-                SafeAddPivotItem(EpisodesPivotItem);
-                PopulateEpisodesTree(ViewModel.Seasons, ViewModel.Episodes);
-            }
-            else
-            {
-                SafeRemovePivotItem(EpisodesPivotItem);
-            }
-        }
-
-        private void SafeAddPivotItem(PivotItem item, int? insertIndex = null)
-        {
+            // Bind multi-platform scores
+=======
             try
             {
-                if (DetailsPivot == null || item == null) return;
-                if (DetailsPivot.Items.Contains(item)) return;
+                AntiGravityLogger.Log("[StreamingDetailsPage] ApplyViewModelToUI started");
+                var details = ViewModel.Details;
+                if (details == null)
+                {
+                    TitleText.Text = ViewModel.ErrorMessage ?? "Failed to load details.";
+                    return;
+                }
 
-                if (insertIndex.HasValue && insertIndex.Value >= 0 && insertIndex.Value <= DetailsPivot.Items.Count)
+                // Populate text fields
+                TitleText.Text = details.Title ?? "Unknown Title";
+                YearText.Text = details.Year?.ToString() ?? string.Empty;
+                RatingText.Text = details.UserRating != null ? $"⭐ {details.UserRating:F1}" : "No Rating";
+                RuntimeText.Text = details.RuntimeMinutes != null ? $"{details.RuntimeMinutes} min" : string.Empty;
+
+                TypeText.Text = details.Type switch
                 {
-                    DetailsPivot.Items.Insert(insertIndex.Value, item);
-                }
-                else
+                    "movie" => "MOVIE",
+                    "tv_series" => "TV SHOW",
+                    "tv_miniseries" => "MINISERIES",
+                    _ => details.Type?.ToUpperInvariant() ?? "UNKNOWN"
+                };
+
+                if (details.GenreNames != null)
                 {
-                    DetailsPivot.Items.Add(item);
+                    GenresText.Text = string.Join(" • ", details.GenreNames);
                 }
+
+                // Multi-platform scores
+                PopulateScores(ViewModel.Scores);
+
+                OverviewText.Text = details.PlotOverview ?? "No synopsis available.";
+
+                // Poster
+                if (!string.IsNullOrEmpty(details.DisplayPoster) && Uri.TryCreate(details.DisplayPoster, UriKind.Absolute, out var posterUri))
+                {
+                    var bmp = new BitmapImage { DecodePixelWidth = 360, UriSource = posterUri };
+                    PosterImage.Source = bmp;
+                }
+
+                // Watchlist status
+                UpdateLibraryButtonStatus();
+
+                // Trailer button
+                TrailerButton.Visibility = ViewModel.HasTrailer ? Visibility.Visible : Visibility.Collapsed;
+
+                // Region Detail Dropdown
+                RegionDetailComboBox.ItemsSource = RegionHelper.GetAllRegions();
+                RegionDetailComboBox.SelectedValue = ViewModel.SelectedRegion;
+
+                // Where to Watch section
+                BuildProvidersSection();
+
+                // Cast & Crew
+                CastGridView.ItemsSource = ViewModel.Cast;
+                CrewGridView.ItemsSource = ViewModel.Crew;
+
+                bool hasCast = ViewModel.Cast != null && ViewModel.Cast.Count > 0;
+                bool hasCrew = ViewModel.Crew != null && ViewModel.Crew.Count > 0;
+                bool isTv = details.Type is "tv_series" or "tv_miniseries";
+                bool hasSimilar = ViewModel.SimilarTitles != null && ViewModel.SimilarTitles.Count > 0;
+                bool hasReleases = ViewModel.Releases != null && ViewModel.Releases.Count > 0;
+
+                if (CastSelectorItem != null) CastSelectorItem.Visibility = hasCast ? Visibility.Visible : Visibility.Collapsed;
+                if (CrewSelectorItem != null) CrewSelectorItem.Visibility = hasCrew ? Visibility.Visible : Visibility.Collapsed;
+                if (EpisodesSelectorItem != null) EpisodesSelectorItem.Visibility = isTv ? Visibility.Visible : Visibility.Collapsed;
+                if (SimilarSelectorItem != null) SimilarSelectorItem.Visibility = hasSimilar ? Visibility.Visible : Visibility.Collapsed;
+                if (ReleasesSelectorItem != null) ReleasesSelectorItem.Visibility = hasReleases ? Visibility.Visible : Visibility.Collapsed;
+
+                // Similar titles
+                if (hasSimilar)
+                {
+                    SimilarTitlesGridView.ItemsSource = ViewModel.SimilarTitles;
+                }
+
+                // Releases
+                if (hasReleases)
+                {
+                    ReleasesListView.ItemsSource = ViewModel.Releases;
+                }
+
+                // TV show hierarchy TreeView
+                if (isTv)
+                {
+                    PopulateEpisodesTree(ViewModel.Seasons, ViewModel.Episodes);
+                }
+
+                // Ensure valid SelectorBar selection
+                if (DetailsSelectorBar != null)
+                {
+                    var currentSelected = DetailsSelectorBar.SelectedItem;
+                    if (currentSelected == null || currentSelected.Visibility == Visibility.Collapsed)
+                    {
+                        DetailsSelectorBar.SelectedItem = hasCast ? CastSelectorItem
+                            : hasCrew ? CrewSelectorItem
+                            : hasSimilar ? SimilarSelectorItem
+                            : hasReleases ? ReleasesSelectorItem
+                            : isTv ? EpisodesSelectorItem
+                            : null;
+                    }
+                    UpdateSelectorBarPanels(DetailsSelectorBar.SelectedItem);
+                }
+
+                AntiGravityLogger.Log("[StreamingDetailsPage] ApplyViewModelToUI completed successfully");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] SafeAddPivotItem warning: {ex.Message}");
+                AntiGravityLogger.Log($"[StreamingDetailsPage] ApplyViewModelToUI Exception: {ex}");
             }
         }
 
-        private void SafeRemovePivotItem(PivotItem item)
+        private void OnDetailsSelectorBarSelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
+        {
+            UpdateSelectorBarPanels(sender.SelectedItem);
+        }
+
+        private void UpdateSelectorBarPanels(SelectorBarItem? selected)
         {
             try
             {
-                if (DetailsPivot != null && item != null && DetailsPivot.Items.Contains(item))
-                {
-                    DetailsPivot.Items.Remove(item);
-                }
+                if (CastPanel != null) CastPanel.Visibility = (selected == CastSelectorItem) ? Visibility.Visible : Visibility.Collapsed;
+                if (CrewPanel != null) CrewPanel.Visibility = (selected == CrewSelectorItem) ? Visibility.Visible : Visibility.Collapsed;
+                if (EpisodesPanel != null) EpisodesPanel.Visibility = (selected == EpisodesSelectorItem) ? Visibility.Visible : Visibility.Collapsed;
+                if (SimilarPanel != null) SimilarPanel.Visibility = (selected == SimilarSelectorItem) ? Visibility.Visible : Visibility.Collapsed;
+                if (ReleasesPanel != null) ReleasesPanel.Visibility = (selected == ReleasesSelectorItem) ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] SafeRemovePivotItem warning: {ex.Message}");
+                AntiGravityLogger.Log($"[StreamingDetailsPage.UpdateSelectorBarPanels] Warning: {ex.Message}");
             }
         }
 
         private void PopulateScores(WatchmodeScores? scores)
         {
+>>>>>>> Stashed changes
             bool anyScore = false;
             if (scores != null)
             {
@@ -352,6 +440,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void BuildProvidersSection()
         {
+<<<<<<< Updated upstream
             ProvidersContainer.Children.Clear();
 
             // Local media card
@@ -393,7 +482,58 @@ namespace LumiereMediaPlayer.Pages
             if (grouped.PurchaseSources.Count > 0)
             {
                 ProvidersContainer.Children.Add(new TextBlock { Text = "Buy or Rent", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) });
-                ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.PurchaseSources, "Rent/Buy"));
+                ProvidersContainer.Children.Add(BuildProviderWrapPanel(purchaseSources, "Rent/Buy"));
+=======
+            try
+            {
+                ProvidersContainer.Children.Clear();
+
+                // Local media card
+                if (ViewModel.LocalMatch != null)
+                {
+                    var card = BuildLocalMediaCard(ViewModel.LocalMatch);
+                    ProvidersContainer.Children.Add(card);
+                    ProvidersContainer.Children.Add(new Border { Height = 16 });
+                }
+
+                // Quality badges
+                PopulateQualityBadges();
+
+                var grouped = ViewModel.GroupedSources;
+                if (!grouped.HasAnySources)
+                {
+                    ProvidersContainer.Children.Add(new TextBlock
+                    {
+                        Text = "Streaming Not Available",
+                        FontStyle = Windows.UI.Text.FontStyle.Italic,
+                        FontSize = 15,
+                        Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
+                    });
+                    return;
+                }
+
+                if (grouped.SubscriptionSources.Count > 0)
+                {
+                    ProvidersContainer.Children.Add(new TextBlock { Text = "Subscription Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 0, 0, 0) });
+                    ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.SubscriptionSources, "Subscription"));
+                }
+
+                if (grouped.FreeSources.Count > 0)
+                {
+                    ProvidersContainer.Children.Add(new TextBlock { Text = "Free Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) });
+                    ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.FreeSources, "Free"));
+                }
+
+                if (grouped.PurchaseSources.Count > 0)
+                {
+                    ProvidersContainer.Children.Add(new TextBlock { Text = "Buy or Rent", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) });
+                    ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.PurchaseSources, "Rent/Buy"));
+                }
+            }
+            catch (Exception ex)
+            {
+                AntiGravityLogger.Log($"[StreamingDetailsPage] BuildProvidersSection Exception: {ex}");
+>>>>>>> Stashed changes
             }
         }
 
@@ -482,9 +622,10 @@ namespace LumiereMediaPlayer.Pages
                 };
 
                 var contentPanel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-
-                var iconUrl = StreamingProviderHelper.GetProviderIconUrl(source);
-                var bmp = new BitmapImage { DecodePixelWidth = 48, UriSource = new Uri(iconUrl) };
+<<<<<<< Updated upstream
+                
+                // Icon
+                var iconUrl = GetProviderIconUrl(source);
                 var logo = new Image
                 {
                     Source = bmp,
@@ -493,6 +634,22 @@ namespace LumiereMediaPlayer.Pages
                     Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
                 };
                 contentPanel.Children.Add(logo);
+=======
+
+                var iconUrl = StreamingProviderHelper.GetProviderIconUrl(source);
+                if (!string.IsNullOrEmpty(iconUrl) && Uri.TryCreate(iconUrl, UriKind.Absolute, out var iconUri))
+                {
+                    var bmp = new BitmapImage { DecodePixelWidth = 48, UriSource = iconUri };
+                    var logo = new Image
+                    {
+                        Source = bmp,
+                        Width = 40,
+                        Height = 40,
+                        Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                    };
+                    contentPanel.Children.Add(logo);
+                }
+>>>>>>> Stashed changes
 
                 var text = new TextBlock
                 {
@@ -639,6 +796,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void PopulateEpisodesTree(List<WatchmodeSeason> seasons, List<WatchmodeEpisode> episodes)
         {
+<<<<<<< Updated upstream
             EpisodesTreeView.RootNodes.Clear();
 
             if (seasons == null || seasons.Count == 0) return;
@@ -646,9 +804,19 @@ namespace LumiereMediaPlayer.Pages
             var sortedSeasons = seasons.OrderBy(s => s.Number).ToList();
 
             foreach (var season in sortedSeasons)
+=======
+            try
+>>>>>>> Stashed changes
             {
-                var seasonContent = new TreeViewItemContent
+                EpisodesTreeView.RootNodes.Clear();
+
+                if (seasons == null || seasons.Count == 0) return;
+
+                var sortedSeasons = seasons.OrderBy(s => s.Number).ToList();
+
+                foreach (var season in sortedSeasons)
                 {
+<<<<<<< Updated upstream
                     Title = season.Name ?? $"Season {season.Number}",
                     Subtitle = $"{season.EpisodeCount} Episodes"
                 };
@@ -663,17 +831,40 @@ namespace LumiereMediaPlayer.Pages
                 foreach (var ep in seasonEpisodes)
                 {
                     var epContent = new TreeViewItemContent
+=======
+                    var seasonContent = new TreeViewItemContent
+>>>>>>> Stashed changes
                     {
-                        Title = $"{ep.EpisodeNumber}. {ep.Name ?? "Episode"}",
-                        Subtitle = ep.ReleaseDate ?? string.Empty,
-                        Description = ep.Overview ?? "No description available.",
-                        Episode = ep
+                        Title = season.Name ?? $"Season {season.Number}",
+                        Subtitle = $"{season.EpisodeCount} Episodes"
                     };
 
-                    seasonNode.Children.Add(new TreeViewNode { Content = epContent });
-                }
+                    var seasonNode = new TreeViewNode { Content = seasonContent };
 
-                EpisodesTreeView.RootNodes.Add(seasonNode);
+                    var seasonEpisodes = episodes
+                        .Where(e => e.SeasonNumber == season.Number || e.SeasonId == season.Id)
+                        .OrderBy(e => e.EpisodeNumber)
+                        .ToList();
+
+                    foreach (var ep in seasonEpisodes)
+                    {
+                        var epContent = new TreeViewItemContent
+                        {
+                            Title = $"{ep.EpisodeNumber}. {ep.Name ?? "Episode"}",
+                            Subtitle = ep.ReleaseDate ?? string.Empty,
+                            Description = ep.Overview ?? "No description available.",
+                            Episode = ep
+                        };
+
+                        seasonNode.Children.Add(new TreeViewNode { Content = epContent });
+                    }
+
+                    EpisodesTreeView.RootNodes.Add(seasonNode);
+                }
+            }
+            catch (Exception ex)
+            {
+                AntiGravityLogger.Log($"[StreamingDetailsPage] PopulateEpisodesTree Exception: {ex}");
             }
         }
 

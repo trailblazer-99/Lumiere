@@ -52,6 +52,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial ToneMappingMode SelectedToneMappingMode { get; set; }
     [ObservableProperty] public partial int PeakBrightnessNits { get; set; }
     [ObservableProperty] public partial bool AutoBoostHdrBrightness { get; set; }
+    [ObservableProperty] public partial bool HdrRealTimePlayback { get; set; }
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
     // ── Appearance ─────────────────────────────────────────────────
@@ -96,6 +97,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial Windows.UI.Color CurrentAccentColor { get; set; }
     [ObservableProperty] public partial bool IsCustomAccentExpanded { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
+<<<<<<< Updated upstream
+=======
     [ObservableProperty] public partial bool AcrylicTransportBar { get; set; }
     public bool IsAcrylicTransportBarOptionEnabled => AlwaysShowTransportBar
         && SelectedBackdrop != AppThemeBackdrop.Acrylic
@@ -126,9 +129,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
     [ObservableProperty] public partial bool AutoHideTransportBarInStreaming { get; set; }
+    [ObservableProperty] public partial int FullscreenControlsTranslucency { get; set; }
+    public string FullscreenControlsTranslucencyText => FullscreenControlsTranslucency switch
+    {
+        0 => "0% (Pure Transparent)",
+        <= 25 => $"{FullscreenControlsTranslucency}% (Subtle Glass)",
+        <= 70 => $"{FullscreenControlsTranslucency}% (Frosted Acrylic)",
+        _ => $"{FullscreenControlsTranslucency}% (Deep Acrylic)"
+    };
+    public Brush PreviewControlsBackgroundBrush => ThemeHelper.GetTranslucencyBrush(FullscreenControlsTranslucency);
+    public Brush PreviewSpecularBorderBrush => ThemeHelper.CreateFullscreenSpecularBorderBrush();
     [ObservableProperty] public partial bool UseLocationForRegion { get; set; }
     [ObservableProperty] public partial bool CreateShellShortcuts { get; set; }
     [ObservableProperty] public partial bool IsBatterySaverActive { get; set; }
+>>>>>>> Stashed changes
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool IsDevelopmentDevice => UpdateService.IsDevelopmentDevice;
@@ -805,6 +819,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         TryReapplyHdrPipeline();
     }
 
+    partial void OnHdrRealTimePlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HdrRealTimePlayback = value; _settingsService.Save(); } }
     partial void OnShowHdrBadgeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHdrBadge = value; _settingsService.Save(); } }
 
     private static void TryReapplyHdrPipeline()
@@ -1073,29 +1088,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         UpdateActivePresetMatch();
     }
 
-    partial void OnCurrentAccentColorChanged(Windows.UI.Color value)
-    {
-        if (_isSyncing) return;
-        var hex = ColorHelper.ToHex(value);
-        _settingsService.Current.CustomAccentColorHex = hex;
-        _settingsService.Current.AccentColor = AccentColorOption.Custom;
-        _isSyncing = true;
-        SelectedAccentColor = AccentColorOption.Custom;
-        IsCustomAccentExpanded = true;
-        _isSyncing = false;
-
-        // Instant live visual update across all palettes and theme dictionaries
-        ThemeHelper.ApplyAccentColor(value);
-
-        // Debounce expensive disk file writes and accessibility passes
-        _customAccentDebounceTimer?.Stop();
-        _customAccentDebounceTimer?.Start();
-
-        OnPropertyChanged(nameof(SelectedAccentColorIndex));
-        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
-        UpdateActivePresetMatch();
-    }
-
+<<<<<<< Updated upstream
+    partial void OnCompactDensityModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CompactDensityMode = value; _settingsService.Save(); } }
+    partial void OnShowAlbumArtInTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowAlbumArtInTransportBar = value; _settingsService.Save(); } }
+    partial void OnAnimatedTransitionsChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AnimatedTransitions = value; _settingsService.Save(); } }
+    partial void OnAlwaysShowTransportBarChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AlwaysShowTransportBar = value; _settingsService.Save(); } }
+=======
     partial void OnAlwaysShowTransportBarChanged(bool value)
     {
         OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
@@ -1128,6 +1126,23 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnFullscreenControlsTranslucencyChanged(int value)
+    {
+        OnPropertyChanged(nameof(FullscreenControlsTranslucencyText));
+        OnPropertyChanged(nameof(PreviewControlsBackgroundBrush));
+        OnPropertyChanged(nameof(PreviewSpecularBorderBrush));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.FullscreenControlsTranslucency = value;
+            _settingsService.Save();
+            App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+            bool isFs = App.MainWindowInstance?.IsFullscreenVideoActive == true ||
+                        App.MainWindowInstance?.TransportBarElement?.IsFullscreenPresentation == true;
+            ThemeHelper.ApplyFullscreenSpecularTheming(isFs, force: true);
+            App.MainWindowInstance?.ApplyFullscreenSpecularOverlays();
+        }
+    }
+
     partial void OnUseLocationForRegionChanged(bool value)
     {
         if (!_isSyncing)
@@ -1155,6 +1170,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             AppIconHelper.UpdateAppIcon();
         }
     }
+>>>>>>> Stashed changes
 
     // Controls & Interface
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
@@ -1506,11 +1522,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             CurrentAccentColor = ThemeHelper.GetAccentColor(c.AccentColor);
         }
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
+<<<<<<< Updated upstream
+=======
         AcrylicTransportBar = c.AcrylicTransportBar;
         IsBatterySaverActive = ThemeHelper.IsBatterySaverActive;
         AutoHideTransportBarInStreaming = c.AutoHideTransportBarInStreaming;
+        FullscreenControlsTranslucency = c.FullscreenControlsTranslucency;
         UseLocationForRegion = c.UseLocationForRegion;
         CreateShellShortcuts = c.CreateShellShortcuts;
+>>>>>>> Stashed changes
 
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
@@ -1594,6 +1614,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedToneMappingModeIndex));
         OnPropertyChanged(nameof(PeakBrightnessText));
         OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex));
+<<<<<<< Updated upstream
+        AccessibilityHelper.Apply(c);
+=======
         OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
         OnPropertyChanged(nameof(AcrylicTransportBarEffective));
         OnPropertyChanged(nameof(IsBackdropStudioSelected));
@@ -1603,6 +1626,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedStudioTransportBarIndex));
         OnPropertyChanged(nameof(SelectedThemePreset));
         OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        OnPropertyChanged(nameof(FullscreenControlsTranslucencyText));
+        OnPropertyChanged(nameof(PreviewControlsBackgroundBrush));
         try
         {
             AccessibilityHelper.Apply(c);
@@ -1611,6 +1636,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         {
             // Non-UI context or unit testing environment
         }
+>>>>>>> Stashed changes
     }
 }
 

@@ -1505,6 +1505,8 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
+<<<<<<< Updated upstream
+=======
          ROUNDED CARD GRIDVIEW ITEM STYLE
          Eliminates default WinUI square hover/selection borders and 
          ensures smooth rounded corners matching the home page cards.
@@ -1531,7 +1533,7 @@
                         PointerOverBackground="Transparent"
                         SelectedBackground="Transparent"
                         SelectedForeground="{TemplateBinding Foreground}"
-                        FocusBorderBrush="{ThemeResource FocusVisualPrimaryBrush}"
+                        FocusBorderBrush="Transparent"
                         SelectedBorderThickness="0"
                         CornerRadius="{StaticResource CardCornerRadiusFull}" />
                 </ControlTemplate>
@@ -1540,6 +1542,7 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
+>>>>>>> Stashed changes
          ACCENT PLAY BUTTON — used on playlist cards
     ═══════════════════════════════════════════════════════════════ -->
     <Style x:Key="AccentPlayButtonStyle" TargetType="Button">

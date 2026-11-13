@@ -740,18 +740,8 @@ public sealed class HdrPipelineService : IHdrPipelineService
         // 3. Ensure the native MPO pipeline handles HDR (frame-server mode bypasses it)
         TryConfigureNativePipeline(player, shouldEnableHdr, _isDualGpuPresent);
 
-        // HDR-04: If tracks haven't been demuxed yet, defer tone-mapping configuration until VideoTracksChanged fires
-        if (!hasVideoTracks && item != null)
-        {
-            Debug.WriteLine("[HDR] Deferring tone-mapping configuration: video tracks have not demuxed yet.");
-            _pendingPipelineConfig = (player, item);
-            _hdrActive = shouldEnableHdr;
-            UpdateBrightnessOverride();
-            return;
-        }
-
-        // 4. Configure Media Foundation tone-mapping operator and display-adaptive color grading
-        ApplyToneMapping(item, settings.ToneMappingMode, shouldEnableHdr, isContentHdr, format);
+        // 4. Configure Media Foundation tone-mapping operator and color space attributes on video tracks
+        ApplyToneMapping(item, settings.ToneMappingMode, shouldEnableHdr);
 
         _hdrActive = shouldEnableHdr;
         _lastConfiguredItem = item;
@@ -828,7 +818,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
         }
     }
 
-    private static void ApplyToneMapping(MediaPlaybackItem? item, ToneMappingMode mode, bool isHdrActive, bool isContentHdr, HdrContentFormat contentFormat)
+    private static void ApplyToneMapping(MediaPlaybackItem? item, ToneMappingMode mode, bool isHdrActive)
     {
         if (item == null || item.VideoTracks.Count == 0)
         {
@@ -837,87 +827,50 @@ public sealed class HdrPipelineService : IHdrPipelineService
 
         try
         {
-            var displayManager = AppServices.DisplayManager;
-            var displayProfile = displayManager.ActiveDisplayProfile;
-            float peakNits = displayManager.MaxLuminanceInNits;
-            float sdrWhiteNits = displayManager.SdrWhiteLevelInNits;
-
-            bool isDisplayHdr = isHdrActive && displayManager.IsHdrActive;
-
-            // Resolve Tone Mapping Operator:
-            // When outputting to a native HDR display (isDisplayHdr == true),
-            // use direct passthrough (3u / Clip) so Windows DWM and the display receive the uncompressed PQ
-            // highlights for full specular peak brightness (up to monitor's peak nits) naturally.
-            // On SDR displays, HDR content MUST be tone-mapped with ACES (1u) or BT.2408 (2u) so midtones
-            // and diffuse white are properly preserved and bright, preventing dim/dark pictures!
-            uint toneMapOperatorIndex = isDisplayHdr
-                ? 3u // HDR display active: direct passthrough / clip at display peak
-                : mode switch
-                {
-                    ToneMappingMode.DisplayAdaptive => displayProfile switch
-                    {
-                        Display.DisplayProfileKind.TrueHdrOledOrMiniLed => 3u, // High-End HDR: Direct passthrough
-                        Display.DisplayProfileKind.EntryHdr => isDisplayHdr ? 3u : 1u, // Entry HDR: Direct passthrough if active, else ACES
-                        Display.DisplayProfileKind.WideColorGamutSdr => 1u,    // WCG SDR: ACES filmic
-                        _ => 1u                                                // Standard SDR: ACES tone mapping for bright, vivid midtones
-                    },
-                    ToneMappingMode.Bt2408 => 2u, // BT.2408 (ITU standard reference)
-                    ToneMappingMode.Aces => 1u,   // ACES (Cinematic highlights, preserves luminance)
-                    ToneMappingMode.Reinhard => 0u, // Reinhard (Smooth roll-off)
-                    ToneMappingMode.Clip => 3u,   // Clip
-                    _ => 1u
-                };
+            // Map ToneMappingMode enum to Media Foundation Tone Mapping Operator index:
+            // 0 = Reinhard (smooth global roll-off)
+            // 1 = ACES (cinematic film curve approximation)
+            // 2 = BT.2408 (ITU reference HDR-to-SDR standard)
+            // 3 = Clip (linear highlight clipping)
+            uint toneMapOperatorIndex = mode switch
+            {
+                ToneMappingMode.Reinhard => 0u,
+                ToneMappingMode.Aces     => 1u,
+                ToneMappingMode.Bt2408   => 2u,
+                ToneMappingMode.Clip     => 3u,
+                _                        => 1u
+            };
 
             var toneMapGuid = new Guid("DE9AC8C9-9602-4A85-AA27-BCE095709DFF"); // MF_VIDEO_TONEMAPPING_OPERATOR
             var primariesGuid = new Guid("dbfbe4d7-0740-4ee0-8192-850AB0E21935"); // MF_MT_VIDEO_PRIMARIES
-            var transferFuncGuid = new Guid("93B7BE49-B4B2-4F40-A66E-C13B5F8E4E82"); // MF_MT_TRANSFER_FUNCTION
-            var yuvMatrixGuid = new Guid("3e23d46a-0ba1-44e5-a4e3-b9c1046182d4"); // MF_MT_YUV_MATRIX
-            var nominalRangeGuid = new Guid("66753cff-82ec-42f2-ac1a-e69a0b76cf55"); // MF_MT_VIDEO_NOMINAL_RANGE
+            var transferFuncGuid = new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EEED2"); // MF_MT_TRANSFER_FUNCTION
 
             foreach (var track in item.VideoTracks)
             {
                 try
                 {
                     var props = track.GetEncodingProperties();
-                    if (props?.Properties != null)
+                    props.Properties[toneMapGuid] = toneMapOperatorIndex;
+
+                    if (!isHdrActive)
                     {
-                        // Set tone mapping operator (3u = Clip/Passthrough on HDR display to pass full highlights)
-                        SafeSetProperty(props.Properties, toneMapGuid, toneMapOperatorIndex);
-
-                        if (isContentHdr)
-                        {
-                            // Explicitly declare incoming stream format as 10-bit BT.2020 PQ/HLG
-                            SafeSetProperty(props.Properties, primariesGuid, 9u);      // MFVideoPrimaries_BT2020 (9)
-
-                            // MFVideoTransFunc_HLG = 16, MFVideoTransFunc_2084 = 15
-                            SafeSetProperty(props.Properties, transferFuncGuid, (contentFormat == HdrContentFormat.Hlg) ? 16u : 15u);
-
-                            // MFVideoTransferMatrix_BT2020_10 = 4 (ITU-R BT.2020 non-constant luminance transfer matrix)
-                            SafeSetProperty(props.Properties, yuvMatrixGuid, 4u);
-
-                            // MFNominalRange_Normal = 1u: Maps 10-bit limited studio range (64-940) to full dynamic range (0-1023)
-                            // so peak white highlights reach true 100% luminance and blacks remain pure 0 nits
-                            SafeSetProperty(props.Properties, nominalRangeGuid, 1u);
-                        }
-                        else
-                        {
-                            // Standard SDR source: BT.709 sRGB Gamma 2.2
-                            SafeSetProperty(props.Properties, primariesGuid, 2u);      // MFVideoPrimaries_BT709 (2)
-                            SafeSetProperty(props.Properties, transferFuncGuid, 5u);   // MFVideoTransFunc_709 (5)
-                            SafeSetProperty(props.Properties, yuvMatrixGuid, 1u);      // MFVideoTransferMatrix_BT709 (1)
-                            SafeSetProperty(props.Properties, nominalRangeGuid, 1u);
-                        }
+                        // When tone-mapping HDR down to SDR, instruct Media Foundation Video Processor
+                        // to map to BT.709 primaries (index 2) and BT.709 transfer curve (index 1)
+                        props.Properties[primariesGuid] = 2u;
+                        props.Properties[transferFuncGuid] = 1u;
+                    }
+                    else
+                    {
+                        // When HDR output is active, preserve BT.2020 primaries (index 9) and PQ ST.2084 curve (index 6)
+                        // while applying the selected tone mapping operator for highlight compression
+                        props.Properties[primariesGuid] = 9u;
+                        props.Properties[transferFuncGuid] = 6u;
                     }
                 }
                 catch { }
             }
 
-            string toneSummary = $"{displayProfile}|{peakNits:F0}|{sdrWhiteNits:F0}|{mode}|{toneMapOperatorIndex}|{isHdrActive}|{contentFormat}";
-            if (toneSummary != _lastLoggedToneMapSummary)
-            {
-                _lastLoggedToneMapSummary = toneSummary;
-                Debug.WriteLine($"[HDR Display-Adaptive ToneMapping] Profile: {displayProfile}, Screen Peak: {peakNits:F0} nits, White: {sdrWhiteNits:F0} nits, Mode: '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}, Format={contentFormat}) across {item.VideoTracks.Count} video tracks");
-            }
+            Debug.WriteLine($"[HDR ToneMapping] Applied mode '{mode}' (operator index {toneMapOperatorIndex}, HdrActive={isHdrActive}) across {item.VideoTracks.Count} video tracks");
         }
         catch (Exception ex)
         {
@@ -925,34 +878,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
         }
     }
 
-    private static void SafeSetProperty(Windows.Media.MediaProperties.MediaPropertySet? properties, Guid guid, object value)
-    {
-        if (properties == null) return;
-        try
-        {
-            if (properties.TryGetValue(guid, out var currentVal))
-            {
-                if (currentVal is uint uCur && value is uint uVal && uCur == uVal) return;
-                if (Equals(currentVal, value)) return;
-            }
-            properties[guid] = value;
-        }
-        catch { }
-    }
-
-    private static bool SafeTryGetProperty(Windows.Media.MediaProperties.MediaPropertySet? properties, Guid guid, out object? value)
-    {
-        value = null;
-        if (properties == null) return false;
-        try
-        {
-            return properties.TryGetValue(guid, out value);
-        }
-        catch { }
-        return false;
-    }
-
-    private readonly BrightnessOverrideHelper _brightnessOverride = new();
+    private BrightnessOverrideHelper? _brightnessOverride;
     private bool _isAppFullscreen;
     private bool _isVideoPageActive;
     private bool _isSuspended;
@@ -1048,8 +974,7 @@ public sealed class HdrPipelineService : IHdrPipelineService
     {
         try
         {
-            var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
-            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            if (_hdrActive && AppServices.Settings.Current.AutoBoostHdrBrightness)
             {
                 dispatcher.TryEnqueue(UpdateBrightnessOverride);
                 return;

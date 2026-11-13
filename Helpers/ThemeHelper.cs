@@ -1,3 +1,5 @@
+<<<<<<< Updated upstream
+=======
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,7 +7,9 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using LumiereMediaPlayer.Controls;
+>>>>>>> Stashed changes
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
 using Microsoft.UI;
@@ -35,6 +39,10 @@ public static class ThemeHelper
 
     private static AccentPalette? _systemAccentPalette;
 
+<<<<<<< Updated upstream
+    public static ElementTheme ToElementTheme(AppThemeOption option) =>
+        option switch
+=======
     private static readonly object _accentCacheLock = new object();
 
     private static UISettings? _uiSettings;
@@ -50,11 +58,17 @@ public static class ThemeHelper
     private static readonly HashSet<Control> _styledFullscreenPresenters = new HashSet<Control>();
 
     private static Brush? _cachedFullscreenBgBrush;
+    private static int _cachedFullscreenTranslucency = -1;
+    private static readonly Dictionary<int, Brush> _cachedTranslucencyBrushes = new Dictionary<int, Brush>();
+    private static readonly object _translucencyLock = new object();
 
     private static LinearGradientBrush? _cachedFullscreenBorderBrush;
     private static Windows.UI.Color? _cachedLiveSceneColor;
-    private static string? _cachedLiveSceneKey;
     private static bool _hasTintedFullscreenBorderBrush;
+    private static bool _isExtractingLiveSceneColor;
+    private static double _lastExtractedSec = -999.0;
+    private static string? _lastExtractedPath;
+    private static long _lastExtractionTicks = 0;
 
     private static SolidColorBrush? _cachedFullscreenWhiteBrush;
 
@@ -213,6 +227,7 @@ public static class ThemeHelper
     public static ElementTheme ToElementTheme(AppThemeOption option)
     {
         return option switch
+>>>>>>> Stashed changes
         {
             AppThemeOption.Light => ElementTheme.Light,
             AppThemeOption.Dark => ElementTheme.Dark,
@@ -1445,6 +1460,8 @@ public static class ThemeHelper
             {
                 dictionary[key] = new SolidColorBrush(color);
             }
+<<<<<<< Updated upstream
+=======
             else
             {
                 try
@@ -1764,7 +1781,54 @@ public static class ThemeHelper
 
     public static Brush CreateFullscreenFlyoutBackgroundBrush()
     {
-        return CreateFullscreenTransparentSpecularBackgroundBrush();
+        return GetFullscreenControlsBackgroundBrush();
+    }
+
+    public static Brush GetFullscreenControlsBackgroundBrush()
+    {
+        int translucency = AppServices.Settings?.Current?.FullscreenControlsTranslucency ?? 0;
+        return GetTranslucencyBrush(translucency);
+    }
+
+    public static Brush GetTranslucencyBrush(int translucencyPercent)
+    {
+        int clamped = Math.Clamp(translucencyPercent, 0, 100);
+        if (clamped <= 0)
+        {
+            return CreateFullscreenTransparentSpecularBackgroundBrush();
+        }
+
+        lock (_translucencyLock)
+        {
+            if (_cachedTranslucencyBrushes.TryGetValue(clamped, out var cachedBrush))
+            {
+                return cachedBrush;
+            }
+
+            try
+            {
+                double t = (clamped - 1.0) / 99.0;
+                double tintOpacity = Math.Clamp(0.02 + (t * (0.82 - 0.02)), 0.02, 0.82);
+                double luminosityOpacity = Math.Clamp(0.20 + (t * (0.85 - 0.20)), 0.20, 0.85);
+                byte fallbackAlpha = (byte)Math.Clamp((int)Math.Round(10.0 + (t * (225.0 - 10.0))), 10, 225);
+
+                var brush = new AcrylicBrush
+                {
+                    AlwaysUseFallback = true,
+                    TintColor = Microsoft.UI.ColorHelper.FromArgb(255, 18, 18, 24),
+                    TintOpacity = tintOpacity,
+                    TintLuminosityOpacity = luminosityOpacity,
+                    FallbackColor = Microsoft.UI.ColorHelper.FromArgb(fallbackAlpha, 18, 18, 24)
+                };
+                _cachedTranslucencyBrushes[clamped] = brush;
+                _cachedFullscreenTranslucency = clamped;
+                return brush;
+            }
+            catch
+            {
+                return CreateFullscreenTransparentSpecularBackgroundBrush();
+            }
+        }
     }
 
     public static Brush CreateFullscreenTransparentSpecularBackgroundBrush()
@@ -1785,6 +1849,11 @@ public static class ThemeHelper
 
     public static Windows.UI.Color GetLiveSceneSpecularColor()
     {
+        if (_cachedLiveSceneColor.HasValue)
+        {
+            return _cachedLiveSceneColor.Value;
+        }
+
         try
         {
             var playbackVm = AppServices.PlaybackViewModel;
@@ -1798,118 +1867,12 @@ public static class ThemeHelper
                 {
                     return ColorHelper.FromHex(currentTrack.AccentColor);
                 }
-
-                // 2. Check cached thumbnail or fast thumbnail from PlaybackSession
-                if (playbackVm?.Session is PlaybackSession session)
-                {
-                    double currentSec = 0.0;
-                    try
-                    {
-                        var player = session.MediaPlayer;
-                        if (player?.PlaybackSession != null)
-                        {
-                            currentSec = player.PlaybackSession.Position.TotalSeconds;
-                        }
-                    }
-                    catch { }
-
-                    string currentKey = $"{currentTrack.Id}_{Math.Floor(currentSec / 10.0)}";
-                    if (_cachedLiveSceneKey == currentKey && _cachedLiveSceneColor.HasValue)
-                    {
-                        return _cachedLiveSceneColor.Value;
-                    }
-
-                    var cachedThumb = session.GetCachedThumbnail(currentSec, 60.0)
-                        ?? session.GetCachedThumbnail(0.0, 120.0);
-
-                    if (cachedThumb is Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap wb)
-                    {
-                        var extracted = ExtractDominantChromaFromWriteableBitmap(wb);
-                        if (extracted.HasValue)
-                        {
-                            _cachedLiveSceneKey = currentKey;
-                            _cachedLiveSceneColor = extracted.Value;
-                            return extracted.Value;
-                        }
-                    }
-                }
-
-                // 3. Check track's Artwork if it is a WriteableBitmap
-                if (currentTrack.Artwork is Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap artworkWb)
-                {
-                    var extracted = ExtractDominantChromaFromWriteableBitmap(artworkWb);
-                    if (extracted.HasValue)
-                    {
-                        return extracted.Value;
-                    }
-                }
             }
 
-            // 4. Fallback to active app accent
+            // 2. Fallback to active app accent
             var opt = AppServices.Settings?.Current?.AccentColor ?? Models.AccentColorOption.SystemDefault;
             return GetAccentPalette(opt).Default;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GetLiveSceneSpecularColor] Fallback due to: {ex.Message}");
-            return Microsoft.UI.Colors.DeepSkyBlue;
-        }
-    }
-
-    public static Windows.UI.Color? ExtractDominantChromaFromWriteableBitmap(Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap wb)
-    {
-        if (wb == null || wb.PixelWidth <= 0 || wb.PixelHeight <= 0) return null;
-        try
-        {
-            using var stream = wb.PixelBuffer.AsStream();
-            int totalBytes = wb.PixelWidth * wb.PixelHeight * 4;
-            if (totalBytes <= 0 || totalBytes > 20_000_000) return null;
-
-            byte[] buffer = new byte[totalBytes];
-            int read = stream.Read(buffer, 0, totalBytes);
-            if (read < totalBytes) return null;
-
-            // Sample ~100 distributed pixels across the image
-            int totalPixels = wb.PixelWidth * wb.PixelHeight;
-            int step = Math.Max(1, totalPixels / 100);
-
-            float bestScore = -1f;
-            Windows.UI.Color bestColor = default;
-
-            for (int p = 0; p < totalPixels; p += step)
-            {
-                int idx = p * 4;
-                if (idx + 3 >= totalBytes) break;
-
-                byte b = buffer[idx];
-                byte g = buffer[idx + 1];
-                byte r = buffer[idx + 2];
-                byte a = buffer[idx + 3];
-
-                if (a < 128) continue;
-
-                int max = Math.Max(r, Math.Max(g, b));
-                int min = Math.Min(r, Math.Min(g, b));
-                int delta = max - min;
-                float luma = 0.299f * r + 0.587f * g + 0.114f * b;
-
-                // Look for saturated colors, avoid near-black (< 30) or near-white (> 220)
-                if (delta >= 24 && luma >= 30f && luma <= 220f)
-                {
-                    float lumaFactor = 1.0f - Math.Abs(luma - 128f) / 128f;
-                    float score = delta * lumaFactor;
-                    if (score > bestScore)
-                    {
-                        bestScore = score;
-                        bestColor = Windows.UI.Color.FromArgb(255, r, g, b);
-                    }
-                }
-            }
-
-            if (bestScore > 0f)
-            {
-                return bestColor;
-            }
+>>>>>>> Stashed changes
         }
         catch (Exception ex)
         {
@@ -2072,6 +2035,396 @@ public static class ThemeHelper
                 }
                 RefreshThemeBindings();
                 StartFullscreenPopupWatcher();
+            }
+            else
+            {
+                StopFullscreenPopupWatcher();
+                _styledFullscreenPresenters.Clear();
+                _settledSubMenuPresenters.Clear();
+                _settledMenuRects.Clear();
+                _cachedParentMap.Clear();
+                AppThemeBackdrop valueOrDefault = (AppServices.Settings?.Current?.BackdropType).GetValueOrDefault();
+                ElementTheme secondaryTheme = (effectiveElementTheme == ElementTheme.Light) ? ElementTheme.Dark : ElementTheme.Light;
+                ApplyBackdropTheme(valueOrDefault, secondaryTheme);
+                ApplyBackdropTheme(valueOrDefault, effectiveElementTheme);
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        Brush flyoutPresenterBackground = GetFlyoutPresenterBackground(valueOrDefault, effectiveElementTheme);
+                        Brush flyoutBorderBrush = GetFlyoutBorderBrush(valueOrDefault, effectiveElementTheme);
+                        Brush volumeFlyoutBackground = GetVolumeFlyoutBackground(valueOrDefault, effectiveElementTheme);
+                        Brush volumeFlyoutBorderBrush = GetVolumeFlyoutBorderBrush(valueOrDefault, effectiveElementTheme);
+                        SafeSetAppResource("MenuFlyoutPresenterBackground", flyoutPresenterBackground);
+                        SafeSetAppResource("FlyoutPresenterBackground", flyoutPresenterBackground);
+                        SafeSetAppResource("VolumeFlyoutPresenterBackground", volumeFlyoutBackground);
+                        SafeSetAppResource("SurfaceStrokeColorFlyoutBrush", flyoutBorderBrush);
+                        SafeSetAppResource("FlyoutBorderThemeBrush", flyoutBorderBrush);
+                        SafeSetAppResource("FlyoutPresenterBorderBrush", flyoutBorderBrush);
+                        SafeSetAppResource("MenuFlyoutPresenterBorderBrush", flyoutBorderBrush);
+                        SafeSetAppResource("VolumeFlyoutPresenterBorderBrush", volumeFlyoutBorderBrush);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.UpdateTheming();
+            FlyoutHelper.RefreshAllFlyouts();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+<<<<<<< Updated upstream
+    private static Color Mix(Color from, Color to, double amount)
+=======
+    public static void ApplyLiveSceneColorToSpecularBorder(Windows.UI.Color sceneColor)
+    {
+        _cachedLiveSceneColor = sceneColor;
+        _hasTintedFullscreenBorderBrush = true;
+
+        if (_cachedFullscreenBorderBrush == null)
+        {
+            CreateFullscreenSpecularBorderBrush(sceneColor, forceRefresh: true);
+            return;
+        }
+
+        if (_cachedFullscreenBorderBrush.GradientStops.Count >= 4)
+        {
+            // Stop 0 (Offset 0.0): Diamond glint core: 60% pure white + 40% scene color, Alpha 245
+            _cachedFullscreenBorderBrush.GradientStops[0].Color = Windows.UI.Color.FromArgb(
+                245,
+                (byte)Math.Clamp((int)(255 * 0.60f + sceneColor.R * 0.40f), 0, 255),
+                (byte)Math.Clamp((int)(255 * 0.60f + sceneColor.G * 0.40f), 0, 255),
+                (byte)Math.Clamp((int)(255 * 0.60f + sceneColor.B * 0.40f), 0, 255));
+
+            // Stop 1 (Offset 0.30): Vibrant chromatic live scene refraction body, Alpha 190
+            _cachedFullscreenBorderBrush.GradientStops[1].Color = Windows.UI.Color.FromArgb(
+                190, sceneColor.R, sceneColor.G, sceneColor.B);
+
+            // Stop 2 (Offset 0.70): Soft ambient refraction, Alpha 85
+            _cachedFullscreenBorderBrush.GradientStops[2].Color = Windows.UI.Color.FromArgb(
+                85, sceneColor.R, sceneColor.G, sceneColor.B);
+
+            // Stop 3 (Offset 1.00): Deep ambient edge refraction, Alpha 45
+            _cachedFullscreenBorderBrush.GradientStops[3].Color = Windows.UI.Color.FromArgb(
+                45, sceneColor.R, sceneColor.G, sceneColor.B);
+        }
+    }
+
+    public static Windows.UI.Color ExtractDominantChromaFromBgra(byte[] bgra, int width, int height)
+    {
+        if (bgra == null || bgra.Length < width * height * 4)
+        {
+            return Microsoft.UI.Colors.DeepSkyBlue;
+        }
+
+        int totalPixels = width * height;
+        float bestScore = -1f;
+        Windows.UI.Color bestColor = Microsoft.UI.Colors.DeepSkyBlue;
+
+        float avgR = 0f, avgG = 0f, avgB = 0f;
+        int validPixels = 0;
+
+        for (int p = 0; p < totalPixels; p++)
+        {
+            int idx = p * 4;
+            byte b = bgra[idx];
+            byte g = bgra[idx + 1];
+            byte r = bgra[idx + 2];
+            byte a = bgra[idx + 3];
+
+            if (a < 128) continue;
+
+            avgR += r;
+            avgG += g;
+            avgB += b;
+            validPixels++;
+
+            int max = Math.Max(r, Math.Max(g, b));
+            int min = Math.Min(r, Math.Min(g, b));
+            int delta = max - min;
+            float luma = 0.299f * r + 0.587f * g + 0.114f * b;
+
+            // Target saturated hues with healthy midtone luminance
+            if (delta >= 18 && luma >= 25f && luma <= 235f)
+            {
+                float lumaFactor = 1.0f - Math.Abs(luma - 128f) / 128f;
+                float score = delta * (1.0f + lumaFactor);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestColor = Windows.UI.Color.FromArgb(255, r, g, b);
+                }
+            }
+        }
+
+        // If scene is monochromatic / low chroma (e.g. black & white, dark shadows, snowy fog)
+        if (bestScore <= 0f && validPixels > 0)
+        {
+            byte meanR = (byte)Math.Clamp((int)(avgR / validPixels), 0, 255);
+            byte meanG = (byte)Math.Clamp((int)(avgG / validPixels), 0, 255);
+            byte meanB = (byte)Math.Clamp((int)(avgB / validPixels), 0, 255);
+
+            int luma = (int)(0.299f * meanR + 0.587f * meanG + 0.114f * meanB);
+            byte glint = (byte)Math.Clamp(luma + 80, 180, 245);
+            return Windows.UI.Color.FromArgb(255, glint, (byte)Math.Clamp(glint + 5, 0, 255), (byte)Math.Clamp(glint + 15, 0, 255));
+        }
+
+        return bestColor;
+    }
+
+    public static async Task UpdateLiveSceneSpecularColorAsync(bool force = false)
+    {
+        try
+        {
+            long nowTicks = Environment.TickCount64;
+            if (!force && (nowTicks - _lastExtractionTicks < 2500))
+            {
+                return; // Rate limit to once every 2.5 seconds
+            }
+
+            var playbackVm = AppServices.PlaybackViewModel;
+            var currentTrack = playbackVm?.CurrentTrack;
+            if (currentTrack == null) return;
+
+            if (currentTrack.IsVideo && !string.IsNullOrEmpty(currentTrack.SourcePath) && File.Exists(currentTrack.SourcePath))
+            {
+                double currentSec = 0.0;
+                try
+                {
+                    var player = (playbackVm?.Session as PlaybackSession)?.MediaPlayer;
+                    if (player?.PlaybackSession != null)
+                    {
+                        currentSec = player.PlaybackSession.Position.TotalSeconds;
+                    }
+                }
+                catch { }
+
+                if (!force && _lastExtractedPath == currentTrack.SourcePath && Math.Abs(currentSec - _lastExtractedSec) < 3.0)
+                {
+                    return;
+                }
+
+                if (_isExtractingLiveSceneColor) return;
+                _isExtractingLiveSceneColor = true;
+                _lastExtractionTicks = nowTicks;
+
+                string path = currentTrack.SourcePath;
+                var color = await Task.Run(() =>
+                {
+                    try
+                    {
+                        byte[]? bgra = MediaFoundationThumbnailExtractor.ExtractThumbnailBgra(path, currentSec, 32, 18);
+                        if (bgra != null && bgra.Length >= 32 * 18 * 4)
+                        {
+                            return (Windows.UI.Color?)ExtractDominantChromaFromBgra(bgra, 32, 18);
+                        }
+                    }
+                    catch { }
+                    return null;
+                });
+
+                _isExtractingLiveSceneColor = false;
+
+                if (color.HasValue)
+                {
+                    _lastExtractedSec = currentSec;
+                    _lastExtractedPath = path;
+
+                    var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+                    dispatcher?.TryEnqueue(() =>
+                    {
+                        ApplyLiveSceneColorToSpecularBorder(color.Value);
+                    });
+                }
+            }
+            else
+            {
+                Windows.UI.Color fallbackColor = GetLiveSceneSpecularColor();
+                ApplyLiveSceneColorToSpecularBorder(fallbackColor);
+            }
+        }
+        catch (Exception ex)
+        {
+            _isExtractingLiveSceneColor = false;
+            System.Diagnostics.Debug.WriteLine($"[UpdateLiveSceneSpecularColorAsync] Error: {ex.Message}");
+        }
+    }
+
+    public static Windows.UI.Color? ExtractDominantChromaFromWriteableBitmap(Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap wb)
+>>>>>>> Stashed changes
+    {
+        static byte Blend(byte a, byte b, double amount) =>
+            (byte)Math.Clamp(Math.Round(a + ((b - a) * amount)), byte.MinValue, byte.MaxValue);
+
+<<<<<<< Updated upstream
+        return Color.FromArgb(
+            from.A,
+            Blend(from.R, to.R, amount),
+            Blend(from.G, to.G, amount),
+            Blend(from.B, to.B, amount));
+=======
+            byte[] buffer = new byte[totalBytes];
+            int read = stream.Read(buffer, 0, totalBytes);
+            if (read < totalBytes) return null;
+
+            return ExtractDominantChromaFromBgra(buffer, wb.PixelWidth, wb.PixelHeight);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ExtractDominantChroma] Error: {ex.Message}");
+        }
+        return null;
+>>>>>>> Stashed changes
+    }
+
+    private static void HookRenderingWatcher()
+    {
+<<<<<<< Updated upstream
+        public static AccentPalette FromBase(Color accent) =>
+            new(
+                accent,
+                Mix(accent, White, 0.18),
+                Mix(accent, White, 0.32),
+                Mix(accent, White, 0.48),
+                Mix(accent, Black, 0.16),
+                Mix(accent, Black, 0.28),
+                Mix(accent, Black, 0.42));
+=======
+        if (_cachedFullscreenBorderBrush == null)
+        {
+            try
+            {
+                _cachedFullscreenBorderBrush = new LinearGradientBrush
+                {
+                    StartPoint = new Windows.Foundation.Point(0.0, 0.0),
+                    EndPoint = new Windows.Foundation.Point(1.0, 1.0),
+                    GradientStops =
+                    {
+                        new GradientStop { Offset = 0.0 },
+                        new GradientStop { Offset = 0.30 },
+                        new GradientStop { Offset = 0.70 },
+                        new GradientStop { Offset = 1.0 }
+                    }
+                };
+                forceRefresh = true;
+            }
+            catch
+            {
+                return new LinearGradientBrush();
+            }
+        }
+
+        if (forceRefresh || customColor.HasValue || !_hasTintedFullscreenBorderBrush)
+        {
+            try
+            {
+                var sceneColor = customColor ?? GetLiveSceneSpecularColor();
+                ApplyLiveSceneColorToSpecularBorder(sceneColor);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateFullscreenSpecularBorderBrush] Tint error: {ex.Message}");
+            }
+        }
+
+        return _cachedFullscreenBorderBrush;
+    }
+
+    public static Brush CreateFullscreenSpecularTopHighlightBrush()
+    {
+        return new LinearGradientBrush
+        {
+            StartPoint = new Point(0f, 0f),
+            EndPoint = new Point(1f, 0f),
+            GradientStops =
+            {
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(35, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.0
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(120, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.2
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(240, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.5
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(120, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.8
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(35, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 1.0
+                }
+            }
+        };
+    }
+
+    public static void ApplyFullscreenSpecularTheming(bool isFullscreenVideo, bool force = false)
+    {
+        try
+        {
+            ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
+            string text = ((effectiveElementTheme == ElementTheme.Light) ? "Light" : "Dark");
+            if (isFullscreenVideo)
+            {
+                Func<object> resourceFactory = () => GetFullscreenControlsBackgroundBrush();
+                Func<object> resourceFactory2 = () => CreateFullscreenSpecularBorderBrush();
+                SetScopedResource("FlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("ComboBoxDropDownBackground", resourceFactory, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBackground", resourceFactory, "Dark");
+                SetScopedResource("SurfaceStrokeColorFlyoutBrush", resourceFactory2, "Dark");
+                SetScopedResource("FlyoutBorderThemeBrush", resourceFactory2, "Dark");
+                SetScopedResource("FlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("ComboBoxDropDownBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", resourceFactory2, "Dark");
+                if (text != "Dark")
+                {
+                    SetScopedResource("FlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("MenuFlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("VolumeFlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("ComboBoxDropDownBackground", resourceFactory, text);
+                    SetScopedResource("SurfaceStrokeColorFlyoutBrush", resourceFactory2, text);
+                    SetScopedResource("FlyoutBorderThemeBrush", resourceFactory2, text);
+                    SetScopedResource("FlyoutPresenterBorderBrush", resourceFactory2, text);
+                    SetScopedResource("MenuFlyoutPresenterBorderBrush", resourceFactory2, text);
+                    SetScopedResource("VolumeFlyoutPresenterBorderBrush", resourceFactory2, text);
+                }
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        SafeSetAppResource("MenuFlyoutPresenterBackground", GetFullscreenControlsBackgroundBrush());
+                        SafeSetAppResource("FlyoutPresenterBackground", GetFullscreenControlsBackgroundBrush());
+                        SafeSetAppResource("VolumeFlyoutPresenterBackground", GetFullscreenControlsBackgroundBrush());
+                        SafeSetAppResource("SurfaceStrokeColorFlyoutBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("FlyoutBorderThemeBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("FlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("MenuFlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("VolumeFlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                    }
+                }
+                catch
+                {
+                }
+                RefreshThemeBindings();
+                StartFullscreenPopupWatcher();
+                _ = UpdateLiveSceneSpecularColorAsync(force: true);
             }
             else
             {
@@ -2413,7 +2766,7 @@ public static class ThemeHelper
             {
                 return false;
             }
-            Brush brush = CreateFullscreenTransparentSpecularBackgroundBrush();
+            Brush brush = GetFullscreenControlsBackgroundBrush();
             Brush brush2 = CreateFullscreenSpecularBorderBrush(forceRefresh: true);
             AppThemeBackdrop valueOrDefault = (AppServices.Settings?.Current?.BackdropType).GetValueOrDefault();
             ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
@@ -2682,6 +3035,10 @@ public static class ThemeHelper
             if (!flag)
             {
                 InvalidateSubMenuGeometryCache();
+            }
+            else if (isFullscreenVideo)
+            {
+                _ = UpdateLiveSceneSpecularColorAsync();
             }
             return flag;
         }
@@ -3874,7 +4231,7 @@ public static class ThemeHelper
         ApplyFlyoutDropShadow(presenter);
 
         borderBrush ??= CreateFullscreenSpecularBorderBrush();
-        Brush transparentBg = CreateFullscreenTransparentSpecularBackgroundBrush();
+        Brush transparentBg = GetFullscreenControlsBackgroundBrush();
 
         Border? layoutRoot = FindVisualChildByName<Border>(presenter, "LayoutRoot");
         if (layoutRoot == null)
@@ -3974,7 +4331,7 @@ public static class ThemeHelper
         {
             presenter.LayoutUpdated -= OnPresenterLayoutUpdated;
             ApplyFlyoutDropShadow(presenter);
-            Brush effPresenterBg = CreateFullscreenTransparentSpecularBackgroundBrush();
+            Brush effPresenterBg = GetFullscreenControlsBackgroundBrush();
             Brush effectiveBorder = borderBrush ?? CreateFullscreenSpecularBorderBrush();
 
             ApplyFullscreenWhiteForegroundResources(presenter);
@@ -4058,7 +4415,7 @@ public static class ThemeHelper
                 }
             }
         }
-        return CreateFullscreenTransparentSpecularBackgroundBrush();
+        return GetFullscreenControlsBackgroundBrush();
     }
 
     public static Brush GetVolumeFlyoutBorderBrush(AppThemeBackdrop backdrop, ElementTheme effectiveTheme, bool isFullscreenVideo = false)
@@ -4149,7 +4506,7 @@ public static class ThemeHelper
                 }
             }
         }
-        return CreateFullscreenTransparentSpecularBackgroundBrush();
+        return GetFullscreenControlsBackgroundBrush();
     }
 
     public static Brush GetFlyoutBorderBrush(AppThemeBackdrop backdrop, ElementTheme effectiveTheme)
@@ -4371,7 +4728,7 @@ public static class ThemeHelper
             bool flag = (byte)num != 0;
             AppThemeBackdrop backdropType = AppServices.Settings.Current.BackdropType;
             ElementTheme theme = (flag ? ElementTheme.Dark : GetEffectiveElementTheme());
-            Brush bgBrush = (flag ? CreateFullscreenTransparentSpecularBackgroundBrush() : GetFlyoutPresenterBackground(backdropType, theme));
+            Brush bgBrush = (flag ? GetFullscreenControlsBackgroundBrush() : GetFlyoutPresenterBackground(backdropType, theme));
             Brush borderBrush = (flag ? CreateFullscreenSpecularBorderBrush() : GetFlyoutBorderBrush(backdropType, theme));
             Thickness borderThickness = new Thickness(flag ? 1.5 : 1.0);
             ApplySystemBackdropToFlyout(flyout);
@@ -4742,5 +5099,6 @@ public static class ThemeHelper
             }
             FindVisualChildrenInternal(child, results);
         }
+>>>>>>> Stashed changes
     }
 }

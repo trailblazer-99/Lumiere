@@ -12,7 +12,11 @@ using LumiereMediaPlayer.Controls;
 using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Pages;
+<<<<<<< Updated upstream
+=======
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Services.Streaming;
+>>>>>>> Stashed changes
 using LumiereMediaPlayer.ViewModels;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
@@ -1078,7 +1082,72 @@ public sealed partial class MainWindow : Window
         GlobalVideoPlayer.PointerMoved += OnFullscreenPointerMoved;
         GlobalVideoPlayer.PointerWheelChanged += OnGlobalVideoPointerWheelChanged;
         FullscreenVideoContainer.PointerMoved += OnFullscreenPointerMoved;
+<<<<<<< Updated upstream
+        FullscreenVideoContainer.Children.Insert(0, GlobalVideoPlayer);
+        AppServices.PlaybackViewModel.Session.MediaPlayer.MediaOpened += OnFullscreenMediaOpened;
+=======
         FloatingVideoContainer = new Grid
+        {
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false
+        };
+        FloatingVideoContainer.Tapped += (object _, TappedRoutedEventArgs _) =>
+        {
+            MediaItem track = _playback.CurrentTrack;
+            if ((object)track != null)
+            {
+                AppWindow appWindow2 = AppWindow;
+                bool isPip = ((object)appWindow2 != null && appWindow2.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay) || _wasInPipMode;
+                DispatcherQueue.SafeEnqueue(() =>
+                {
+                    if (!(ContentFrame?.Content is VideoPage))
+                    {
+                        NavigateForTrack(track);
+                    }
+                    if (isPip)
+                    {
+                        TogglePipMode();
+                    }
+                }, ".ctor", "V:\\Projects\\Lumiere\\MainWindow.xaml.cs", 754);
+            }
+        };
+        Grid.SetRow(FloatingVideoContainer, 0);
+        Grid.SetRowSpan(FloatingVideoContainer, 1);
+        FloatingVideoContainer.Children.Add(GlobalVideoPlayer);
+        RootGrid.Children.Insert(RootGrid.Children.IndexOf(FullscreenVideoContainer), FloatingVideoContainer);
+        Canvas.SetZIndex(FullscreenVideoContainer, 50);
+        FullscreenVideoContainer.Children.Remove(FullscreenMetadataOverlay);
+        RootGrid.Children.Add(FullscreenMetadataOverlay);
+        Grid.SetRowSpan(FullscreenMetadataOverlay, 2);
+        Canvas.SetZIndex(FullscreenMetadataOverlay, 650);
+        CloseFullscreenMetadataButton.Click += (object _, RoutedEventArgs _) =>
+        {
+            HideMetadataOverlayGlobal();
+        };
+        if (FullscreenStreamingDetailsButton != null)
+        {
+            FullscreenStreamingDetailsButton.Click += OnFullscreenStreamingDetailsButtonClick;
+        }
+>>>>>>> Stashed changes
+        RootGrid.SizeChanged += RootGrid_SizeChanged;
+
+        // Add global preview keydown for keyboard controls to intercept hotkeys before focused controls consume them
+        RootGrid.PreviewKeyDown += OnMainWindowKeyDown;
+
+        _videoControlsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _videoControlsTimer.Tick += OnVideoControlsTimerTick;
+
+        _miniPlayerInteractionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _miniPlayerInteractionTimer.Tick += OnMiniPlayerInteractionTimerTick;
+
+        _playback.PropertyChanged += OnPlaybackPropertyChanged;
+
+        _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _positionTimer.Tick += OnPositionTimerTick;
+
+        _queuePanel = new QueuePanel();
+
+        _queueFlyout = new Flyout
         {
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false
@@ -2267,6 +2336,9 @@ public sealed partial class MainWindow : Window
 
     private void OnPositionTimerTick(object? sender, object e)
     {
+<<<<<<< Updated upstream
+        if (!_playback.IsPlaying || _playback.CurrentTrack is null)
+=======
         try
         {
             MediaItem currentTrack = _playback.CurrentTrack;
@@ -2324,6 +2396,10 @@ public sealed partial class MainWindow : Window
             if (currentTrack.IsVideo)
             {
                 _ = TriggerVideoFrameCapture();
+                if (IsFullscreenVideoActive || TransportControls?.IsFullscreenPresentation == true)
+                {
+                    _ = ThemeHelper.UpdateLiveSceneSpecularColorAsync();
+                }
             }
         }
         catch (Exception)
@@ -2412,6 +2488,170 @@ public sealed partial class MainWindow : Window
             }
             AppWindow appWindow = AppWindow;
             if ((object)appWindow != null && appWindow.Presenter?.Kind == AppWindowPresenterKind.FullScreen)
+            {
+                SetFullScreenMode(isFullScreen: false);
+            }
+            else
+            {
+                AppWindow appWindow2 = AppWindow;
+                if ((object)appWindow2 != null && appWindow2.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay)
+                {
+                    TogglePipMode();
+                }
+            }
+            _playback?.Stop();
+            if (FloatingVideoContainer != null)
+            {
+                FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                FloatingVideoContainer.Clip = null;
+            }
+            if (FullscreenVideoContainer != null)
+            {
+                FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+            }
+            TransportControls?.SetMiniVideoPlayer(null);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public void NavigateTo(Type pageType, object? parameter = null)
+    {
+        if (ContentFrame == null || _isNavigating)
+>>>>>>> Stashed changes
+        {
+            AntiGravityLogger.Log($"[MainWindow.NavigateTo] Aborted: ContentFrame==null({ContentFrame == null}) or _isNavigating({_isNavigating}) for {pageType.Name}");
+            return;
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public async Task TriggerVideoFrameCapture()
+    {
+        try
+        {
+            if (_isVideoFrameCaptureInProgress || DateTime.UtcNow - _lastVideoFrameCaptureTime < VideoFrameCaptureInterval || !(ContentFrame.Content is VideoPage videoPage))
+            {
+                return;
+            }
+            _isVideoFrameCaptureInProgress = true;
+            try
+            {
+                ImageSource imageSource = await videoPage.CaptureCurrentFrameAsync();
+                if (imageSource != null)
+                {
+                    TransportControls.SetArtImageSource(imageSource);
+                    _lastVideoFrameCaptureTime = DateTime.UtcNow;
+                }
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                _isVideoFrameCaptureInProgress = false;
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public void NavigateToYouTube(string? initialUrl = null)
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            DoNavigate();
+        }
+        else
+        {
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, DoNavigate);
+        }
+        void DoNavigate()
+        {
+            try
+            {
+                _isNavigating = true;
+                if (RootNavigationView?.MenuItems != null)
+                {
+                    NavigationViewItem navigationViewItem = RootNavigationView.MenuItems.OfType<NavigationViewItem>().FirstOrDefault((NavigationViewItem i) => i.Tag?.ToString() == "streamYouTube");
+                    if (navigationViewItem != null)
+                    {
+                        RootNavigationView.SelectedItem = navigationViewItem;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                _isNavigating = false;
+            }
+            NavigateTo(typeof(StreamingYouTubePage), initialUrl);
+        }
+    }
+
+    public void StopActiveVideoPlayback()
+    {
+        try
+        {
+            MediaItem mediaItem = _playback?.CurrentTrack;
+            if ((object)mediaItem == null || !mediaItem.IsVideo)
+            {
+                PlaybackViewModel playback = _playback;
+                if (playback == null || !playback.IsVideoPlayerActive)
+                {
+                    return;
+                }
+            }
+<<<<<<< Updated upstream
+=======
+            if ((pageType == typeof(StreamingTwitchPage) || pageType == typeof(StreamingYouTubePage)) && ContentFrame.CurrentSourcePageType != null && ContentFrame.CurrentSourcePageType != typeof(StreamingTwitchPage) && ContentFrame.CurrentSourcePageType != typeof(StreamingYouTubePage))
+            {
+                _streamingOriginPage = ContentFrame.CurrentSourcePageType;
+            }
+            NavigationTransitionInfo infoOverride = (AppServices.Settings.Current.ReduceMotion ? ((NavigationTransitionInfo)new SuppressNavigationTransitionInfo()) : ((NavigationTransitionInfo)new EntranceNavigationTransitionInfo()));
+            if (pageType == typeof(HomePage))
+            {
+                ContentFrame.BackStack.Clear();
+                ContentFrame.ForwardStack.Clear();
+            }
+            if (pageType != typeof(VideoPage))
+            {
+                MediaItem? mediaItem = _playback?.CurrentTrack;
+                if ((mediaItem == null || !mediaItem.IsVideo || _playback?.IsVideoPlayerActive != true) && FloatingVideoContainer != null)
+                {
+                    FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                }
+                MemoryTrimHelper.TrimWorkingSetAsync(300);
+            }
+            AntiGravityLogger.Log($"[MainWindow.NavigateTo] Navigating ContentFrame to {pageType.Name} with parameter '{parameter}'");
+            bool navSuccess = ContentFrame.Navigate(pageType, parameter, infoOverride);
+            AntiGravityLogger.Log($"[MainWindow.NavigateTo] ContentFrame.Navigate returned {navSuccess}");
+        }
+        catch (Exception ex)
+        {
+            AntiGravityLogger.Log($"[MainWindow.NavigateTo] Exception during navigate: {ex}");
+            System.Diagnostics.Debug.WriteLine($"[MainWindow.NavigateTo] Exception during navigate: {ex}");
+>>>>>>> Stashed changes
+        }
+        finally
+        {
+            _isVideoFrameCaptureInProgress = false;
+        }
+    }
+
+    private void NavigateTo(System.Type pageType)
+    {
+        if (ContentFrame.CurrentSourcePageType != pageType)
+        {
+            Microsoft.UI.Xaml.Media.Animation.NavigationTransitionInfo transitionInfo;
+
+            if (pageType == typeof(VideoPage) || pageType == typeof(NowPlayingPage))
             {
                 SetFullScreenMode(isFullScreen: false);
             }
@@ -4074,12 +4314,69 @@ public sealed partial class MainWindow : Window
 
     private void OnContentFrameNavigationFailed(object sender, NavigationFailedEventArgs e)
     {
+<<<<<<< Updated upstream
+        _isNavigating = true;
+
+        if (ContentFrame.Content is HomePage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("home");
+        }
+        else if (ContentFrame.Content is MusicLibraryPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("music");
+        }
+        else if (ContentFrame.Content is VideoPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("videos");
+        }
+        else if (ContentFrame.Content is PlaylistsPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("playlists");
+        }
+        else if (ContentFrame.Content is NowPlayingPage)
+        {
+            RootNavigationView.SelectedItem = NowPlayingNavItem;
+        }
+        else if (ContentFrame.Content is SettingsPage)
+        {
+            RootNavigationView.SelectedItem = RootNavigationView.SettingsItem;
+        }
+        else if (ContentFrame.Content is StreamingMusicPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("streamMusic");
+        }
+        else if (ContentFrame.Content is StreamingMoviesPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("streamMovies");
+        }
+        else if (ContentFrame.Content is StreamingTvShowsPage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("streamTvShows");
+        }
+        else if (ContentFrame.Content is StreamingYouTubePage)
+        {
+            RootNavigationView.SelectedItem = FindNavItem("streamYouTube");
+        }
+
+        bool isVideo = ContentFrame.Content is VideoPage && _playback.CurrentTrack is { IsVideo: true };
+        RootNavigationView.IsBackEnabled = isVideo || ContentFrame.CanGoBack;
+
+        UpdateLayoutForVideoMode();
+
+        _isNavigating = false;
+    }
+
+    private bool _isClosingAnimated;
+=======
+        AntiGravityLogger.Log($"[OnContentFrameNavigationFailed] {e.SourcePageType?.Name} failed: {e.Exception}");
+        System.Diagnostics.Debug.WriteLine($"[OnContentFrameNavigationFailed] {e.SourcePageType?.Name} failed: {e.Exception}");
         e.Handled = true;
         _isNavigating = false;
     }
 
     private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
     {
+        AntiGravityLogger.Log($"[OnContentFrameNavigated] Successfully navigated to {e.SourcePageType?.Name}");
         VideoHoverPreview?.ClosePreview();
         _isNavigating = true;
         try
@@ -4328,6 +4625,7 @@ public sealed partial class MainWindow : Window
     public void SelectStreamingTabForTitleType(string? type)
     {
     }
+>>>>>>> Stashed changes
 
     private void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
@@ -5110,6 +5408,7 @@ public sealed partial class MainWindow : Window
             }
             catch
             {
+                vp.SyncMediaPlayer(true);
             }
         }
     }
@@ -5206,6 +5505,10 @@ public sealed partial class MainWindow : Window
                     TransportControls?.RefreshTheme();
                     return;
                 }
+<<<<<<< Updated upstream
+
+                TryRunHdrPipelineOnFullscreenPlayer();
+=======
                 AppServices.HdrPipeline.SetFullscreenState(isFullscreen: false);
                 _videoControlsTimer.Stop();
                 if (FullscreenVideoContainer != null)
@@ -5223,13 +5526,17 @@ public sealed partial class MainWindow : Window
                     MoveTransportControlsToNormalLayout();
                     if (FloatingVideoContainer != null)
                     {
-                        Grid.SetRow(FloatingVideoContainer, 0);
-                        Grid.SetRowSpan(FloatingVideoContainer, 1);
-                        FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Left;
-                        FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Top;
                         if (ContentFrame?.Content is VideoPage)
                         {
+                            Grid.SetRow(FloatingVideoContainer, 0);
+                            Grid.SetRowSpan(FloatingVideoContainer, 1);
                             FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                        }
+                        else
+                        {
+                            // For non-video library pages, immediately sync dock coordinates to the transport bar
+                            // rather than resetting to unanchored Top/Left (0,0)
+                            SyncFloatingVideoPlayer(force: true);
                         }
                     }
                     int num;
@@ -5290,6 +5597,7 @@ public sealed partial class MainWindow : Window
                     SyncFloatingVideoPlayer(force: true);
                 });
                 return;
+>>>>>>> Stashed changes
             }
             if (flag)
             {
@@ -5342,6 +5650,14 @@ public sealed partial class MainWindow : Window
             if (FullscreenVideoContainer != null)
             {
                 FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+                _edgeSeekFeedbackTimer?.Stop();
+                _edgeSeekStreak = 0;
+                if (GlobalVideoPlayer.MediaPlayer != null)
+                    GlobalVideoPlayer.MediaPlayer.MediaOpened -= OnFullscreenMediaOpened;
+                GlobalVideoPlayer.SetMediaPlayer(null);
+
+                if (ContentFrame?.Content is VideoPage vp)
+                    vp.SyncMediaPlayer(true);
             }
             if (FullscreenControlsOverlay != null)
             {
@@ -5949,6 +6265,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
+<<<<<<< Updated upstream
+=======
     private void OnControlsPointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (!_isStreamingFullScreen && !(ContentFrame?.Content is StreamingYouTubePage) && !(ContentFrame?.Content is StreamingTwitchPage))
@@ -5972,6 +6290,157 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
+    public string? CurrentStreamingTargetId { get; set; }
+
+    private bool IsSourceInsideOverlay(DependencyObject? source, Point? tapPointInRoot = null)
+    {
+        if (tapPointInRoot.HasValue && FullscreenMetadataOverlay != null && FullscreenMetadataOverlay.Visibility == Visibility.Visible)
+        {
+            try
+            {
+                GeneralTransform transform = FullscreenMetadataOverlay.TransformToVisual(RootGrid);
+                Point origin = transform.TransformPoint(new Point(0, 0));
+                Rect bounds = new Rect(origin.X, origin.Y, FullscreenMetadataOverlay.ActualWidth, FullscreenMetadataOverlay.ActualHeight);
+                if (bounds.Contains(tapPointInRoot.Value))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        DependencyObject? curr = source;
+        while (curr != null && curr != RootGrid)
+        {
+            if (curr == FullscreenMetadataOverlay || curr is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase || curr is ScrollViewer || curr is TransportBar)
+            {
+                return true;
+            }
+            try
+            {
+                curr = VisualTreeHelper.GetParent(curr);
+            }
+            catch
+            {
+                break;
+            }
+        }
+        return false;
+    }
+
+    private void OnMetadataOverlayPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+    }
+
+    private void OnMetadataOverlayTapped(object sender, TappedRoutedEventArgs e)
+    {
+    }
+
+    private void OnMetadataOverlayDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+    }
+
+    public async Task NavigateToStreamingDetailsAsync(string? targetId = null)
+    {
+        AntiGravityLogger.Log($"[NavigateToStreamingDetailsAsync] Starting. Passed targetId='{targetId}', CurrentStreamingTargetId='{CurrentStreamingTargetId}'");
+        try
+        {
+            // 1. Capture target and preferred region before tearing down any playback or clearing session state
+            string? target = targetId ?? CurrentStreamingTargetId;
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                var cur = AppServices.PlaybackViewModel.CurrentTrack ?? (_activeVideoPage ?? ContentFrame?.Content as VideoPage)?.ViewModel.CurrentVideo;
+                if (cur != null)
+                {
+                    var (cleanTitle, _, _) = Helpers.VideoMetadataHelper.CleanTitleAndExtractYear(cur.Title, cur.SourcePath);
+                    target = !string.IsNullOrWhiteSpace(cleanTitle) ? cleanTitle : cur.Title;
+                }
+            }
+
+            string region = AppServices.Settings.Current.PreferredStreamingRegion ?? "US";
+            object? navParam = !string.IsNullOrWhiteSpace(target)
+                ? (target, region)
+                : null;
+
+            AntiGravityLogger.Log($"[NavigateToStreamingDetailsAsync] Resolved target='{target}', region='{region}'");
+
+            // 2. Hide all metadata overlays immediately
+            HideMetadataOverlayGlobal();
+            if (FullscreenInternetMetadataPoster != null) FullscreenInternetMetadataPoster.Source = null;
+
+            // 3. Exit fullscreen if active or container is visible
+            bool isFs = (AppWindow?.Presenter?.Kind == AppWindowPresenterKind.FullScreen) ||
+                        _expectedPresenterKind == AppWindowPresenterKind.FullScreen ||
+                        CurrentPresentationMode == PresentationMode.Fullscreen ||
+                        (FullscreenVideoContainer != null && FullscreenVideoContainer.Visibility == Visibility.Visible);
+
+            if (isFs)
+            {
+                AntiGravityLogger.Log("[NavigateToStreamingDetailsAsync] Exiting fullscreen mode...");
+                await SetFullScreenModeAsync(false);
+            }
+
+            // Ensure containers and navigation views are in proper state for streaming content
+            if (FullscreenVideoContainer != null)
+            {
+                FullscreenVideoContainer.Visibility = Visibility.Collapsed;
+            }
+            if (FullscreenControlsOverlay != null)
+            {
+                FullscreenControlsOverlay.Visibility = Visibility.Collapsed;
+                FullscreenControlsOverlay.Opacity = 0.0;
+            }
+            if (RootNavigationView != null)
+            {
+                RootNavigationView.Visibility = Visibility.Visible;
+                RootNavigationView.Opacity = 1.0;
+                RootNavigationView.IsHitTestVisible = true;
+            }
+            if (AppTitleBar != null)
+            {
+                AppTitleBar.Visibility = Visibility.Visible;
+                AppTitleBar.IsHitTestVisible = true;
+            }
+
+            // 4. Stop playback cleanly
+            AppServices.Playback.Stop();
+            AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
+            if (FloatingVideoContainer != null)
+            {
+                FloatingVideoContainer.Visibility = Visibility.Collapsed;
+                FloatingVideoContainer.Clip = null;
+            }
+
+            // 5. Navigate to StreamingDetailsPage (or StreamingMoviesPage fallback)
+            _isNavigating = false; // ensure clean navigation state
+            if (navParam != null)
+            {
+                AntiGravityLogger.Log($"[NavigateToStreamingDetailsAsync] Navigating to StreamingDetailsPage with parameter tuple ({target}, {region})");
+                NavigateTo(typeof(StreamingDetailsPage), navParam);
+            }
+            else
+            {
+                AntiGravityLogger.Log("[NavigateToStreamingDetailsAsync] No target found; navigating to StreamingMoviesPage fallback");
+                NavigateTo(typeof(StreamingMoviesPage));
+            }
+        }
+        catch (Exception ex)
+        {
+            AntiGravityLogger.Log($"[NavigateToStreamingDetailsAsync] Exception: {ex}");
+            System.Diagnostics.Debug.WriteLine($"[NavigateToStreamingDetailsAsync] Exception: {ex}");
+        }
+    }
+
+    internal void OnFullscreenStreamingDetailsButtonClick(object sender, RoutedEventArgs e)
+    {
+        AntiGravityLogger.Log($"[OnFullscreenStreamingDetailsButtonClick] Clicked! Tag='{(sender as FrameworkElement)?.Tag}', CurrentStreamingTargetId='{CurrentStreamingTargetId}'");
+        string? target = CurrentStreamingTargetId ?? (sender as FrameworkElement)?.Tag as string;
+        _ = NavigateToStreamingDetailsAsync(target);
+    }
+
+>>>>>>> Stashed changes
     private void OnVideoControlsTimerTick(object? sender, object e)
     {
         HideVideoControls();
@@ -6957,6 +7426,9 @@ public sealed partial class MainWindow : Window
 
     private void OnMiniExitPipClick(object sender, RoutedEventArgs e)
     {
+<<<<<<< Updated upstream
+        TogglePipMode();
+=======
         try
         {
             (sender as UIElement)?.ReleasePointerCaptures();
@@ -7095,7 +7567,9 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void ApplyFullscreenSpecularOverlays(bool isFullscreenVideo)
+    public void ApplyFullscreenSpecularOverlays() => ApplyFullscreenSpecularOverlays(IsFullscreenVideoActive);
+
+    public void ApplyFullscreenSpecularOverlays(bool isFullscreenVideo)
     {
         if (isFullscreenVideo)
         {
@@ -7114,7 +7588,7 @@ public sealed partial class MainWindow : Window
             if (FullscreenMetadataOverlay != null)
             {
                 FullscreenMetadataOverlay.RequestedTheme = ElementTheme.Dark;
-                FullscreenMetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+                FullscreenMetadataOverlay.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();
                 FullscreenMetadataOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
                 FullscreenMetadataOverlay.BorderThickness = new Thickness(1.5);
             }
@@ -7139,7 +7613,7 @@ public sealed partial class MainWindow : Window
         if (FullscreenMetadataOverlay != null)
         {
             FullscreenMetadataOverlay.RequestedTheme = ElementTheme.Dark;
-            FullscreenMetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            FullscreenMetadataOverlay.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();
             FullscreenMetadataOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
             FullscreenMetadataOverlay.BorderThickness = new Thickness(1.0);
         }
@@ -7162,6 +7636,7 @@ public sealed partial class MainWindow : Window
             AppThemeBackdrop.Solid => current == null,
             _ => false,
         };
+>>>>>>> Stashed changes
     }
 
     public void ApplyBackdrop(AppThemeBackdrop backdropType)
@@ -7394,89 +7869,10 @@ public sealed partial class MainWindow : Window
             {
                 if (!_isFullscreenTransitioning && CurrentPresentationMode != PresentationMode.TransitioningToFullscreen && CurrentPresentationMode != PresentationMode.TransitioningToWindowed && Environment.TickCount64 - _lastFullscreenTransitionTicks >= 500)
                 {
-                    VideoHoverPreview?.ClosePreview();
-                    AppWindow appWindow = AppWindow;
-                    bool flag = ((object)appWindow != null && appWindow.Presenter?.Kind == AppWindowPresenterKind.FullScreen) || CurrentPresentationMode == PresentationMode.Fullscreen;
-                    if (!flag)
+                    AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                    if (ContentFrame?.Content is VideoPage vp)
                     {
-                        MediaItem currentTrack = _playback.CurrentTrack;
-                        bool num = (object)currentTrack != null && currentTrack.IsVideo && _playback.IsVideoPlayerActive;
-                        bool flag2 = ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage;
-                        if (!num && !flag2)
-                        {
-                            return;
-                        }
-                    }
-                    if (flag)
-                    {
-                        SetStreamingFullScreenFlag(value: false);
-                        await ExitFullscreenAnimatedAsync();
-                    }
-                    else
-                    {
-                        if (ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage)
-                        {
-                            SetStreamingFullScreenFlag(value: true);
-                        }
-                        await EnterFullscreenAnimatedAsync();
-                    }
-                    await Task.Delay(150);
-                }
-            }
-            catch (Exception)
-            {
-            }
-            finally
-            {
-                _fullscreenLock.Release();
-            }
-        }, "ToggleFullscreen", "V:\\Projects\\Lumiere\\MainWindow.xaml.cs", 6546);
-    }
-
-    public Task SetFullScreenModeAsync(bool isFullScreen)
-    {
-        return SetFullScreenModeInternalAsync(isFullScreen);
-    }
-
-    public void SetFullScreenMode(bool isFullScreen)
-    {
-        _ = SetFullScreenModeInternalAsync(isFullScreen);
-    }
-
-    private async Task SetFullScreenModeInternalAsync(bool isFullScreen)
-    {
-        _ = 1;
-        try
-        {
-            if (_isFullscreenTransitioning || CurrentPresentationMode == PresentationMode.TransitioningToFullscreen || CurrentPresentationMode == PresentationMode.TransitioningToWindowed || (isFullScreen && Environment.TickCount64 - _lastFullscreenTransitionTicks < 500))
-            {
-                if (!isFullScreen && _isStreamingFullScreen)
-                {
-                    SetStreamingFullScreenFlag(value: false);
-                }
-                return;
-            }
-            VideoHoverPreview?.ClosePreview();
-            AppWindow appWindow = AppWindow;
-            bool flag = ((object)appWindow != null && appWindow.Presenter?.Kind == AppWindowPresenterKind.FullScreen) || CurrentPresentationMode == PresentationMode.Fullscreen;
-            MediaItem currentTrack = _playback.CurrentTrack;
-            bool flag2 = (object)currentTrack != null && currentTrack.IsVideo && _playback.IsVideoPlayerActive;
-            bool flag3 = ContentFrame?.Content is StreamingYouTubePage || ContentFrame?.Content is StreamingTwitchPage;
-            if (isFullScreen)
-            {
-                if (!flag2 && !flag3)
-                {
-                    return;
-                }
-                if (flag3)
-                {
-                    SetStreamingFullScreenFlag(value: true);
-                }
-                if (flag)
-                {
-                    if (flag3)
-                    {
-                        ApplyStreamingFullscreenChrome(isFullScreen: true);
+                        vp.SyncMediaPlayer(true);
                     }
                 }
                 else
@@ -7497,6 +7893,9 @@ public sealed partial class MainWindow : Window
                     ApplyStreamingFullscreenChrome(isFullScreen: false);
                 }
             }
+<<<<<<< Updated upstream
+        });
+=======
         }
         catch (Exception)
         {
@@ -8134,7 +8533,7 @@ public sealed partial class MainWindow : Window
                 }
                 if (FullscreenMetadataOverlay != null)
                 {
-                    Canvas.SetZIndex(FullscreenMetadataOverlay, 60);
+                    Canvas.SetZIndex(FullscreenMetadataOverlay, 650);
                 }
                 UpdateFullscreenPlayerLayout();
                 MoveTransportControlsToFullscreenOverlay();
@@ -8321,13 +8720,43 @@ public sealed partial class MainWindow : Window
             {
                 GetVideoPageDockBounds(videoPage2, host, out targetX, out targetY, out targetW, out targetH);
             }
+            else if (TransportControls?.MiniPlayerHost is FrameworkElement miniHost && miniHost.IsLoaded && RootGrid != null && miniHost.XamlRoot == RootGrid.XamlRoot)
+            {
+                double barHeight = (TransportControls != null && TransportControls.ActualHeight > 0.0) ? TransportControls.ActualHeight : 64.0;
+                double minExpectedY = Math.Max(100.0, num2 - 200.0);
+                try
+                {
+                    Point pt = miniHost.TransformToVisual(RootGrid).TransformPoint(new Point(0f, 0f));
+                    if (!double.IsNaN(pt.X) && !double.IsNaN(pt.Y) && pt.Y >= minExpectedY)
+                    {
+                        targetX = pt.X;
+                        targetY = pt.Y;
+                        targetW = miniHost.ActualWidth > 0.0 ? miniHost.ActualWidth : 80.0;
+                        targetH = miniHost.ActualHeight > 0.0 ? miniHost.ActualHeight : 48.0;
+                    }
+                    else
+                    {
+                        targetX = 16.0;
+                        targetW = miniHost.ActualWidth > 0.0 ? miniHost.ActualWidth : 80.0;
+                        targetH = miniHost.ActualHeight > 0.0 ? miniHost.ActualHeight : 48.0;
+                        targetY = Math.Max(0.0, num2 - barHeight + Math.Max(0.0, (barHeight - targetH) / 2.0));
+                    }
+                }
+                catch
+                {
+                    targetX = 16.0;
+                    targetW = 80.0;
+                    targetH = 48.0;
+                    targetY = Math.Max(0.0, num2 - barHeight + 8.0);
+                }
+            }
             else
             {
-                double num3 = ((RootNavigationView?.IsPaneOpen ?? false) ? RootNavigationView.OpenPaneLength : 48.0);
-                targetX = Math.Max(16.0, num3 + 32.0);
-                targetY = 49.0;
-                targetW = Math.Max(300.0, num - targetX - 340.0 - 32.0);
-                targetH = Math.Max(200.0, num2 - targetY - 24.0);
+                double barHeight = (TransportControls != null && TransportControls.ActualHeight > 0.0) ? TransportControls.ActualHeight : 64.0;
+                targetX = 16.0;
+                targetW = 80.0;
+                targetH = 48.0;
+                targetY = Math.Max(0.0, num2 - barHeight + 8.0);
             }
             Visual visual = ((FloatingVideoContainer != null) ? ElementCompositionPreview.GetElementVisual(FloatingVideoContainer) : null);
             Compositor compositor = visual?.Compositor;
@@ -8452,7 +8881,7 @@ public sealed partial class MainWindow : Window
             else if (FloatingVideoContainer != null)
             {
                 Grid.SetRow(FloatingVideoContainer, 0);
-                Grid.SetRowSpan(FloatingVideoContainer, 1);
+                Grid.SetRowSpan(FloatingVideoContainer, 2);
                 FloatingVideoContainer.Margin = new Thickness(targetX, targetY, 0.0, 0.0);
                 FloatingVideoContainer.Width = targetW;
                 FloatingVideoContainer.Height = targetH;
@@ -8460,8 +8889,9 @@ public sealed partial class MainWindow : Window
                 FloatingVideoContainer.MaxHeight = targetH;
                 FloatingVideoContainer.HorizontalAlignment = HorizontalAlignment.Left;
                 FloatingVideoContainer.VerticalAlignment = VerticalAlignment.Top;
-                FloatingVideoContainer.CornerRadius = new CornerRadius(8.0);
+                FloatingVideoContainer.CornerRadius = new CornerRadius(4.0);
                 FloatingVideoContainer.Clip = null;
+                Canvas.SetZIndex(FloatingVideoContainer, 595);
             }
             if (isVideoActive && !(ContentFrame?.Content is VideoPage))
             {
@@ -8520,6 +8950,7 @@ public sealed partial class MainWindow : Window
             }
             SetTransitionHitTestShield(shieldActive: false);
         }
+>>>>>>> Stashed changes
     }
 
     public void SetChromeVisibility(bool visible)
@@ -9399,8 +9830,12 @@ public sealed partial class MainWindow : Window
             AppWindow appWindow = AppWindow;
             if ((object)appWindow == null || appWindow.Presenter?.Kind != AppWindowPresenterKind.FullScreen)
             {
-                MediaItem currentTrack = _playback.CurrentTrack;
-                if ((object)currentTrack != null && currentTrack.IsVideo)
+                RootNavigationView.SelectedItem = FindNavItem("videos");
+                NavigateTo(typeof(VideoPage));
+
+<<<<<<< Updated upstream
+                // Defer to the next dispatcher loop tick to allow layout and page navigation to finish
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                 {
                     _playback.IsVideoPlayerActive = true;
                     if (ContentFrame.CurrentSourcePageType != typeof(VideoPage))
@@ -9413,25 +9848,30 @@ public sealed partial class MainWindow : Window
             }
             ToggleFullscreen();
         }
-        catch (Exception)
-        {
-        }
-    }
-
+        ToggleFullscreen();
+=======
     public bool HideMetadataOverlayGlobal()
     {
         bool result = false;
-        if (FullscreenMetadataOverlay.Visibility == Visibility.Visible)
+        if (FullscreenMetadataOverlay != null && FullscreenMetadataOverlay.Visibility == Visibility.Visible)
         {
             FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
             result = true;
         }
-        if (ContentFrame?.Content is VideoPage { IsMetadataOverlayVisible: not false } videoPage)
+        if (ContentFrame?.Content is VideoPage videoPage)
         {
-            videoPage.HideMetadataOverlay();
-            result = true;
+            if (videoPage.IsMetadataOverlayVisible)
+            {
+                videoPage.HideMetadataOverlay();
+                result = true;
+            }
+        }
+        if (result)
+        {
+            AntiGravityLogger.Log("[HideMetadataOverlayGlobal] Fullscreen or video metadata overlay was hidden.");
         }
         return result;
+>>>>>>> Stashed changes
     }
 
     private void ToggleMetadataOverlayGlobal()
@@ -9486,11 +9926,37 @@ public sealed partial class MainWindow : Window
             AppWindow appWindow = AppWindow;
             if ((object)appWindow == null || appWindow.Presenter?.Kind != AppWindowPresenterKind.FullScreen || (!(ContentFrame?.Content is StreamingYouTubePage) && !(ContentFrame?.Content is StreamingTwitchPage)))
             {
-                bool flag = (InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & CoreVirtualKeyStates.Down) == CoreVirtualKeyStates.Down;
-                bool flag2 = (InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & CoreVirtualKeyStates.Down) == CoreVirtualKeyStates.Down;
-                if (flag)
+                case Windows.System.VirtualKey.Left:
+                    SeekRelative(-AppServices.Settings.Current.SkipBackwardInterval);
+                    e.Handled = true;
+                    return;
+<<<<<<< Updated upstream
+                case Windows.System.VirtualKey.Right:
+                    SeekRelative(AppServices.Settings.Current.SkipForwardInterval);
+                    e.Handled = true;
+                    return;
+                case Windows.System.VirtualKey.I:
+                    ToggleMetadataOverlayGlobal();
+                    e.Handled = true;
+                    return;
+                case Windows.System.VirtualKey.E:
+                    if (isShiftPressed)
+=======
+                }
+                if (FullscreenMetadataOverlay.Visibility == Visibility.Collapsed)
                 {
-                    switch (e.Key)
+                    ApplyFullscreenSpecularOverlays(IsFullscreenVideoActive);
+                    Canvas.SetZIndex(FullscreenMetadataOverlay, 650);
+                    if (RootGrid != null && RootGrid.Children.Contains(FullscreenMetadataOverlay))
+                    {
+                        RootGrid.Children.Remove(FullscreenMetadataOverlay);
+                        RootGrid.Children.Add(FullscreenMetadataOverlay);
+                    }
+                    FullscreenMetadataOverlay.MaxHeight = Math.Max(100.0, (RootGrid?.ActualHeight ?? 600.0) - 160.0);
+                    FadeElement(FullscreenMetadataOverlay, 1.0, 110.0, collapseOnHide: false);
+                    MediaItem currentTrack2 = AppServices.PlaybackViewModel.CurrentTrack;
+                    if (currentTrack2 != null)
+>>>>>>> Stashed changes
                     {
                         case VirtualKey.P:
                             TogglePipMode();
@@ -9953,9 +10419,70 @@ public sealed partial class MainWindow : Window
 
     private async void OnVideoTapped(object sender, TappedRoutedEventArgs e)
     {
+<<<<<<< Updated upstream
+        var pointerPoint = e.GetCurrentPoint(FullscreenVideoContainer);
+        AdjustVolume(pointerPoint.Properties.MouseWheelDelta > 0 ? 5 : -5);
+=======
         try
         {
+            Point rootPt = new Point(0, 0);
+            try
+            {
+                rootPt = e.GetPosition(RootGrid);
+            }
+            catch { }
+
+            if (FullscreenStreamingDetailsButton != null && FullscreenStreamingDetailsButton.Visibility == Visibility.Visible && FullscreenMetadataOverlay?.Visibility == Visibility.Visible)
+            {
+                try
+                {
+                    GeneralTransform btnTransform = FullscreenStreamingDetailsButton.TransformToVisual(RootGrid);
+                    Point btnPt = btnTransform.TransformPoint(new Point(0, 0));
+                    Rect btnBounds = new Rect(btnPt.X, btnPt.Y, FullscreenStreamingDetailsButton.ActualWidth, FullscreenStreamingDetailsButton.ActualHeight);
+                    if (btnBounds.Contains(rootPt))
+                    {
+                        AntiGravityLogger.Log($"[OnVideoTapped] Click at {rootPt} fell directly on FullscreenStreamingDetailsButton bounds {btnBounds}! Triggering streaming navigation.");
+                        e.Handled = true;
+                        OnFullscreenStreamingDetailsButtonClick(FullscreenStreamingDetailsButton, new RoutedEventArgs());
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AntiGravityLogger.Log($"[OnVideoTapped] Error checking button bounds: {ex.Message}");
+                }
+            }
+
+            if (CloseFullscreenMetadataButton != null && CloseFullscreenMetadataButton.Visibility == Visibility.Visible && FullscreenMetadataOverlay?.Visibility == Visibility.Visible)
+            {
+                try
+                {
+                    GeneralTransform closeTransform = CloseFullscreenMetadataButton.TransformToVisual(RootGrid);
+                    Point closePt = closeTransform.TransformPoint(new Point(0, 0));
+                    Rect closeBounds = new Rect(closePt.X, closePt.Y, CloseFullscreenMetadataButton.ActualWidth, CloseFullscreenMetadataButton.ActualHeight);
+                    if (closeBounds.Contains(rootPt))
+                    {
+                        AntiGravityLogger.Log($"[OnVideoTapped] Click at {rootPt} fell on CloseFullscreenMetadataButton bounds {closeBounds}. Closing metadata overlay.");
+                        e.Handled = true;
+                        HideMetadataOverlayGlobal();
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            if (IsSourceInsideOverlay(e.OriginalSource as DependencyObject, rootPt))
+            {
+                AntiGravityLogger.Log("[OnVideoTapped] Click inside overlay ignored by video handler.");
+                return;
+            }
             e.Handled = true;
+            if (HideMetadataOverlayGlobal())
+            {
+                AntiGravityLogger.Log("[OnVideoTapped] Click outside overlay: dismissed metadata overlay.");
+                _videoTapClickCount = 0;
+                return;
+            }
             if (_isFullscreenTransitioning || Environment.TickCount64 - _lastFullscreenTransitionTicks < 500)
             {
                 return;
@@ -9982,6 +10509,7 @@ public sealed partial class MainWindow : Window
     {
         PointerPoint currentPoint = e.GetCurrentPoint(FullscreenVideoContainer);
         AdjustVolume((currentPoint.Properties.MouseWheelDelta > 0) ? 5 : (-5));
+>>>>>>> Stashed changes
         e.Handled = true;
     }
 
@@ -10243,7 +10771,108 @@ public sealed partial class MainWindow : Window
                 }
             }
         }
+        catch { }
+    }
+
+<<<<<<< Updated upstream
+    // ── Input Handlers for GlobalVideoPlayer ──────────────────
+    private async void OnGlobalVideoTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+=======
+    private async void OnGlobalVideoTapped(object sender, TappedRoutedEventArgs e)
+    {
+        try
+        {
+            Point rootPt = new Point(0, 0);
+            try
+            {
+                rootPt = e.GetPosition(RootGrid);
+            }
+            catch { }
+
+            if (FullscreenStreamingDetailsButton != null && FullscreenStreamingDetailsButton.Visibility == Visibility.Visible && FullscreenMetadataOverlay?.Visibility == Visibility.Visible)
+            {
+                try
+                {
+                    GeneralTransform btnTransform = FullscreenStreamingDetailsButton.TransformToVisual(RootGrid);
+                    Point btnPt = btnTransform.TransformPoint(new Point(0, 0));
+                    Rect btnBounds = new Rect(btnPt.X, btnPt.Y, FullscreenStreamingDetailsButton.ActualWidth, FullscreenStreamingDetailsButton.ActualHeight);
+                    if (btnBounds.Contains(rootPt))
+                    {
+                        AntiGravityLogger.Log($"[OnGlobalVideoTapped] Click at {rootPt} fell directly on FullscreenStreamingDetailsButton bounds {btnBounds}! Triggering streaming navigation.");
+                        e.Handled = true;
+                        OnFullscreenStreamingDetailsButtonClick(FullscreenStreamingDetailsButton, new RoutedEventArgs());
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            if (IsSourceInsideOverlay(e.OriginalSource as DependencyObject, rootPt))
+            {
+                AntiGravityLogger.Log("[OnGlobalVideoTapped] Click inside overlay ignored by global video handler.");
+                return;
+            }
+            e.Handled = true;
+            if (HideMetadataOverlayGlobal())
+            {
+                _videoTapClickCount = 0;
+                return;
+            }
+            AppWindow appWindow = AppWindow;
+            bool flag = (object)appWindow != null && appWindow.Presenter?.Kind == AppWindowPresenterKind.FullScreen;
+            bool flag2 = ContentFrame?.Content is VideoPage;
+            AppWindow appWindow2 = AppWindow;
+            if (((object)appWindow2 != null && appWindow2.Presenter?.Kind == AppWindowPresenterKind.CompactOverlay) || _wasInPipMode)
+            {
+                DispatcherQueue.SafeEnqueue(() =>
+                {
+                    TogglePipMode();
+                    MediaItem currentTrack = _playback.CurrentTrack;
+                    if ((object)currentTrack != null && currentTrack.IsVideo && !(ContentFrame?.Content is VideoPage))
+                    {
+                        NavigateForTrack(currentTrack);
+                    }
+                }, "OnGlobalVideoTapped", "V:\\Projects\\Lumiere\\MainWindow.xaml.cs", 9450);
+                return;
+            }
+            if (!flag && !flag2)
+            {
+                MediaItem track = _playback.CurrentTrack;
+                if ((object)track != null && track.IsVideo)
+                {
+                    DispatcherQueue.SafeEnqueue(() =>
+                    {
+                        NavigateForTrack(track);
+                    }, "OnGlobalVideoTapped", "V:\\Projects\\Lumiere\\MainWindow.xaml.cs", 9468);
+                    return;
+                }
+            }
+            NotifyActivityInFullscreen();
+            _videoTapClickCount++;
+            if (_videoTapClickCount == 1)
+            {
+                int tapVersion = ++_videoTapVersion;
+                await Task.Delay(GetDoubleTapDelayMs());
+                if (tapVersion == _videoTapVersion)
+                {
+                    _videoTapClickCount = 0;
+                    TogglePlayPause();
+                }
+            }
+        }
         catch (Exception)
+        {
+        }
+    }
+
+    private void OnGlobalVideoDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+>>>>>>> Stashed changes
+    {
+        e.Handled = true;
+        NotifyActivityInFullscreen();
+        _videoTapClickCount++;
+        
+        if (_videoTapClickCount == 1)
         {
         }
     }
@@ -10491,6 +11120,8 @@ public sealed partial class MainWindow : Window
     {
         OnRootGridKeyDown(sender, e);
     }
+<<<<<<< Updated upstream
+=======
 
     private void SyncFloatingVideoPlayer(bool force = false)
     {
@@ -10710,6 +11341,29 @@ public sealed partial class MainWindow : Window
                             Point point = frameworkElement.TransformToVisual(RootGrid).TransformPoint(new Point(0f, 0f));
                             double actualWidth = frameworkElement.ActualWidth;
                             double actualHeight = frameworkElement.ActualHeight;
+
+                            // MiniPlayerHost is situated in the bottom TransportBar.
+                            // If TransformToVisual returns (0, 0), top-of-window, or invalid values due to layout transitions,
+                            // clamp to a deterministic bottom dock position and schedule a low-priority re-sync.
+                            double rootHeight = (RootGrid != null && RootGrid.ActualHeight > 0.0) ? RootGrid.ActualHeight : 720.0;
+                            double minExpectedY = Math.Max(100.0, rootHeight - 200.0);
+                            bool isAnomalous = double.IsNaN(point.X) || double.IsNaN(point.Y) ||
+                                               double.IsInfinity(point.X) || double.IsInfinity(point.Y) ||
+                                               point.Y < minExpectedY || (Math.Abs(point.X) < 1.0 && Math.Abs(point.Y) < 1.0);
+
+                            if (isAnomalous)
+                            {
+                                double barHeight = (TransportControls != null && TransportControls.ActualHeight > 0.0) ? TransportControls.ActualHeight : 64.0;
+                                double fallbackX = 16.0;
+                                double fallbackY = Math.Max(0.0, rootHeight - barHeight + Math.Max(0.0, (barHeight - actualHeight) / 2.0));
+                                point = new Point(fallbackX, fallbackY);
+
+                                _ = DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                                {
+                                    SyncFloatingVideoPlayer(force: true);
+                                });
+                            }
+
                             FloatingVideoContainer.Width = actualWidth;
                             FloatingVideoContainer.Height = actualHeight;
                             FloatingVideoContainer.MaxWidth = actualWidth;
@@ -10873,4 +11527,5 @@ public sealed partial class MainWindow : Window
         HideBottomToast();
     }
 
+>>>>>>> Stashed changes
 }

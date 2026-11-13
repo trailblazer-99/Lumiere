@@ -38,6 +38,7 @@ internal sealed class BrightnessOverrideHelper : IDisposable
     private byte? _savedWmiBrightness;
     private bool _ddcOverrideActive;
     private bool _wmiOverrideActive;
+    private bool _winrtOverrideActive;
     private bool _disposed;
     private volatile bool _overrideRequested;
     private CancellationTokenSource? _wmiCts;
@@ -45,24 +46,11 @@ internal sealed class BrightnessOverrideHelper : IDisposable
     private Task? _lastDdcTask;
     private Windows.Graphics.Display.BrightnessOverride? _winRtOverride;
 
-    static BrightnessOverrideHelper()
-    {
-        // Windows.Graphics.Display.BrightnessOverride is a UWP API and is unsupported in desktop WinUI 3.
-        // Pre-emptively flagging it as unsupported prevents throwing first-chance COMExceptions inside WinRT.Runtime.dll.
-        s_winRtUnsupported = true;
-        s_wmiUnsupported = false;
-        s_ddcUnsupported = false;
-
-        // Try restoring emergency baseline if app previously crashed or was killed while overridden
-        TryRestoreEmergencyBaseline();
-    }
-
-    public BrightnessOverrideHelper()
-    {
-        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-    }
-
-    private void OnProcessExit(object? sender, EventArgs e)
+    /// <summary>
+    /// Boost the monitor's brightness to its maximum level.
+    /// Returns <c>true</c> if either WinRT, WMI, or DDC/CI override was applied successfully.
+    /// </summary>
+    public bool TryOverrideToMax(IntPtr hwnd)
     {
         if (IsOverrideActive)
         {
@@ -105,14 +93,53 @@ internal sealed class BrightnessOverrideHelper : IDisposable
 
         try
         {
-            // 0. Try WinRT BrightnessOverride (Tier 0 for modern laptops/tablets).
-            // Strictly mutually exclusive fallback: if supported and applied, RETURN immediately!
-            if (!s_winRtUnsupported)
+            // 0. Try WinRT BrightnessOverride (Official Windows 10/11 system brightness override API for laptops/tablets)
+            try
+            {
+                var winrtOverride = Windows.Graphics.Display.BrightnessOverride.GetDefaultForSystem();
+                if (winrtOverride != null && winrtOverride.IsSupported)
+                {
+                    winrtOverride.SetBrightnessLevel(1.0, Windows.Graphics.Display.DisplayBrightnessOverrideOptions.None);
+                    winrtOverride.StartOverride();
+                    _winrtOverrideActive = true;
+                    success = true;
+                    Debug.WriteLine("[HDR Brightness] WinRT system BrightnessOverride applied: 100%");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[HDR Brightness] WinRT BrightnessOverride attempt failed: {ex.Message}");
+            }
+
+            // 1. Try WMI (for laptop internal displays if WinRT not supported)
+            if (!_winrtOverrideActive)
             {
                 try
                 {
-                    var bo = Windows.Graphics.Display.BrightnessOverride.GetDefaultForSystem();
-                    if (bo != null && bo.IsSupported)
+                    byte? currentWmi = GetWmiBrightness();
+                    if (currentWmi.HasValue)
+                    {
+                        _savedWmiBrightness = currentWmi.Value;
+                        // Fire-and-forget — WMI latency (~50–200 ms) must not block the UI thread.
+                        _ = Task.Run(() => SetWmiBrightness(100));
+                        _wmiOverrideActive = true;
+                        success = true;
+                        Debug.WriteLine($"[HDR Brightness] WMI laptop override applied: {currentWmi.Value} → 100");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[HDR Brightness] WMI override attempt failed: {ex.Message}");
+                }
+            }
+
+            // 2. Try DDC/CI (for external monitors)
+            try
+            {
+                var hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (hMonitor != IntPtr.Zero)
+                {
+                    if (GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, out uint count) && count > 0)
                     {
                         bo.SetBrightnessLevel(1.0, Windows.Graphics.Display.DisplayBrightnessOverrideOptions.None);
                         bo.StartOverride();
@@ -412,15 +439,27 @@ internal sealed class BrightnessOverrideHelper : IDisposable
     /// </summary>
     public void Release()
     {
-        CancellationTokenSource? ctsToCancel;
-        bool shouldRestoreWmi = false;
-        byte targetWmi = 70;
-        bool shouldRestoreDdc = false;
-        uint targetDdc = 100;
-        IntPtr hPhysical = IntPtr.Zero;
-        Windows.Graphics.Display.BrightnessOverride? winRtToStop = null;
+        // Restore WinRT (system)
+        if (_winrtOverrideActive)
+        {
+            try
+            {
+                var winrtOverride = Windows.Graphics.Display.BrightnessOverride.GetDefaultForSystem();
+                winrtOverride?.StopOverride();
+                Debug.WriteLine("[HDR Brightness] WinRT system BrightnessOverride stopped");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[HDR Brightness] WinRT restore failed: {ex.Message}");
+            }
+            finally
+            {
+                _winrtOverrideActive = false;
+            }
+        }
 
-        lock (s_globalSyncLock)
+        // Restore WMI (internal)
+        if (_wmiOverrideActive)
         {
             lock (_stateLock)
             {
@@ -854,54 +893,7 @@ internal sealed class BrightnessOverrideHelper : IDisposable
         }
     }
 
-    public static bool IsAnyOverrideActive
-    {
-        get
-        {
-            lock (s_globalSyncLock)
-            {
-                return s_isWmiOverrideActive || s_isDdcOverrideActive;
-            }
-        }
-    }
-
-    internal static void ResetBaselineForTesting()
-    {
-        lock (s_globalSyncLock)
-        {
-            s_persistentBaselineWmi = null;
-            s_persistentBaselineDdc = null;
-            s_isWmiOverrideActive = false;
-            s_isDdcOverrideActive = false;
-            s_winRtUnsupported = true;
-            s_wmiUnsupported = false;
-            s_ddcUnsupported = false;
-            s_lastDdcTimestamp = 0;
-        }
-        ClearEmergencyBaseline();
-    }
-
-    internal static byte? PersistentBaselineWmi
-    {
-        get
-        {
-            lock (s_globalSyncLock)
-            {
-                return s_persistentBaselineWmi;
-            }
-        }
-    }
-
-    internal static uint? PersistentBaselineDdc
-    {
-        get
-        {
-            lock (s_globalSyncLock)
-            {
-                return s_persistentBaselineDdc;
-            }
-        }
-    }
+    public bool IsOverrideActive => _winrtOverrideActive || _ddcOverrideActive || _wmiOverrideActive;
 
     public void Dispose()
     {
@@ -1002,21 +994,10 @@ internal sealed class BrightnessOverrideHelper : IDisposable
                 {
                     using (instance)
                     {
-                        try
-                        {
-                            using var inParams = instance.GetMethodParameters("WmiSetBrightness");
-                            if (inParams != null)
-                            {
-                                inParams["Timeout"] = 0u;
-                                inParams["Brightness"] = targetBrightness;
-                                using var outParams = instance.InvokeMethod("WmiSetBrightness", inParams, null);
-                                success = true;
-                            }
-                        }
-                        catch (Exception exInner)
-                        {
-                            Debug.WriteLine($"[WMI Brightness] Instance InvokeMethod failed: {exInner.Message}");
-                        }
+                        // Invoke on all instances (some drivers report Active=false incorrectly)
+                        // Pass uint 0 (0u) as Timeout so ACPI brightness methods transition immediately without type mismatch
+                        instance.InvokeMethod("WmiSetBrightness", new object[] { 0u, targetBrightness });
+                        success = true;
                     }
                 }
                 return success;

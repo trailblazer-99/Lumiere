@@ -4,6 +4,8 @@ using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
+using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using System.Linq;
@@ -12,7 +14,11 @@ using System.ComponentModel;
 using System.Collections.Generic;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Models.Streaming;
+<<<<<<< Updated upstream
+=======
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Services.Streaming;
+>>>>>>> Stashed changes
 
 namespace LumiereMediaPlayer.Pages;
 
@@ -60,6 +66,8 @@ public sealed partial class VideoPage : Page
     public VideoPage()
     {
         InitializeComponent();
+<<<<<<< Updated upstream
+=======
         this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
@@ -75,6 +83,127 @@ public sealed partial class VideoPage : Page
         {
             CloseMetadataButton.Click += (_, _) => HideMetadataOverlay();
         }
+        if (StreamingDetailsButton != null)
+        {
+            StreamingDetailsButton.Click += OnStreamingDetailsButtonClick;
+        }
+    }
+
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_isFullscreen) return;
+        UpdateLayoutForWidth(e.NewSize.Width);
+    }
+
+    private bool _isFullscreen;
+    public bool IsFullscreen => _isFullscreen;
+
+    public void SetFullscreenPresentation(bool isFullscreen)
+    {
+        _isFullscreen = isFullscreen;
+        ViewModel.IsFullscreen = isFullscreen;
+        if (HdrStatusBadge != null)
+        {
+            HdrStatusBadge.Visibility = isFullscreen ? Visibility.Collapsed : ViewModel.HdrBadgeVisibility;
+        }
+
+        if (isFullscreen)
+        {
+            if (QueueColumn != null) QueueColumn.Width = new GridLength(0);
+            if (PlayerSidebarGrid != null) PlayerSidebarGrid.ColumnSpacing = 0;
+            if (VideoListBorder != null) VideoListBorder.Visibility = Visibility.Collapsed;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = Visibility.Collapsed;
+
+            if (PageContent != null)
+            {
+                PageContent.Margin = new Thickness(0);
+                PageContent.RowSpacing = 0;
+            }
+            if (VideoPlayerContainer != null)
+            {
+                VideoPlayerContainer.BorderThickness = new Thickness(0);
+                VideoPlayerContainer.CornerRadius = new CornerRadius(0);
+            }
+            if (VideoPlayerHost != null)
+            {
+                VideoPlayerHost.CornerRadius = new CornerRadius(0);
+            }
+        }
+        else
+        {
+            if (PlayerColumn != null) PlayerColumn.Width = new GridLength(1, GridUnitType.Star);
+            if (QueueColumn != null) QueueColumn.Width = new GridLength(_isQueueVisible ? 340 : 0);
+            if (PlayerSidebarGrid != null) PlayerSidebarGrid.ColumnSpacing = _isQueueVisible ? 16 : 0;
+            if (VideoListBorder != null) VideoListBorder.Visibility = _isQueueVisible ? Visibility.Visible : Visibility.Collapsed;
+            if (ShowQueueButton != null) ShowQueueButton.Visibility = _isQueueVisible ? Visibility.Collapsed : Visibility.Visible;
+
+            if (PageContent != null)
+            {
+                bool isNarrow = ActualWidth > 0 ? ActualWidth < 960 : false;
+                string marginKey = isNarrow ? "PageContentMarginNarrow" : "PageContentMargin";
+                var normalMargin = Application.Current.Resources.TryGetValue(marginKey, out var m) && m is Thickness th
+                    ? th
+                    : (isNarrow ? new Thickness(16, 44, 16, 16) : new Thickness(32, 48, 32, 24));
+                PageContent.Margin = normalMargin;
+                PageContent.RowSpacing = 16;
+            }
+            if (VideoPlayerContainer != null)
+            {
+                var cornerRadius = Application.Current.Resources.TryGetValue("LargeCornerRadius", out var cr) && cr is CornerRadius r ? r : new CornerRadius(8);
+                VideoPlayerContainer.BorderThickness = new Thickness(1);
+                VideoPlayerContainer.CornerRadius = cornerRadius;
+            }
+            if (VideoPlayerHost != null)
+            {
+                var cornerRadius = Application.Current.Resources.TryGetValue("LargeCornerRadius", out var cr) && cr is CornerRadius r ? r : new CornerRadius(8);
+                VideoPlayerHost.CornerRadius = cornerRadius;
+            }
+        }
+    }
+
+    public void EnsurePlayerDocked()
+    {
+        var mainWin = App.MainWindowInstance;
+        if (mainWin == null || mainWin.GlobalVideoPlayer == null || VideoPlayerHost == null) return;
+
+        // Invariant: Cannot dock player into host if the page or host is not attached to the visual tree
+        if (!this.IsLoaded || this.XamlRoot == null || !VideoPlayerHost.IsLoaded)
+        {
+            return;
+        }
+
+        // Invariant: If app is currently in Fullscreen, transitioning, or in PiP,
+        // GlobalVideoPlayer belongs in FloatingVideoContainer / MiniVideoHost, NOT VideoPlayerHost!
+        if (_isFullscreen ||
+            (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (mainWin.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay) ||
+            (mainWin.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) ||
+            (mainWin.ExpectedPresenterKind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay) ||
+            (mainWin.CurrentPresentationMode == Models.PresentationMode.Pip) ||
+            mainWin.IsFullscreenTransitioning)
+        {
+            return;
+        }
+
+>>>>>>> Stashed changes
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.Opacity = 0f;
+        }
+        catch { }
+        _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
+        _playbackPropertyChangedHandler = OnPlaybackPropertyChanged;
+        _closeFullscreenHandler = (_, _) => HideMetadataOverlay();
+
+        AttachEventHandlers();
+
+        this.Loaded += OnLoaded;
+        this.Unloaded += OnUnloaded;
+        this.SizeChanged += OnPageSizeChanged;
+
+        SyncMediaPlayer(true);
+        UpdateUiLuminance();
     }
 
     private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
@@ -575,34 +704,8 @@ public sealed partial class VideoPage : Page
         if (e.PropertyName is nameof(VideoViewModel.CurrentVideo)
             or nameof(VideoViewModel.HasSource))
         {
-            bool clearSelection = ViewModel.CurrentVideo != null;
             bool force = e.PropertyName == nameof(VideoViewModel.CurrentVideo);
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (clearSelection)
-                {
-                    VideoSelectionRibbon?.ClearSelection();
-                    UpdateQueueSelectAllState();
-                }
-                SyncMediaPlayer(force);
-            });
-        }
-        else if (e.PropertyName is nameof(VideoViewModel.FilteredVideos)
-                 or nameof(VideoViewModel.OverlayVisibility))
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                UpdateEmptyState();
-                UpdateQueueSelectAllState();
-            });
-        }
-        else if (e.PropertyName is nameof(VideoViewModel.PlayerVisibility))
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                UpdateEmptyState();
-                SyncMediaPlayer(true);
-            });
+            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(force));
         }
     }
 
@@ -610,16 +713,7 @@ public sealed partial class VideoPage : Page
     {
         if (e.PropertyName == nameof(PlaybackViewModel.IsVideoPlayerActive))
         {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (AppServices.PlaybackViewModel.IsVideoPlayerActive)
-                {
-                    App.MainWindowInstance?.VideoHoverPreviewControl?.ClosePreview();
-                    VideoSelectionRibbon?.ClearSelection();
-                    UpdateQueueSelectAllState();
-                }
-                SyncMediaPlayer(true);
-            });
+            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
         }
         else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAspectRatio)
                  || e.PropertyName == nameof(PlaybackViewModel.VideoStretch))
@@ -630,7 +724,8 @@ public sealed partial class VideoPage : Page
         {
             DispatcherQueue.SafeEnqueueAsync(async () =>
             {
-                try
+                SyncMediaPlayer(true);
+                if (ViewModel.CurrentVideo != null)
                 {
                     SyncMediaPlayer(true);
                     if (AppServices.PlaybackViewModel.CurrentTrack == null)
@@ -659,14 +754,26 @@ public sealed partial class VideoPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        try
+        DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+    }
+
+    public void SyncMediaPlayer(bool forceRefresh = false)
+    {
+        bool isPip = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.CompactOverlay;
+        bool isFullscreen = App.MainWindowInstance?.AppWindow?.Presenter?.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
+
+        if (ViewModel.HasSource && AppServices.PlaybackViewModel.IsVideoPlayerActive && !isPip && !isFullscreen)
         {
-            try { AppServices.HdrPipeline.SetVideoPageActive(true); } catch { }
-            AttachRibbonToHost();
-            AttachEventHandlers();
-            EnsurePlayerDocked();
-            UpdateUiLuminance();
-            DispatcherQueue.TryEnqueue(() => SyncMediaPlayer(true));
+            var sessionPlayer = AppServices.PlaybackViewModel.Session.MediaPlayer;
+            if (LocalVideoPlayer.MediaPlayer != sessionPlayer || forceRefresh)
+            {
+                if (LocalVideoPlayer.MediaPlayer != null)
+                {
+                    LocalVideoPlayer.SetMediaPlayer(null);
+                }
+                LocalVideoPlayer.SetMediaPlayer(sessionPlayer);
+            }
+            UpdatePlayerLayout();
         }
         catch (Exception ex)
         {
@@ -869,31 +976,146 @@ public sealed partial class VideoPage : Page
             InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
             if (mainWin != null)
             {
-                mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+<<<<<<< Updated upstream
+=======
+                string displayTitle = !string.IsNullOrWhiteSpace(cleanTitle) ? cleanTitle : video.Title;
+                InternetMetadataTitle.Text = displayTitle;
+                InternetMetadataOverview.Text = "Search streaming providers and details.";
+                InternetMetadataPanel.Visibility = Visibility.Visible;
+                InternetMetadataContent.Visibility = Visibility.Visible;
+                InternetMetadataProgress.IsActive = false;
+                InternetMetadataProgress.Visibility = Visibility.Collapsed;
+
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataTitle.Text = displayTitle;
+                    mainWin.FullscreenInternetMetadataOverview.Text = "Search streaming providers and details.";
+                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Visible;
+                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                }
             }
 
-            if (bestMatch == null) return;
-            string targetTmdbId = isTvShow ? $"tmdb_tv-{bestMatch.Id}" : $"tmdb_movie-{bestMatch.Id}";
-
-            // Unsubscribe any previous handler to prevent accumulation
-            if (_streamingClickHandler != null)
-                StreamingDetailsButton.Click -= _streamingClickHandler;
-
-            _streamingClickHandler = (s, args) =>
+            string? targetTmdbId = null;
+            if (bestMatch != null)
             {
-                HideMetadataOverlay();
-                AppServices.Playback.Stop();
-                AppServices.PlaybackViewModel.IsVideoPlayerActive = false;
-                if (InternetMetadataPoster != null) InternetMetadataPoster.Source = null;
-                if (App.MainWindowInstance?.FullscreenInternetMetadataPoster != null)
-                    App.MainWindowInstance.FullscreenInternetMetadataPoster.Source = null;
-                App.MainWindowInstance?.NavigateTo(typeof(StreamingDetailsPage), targetTmdbId);
-            };
-            StreamingDetailsButton.Click += _streamingClickHandler;
+                targetTmdbId = isTvShow ? $"tmdb_tv-{bestMatch.Id}" : $"tmdb_movie-{bestMatch.Id}";
+            }
+            else if (!string.IsNullOrWhiteSpace(cleanTitle))
+            {
+                targetTmdbId = cleanTitle;
+            }
+
+            CurrentStreamingTargetId = targetTmdbId;
+            StreamingDetailsButton.Tag = targetTmdbId;
+            if (mainWin != null)
+            {
+                mainWin.CurrentStreamingTargetId = targetTmdbId;
+                mainWin.FullscreenStreamingDetailsButton.Tag = targetTmdbId;
+                mainWin.FullscreenStreamingDetailsButton.Click -= mainWin.OnFullscreenStreamingDetailsButtonClick;
+                mainWin.FullscreenStreamingDetailsButton.Click += mainWin.OnFullscreenStreamingDetailsButtonClick;
+            }
+
             StreamingDetailsButton.Visibility = Visibility.Visible;
             InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
 
             if (mainWin != null)
+            {
+                mainWin.FullscreenStreamingDetailsButton.Visibility = Visibility.Visible;
+                mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+                mainWin.FullscreenMetadataDivider.Visibility = Visibility.Visible;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error fetching metadata: {ex.Message}");
+            try
+            {
+                var (cleanTitle, _, _) = Helpers.VideoMetadataHelper.CleanTitleAndExtractYear(video.Title, video.SourcePath);
+                string target = !string.IsNullOrWhiteSpace(cleanTitle) ? cleanTitle : video.Title;
+                CurrentStreamingTargetId = target;
+                StreamingDetailsButton.Tag = target;
+                if (mainWin != null)
+                {
+                    mainWin.CurrentStreamingTargetId = target;
+                    mainWin.FullscreenStreamingDetailsButton.Tag = target;
+                    mainWin.FullscreenStreamingDetailsButton.Click -= mainWin.OnFullscreenStreamingDetailsButtonClick;
+                    mainWin.FullscreenStreamingDetailsButton.Click += mainWin.OnFullscreenStreamingDetailsButtonClick;
+                }
+
+                InternetMetadataTitle.Text = target;
+                InternetMetadataOverview.Text = "Search streaming providers and details.";
+                InternetMetadataPanel.Visibility = Visibility.Visible;
+                InternetMetadataContent.Visibility = Visibility.Visible;
+                StreamingDetailsButton.Visibility = Visibility.Visible;
+                InternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataTitle.Text = target;
+                    mainWin.FullscreenInternetMetadataOverview.Text = "Search streaming providers and details.";
+                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Visible;
+                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Visible;
+                    mainWin.FullscreenStreamingDetailsButton.Visibility = Visibility.Visible;
+                    mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Visible;
+                }
+            }
+            catch { }
+        }
+        finally
+        {
+            if (reqVer == System.Threading.Volatile.Read(ref _metadataRequestVersion))
+            {
+                InternetMetadataProgress.IsActive = false;
+>>>>>>> Stashed changes
+                InternetMetadataProgress.Visibility = Visibility.Collapsed;
+                InternetMetadataProgress.IsActive = false;
+                InternetMetadataPanel.Visibility = Visibility.Collapsed;
+                InternetMetadataContent.Visibility = Visibility.Collapsed;
+                InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+
+                if (mainWin != null)
+                {
+                    mainWin.FullscreenInternetMetadataProgress.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataProgress.IsActive = false;
+                    mainWin.FullscreenInternetMetadataPanel.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataContent.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenInternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+                    mainWin.FullscreenMetadataDivider.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+<<<<<<< Updated upstream
+        catch
+        {
+            InternetMetadataProgress.Visibility = Visibility.Collapsed;
+            InternetMetadataProgress.IsActive = false;
+            InternetMetadataPanel.Visibility = Visibility.Collapsed;
+            InternetMetadataContent.Visibility = Visibility.Collapsed;
+            InternetMetadataProvidersPanel.Visibility = Visibility.Collapsed;
+
+            if (mainWin != null)
+=======
+    }
+
+    public bool IsMetadataOverlayVisible => (MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible) ||
+                                           (App.MainWindowInstance?.FullscreenMetadataOverlay != null && App.MainWindowInstance.FullscreenMetadataOverlay.Visibility == Visibility.Visible);
+
+    public void ToggleMetadataOverlay()
+    {
+        if (MetadataOverlay.Visibility == Visibility.Collapsed)
+        {
+            MetadataOverlay.RequestedTheme = ElementTheme.Dark;
+            MetadataOverlay.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();
+            MetadataOverlay.BorderBrush = ThemeHelper.CreateFullscreenSpecularBorderBrush();
+            MetadataOverlay.Visibility = Visibility.Visible;
+            var current = ViewModel.CurrentVideo ?? AppServices.PlaybackViewModel.CurrentTrack;
+            if (current != null)
+>>>>>>> Stashed changes
             {
                 // Unsubscribe any previous handler to prevent accumulation
                 if (_fullscreenStreamingClickHandler != null)
@@ -966,6 +1188,85 @@ public sealed partial class VideoPage : Page
         {
             App.MainWindowInstance.FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
         }
+<<<<<<< Updated upstream
+=======
+        else
+        {
+            MetadataOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    public void HideMetadataOverlay()
+    {
+        AntiGravityLogger.Log("[VideoPage.HideMetadataOverlay] Called.");
+        MetadataOverlay.Visibility = Visibility.Collapsed;
+        if (App.MainWindowInstance != null)
+        {
+            App.MainWindowInstance.FullscreenMetadataOverlay.Visibility = Visibility.Collapsed;
+        }
+>>>>>>> Stashed changes
+    }
+
+    public string? CurrentStreamingTargetId { get; set; }
+
+    private bool IsSourceInsideMetadataOverlay(DependencyObject? source, Point? tapPointInPage = null)
+    {
+        if (tapPointInPage.HasValue && MetadataOverlay != null && MetadataOverlay.Visibility == Visibility.Visible)
+        {
+            try
+            {
+                GeneralTransform transform = MetadataOverlay.TransformToVisual(this);
+                Point origin = transform.TransformPoint(new Point(0, 0));
+                Rect bounds = new Rect(origin.X, origin.Y, MetadataOverlay.ActualWidth, MetadataOverlay.ActualHeight);
+                if (bounds.Contains(tapPointInPage.Value))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        DependencyObject? curr = source;
+        while (curr != null && curr != this)
+        {
+            if (curr == MetadataOverlay || curr is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase || curr is ScrollViewer)
+            {
+                return true;
+            }
+            try
+            {
+                curr = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(curr);
+            }
+            catch
+            {
+                break;
+            }
+        }
+        return false;
+    }
+
+    private void OnMetadataOverlayPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+    }
+
+    private void OnMetadataOverlayTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+    }
+
+    private void OnMetadataOverlayDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+    }
+
+    private void OnStreamingDetailsButtonClick(object sender, RoutedEventArgs e)
+    {
+        AntiGravityLogger.Log($"[VideoPage.OnStreamingDetailsButtonClick] Clicked! Tag='{(sender as FrameworkElement)?.Tag}', CurrentStreamingTargetId='{CurrentStreamingTargetId}'");
+        string? target = CurrentStreamingTargetId ?? (sender as FrameworkElement)?.Tag as string ?? App.MainWindowInstance?.CurrentStreamingTargetId;
+        if (App.MainWindowInstance != null)
+        {
+            _ = App.MainWindowInstance.NavigateToStreamingDetailsAsync(target);
+        }
     }
 
     public async System.Threading.Tasks.Task<Microsoft.UI.Xaml.Media.ImageSource?> CaptureCurrentFrameAsync()
@@ -1003,9 +1304,55 @@ public sealed partial class VideoPage : Page
         {
             try
             {
+<<<<<<< Updated upstream
+                _videoTapCts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(225, _videoTapCts.Token);
+=======
+                Point tapPt = new Point(0, 0);
+                try
+                {
+                    tapPt = e.GetPosition(this);
+                }
+                catch { }
+
+                if (StreamingDetailsButton != null && StreamingDetailsButton.Visibility == Visibility.Visible && MetadataOverlay?.Visibility == Visibility.Visible)
+                {
+                    try
+                    {
+                        GeneralTransform btnTransform = StreamingDetailsButton.TransformToVisual(this);
+                        Point btnPt = btnTransform.TransformPoint(new Point(0, 0));
+                        Rect btnBounds = new Rect(btnPt.X, btnPt.Y, StreamingDetailsButton.ActualWidth, StreamingDetailsButton.ActualHeight);
+                        if (btnBounds.Contains(tapPt))
+                        {
+                            AntiGravityLogger.Log($"[VideoPage.OnVideoTapped] Click at {tapPt} fell directly on StreamingDetailsButton bounds {btnBounds}! Triggering streaming navigation.");
+                            e.Handled = true;
+                            OnStreamingDetailsButtonClick(StreamingDetailsButton, new RoutedEventArgs());
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AntiGravityLogger.Log($"[VideoPage.OnVideoTapped] Error checking StreamingDetailsButton bounds: {ex.Message}");
+                    }
+                }
+
+                if (IsSourceInsideMetadataOverlay(e.OriginalSource as DependencyObject, tapPt))
+                {
+                    AntiGravityLogger.Log("[VideoPage.OnVideoTapped] Click inside metadata overlay ignored.");
+                    return;
+                }
                 if (ViewModel.HasSource && AppServices.PlaybackViewModel.Session.MediaPlayer != null)
                 {
-                    HideMetadataOverlay();
+                    if (IsMetadataOverlayVisible || App.MainWindowInstance?.HideMetadataOverlayGlobal() == true)
+                    {
+                        HideMetadataOverlay();
+                        e.Handled = true;
+                        CancelPendingVideoTap();
+                        _videoTapClickCount = 0;
+                        return;
+                    }
                     e.Handled = true;
 
                     long now = Environment.TickCount64;
@@ -1047,6 +1394,7 @@ public sealed partial class VideoPage : Page
                     if (tapVersion != _videoTapVersion || cts.IsCancellationRequested) return;
 
                     _videoTapClickCount = 0;
+>>>>>>> Stashed changes
                     if (AppServices.PlaybackViewModel.IsPlaying)
                     {
                         AppServices.PlaybackViewModel.Pause();

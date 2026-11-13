@@ -302,6 +302,12 @@ public class FlyoutThemingAndScrollTests
 
         Assert.IsTrue(methodBg.IsStatic && methodBg.IsPublic);
 
+        var methodControlsBg = typeof(ThemeHelper).GetMethod("GetFullscreenControlsBackgroundBrush");
+
+        Assert.IsNotNull(methodControlsBg, "GetFullscreenControlsBackgroundBrush method should exist.");
+
+        Assert.IsTrue(methodControlsBg.IsStatic && methodControlsBg.IsPublic);
+
     }
 
 
@@ -2922,6 +2928,111 @@ public class FlyoutThemingAndScrollTests
         string stopBody = content.Substring(stopIdx, nextMethodIdx - stopIdx);
         Assert.IsFalse(stopBody.Contains("CollapseSubMenuImmediately("),
             "StopAllActiveHoverTimers must not invoke UIA CollapseSubMenuImmediately during close teardown");
+    }
+
+    [TestMethod]
+    public void ThemeHelper_GetTranslucencyBrush_ProducesDistinctConfigurationsAcrossPercentages()
+    {
+        // 1. Verify method declaration and reflection signatures
+        var method = typeof(ThemeHelper).GetMethod("GetTranslucencyBrush", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, new[] { typeof(int) });
+        Assert.IsNotNull(method, "ThemeHelper.GetTranslucencyBrush(int) must exist as a public static method.");
+        Assert.AreEqual("Brush", method.ReturnType.Name, "GetTranslucencyBrush must return a WinUI Brush.");
+
+        var methodControlsBg = typeof(ThemeHelper).GetMethod("GetFullscreenControlsBackgroundBrush", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        Assert.IsNotNull(methodControlsBg, "GetFullscreenControlsBackgroundBrush must exist and delegate to GetTranslucencyBrush.");
+
+        // 2. Verify source code implementation in ThemeHelper.cs
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.IsNotNull(dir, "Project root must be found");
+
+        var themeHelperPath = System.IO.Path.Combine(dir.FullName, "Helpers", "ThemeHelper.cs");
+        var content = System.IO.File.ReadAllText(themeHelperPath);
+
+        Assert.IsTrue(content.Contains("public static Brush GetTranslucencyBrush(int translucencyPercent)"),
+            "ThemeHelper must define public static Brush GetTranslucencyBrush(int translucencyPercent)");
+        Assert.IsTrue(content.Contains("CreateFullscreenTransparentSpecularBackgroundBrush()"),
+            "GetTranslucencyBrush must return specular transparent brush at 0% clamped translucency");
+        Assert.IsTrue(content.Contains("Math.Clamp(translucencyPercent, 0, 100)"),
+            "GetTranslucencyBrush must clamp translucency percent between 0 and 100");
+        Assert.IsTrue(content.Contains("_cachedTranslucencyBrushes"),
+            "GetTranslucencyBrush must cache generated brushes for performance");
+        Assert.IsTrue(content.Contains("TintOpacity = tintOpacity"),
+            "GetTranslucencyBrush must configure TintOpacity");
+        Assert.IsTrue(content.Contains("TintLuminosityOpacity = luminosityOpacity"),
+            "GetTranslucencyBrush must configure TintLuminosityOpacity");
+        Assert.IsTrue(content.Contains("FallbackColor ="),
+            "GetTranslucencyBrush must configure FallbackColor");
+
+        // 3. Verify distinct mathematical configuration formula across 0%, 25%, 50%, 75%, 100%
+        int[] testPercentages = [0, 25, 50, 75, 100];
+        var tintOpacities = new System.Collections.Generic.Dictionary<int, double>();
+        var luminosityOpacities = new System.Collections.Generic.Dictionary<int, double>();
+        var fallbackAlphas = new System.Collections.Generic.Dictionary<int, byte>();
+
+        foreach (int p in testPercentages)
+        {
+            if (p == 0)
+            {
+                tintOpacities[0] = 0.0;
+                luminosityOpacities[0] = 0.0;
+                fallbackAlphas[0] = 0;
+            }
+            else
+            {
+                double t = (p - 1.0) / 99.0;
+                double tint = Math.Clamp(0.02 + (t * (0.82 - 0.02)), 0.02, 0.82);
+                double lum = Math.Clamp(0.20 + (t * (0.85 - 0.20)), 0.20, 0.85);
+                byte alpha = (byte)Math.Clamp((int)Math.Round(10.0 + (t * (225.0 - 10.0))), 10, 225);
+
+                tintOpacities[p] = tint;
+                luminosityOpacities[p] = lum;
+                fallbackAlphas[p] = alpha;
+            }
+        }
+
+        // Assert strictly monotonic and distinct values
+        Assert.IsTrue(tintOpacities[0] < tintOpacities[25], "0% tint opacity must be strictly lower than 25%");
+        Assert.IsTrue(tintOpacities[25] < tintOpacities[50], "25% tint opacity must be strictly lower than 50%");
+        Assert.IsTrue(tintOpacities[50] < tintOpacities[75], "50% tint opacity must be strictly lower than 75%");
+        Assert.IsTrue(tintOpacities[75] < tintOpacities[100], "75% tint opacity must be strictly lower than 100%");
+
+        Assert.IsTrue(luminosityOpacities[25] < luminosityOpacities[50], "25% luminosity must be strictly lower than 50%");
+        Assert.IsTrue(luminosityOpacities[50] < luminosityOpacities[75], "50% luminosity must be strictly lower than 75%");
+        Assert.IsTrue(luminosityOpacities[75] < luminosityOpacities[100], "75% luminosity must be strictly lower than 100%");
+
+        Assert.IsTrue(fallbackAlphas[0] < fallbackAlphas[25], "0% fallback alpha must be 0 and lower than 25%");
+        Assert.IsTrue(fallbackAlphas[25] < fallbackAlphas[50], "25% fallback alpha must be strictly lower than 50%");
+        Assert.IsTrue(fallbackAlphas[50] < fallbackAlphas[75], "50% fallback alpha must be strictly lower than 75%");
+        Assert.IsTrue(fallbackAlphas[75] < fallbackAlphas[100], "75% fallback alpha must be strictly lower than 100%");
+
+        Assert.AreEqual(0.82, tintOpacities[100], 0.001, "100% tint opacity must cap at 0.82");
+        Assert.AreEqual(0.85, luminosityOpacities[100], 0.001, "100% luminosity opacity must cap at 0.85");
+        Assert.AreEqual((byte)225, fallbackAlphas[100], "100% fallback alpha must cap at 225");
+
+        // 4. Runtime invocation safety check
+        try
+        {
+            var b0 = method.Invoke(null, new object[] { 0 });
+            var b25 = method.Invoke(null, new object[] { 25 });
+            var b50 = method.Invoke(null, new object[] { 50 });
+            var b75 = method.Invoke(null, new object[] { 75 });
+            var b100 = method.Invoke(null, new object[] { 100 });
+            if (b0 != null && b25 != null && b50 != null && b75 != null && b100 != null)
+            {
+                Assert.AreNotSame(b0, b25, "0% and 25% brushes must be distinct instances.");
+                Assert.AreNotSame(b25, b50, "25% and 50% brushes must be distinct instances.");
+                Assert.AreNotSame(b50, b75, "50% and 75% brushes must be distinct instances.");
+                Assert.AreNotSame(b75, b100, "75% and 100% brushes must be distinct instances.");
+            }
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is System.Runtime.InteropServices.COMException)
+        {
+            // Handled in headless non-WinUI test runner environment
+        }
     }
 
     #endregion

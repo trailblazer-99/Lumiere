@@ -287,6 +287,28 @@ public class ArchitecturalHygieneTests
             "MainWindow.xaml must declare VideoNavIcon.");
     }
 
+    [TestMethod]
+    public void MainWindow_MiniPreview_TransportBarDockGuard_PreventsTopLeftDrift()
+    {
+        var root = GetProjectRoot();
+        var mainWindowCs = Path.Combine(root, "MainWindow.xaml.cs");
+        Assert.IsTrue(File.Exists(mainWindowCs), "MainWindow.xaml.cs must exist.");
+
+        var csContent = File.ReadAllText(mainWindowCs);
+
+        // Verify SyncFloatingVideoPlayer guards against anomalous (0, 0) / top-left coordinates
+        Assert.IsTrue(csContent.Contains("minExpectedY = Math.Max(100.0, rootHeight - 200.0);"),
+            "SyncFloatingVideoPlayer must calculate minExpectedY to detect unsettled layout coordinates.");
+        Assert.IsTrue(csContent.Contains("isAnomalous = double.IsNaN(point.X) || double.IsNaN(point.Y) ||"),
+            "SyncFloatingVideoPlayer must detect anomalous coordinates before setting FloatingVideoContainer Margin.");
+        Assert.IsTrue(csContent.Contains("fallbackY = Math.Max(0.0, rootHeight - barHeight"),
+            "SyncFloatingVideoPlayer must calculate a deterministic bottom-dock fallback when coordinates are unsettled.");
+
+        // Verify ExitFullscreenAnimatedAsync targets TransportControls.MiniPlayerHost rather than hardcoded (80, 49)
+        Assert.IsTrue(csContent.Contains("TransportControls?.MiniPlayerHost is FrameworkElement miniHost"),
+            "ExitFullscreenAnimatedAsync must target TransportControls.MiniPlayerHost when exiting fullscreen outside VideoPage.");
+    }
+
     private static string GetProjectRoot()
     {
         var currentDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);

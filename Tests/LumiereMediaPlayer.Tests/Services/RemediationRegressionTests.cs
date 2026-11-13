@@ -377,10 +377,11 @@ public class RemediationRegressionTests
                       flyoutHelperCs.Contains("OnFastSubItemPointerPressed"),
             "FlyoutHelper must trigger popup watcher on keyboard and pointer press expands cleanly.");
 
-        // 3. Properties flyout (FullscreenMetadataOverlay) uses transparent specular glass in both Light and Dark modes instead of jet-black #FF0E1218
+        // 3. Properties flyout (FullscreenMetadataOverlay) uses specular glass brush in both Light and Dark modes instead of jet-black #FF0E1218
         Assert.IsFalse(mainWindowCs.Contains("ColorHelper.FromArgb(255, 14, 18, 24)"),
             "FullscreenMetadataOverlay must not hardcode dark opaque #FF0E1218 AcrylicBrush in ApplyFullscreenSpecularOverlays.");
-        Assert.IsTrue(mainWindowCs.Contains("FullscreenMetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();"),
-            "FullscreenMetadataOverlay must share the transparent specular background brush used by other transport flyouts.");
+        Assert.IsTrue(mainWindowCs.Contains("FullscreenMetadataOverlay.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();") ||
+                      mainWindowCs.Contains("FullscreenMetadataOverlay.Background = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();"),
+            "FullscreenMetadataOverlay must share the specular background brush used by other transport flyouts.");
     }
 }

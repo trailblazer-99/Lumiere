@@ -351,7 +351,7 @@ public static class FlyoutHelper
 
             var bgBrush = isFullscreenVideo
 
-            ? ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush()
+            ? ThemeHelper.GetFullscreenControlsBackgroundBrush()
 
             : ThemeHelper.GetFlyoutPresenterBackground(backdrop, theme);
 
@@ -1233,7 +1233,7 @@ public static class FlyoutHelper
 
         {
 
-            var fsBg = ThemeHelper.CreateFullscreenTransparentSpecularBackgroundBrush();
+            var fsBg = ThemeHelper.GetFullscreenControlsBackgroundBrush();
 
             var fsBorder = ThemeHelper.CreateFullscreenSpecularBorderBrush();
 

@@ -1,3 +1,4 @@
+using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
@@ -264,6 +265,111 @@ public class SettingsViewModelTests
             HardwareDetectionService.ApplyGpuPreferenceToWindows(GpuPreference.Auto);
             var resetPref = HardwareDetectionService.GetCurrentWindowsGpuPreference();
             Assert.AreEqual(GpuPreference.Auto, resetPref);
+        }
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_FullscreenControlsTranslucency_UpdatesSettingsAndStatusText()
+    {
+        var appSettings = new AppSettings
+        {
+            FullscreenControlsTranslucency = 0
+        };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        // Initial default state
+        Assert.AreEqual(0, vm.FullscreenControlsTranslucency);
+        Assert.AreEqual("0% (Pure Transparent)", vm.FullscreenControlsTranslucencyText);
+
+        // Update to 20%
+        vm.FullscreenControlsTranslucency = 20;
+        Assert.AreEqual(20, appSettings.FullscreenControlsTranslucency);
+        Assert.AreEqual("20% (Subtle Glass)", vm.FullscreenControlsTranslucencyText);
+        mockSettings.Verify(s => s.Save(), Times.AtLeastOnce);
+
+        // Update to 65%
+        vm.FullscreenControlsTranslucency = 65;
+        Assert.AreEqual(65, appSettings.FullscreenControlsTranslucency);
+        Assert.AreEqual("65% (Frosted Acrylic)", vm.FullscreenControlsTranslucencyText);
+
+        // Update to 90%
+        vm.FullscreenControlsTranslucency = 90;
+        Assert.AreEqual(90, appSettings.FullscreenControlsTranslucency);
+        Assert.AreEqual("90% (Deep Acrylic)", vm.FullscreenControlsTranslucencyText);
+    }
+
+    [TestMethod]
+    public void SettingsViewModel_PreviewControlsBackgroundBrush_ReflectsFullscreenControlsTranslucency()
+    {
+        // 1. Verify property declaration on SettingsViewModel via reflection
+        var prop = typeof(SettingsViewModel).GetProperty("PreviewControlsBackgroundBrush");
+        Assert.IsNotNull(prop, "SettingsViewModel must expose PreviewControlsBackgroundBrush property.");
+        Assert.IsTrue(prop.CanRead, "PreviewControlsBackgroundBrush must be readable.");
+        Assert.AreEqual("Brush", prop.PropertyType.Name, "PreviewControlsBackgroundBrush must return a WinUI Brush.");
+
+        // 2. Verify source code binding and notification wiring in SettingsViewModel.cs
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "LumiereMediaPlayer.csproj")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.IsNotNull(dir, "Project root must be found");
+
+        var vmPath = System.IO.Path.Combine(dir.FullName, "ViewModels", "SettingsViewModel.cs");
+        var vmContent = System.IO.File.ReadAllText(vmPath);
+
+        Assert.IsTrue(vmContent.Contains("PreviewControlsBackgroundBrush => ThemeHelper.GetTranslucencyBrush(FullscreenControlsTranslucency);"),
+            "PreviewControlsBackgroundBrush must evaluate to ThemeHelper.GetTranslucencyBrush(FullscreenControlsTranslucency)");
+        Assert.IsTrue(vmContent.Contains("OnPropertyChanged(nameof(PreviewControlsBackgroundBrush));"),
+            "SettingsViewModel must notify PreviewControlsBackgroundBrush property changes");
+
+        // 3. Test runtime PropertyChanged notifications on translucency value changes
+        var appSettings = new AppSettings
+        {
+            FullscreenControlsTranslucency = 0
+        };
+        var mockSettings = new Mock<ISettingsService>();
+        mockSettings.Setup(s => s.Current).Returns(appSettings);
+        var mockDisplay = new Mock<IDisplayManager>();
+
+        var vm = new SettingsViewModel(mockSettings.Object, mockDisplay.Object);
+
+        var propertyChangedList = new System.Collections.Generic.List<string>();
+        vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName != null)
+            {
+                propertyChangedList.Add(e.PropertyName);
+            }
+        };
+
+        // Transition across multiple values: 25%, 50%, 75%, 100%
+        int[] testValues = [25, 50, 75, 100, 0];
+        foreach (int val in testValues)
+        {
+            propertyChangedList.Clear();
+            vm.FullscreenControlsTranslucency = val;
+
+            Assert.AreEqual(val, vm.FullscreenControlsTranslucency);
+            Assert.AreEqual(val, appSettings.FullscreenControlsTranslucency);
+            CollectionAssert.Contains(propertyChangedList, "PreviewControlsBackgroundBrush",
+                $"Changing FullscreenControlsTranslucency to {val} must raise PropertyChanged for PreviewControlsBackgroundBrush");
+            CollectionAssert.Contains(propertyChangedList, "FullscreenControlsTranslucencyText",
+                $"Changing FullscreenControlsTranslucency to {val} must raise PropertyChanged for FullscreenControlsTranslucencyText");
+        }
+
+        // 4. Runtime property getter safety check
+        try
+        {
+            var brush = prop.GetValue(vm);
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is System.Runtime.InteropServices.COMException)
+        {
+            // Expected in headless non-WinUI test runner environment
         }
     }
 }
