@@ -11,14 +11,32 @@ using System.Threading.Tasks;
 using LumiereMediaPlayer.Controls;
 >>>>>>> Stashed changes
 using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Services;
+using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
+using Windows.System.Power;
 using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace LumiereMediaPlayer.Helpers;
 
 public static class ThemeHelper
 {
+    public readonly record struct AccentPalette(Color Default, Color Light1, Color Light2, Color Light3, Color Dark1, Color Dark2, Color Dark3)
+    {
+        public static AccentPalette FromBase(Color accent)
+        {
+            return new AccentPalette(accent, Mix(accent, White, 0.18), Mix(accent, White, 0.32), Mix(accent, White, 0.48), Mix(accent, Black, 0.16), Mix(accent, Black, 0.28), Mix(accent, Black, 0.42));
+        }
+    }
+
     private static AccentPalette? _systemAccentPalette;
 
 <<<<<<< Updated upstream
@@ -213,68 +231,1089 @@ public static class ThemeHelper
         {
             AppThemeOption.Light => ElementTheme.Light,
             AppThemeOption.Dark => ElementTheme.Dark,
-            _ => ElementTheme.Default
+            _ => ElementTheme.Default,
         };
+    }
+
+    public static ElementTheme GetEffectiveElementTheme()
+    {
+        try
+        {
+            if (App.Services != null)
+            {
+                switch (AppServices.Settings.Current.Theme)
+                {
+                    case AppThemeOption.Light:
+                        return ElementTheme.Light;
+                    case AppThemeOption.Dark:
+                        return ElementTheme.Dark;
+                }
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            Application current = Application.Current;
+            return ((object)current != null && current.RequestedTheme == ApplicationTheme.Light) ? ElementTheme.Light : ElementTheme.Dark;
+        }
+        catch
+        {
+            return ElementTheme.Dark;
+        }
+    }
 
     public static void ApplyTheme(FrameworkElement root, AppThemeOption option)
     {
         root.RequestedTheme = ToElementTheme(option);
+        try
+        {
+            ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
+            if (App.Services != null)
+            {
+                ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, effectiveElementTheme);
+            }
+            AppIconHelper.UpdateAppIcon();
+        }
+        catch
+        {
+        }
+    }
+
+    public static void ApplyTheme(AppThemeOption option)
+    {
+        if (App.MainWindowContent != null)
+        {
+            ApplyTheme(App.MainWindowContent, option);
+        }
+    }
+
+    public static void ApplyThemePreset(ThemePreset preset)
+    {
+        if (preset == null)
+        {
+            return;
+        }
+        try
+        {
+            AppSettings appSettings = AppServices.Settings?.Current;
+            if (appSettings != null)
+            {
+                appSettings.Theme = preset.Theme;
+                appSettings.BackdropType = preset.BackdropType;
+                appSettings.AccentColor = preset.AccentColor;
+                appSettings.CustomAccentColorHex = preset.CustomAccentColorHex;
+                appSettings.ActiveThemePresetId = preset.Id;
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            ApplyTheme(preset.Theme);
+        }
+        catch
+        {
+        }
+        try
+        {
+            MainWindow mainWindowInstance = App.MainWindowInstance;
+            if ((object)mainWindowInstance != null)
+            {
+                mainWindowInstance.ApplyBackdrop(preset.BackdropType);
+                mainWindowInstance.UpdateTheme();
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (preset.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(preset.CustomAccentColorHex))
+            {
+                try
+                {
+                    ApplyAccentColor(ColorHelper.FromHex(preset.CustomAccentColorHex));
+                }
+                catch
+                {
+                    ApplyAccentColor(preset.AccentColor);
+                }
+            }
+            else
+            {
+                ApplyAccentColor(preset.AccentColor);
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            AppSettings appSettings2 = AppServices.Settings?.Current;
+            if (appSettings2 != null)
+            {
+                AccessibilityHelper.Apply(appSettings2);
+            }
+        }
+        catch
+        {
+        }
     }
 
     public static void ApplyAccentColor(AccentColorOption option)
     {
+        InitializeOsListeners();
+        if (option == AccentColorOption.SystemDefault)
+        {
+            InvalidateSystemAccentCache();
+        }
+        string text = null;
         try
         {
-            var palette = GetAccentPalette(option);
-
-            UpdateResource("SystemAccentColor", palette.Default);
-            UpdateResource("SystemAccentColorLight1", palette.Light1);
-            UpdateResource("SystemAccentColorLight2", palette.Light2);
-            UpdateResource("SystemAccentColorLight3", palette.Light3);
-            UpdateResource("SystemAccentColorDark1", palette.Dark1);
-            UpdateResource("SystemAccentColorDark2", palette.Dark2);
-            UpdateResource("SystemAccentColorDark3", palette.Dark3);
-
-            UpdateBrushResource("AccentFillColorDefaultBrush", palette.Default);
-            UpdateBrushResource("AccentFillColorSecondaryBrush", palette.Light1);
-            UpdateBrushResource("AccentFillColorTertiaryBrush", palette.Light2);
-            UpdateBrushResource("AccentFillColorDisabledBrush", Mix(palette.Default, Gray, 0.72));
-            UpdateBrushResource("AccentButtonBackground", palette.Default);
-            UpdateBrushResource("AccentButtonBackgroundPointerOver", palette.Light1);
-            UpdateBrushResource("AccentButtonBackgroundPressed", palette.Dark1);
-            UpdateBrushResource("AccentButtonBackgroundDisabled", Mix(palette.Default, Gray, 0.72));
-            UpdateBrushResource("SliderTrackValueFill", palette.Default);
-            UpdateBrushResource("SliderTrackValueFillPointerOver", palette.Light1);
-            UpdateBrushResource("SliderTrackValueFillPressed", palette.Dark1);
-            UpdateBrushResource("SliderThumbBackground", palette.Default);
-            UpdateBrushResource("SliderThumbBackgroundPointerOver", palette.Light1);
-            UpdateBrushResource("SliderThumbBackgroundPressed", palette.Dark1);
-            UpdateBrushResource("ToggleSwitchFillOn", palette.Default);
-            UpdateBrushResource("ToggleSwitchFillOnPointerOver", palette.Light1);
-            UpdateBrushResource("ToggleSwitchFillOnPressed", palette.Dark1);
-            UpdateBrushResource("ToggleSwitchStrokeOn", palette.Default);
-            UpdateBrushResource("ToggleSwitchStrokeOnPointerOver", palette.Light1);
-            UpdateBrushResource("ToggleSwitchStrokeOnPressed", palette.Dark1);
-            UpdateBrushResource("ToggleSwitchKnobFillOn", White);
-            UpdateBrushResource("ToggleSwitchKnobFillOnPointerOver", White);
-            UpdateBrushResource("ToggleSwitchKnobFillOnPressed", White);
+            if (App.Services != null)
+            {
+                text = AppServices.Settings.Current.CustomAccentColorHex;
+            }
         }
-        catch (Exception ex)
+        catch
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to apply accent color: {ex.Message}");
+        }
+        if (option == AccentColorOption.Custom && !string.IsNullOrEmpty(text))
+        {
+            try
+            {
+                ApplyAccentPalette(AccentPalette.FromBase(ColorHelper.FromHex(text)));
+                return;
+            }
+            catch
+            {
+            }
+        }
+        ApplyAccentPalette(GetAccentPalette(option));
+    }
+
+    public static void ApplyAccentColor(Color customColor)
+    {
+        InitializeOsListeners();
+        ApplyAccentPalette(AccentPalette.FromBase(customColor), forceThemeRefresh: false);
+    }
+
+    private static void ApplyAccentPalette(AccentPalette palette, bool forceThemeRefresh = true)
+    {
+        try
+        {
+            if (App.MainWindowContent != null)
+            {
+                InjectAccentResources(App.MainWindowContent.Resources, palette);
+                UpdateBrushResource(App.MainWindowContent.Resources, "SliderContainerBackground", Transparent, addIfMissing: true);
+                UpdateBrushResource(App.MainWindowContent.Resources, "SliderContainerBackgroundPointerOver", Transparent, addIfMissing: true);
+                UpdateBrushResource(App.MainWindowContent.Resources, "SliderContainerBackgroundPressed", Transparent, addIfMissing: true);
+                UpdateBrushResource(App.MainWindowContent.Resources, "SliderContainerBackgroundDisabled", Transparent, addIfMissing: true);
+                ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
+                SolidColorBrush value2 = new SolidColorBrush((effectiveElementTheme == ElementTheme.Light || (effectiveElementTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light)) ? Microsoft.UI.ColorHelper.FromArgb(114, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(139, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+                App.MainWindowContent.Resources["ScrollBarThumbBackground"] = value2;
+                App.MainWindowContent.Resources["ScrollBarPanningThumbBackground"] = value2;
+                App.MainWindowContent.Resources["ScrollBarThumbFill"] = value2;
+                SolidColorBrush value = new SolidColorBrush(Transparent);
+                App.MainWindowContent.Resources["ScrollBarTrackFill"] = value;
+                App.MainWindowContent.Resources["ScrollBarTrackFillPointerOver"] = value;
+                App.MainWindowContent.Resources["ScrollBarTrackFillDisabled"] = value;
+                App.MainWindowContent.Resources["ScrollBarTrackStroke"] = value;
+                App.MainWindowContent.Resources["ScrollBarTrackStrokePointerOver"] = value;
+                App.MainWindowContent.Resources["ScrollBarTrackStrokeDisabled"] = value;
+                App.MainWindowContent.Resources["ScrollBarBackground"] = value;
+                App.MainWindowContent.Resources["ScrollBarBackgroundPointerOver"] = value;
+                App.MainWindowContent.Resources["ScrollBarBackgroundDisabled"] = value;
+                App.MainWindowContent.Resources["ScrollBarBorderBrush"] = value;
+                App.MainWindowContent.Resources["ScrollBarBorderBrushPointerOver"] = value;
+                App.MainWindowContent.Resources["ScrollBarBorderBrushDisabled"] = value;
+            }
+            if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement frameworkElement)
+            {
+                InjectAccentResources(frameworkElement.Resources, palette);
+            }
+            ApplyTextControlFocusedBrushes(palette);
+            if (forceThemeRefresh)
+            {
+                RefreshThemeBindings();
+                ApplyBackdropTheme(AppServices.Settings.Current.BackdropType, GetEffectiveElementTheme());
+                App.MainWindowInstance?.RefreshFlyoutTheming();
+            }
+            AppIconHelper.UpdateAppIcon();
+        }
+        catch (Exception)
+        {
         }
     }
 
-    private static AccentPalette GetAccentPalette(AccentColorOption option)
+    private static void InjectAccentResources(ResourceDictionary rootDict, AccentPalette palette)
     {
-        _systemAccentPalette ??= ReadSystemAccentPalette();
-
-        if (option == AccentColorOption.SystemDefault)
+        try
         {
-            return _systemAccentPalette.Value;
+            ApplyToDict(rootDict);
+            string[] array = new string[3] { "Dark", "Light", "Default" };
+            ResourceDictionary resourceDictionary;
+            for (int i = 0; i < array.Length; ApplyToDict(resourceDictionary), i++)
+            {
+                string key = array[i];
+                if (rootDict.ThemeDictionaries.TryGetValue(key, out var value))
+                {
+                    resourceDictionary = value as ResourceDictionary;
+                    if ((object)resourceDictionary != null)
+                    {
+                        continue;
+                    }
+                }
+                resourceDictionary = new ResourceDictionary();
+                rootDict.ThemeDictionaries[key] = resourceDictionary;
+            }
         }
+        catch (Exception)
+        {
+        }
+        void ApplyToDict(ResourceDictionary dict)
+        {
+            if (!(dict == null) && !(dict.Source != null))
+            {
+                dict["SystemAccentColor"] = palette.Default;
+                dict["SystemAccentColorLight1"] = palette.Light1;
+                dict["SystemAccentColorLight2"] = palette.Light2;
+                dict["SystemAccentColorLight3"] = palette.Light3;
+                dict["SystemAccentColorDark1"] = palette.Dark1;
+                dict["SystemAccentColorDark2"] = palette.Dark2;
+                dict["SystemAccentColorDark3"] = palette.Dark3;
+                dict["TextControlSelectionHighlightColor"] = palette.Default;
+                SetOrCreateBrush(dict, "SystemAccentColorBrush", palette.Default);
+                SetOrCreateBrush(dict, "SystemAccentColorLight1Brush", palette.Light1);
+                SetOrCreateBrush(dict, "SystemAccentColorLight2Brush", palette.Light2);
+                SetOrCreateBrush(dict, "SystemAccentColorLight3Brush", palette.Light3);
+                SetOrCreateBrush(dict, "SystemAccentColorDark1Brush", palette.Dark1);
+                SetOrCreateBrush(dict, "SystemAccentColorDark2Brush", palette.Dark2);
+                SetOrCreateBrush(dict, "SystemAccentColorDark3Brush", palette.Dark3);
+                SetOrCreateBrush(dict, "AccentFillColorDefaultBrush", palette.Default);
+                SetOrCreateBrush(dict, "AccentFillColorSecondaryBrush", palette.Light1);
+                SetOrCreateBrush(dict, "AccentFillColorTertiaryBrush", palette.Light2);
+                SetOrCreateBrush(dict, "AccentFillColorDisabledBrush", Mix(palette.Default, Gray, 0.72));
+                SetOrCreateBrush(dict, "AccentButtonBackground", palette.Default);
+                SetOrCreateBrush(dict, "AccentButtonBackgroundPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "AccentButtonBackgroundPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "AccentButtonBackgroundDisabled", Mix(palette.Default, Gray, 0.72));
+                SetOrCreateBrush(dict, "AccentButtonBorderBrush", palette.Default);
+                SetOrCreateBrush(dict, "AccentButtonBorderBrushPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "AccentButtonBorderBrushPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "SliderTrackValueFill", palette.Default);
+                SetOrCreateBrush(dict, "SliderTrackValueFillPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "SliderTrackValueFillPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "SliderThumbBackground", palette.Default);
+                SetOrCreateBrush(dict, "SliderThumbBackgroundPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "SliderThumbBackgroundPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "ToggleSwitchFillOn", palette.Default);
+                SetOrCreateBrush(dict, "ToggleSwitchFillOnPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "ToggleSwitchFillOnPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "ToggleSwitchStrokeOn", palette.Default);
+                SetOrCreateBrush(dict, "ToggleSwitchStrokeOnPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "ToggleSwitchStrokeOnPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "ToggleSwitchKnobFillOn", White);
+                SetOrCreateBrush(dict, "ToggleSwitchKnobFillOnPointerOver", White);
+                SetOrCreateBrush(dict, "ToggleSwitchKnobFillOnPressed", White);
+                SetOrCreateBrush(dict, "ProgressBarProgressFill", palette.Default);
+                SetOrCreateBrush(dict, "ProgressBarIndeterminateBrush", palette.Default);
+                SetOrCreateBrush(dict, "ProgressRingForeground", palette.Default);
+                SetOrCreateBrush(dict, "CheckBoxBackgroundSelected", palette.Default);
+                SetOrCreateBrush(dict, "CheckBoxBorderBrushSelected", palette.Default);
+                SetOrCreateBrush(dict, "RadioButtonBackgroundSelected", palette.Default);
+                SetOrCreateBrush(dict, "RadioButtonBorderBrushSelected", palette.Default);
+                SetOrCreateBrush(dict, "NavigationViewSelectionIndicatorForeground", Colors.Transparent);
+                SetOrCreateBrush(dict, "NavigationViewItemForegroundSelected", palette.Default);
+                SetOrCreateBrush(dict, "NavigationViewItemForegroundSelectedPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "PivotHeaderItemForegroundSelected", palette.Default);
+                SetOrCreateBrush(dict, "PivotHeaderItemSelectedPipeBrush", palette.Default);
+                SetOrCreateBrush(dict, "InfoBadgeBackground", palette.Default);
+                SetOrCreateBrush(dict, "AccentControlElevationBorderBrush", palette.Light1);
+                SetOrCreateBrush(dict, "HyperlinkButtonForeground", palette.Default);
+                SetOrCreateBrush(dict, "TextOnAccentFillColorPrimaryBrush", White);
+                SetOrCreateBrush(dict, "AccentTextFillColorPrimaryBrush", palette.Default);
+                SetOrCreateBrush(dict, "ToggleButtonBackgroundChecked", palette.Default);
+                SetOrCreateBrush(dict, "ToggleButtonBackgroundCheckedPointerOver", palette.Light1);
+                SetOrCreateBrush(dict, "ToggleButtonBackgroundCheckedPressed", palette.Dark1);
+                SetOrCreateBrush(dict, "ToggleButtonForegroundChecked", White);
+                SetOrCreateBrush(dict, "ToggleButtonForegroundCheckedPointerOver", White);
+                SetOrCreateBrush(dict, "ToggleButtonForegroundCheckedPressed", White);
+                SetOrCreateBrush(dict, "ToggleButtonBorderBrushChecked", palette.Light1);
+                SetOrCreateBrush(dict, "ToggleButtonBorderBrushCheckedPointerOver", palette.Light2);
+                SetOrCreateBrush(dict, "ToggleButtonBorderBrushCheckedPressed", palette.Default);
+                SetOrCreateBrush(dict, "ListViewItemSelectionIndicatorFill", palette.Default);
+                SetOrCreateBrush(dict, "TreeViewItemSelectionIndicatorFill", palette.Default);
+                SetOrCreateBrush(dict, "ComboBoxItemSelectionIndicatorFill", palette.Default);
+                SetOrCreateBrush(dict, "ComboBoxItemPillFill", palette.Default);
+                SetOrCreateBrush(dict, "ComboBoxItemPillFillSelected", palette.Default);
+                SetOrCreateBrush(dict, "TextControlSelectionHighlightBrush", palette.Default);
+                SetOrCreateBrush(dict, "FavoriteIconBrush", Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, 59, 92));
+                SetOrCreateBrush(dict, "YouTubeBrandBrush", Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, 0, 0));
+                SetOrCreateBrush(dict, "TwitchBrandBrush", Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 145, 70, byte.MaxValue));
+                SetOrCreateBrush(dict, "HdrStatusGoldBrush", Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 230, 200, 0));
+            }
+        }
+    }
 
-        var accent = option switch
+    public static void RefreshThemeBindings()
+    {
+        try
+        {
+            ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
+            FrameworkElement mainWindowContent = App.MainWindowContent;
+            if ((object)mainWindowContent != null && mainWindowContent.RequestedTheme != effectiveElementTheme)
+            {
+                mainWindowContent.RequestedTheme = effectiveElementTheme;
+            }
+            XamlRoot? xamlRoot = App.MainWindowContent?.XamlRoot ?? App.MainWindowInstance?.Content?.XamlRoot;
+            if ((object?)xamlRoot != null)
+            {
+                ElementTheme popupTheme = IsFullscreenPresentationActive ? ElementTheme.Dark : effectiveElementTheme;
+                try
+                {
+                    foreach (Popup item in FlyoutHelper.SafeGetOpenPopupsForXamlRoot(xamlRoot))
+                    {
+                        if (item.RequestedTheme != popupTheme)
+                        {
+                            item.RequestedTheme = popupTheme;
+                        }
+                        if (item.Child is FrameworkElement frameworkElement && frameworkElement.RequestedTheme != popupTheme)
+                        {
+                            frameworkElement.RequestedTheme = popupTheme;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+            App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+            App.MainWindowInstance?.VideoHoverPreviewControl?.RefreshBackdropTheming();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public static void ApplyBackdropTheme(AppThemeBackdrop backdrop, ElementTheme effectiveTheme)
+    {
+        try
+        {
+            if (App.MainWindowContent == null)
+            {
+                return;
+            }
+            bool flag = effectiveTheme == ElementTheme.Light || (effectiveTheme == ElementTheme.Default && Application.Current.RequestedTheme == ApplicationTheme.Light);
+            Color color;
+            Color color2;
+            Color color3;
+            Color color4;
+            Color color5;
+            Color color6;
+            Color color7;
+            Color color8;
+            Color color9;
+            Color color10;
+            Color color11;
+            Color color12;
+            switch (backdrop)
+            {
+                case AppThemeBackdrop.MicaAlt:
+                    if (flag)
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(85, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(55, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(26, 0, 0, 0);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(110, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(95, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(130, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(70, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(28, 0, 0, 0);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(95, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(130, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(160, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(32, 0, 0, 0);
+                    }
+                    else
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(18, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(12, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(80, 32, 32, 36);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(20, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(12, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(20, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(36, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(36, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                    }
+                    break;
+                case AppThemeBackdrop.Acrylic:
+                    if (flag)
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(65, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(45, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(90, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(80, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(115, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(55, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(80, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(115, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(145, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(28, 0, 0, 0);
+                    }
+                    else
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(20, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(12, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(28, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(70, 24, 24, 28);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(22, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(34, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(14, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(28, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(22, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(34, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(38, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                    }
+                    break;
+                case AppThemeBackdrop.Solid:
+                    if (flag)
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 245, 245, 248);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 226, 226, 230);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 246, 246, 248);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 238, 238, 242);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 230, 230, 235);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 248, 248, 250);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                    }
+                    else
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 32, 32, 36);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 52, 52, 58);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 45, 45, 50);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 55, 55, 62);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 35, 35, 40);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 54);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 38);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                    }
+                    break;
+                case AppThemeBackdrop.FluentSymphony:
+                    if (flag)
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 245, 245, 248);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 226, 226, 230);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 246, 246, 248);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 238, 238, 242);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 230, 230, 235);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 248, 248, 250);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                    }
+                    else
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 32, 32, 36);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 52, 52, 58);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 45, 45, 50);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 55, 55, 62);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 35, 35, 40);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 54);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 38);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                    }
+                    break;
+                case AppThemeBackdrop.CinematicAdaptive:
+                    {
+                        MainWindow? mainWindowInstance = App.MainWindowInstance;
+                        if ((object)mainWindowInstance != null && mainWindowInstance.IsVideoPlaybackActive)
+                        {
+                            color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 18, 18, 22);
+                            color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 14, 14, 18);
+                            color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 40, 40, 48);
+                            color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 10, 10, 12);
+                            color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 24, 24, 30);
+                            color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 42);
+                            color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 16, 16, 20);
+                            color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 56);
+                            color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 18, 18, 22);
+                            color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 28, 28, 34);
+                            color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 14, 14, 18);
+                            color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 56);
+                        }
+                        else if (flag)
+                        {
+                            color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 245, 245, 248);
+                            color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 226, 226, 230);
+                            color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 246, 246, 248);
+                            color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 238, 238, 242);
+                            color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 230, 230, 235);
+                            color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                            color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 248, 248, 250);
+                            color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                        }
+                        else
+                        {
+                            color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 32, 32, 36);
+                            color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 52, 52, 58);
+                            color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 45, 45, 50);
+                            color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 55, 55, 62);
+                            color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 35, 35, 40);
+                            color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                            color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 54);
+                            color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 38);
+                            color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                        }
+                        break;
+                    }
+                case AppThemeBackdrop.BackdropStudio:
+                    if ((AppServices.Settings?.Current?.StudioCanvas).GetValueOrDefault() == StudioCanvasStyle.SolidLayer)
+                    {
+                        if (flag)
+                        {
+                            color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 245, 245, 248);
+                            color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 226, 226, 230);
+                            color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 246, 246, 248);
+                            color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 238, 238, 242);
+                            color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 230, 230, 235);
+                            color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                            color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 248, 248, 250);
+                            color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                            color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 215, 215, 220);
+                        }
+                        else
+                        {
+                            color = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color2 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 32, 32, 36);
+                            color3 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 52, 52, 58);
+                            color4 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color5 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 45, 45, 50);
+                            color6 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 55, 55, 62);
+                            color7 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 35, 35, 40);
+                            color8 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                            color9 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 38, 38, 42);
+                            color10 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 48, 48, 54);
+                            color11 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 38);
+                            color12 = Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 65, 65, 72);
+                        }
+                        break;
+                    }
+                    ApplyBackdropTheme((AppServices.Settings?.Current?.StudioWindowBase).GetValueOrDefault(), effectiveTheme);
+                    return;
+                default:
+                    if (flag)
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(55, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(35, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(80, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(70, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(105, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(45, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(20, 0, 0, 0);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(70, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(105, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(135, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0);
+                    }
+                    else
+                    {
+                        color = Microsoft.UI.ColorHelper.FromArgb(14, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color2 = Microsoft.UI.ColorHelper.FromArgb(9, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color3 = Microsoft.UI.ColorHelper.FromArgb(26, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color4 = Microsoft.UI.ColorHelper.FromArgb(76, 32, 32, 32);
+                        color5 = Microsoft.UI.ColorHelper.FromArgb(18, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color6 = Microsoft.UI.ColorHelper.FromArgb(28, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color7 = Microsoft.UI.ColorHelper.FromArgb(10, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color8 = Microsoft.UI.ColorHelper.FromArgb(26, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color9 = Microsoft.UI.ColorHelper.FromArgb(18, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color10 = Microsoft.UI.ColorHelper.FromArgb(28, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color11 = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                        color12 = Microsoft.UI.ColorHelper.FromArgb(30, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+                    }
+                    break;
+            }
+            string themeKey = (flag ? "Light" : "Dark");
+            SetScopedBrush("CardBackgroundFillColorDefaultBrush", color, themeKey);
+            SetScopedBrush("CardBackgroundFillColorSecondaryBrush", color2, themeKey);
+            SetScopedBrush("CardStrokeColorDefaultBrush", color3, themeKey);
+            SetScopedBrush("LayerFillColorDefaultBrush", color4, themeKey);
+            SetScopedBrush("ControlFillColorDefaultBrush", color5, themeKey);
+            SetScopedBrush("ControlFillColorSecondaryBrush", color6, themeKey);
+            SetScopedBrush("ControlFillColorTertiaryBrush", color7, themeKey);
+            SetScopedBrush("ControlStrokeColorDefaultBrush", color8, themeKey);
+            SetScopedBrush("ComboBoxBackground", color5, themeKey);
+            SetScopedBrush("ComboBoxBackgroundPointerOver", color6, themeKey);
+            SetScopedBrush("ComboBoxBackgroundPressed", color7, themeKey);
+            SetScopedBrush("ComboBoxBorderBrush", color8, themeKey);
+            SetScopedBrush("ButtonBackground", color5, themeKey);
+            SetScopedBrush("ButtonBackgroundPointerOver", color6, themeKey);
+            SetScopedBrush("ButtonBackgroundPressed", color7, themeKey);
+            SetScopedBrush("ButtonBorderBrush", color8, themeKey);
+            SetScopedBrush("TextControlBackground", color9, themeKey);
+            SetScopedBrush("TextControlBackgroundPointerOver", color10, themeKey);
+            SetScopedBrush("TextControlBackgroundFocused", color11, themeKey);
+            SetScopedBrush("TextControlBorderBrush", color12, themeKey);
+            SetScopedBrush("LiquidGlassSidebarBrush", color4, themeKey);
+            SetScopedBrush("LiquidGlassControlFill", color5, themeKey);
+            SetScopedBrush("LiquidGlassControlPointerOverFill", color6, themeKey);
+            SetScopedBrush("LiquidGlassControlPressedFill", color7, themeKey);
+            Color color13 = (flag ? Microsoft.UI.ColorHelper.FromArgb(9, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(15, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color14 = (flag ? Microsoft.UI.ColorHelper.FromArgb(6, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(10, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            SetScopedBrush("SubtleFillColorSecondaryBrush", color13, themeKey);
+            SetScopedBrush("SubtleFillColorTertiaryBrush", color14, themeKey);
+            SetScopedBrush("ExpanderHeaderBackground", color, themeKey);
+            SetScopedBrush("ExpanderHeaderBackgroundPointerOver", color6, themeKey);
+            SetScopedBrush("ExpanderHeaderBackgroundPressed", color7, themeKey);
+            SetScopedBrush("ExpanderHeaderBorderBrush", color3, themeKey);
+            SetScopedBrush("ExpanderContentBackground", color2, themeKey);
+            SetScopedBrush("ExpanderContentBorderBrush", color3, themeKey);
+            Color transparent = Transparent;
+            Color color15 = (flag ? Microsoft.UI.ColorHelper.FromArgb(15, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(15, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color16 = (flag ? Microsoft.UI.ColorHelper.FromArgb(30, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(30, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color17 = (flag ? Microsoft.UI.ColorHelper.FromArgb(144, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(144, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color18 = (flag ? Microsoft.UI.ColorHelper.FromArgb(176, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(176, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color19 = (flag ? Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 93, 93, 93) : Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color20 = (flag ? Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue) : Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 0, 0, 0));
+            SetScopedBrush("ToggleSwitchFillOff", transparent, themeKey);
+            SetScopedBrush("ToggleSwitchFillOffPointerOver", color15, themeKey);
+            SetScopedBrush("ToggleSwitchFillOffPressed", color16, themeKey);
+            SetScopedBrush("ToggleSwitchStrokeOff", color17, themeKey);
+            SetScopedBrush("ToggleSwitchStrokeOffPointerOver", color18, themeKey);
+            SetScopedBrush("ToggleSwitchThumbFillOff", color19, themeKey);
+            SetScopedBrush("ToggleSwitchThumbFillOffPointerOver", color19, themeKey);
+            SetScopedBrush("ToggleSwitchThumbFillOn", color20, themeKey);
+            SetScopedBrush("ToggleSwitchThumbFillOnPointerOver", color20, themeKey);
+            SetScopedBrush("ToggleSwitchKnobFillOn", color20, themeKey);
+            SetScopedBrush("ToggleSwitchKnobFillOnPointerOver", color20, themeKey);
+            if (backdrop == AppThemeBackdrop.Solid)
+            {
+                Color color21 = (flag ? Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 243, 243, 243) : Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 32, 32, 32));
+                SetScopedBrush("SolidBackgroundFillColorBaseBrush", color21, themeKey);
+            }
+            SetScopedBrush("SliderContainerBackground", Transparent, themeKey);
+            SetScopedBrush("SliderContainerBackgroundPointerOver", Transparent, themeKey);
+            SetScopedBrush("SliderContainerBackgroundPressed", Transparent, themeKey);
+            SetScopedBrush("SliderContainerBackgroundDisabled", Transparent, themeKey);
+            Color color22 = (flag ? Microsoft.UI.ColorHelper.FromArgb(114, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(139, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color23 = (flag ? Microsoft.UI.ColorHelper.FromArgb(138, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(165, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color24 = (flag ? Microsoft.UI.ColorHelper.FromArgb(158, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(192, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            Color color25 = (flag ? Microsoft.UI.ColorHelper.FromArgb(64, 0, 0, 0) : Microsoft.UI.ColorHelper.FromArgb(64, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+            SetScopedBrush("ScrollBarThumbBackground", color22, themeKey);
+            SetScopedBrush("ScrollBarPanningThumbBackground", color22, themeKey);
+            SetScopedBrush("ScrollBarThumbFill", color22, themeKey);
+            SetScopedBrush("ScrollBarThumbFillPointerOver", color23, themeKey);
+            SetScopedBrush("ScrollBarThumbFillPressed", color24, themeKey);
+            SetScopedBrush("ScrollBarThumbFillDisabled", color25, themeKey);
+            SetScopedBrush("ScrollBarPanningThumbBackgroundDisabled", color25, themeKey);
+            SetScopedBrush("ScrollBarThumbBackgroundThemeBrush", color22, themeKey);
+            SetScopedBrush("ScrollBarThumbPointerOverBackgroundThemeBrush", color23, themeKey);
+            SetScopedBrush("ScrollBarThumbPressedBackgroundThemeBrush", color24, themeKey);
+            SetScopedBrush("ScrollBarPanningBackgroundThemeBrush", color22, themeKey);
+            SetScopedBrush("ScrollBarTrackFill", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackFillPointerOver", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackFillDisabled", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackStroke", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackStrokePointerOver", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackStrokeDisabled", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackBackgroundThemeBrush", Transparent, themeKey);
+            SetScopedBrush("ScrollBarTrackBorderThemeBrush", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBackground", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBackgroundPointerOver", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBackgroundDisabled", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBorderBrush", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBorderBrushPointerOver", Transparent, themeKey);
+            SetScopedBrush("ScrollBarBorderBrushDisabled", Transparent, themeKey);
+            AccentPalette accentPalette = GetAccentPalette((AppServices.Settings?.Current?.AccentColor).GetValueOrDefault());
+            Func<object> resourceFactory = () => GetFlyoutPresenterBackground(backdrop, effectiveTheme);
+            Func<object> resourceFactory2 = () => GetFlyoutBorderBrush(backdrop, effectiveTheme);
+            Func<object> resourceFactory3 = () => GetVolumeFlyoutBackground(backdrop, effectiveTheme);
+            Func<object> resourceFactory4 = () => GetVolumeFlyoutBorderBrush(backdrop, effectiveTheme);
+            SetScopedResource("FlyoutPresenterBackground", resourceFactory, themeKey);
+            SetScopedResource("MenuFlyoutPresenterBackground", resourceFactory, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBackground", resourceFactory3, themeKey);
+            SetScopedResource("ComboBoxDropDownBackground", resourceFactory, themeKey);
+            SetScopedResource("AutoSuggestBoxSuggestionsListBackground", resourceFactory, themeKey);
+            SetScopedResource("FlyoutPresenterWindowBackground", () => new SolidColorBrush(Transparent), themeKey);
+            SetScopedResource("SurfaceStrokeColorFlyoutBrush", resourceFactory2, themeKey);
+            SetScopedResource("FlyoutBorderThemeBrush", resourceFactory2, themeKey);
+            SetScopedResource("FlyoutPresenterBorderBrush", resourceFactory2, themeKey);
+            SetScopedResource("MenuFlyoutPresenterBorderBrush", resourceFactory2, themeKey);
+            SetScopedResource("VolumeFlyoutPresenterBorderBrush", resourceFactory4, themeKey);
+            SetScopedResource("ComboBoxDropDownBorderBrush", resourceFactory2, themeKey);
+            SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", resourceFactory2, themeKey);
+            Color color26;
+            if (backdrop != AppThemeBackdrop.Solid)
+            {
+                color26 = (flag ? Microsoft.UI.ColorHelper.FromArgb(246, byte.MaxValue, byte.MaxValue, byte.MaxValue) : Microsoft.UI.ColorHelper.FromArgb(246, 30, 30, 34));
+            }
+            else
+            {
+                color26 = (flag ? Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 245, 245, 248) : Microsoft.UI.ColorHelper.FromArgb(byte.MaxValue, 34, 34, 38));
+            }
+            Color color27 = color26;
+            SetScopedBrush("SelectionRibbonBackground", color27, themeKey);
+            ApplyTextControlFocusedBrushes(accentPalette);
+            RefreshThemeBindings();
+            App.MainWindowInstance?.UpdateNavigationPaneTheming();
+            FlyoutHelper.RefreshAllFlyouts();
+            ComboBoxHelper.RefreshAllComboBoxes();
+            MediaFlyoutHelper.RefreshActiveDialog();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static void SetScopedBrush(string key, Color color, string themeKey)
+    {
+        HashSet<ResourceDictionary> visited = new HashSet<ResourceDictionary>();
+        try
+        {
+            if (App.MainWindowContent != null)
+            {
+                ApplyToDictionary(App.MainWindowContent.Resources);
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement frameworkElement)
+            {
+                ApplyToDictionary(frameworkElement.Resources);
+            }
+        }
+        catch
+        {
+        }
+        void ApplyToDictionary(ResourceDictionary dict)
+        {
+            if (dict == null || !visited.Add(dict)) return;
+            try
+            {
+                SetOrCreateBrush(dict, key, color);
+                try
+                {
+                    if (dict.ThemeDictionaries != null && dict.ThemeDictionaries.TryGetValue(themeKey, out var value) && value is ResourceDictionary resourceDictionary && visited.Add(resourceDictionary) && resourceDictionary.Source == null)
+                    {
+                        SetOrCreateBrush(resourceDictionary, key, color);
+                    }
+                }
+                catch { }
+                try
+                {
+                    if (dict.ThemeDictionaries != null && dict.ThemeDictionaries.TryGetValue("Default", out var value2) && value2 is ResourceDictionary resourceDictionary2 && visited.Add(resourceDictionary2) && resourceDictionary2.Source == null)
+                    {
+                        SetOrCreateBrush(resourceDictionary2, key, color);
+                    }
+                }
+                catch { }
+                foreach (ResourceDictionary mergedDictionary in dict.MergedDictionaries)
+                {
+                    ApplyToDictionary(mergedDictionary);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static void SetOrCreateBrush(ResourceDictionary dictionary, string key, Color color)
+    {
+        if (dictionary == null) return;
+        if (dictionary.Source != null) return;
+        try
+        {
+            dictionary[key] = new SolidColorBrush(color);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void SetScopedResource(string key, Func<object> resourceFactory, string themeKey)
+    {
+        HashSet<ResourceDictionary> visited = new HashSet<ResourceDictionary>();
+        try
+        {
+            if (App.MainWindowContent != null)
+            {
+                ApplyToDictionary(App.MainWindowContent.Resources);
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement frameworkElement)
+            {
+                ApplyToDictionary(frameworkElement.Resources);
+            }
+        }
+        catch
+        {
+        }
+        void ApplyToDictionary(ResourceDictionary dict)
+        {
+            if (dict == null || dict.Source != null || !visited.Add(dict)) return;
+            try
+            {
+                SetValue(dict);
+                try
+                {
+                    if (dict.ThemeDictionaries != null && dict.ThemeDictionaries.TryGetValue(themeKey, out var value) && value is ResourceDictionary resourceDictionary && visited.Add(resourceDictionary))
+                    {
+                        SetValue(resourceDictionary);
+                    }
+                }
+                catch { }
+                try
+                {
+                    if (dict.ThemeDictionaries != null && dict.ThemeDictionaries.TryGetValue("Default", out var value2) && value2 is ResourceDictionary resourceDictionary2 && visited.Add(resourceDictionary2))
+                    {
+                        SetValue(resourceDictionary2);
+                    }
+                }
+                catch { }
+                foreach (ResourceDictionary mergedDictionary in dict.MergedDictionaries)
+                {
+                    ApplyToDictionary(mergedDictionary);
+                }
+            }
+            catch
+            {
+            }
+        }
+        void SetValue(ResourceDictionary target)
+        {
+            if (target == null) return;
+            try
+            {
+                object obj5 = resourceFactory();
+                target[key] = obj5;
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static void SetScopedResource(string key, object resource, string themeKey)
+    {
+        SetScopedResource(key, () => resource, themeKey);
+    }
+
+    private static void SetScopedAcrylicBrush(string key, Color tintColor, double tintOpacity, double tintLuminosity, Color fallbackColor, string themeKey)
+    {
+        SetScopedResource(key, () => new AcrylicBrush
+        {
+            AlwaysUseFallback = false,
+            TintColor = tintColor,
+            TintOpacity = tintOpacity,
+            TintLuminosityOpacity = tintLuminosity,
+            FallbackColor = fallbackColor
+        }, themeKey);
+    }
+
+    public static LinearGradientBrush CreateTextControlElevationBorderFocusedBrush(Color accentColor, Color strokeColor)
+    {
+        return new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(0f, 0f),
+            EndPoint = new Point(0f, 2f),
+            RelativeTransform = new ScaleTransform
+            {
+                ScaleY = -1.0,
+                CenterY = 0.5
+            },
+            GradientStops =
+            {
+                new GradientStop
+                {
+                    Offset = 1.0,
+                    Color = accentColor
+                },
+                new GradientStop
+                {
+                    Offset = 1.0,
+                    Color = strokeColor
+                }
+            }
+        };
+    }
+
+    public static void ApplyTextControlFocusedBrushes(AccentPalette palette)
+    {
+        bool flag = GetEffectiveElementTheme() switch
+        {
+            ElementTheme.Default => Application.Current.RequestedTheme == ApplicationTheme.Light,
+            ElementTheme.Light => true,
+            _ => false,
+        };
+        Color strokeColor = Microsoft.UI.ColorHelper.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+        Color strokeColor2 = Microsoft.UI.ColorHelper.FromArgb(24, 0, 0, 0);
+        LinearGradientBrush darkBrush = CreateTextControlElevationBorderFocusedBrush(palette.Light2, strokeColor);
+        LinearGradientBrush lightBrush = CreateTextControlElevationBorderFocusedBrush(palette.Dark1, strokeColor2);
+        LinearGradientBrush currentBrush = (flag ? lightBrush : darkBrush);
+        SolidColorBrush selectionHighlight = new SolidColorBrush(palette.Default);
+        try
+        {
+            if (App.MainWindowContent != null)
+            {
+                ApplyThemeScopes(App.MainWindowContent.Resources);
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (App.MainWindowInstance?.ContentFrame?.Content is FrameworkElement frameworkElement)
+            {
+                ApplyThemeScopes(frameworkElement.Resources);
+            }
+        }
+        catch
+        {
+        }
+        void ApplyThemeScopes(ResourceDictionary rootDict)
+        {
+            ApplyToDict(rootDict, currentBrush);
+            ResourceDictionary resourceDictionary;
+            if (rootDict.ThemeDictionaries.TryGetValue("Dark", out var value))
+            {
+                resourceDictionary = value as ResourceDictionary;
+                if ((object)resourceDictionary != null)
+                {
+                    goto IL_0042;
+                }
+            }
+            resourceDictionary = new ResourceDictionary();
+            rootDict.ThemeDictionaries["Dark"] = resourceDictionary;
+            goto IL_0042;
+        IL_0084:
+            ResourceDictionary resourceDictionary2;
+            ApplyToDict(resourceDictionary2, darkBrush);
+            ResourceDictionary resourceDictionary3;
+            if (rootDict.ThemeDictionaries.TryGetValue("Light", out var value2))
+            {
+                resourceDictionary3 = value2 as ResourceDictionary;
+                if ((object)resourceDictionary3 != null)
+                {
+                    goto IL_00cb;
+                }
+            }
+            resourceDictionary3 = new ResourceDictionary();
+            rootDict.ThemeDictionaries["Light"] = resourceDictionary3;
+            goto IL_00cb;
+        IL_00cb:
+            ApplyToDict(resourceDictionary3, lightBrush);
+            return;
+        IL_0042:
+            ApplyToDict(resourceDictionary, darkBrush);
+            if (rootDict.ThemeDictionaries.TryGetValue("Default", out var value3))
+            {
+                resourceDictionary2 = value3 as ResourceDictionary;
+                if ((object)resourceDictionary2 != null)
+                {
+                    goto IL_0084;
+                }
+            }
+            resourceDictionary2 = new ResourceDictionary();
+            rootDict.ThemeDictionaries["Default"] = resourceDictionary2;
+            goto IL_0084;
+        }
+        void ApplyToDict(ResourceDictionary dict, LinearGradientBrush brush)
+        {
+            if (!(dict == null) && !(dict.Source != null))
+            {
+                dict["TextControlElevationBorderFocusedBrush"] = brush;
+                dict["TextControlBorderBrushFocused"] = brush;
+                dict["TextControlSelectionHighlightColor"] = palette.Default;
+                dict["TextControlSelectionHighlightBrush"] = selectionHighlight;
+                dict["AccentFillColorSelectedTextBackgroundBrush"] = selectionHighlight;
+            }
+        }
+    }
+
+    public static Color GetAccentColor(AccentColorOption option)
+    {
+        return GetAccentPalette(option).Default;
+    }
+
+    public static AccentPalette GetAccentPalette(AccentColorOption option)
+    {
+        AccentPalette value;
+        lock (_accentCacheLock)
+        {
+            AccentPalette valueOrDefault = _systemAccentPalette.GetValueOrDefault();
+            if (!_systemAccentPalette.HasValue)
+            {
+                valueOrDefault = ReadSystemAccentPalette();
+                _systemAccentPalette = valueOrDefault;
+            }
+            value = _systemAccentPalette.Value;
+        }
+        switch (option)
+        {
+            case AccentColorOption.SystemDefault:
+                return value;
+            case AccentColorOption.Custom:
+                if (!string.IsNullOrEmpty(AppServices.Settings?.Current?.CustomAccentColorHex))
+                {
+                    try
+                    {
+                        return AccentPalette.FromBase(ColorHelper.FromHex(AppServices.Settings.Current.CustomAccentColorHex));
+                    }
+                    catch
+                    {
+                    }
+                }
+                break;
+        }
+        return AccentPalette.FromBase(option switch
         {
             AccentColorOption.Orange => ColorHelper.FromHex("#F7630C"),
             AccentColorOption.Purple => ColorHelper.FromHex("#8E4EC6"),
@@ -282,33 +1321,37 @@ public static class ThemeHelper
             AccentColorOption.Teal => ColorHelper.FromHex("#00B7C3"),
             AccentColorOption.Red => ColorHelper.FromHex("#D13438"),
             AccentColorOption.Pink => ColorHelper.FromHex("#E3008C"),
-            _ => _systemAccentPalette.Value.Default
-        };
-
-        return AccentPalette.FromBase(accent);
+            _ => value.Default,
+        });
     }
 
     private static AccentPalette ReadSystemAccentPalette()
     {
-        var fallback = AccentPalette.FromBase(ColorHelper.FromHex("#0078D4"));
-
-        return new AccentPalette(
-            TryGetColorResource("SystemAccentColor", fallback.Default),
-            TryGetColorResource("SystemAccentColorLight1", fallback.Light1),
-            TryGetColorResource("SystemAccentColorLight2", fallback.Light2),
-            TryGetColorResource("SystemAccentColorLight3", fallback.Light3),
-            TryGetColorResource("SystemAccentColorDark1", fallback.Dark1),
-            TryGetColorResource("SystemAccentColorDark2", fallback.Dark2),
-            TryGetColorResource("SystemAccentColorDark3", fallback.Dark3));
+        try
+        {
+            UISettings uISettings = new UISettings();
+            Color colorValue = uISettings.GetColorValue(UIColorType.Accent);
+            Color colorValue2 = uISettings.GetColorValue(UIColorType.AccentLight1);
+            Color colorValue3 = uISettings.GetColorValue(UIColorType.AccentLight2);
+            Color colorValue4 = uISettings.GetColorValue(UIColorType.AccentLight3);
+            Color colorValue5 = uISettings.GetColorValue(UIColorType.AccentDark1);
+            Color colorValue6 = uISettings.GetColorValue(UIColorType.AccentDark2);
+            Color colorValue7 = uISettings.GetColorValue(UIColorType.AccentDark3);
+            return new AccentPalette(colorValue, colorValue2, colorValue3, colorValue4, colorValue5, colorValue6, colorValue7);
+        }
+        catch
+        {
+            AccentPalette accentPalette = AccentPalette.FromBase(ColorHelper.FromHex("#0078D4"));
+            return new AccentPalette(TryGetColorResource("SystemAccentColor", accentPalette.Default), TryGetColorResource("SystemAccentColorLight1", accentPalette.Light1), TryGetColorResource("SystemAccentColorLight2", accentPalette.Light2), TryGetColorResource("SystemAccentColorLight3", accentPalette.Light3), TryGetColorResource("SystemAccentColorDark1", accentPalette.Dark1), TryGetColorResource("SystemAccentColorDark2", accentPalette.Dark2), TryGetColorResource("SystemAccentColorDark3", accentPalette.Dark3));
+        }
     }
 
     private static Color TryGetColorResource(string key, Color fallback)
     {
         try
         {
-            return TryGetColorResource(Application.Current.Resources, key, out var color)
-                ? color
-                : fallback;
+            Color color;
+            return TryGetColorResource(Application.Current.Resources, key, out color) ? color : fallback;
         }
         catch
         {
@@ -318,65 +1361,73 @@ public static class ThemeHelper
 
     private static bool TryGetColorResource(ResourceDictionary dictionary, string key, out Color color)
     {
-        if (dictionary.TryGetValue(key, out var resource))
+        if (dictionary.TryGetValue(key, out var value))
         {
-            if (resource is Color resourceColor)
+            if (value is Color color2)
             {
-                color = resourceColor;
+                color = color2;
                 return true;
             }
-
-            if (resource is SolidColorBrush brush)
+            if (value is SolidColorBrush solidColorBrush)
             {
-                color = brush.Color;
+                color = solidColorBrush.Color;
                 return true;
             }
         }
-
-        foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
+        foreach (ResourceDictionary item in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
         {
-            if (TryGetColorResource(themeDictionary, key, out color))
+            if (TryGetColorResource(item, key, out color))
             {
                 return true;
             }
         }
-
-        foreach (var mergedDictionary in dictionary.MergedDictionaries)
+        foreach (ResourceDictionary mergedDictionary in dictionary.MergedDictionaries)
         {
             if (TryGetColorResource(mergedDictionary, key, out color))
             {
                 return true;
             }
         }
-
         color = default;
         return false;
     }
 
-    private static Color White => Color.FromArgb(255, 255, 255, 255);
-    private static Color Black => Color.FromArgb(255, 0, 0, 0);
-    private static Color Gray => Color.FromArgb(255, 128, 128, 128);
-
     private static void UpdateBrushResource(string key, Color color)
     {
-        UpdateBrushResource(Application.Current.Resources, key, color, addIfMissing: true);
+        if (App.MainWindowContent?.Resources != null)
+        {
+            UpdateBrushResource(App.MainWindowContent.Resources, key, color, addIfMissing: true);
+        }
+    }
+
+    private static void SafeSetAppResource(string key, object value)
+    {
+        // Application.Current.Resources is sealed in WinUI 3; avoid mutation to prevent 0x800F0902 COMExceptions.
+        // ThemeDictionaries are native read-only scopes in WinUI 3; mutations avoided to prevent 0x800F0902 COMExceptions.
+        // MergedDictionaries are frozen/compiled system resources; mutations avoided to prevent 0x800F0902 COMExceptions.
     }
 
     private static void UpdateResource(string key, object value)
     {
         try
         {
-            Application.Current.Resources[key] = value;
-            UpdateResourceIfPresent(Application.Current.Resources, key, value);
+            SafeSetAppResource(key, value);
+            if (App.MainWindowContent?.Resources != null)
+            {
+                UpdateResourceIfPresent(App.MainWindowContent.Resources, key, value);
+            }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to update resource '{key}': {ex.Message}");
         }
     }
 
     private static void UpdateResourceIfPresent(ResourceDictionary dictionary, string key, object value)
     {
+        if (dictionary.Source != null)
+        {
+            return;
+        }
         try
         {
             if (dictionary.ContainsKey(key))
@@ -384,17 +1435,14 @@ public static class ThemeHelper
                 dictionary[key] = value;
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to update resource dictionary entry '{key}': {ex.Message}");
         }
-
-        foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
+        foreach (ResourceDictionary item in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
         {
-            UpdateResourceIfPresent(themeDictionary, key, value);
+            UpdateResourceIfPresent(item, key, value);
         }
-
-        foreach (var mergedDictionary in dictionary.MergedDictionaries)
+        foreach (ResourceDictionary mergedDictionary in dictionary.MergedDictionaries)
         {
             UpdateResourceIfPresent(mergedDictionary, key, value);
         }
@@ -402,20 +1450,13 @@ public static class ThemeHelper
 
     private static void UpdateBrushResource(ResourceDictionary dictionary, string key, Color color, bool addIfMissing)
     {
+        if (dictionary == null || dictionary.Source != null)
+        {
+            return;
+        }
         try
         {
-            if (dictionary.TryGetValue(key, out var resource))
-            {
-                if (resource is SolidColorBrush brush)
-                {
-                    brush.Color = color;
-                }
-                else
-                {
-                    dictionary[key] = new SolidColorBrush(color);
-                }
-            }
-            else if (addIfMissing)
+            if (addIfMissing)
             {
                 dictionary[key] = new SolidColorBrush(color);
             }
@@ -835,17 +1876,204 @@ public static class ThemeHelper
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to update brush '{key}': {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ExtractDominantChroma] Error: {ex.Message}");
+        }
+        return null;
+    }
+
+    public static LinearGradientBrush CreateFullscreenSpecularBorderBrush(Windows.UI.Color? customColor = null, bool forceRefresh = false)
+    {
+        if (_cachedFullscreenBorderBrush == null)
+        {
+            try
+            {
+                _cachedFullscreenBorderBrush = new LinearGradientBrush
+                {
+                    StartPoint = new Windows.Foundation.Point(0.0, 0.0),
+                    EndPoint = new Windows.Foundation.Point(1.0, 1.0),
+                    GradientStops =
+                    {
+                        new GradientStop { Offset = 0.0 },
+                        new GradientStop { Offset = 0.30 },
+                        new GradientStop { Offset = 0.70 },
+                        new GradientStop { Offset = 1.0 }
+                    }
+                };
+                forceRefresh = true;
+            }
+            catch
+            {
+                return new LinearGradientBrush();
+            }
         }
 
-        foreach (var themeDictionary in dictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
+        if (forceRefresh || customColor.HasValue || !_hasTintedFullscreenBorderBrush)
         {
-            UpdateBrushResource(themeDictionary, key, color, addIfMissing: false);
+            try
+            {
+                var sceneColor = customColor ?? GetLiveSceneSpecularColor();
+                if (_cachedFullscreenBorderBrush.GradientStops.Count >= 4)
+                {
+                    // Stop 0 (Offset 0.0): Diamond specular glint core (blended 75% white + 25% scene tint, #EB / ~235 alpha)
+                    _cachedFullscreenBorderBrush.GradientStops[0].Color = Windows.UI.Color.FromArgb(
+                        235,
+                        (byte)Math.Clamp((int)(255 * 0.75f + sceneColor.R * 0.25f), 0, 255),
+                        (byte)Math.Clamp((int)(255 * 0.75f + sceneColor.G * 0.25f), 0, 255),
+                        (byte)Math.Clamp((int)(255 * 0.75f + sceneColor.B * 0.25f), 0, 255));
+
+                    // Stop 1 (Offset 0.30): Vibrant live scene chromatic body (#91 / ~145 alpha)
+                    _cachedFullscreenBorderBrush.GradientStops[1].Color = Windows.UI.Color.FromArgb(
+                        145, sceneColor.R, sceneColor.G, sceneColor.B);
+
+                    // Stop 2 (Offset 0.70): Soft ambient refraction (#38 / ~56 alpha)
+                    _cachedFullscreenBorderBrush.GradientStops[2].Color = Windows.UI.Color.FromArgb(
+                        56, sceneColor.R, sceneColor.G, sceneColor.B);
+
+                    // Stop 3 (Offset 1.00): Deep ambient edge refraction (#1A / ~26 alpha)
+                    _cachedFullscreenBorderBrush.GradientStops[3].Color = Windows.UI.Color.FromArgb(
+                        26, sceneColor.R, sceneColor.G, sceneColor.B);
+
+                    _hasTintedFullscreenBorderBrush = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateFullscreenSpecularBorderBrush] Tint error: {ex.Message}");
+            }
         }
 
-        foreach (var mergedDictionary in dictionary.MergedDictionaries)
+        return _cachedFullscreenBorderBrush;
+    }
+
+    public static Brush CreateFullscreenSpecularTopHighlightBrush()
+    {
+        return new LinearGradientBrush
         {
-            UpdateBrushResource(mergedDictionary, key, color, addIfMissing: false);
+            StartPoint = new Point(0f, 0f),
+            EndPoint = new Point(1f, 0f),
+            GradientStops =
+            {
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(35, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.0
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(120, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.2
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(240, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.5
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(120, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 0.8
+                },
+                new GradientStop
+                {
+                    Color = Microsoft.UI.ColorHelper.FromArgb(35, byte.MaxValue, byte.MaxValue, byte.MaxValue),
+                    Offset = 1.0
+                }
+            }
+        };
+    }
+
+    public static void ApplyFullscreenSpecularTheming(bool isFullscreenVideo, bool force = false)
+    {
+        try
+        {
+            ElementTheme effectiveElementTheme = GetEffectiveElementTheme();
+            string text = ((effectiveElementTheme == ElementTheme.Light) ? "Light" : "Dark");
+            if (isFullscreenVideo)
+            {
+                Func<object> resourceFactory = () => CreateFullscreenTransparentSpecularBackgroundBrush();
+                Func<object> resourceFactory2 = () => CreateFullscreenSpecularBorderBrush();
+                SetScopedResource("FlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBackground", resourceFactory, "Dark");
+                SetScopedResource("ComboBoxDropDownBackground", resourceFactory, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBackground", resourceFactory, "Dark");
+                SetScopedResource("SurfaceStrokeColorFlyoutBrush", resourceFactory2, "Dark");
+                SetScopedResource("FlyoutBorderThemeBrush", resourceFactory2, "Dark");
+                SetScopedResource("FlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("MenuFlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("VolumeFlyoutPresenterBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("ComboBoxDropDownBorderBrush", resourceFactory2, "Dark");
+                SetScopedResource("AutoSuggestBoxSuggestionsListBorderBrush", resourceFactory2, "Dark");
+                if (text != "Dark")
+                {
+                    SetScopedResource("FlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("MenuFlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("VolumeFlyoutPresenterBackground", resourceFactory, text);
+                    SetScopedResource("ComboBoxDropDownBackground", resourceFactory, text);
+                    SetScopedResource("SurfaceStrokeColorFlyoutBrush", resourceFactory2, text);
+                    SetScopedResource("FlyoutBorderThemeBrush", resourceFactory2, text);
+                    SetScopedResource("FlyoutPresenterBorderBrush", resourceFactory2, text);
+                    SetScopedResource("MenuFlyoutPresenterBorderBrush", resourceFactory2, text);
+                    SetScopedResource("VolumeFlyoutPresenterBorderBrush", resourceFactory2, text);
+                }
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        SafeSetAppResource("MenuFlyoutPresenterBackground", CreateFullscreenTransparentSpecularBackgroundBrush());
+                        SafeSetAppResource("FlyoutPresenterBackground", CreateFullscreenTransparentSpecularBackgroundBrush());
+                        SafeSetAppResource("VolumeFlyoutPresenterBackground", CreateFullscreenTransparentSpecularBackgroundBrush());
+                        SafeSetAppResource("SurfaceStrokeColorFlyoutBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("FlyoutBorderThemeBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("FlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("MenuFlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                        SafeSetAppResource("VolumeFlyoutPresenterBorderBrush", CreateFullscreenSpecularBorderBrush());
+                    }
+                }
+                catch
+                {
+                }
+                RefreshThemeBindings();
+                StartFullscreenPopupWatcher();
+            }
+            else
+            {
+                StopFullscreenPopupWatcher();
+                _styledFullscreenPresenters.Clear();
+                _settledSubMenuPresenters.Clear();
+                _settledMenuRects.Clear();
+                _cachedParentMap.Clear();
+                AppThemeBackdrop valueOrDefault = (AppServices.Settings?.Current?.BackdropType).GetValueOrDefault();
+                ElementTheme secondaryTheme = (effectiveElementTheme == ElementTheme.Light) ? ElementTheme.Dark : ElementTheme.Light;
+                ApplyBackdropTheme(valueOrDefault, secondaryTheme);
+                ApplyBackdropTheme(valueOrDefault, effectiveElementTheme);
+                try
+                {
+                    if (Application.Current != null)
+                    {
+                        Brush flyoutPresenterBackground = GetFlyoutPresenterBackground(valueOrDefault, effectiveElementTheme);
+                        Brush flyoutBorderBrush = GetFlyoutBorderBrush(valueOrDefault, effectiveElementTheme);
+                        Brush volumeFlyoutBackground = GetVolumeFlyoutBackground(valueOrDefault, effectiveElementTheme);
+                        Brush volumeFlyoutBorderBrush = GetVolumeFlyoutBorderBrush(valueOrDefault, effectiveElementTheme);
+                        SafeSetAppResource("MenuFlyoutPresenterBackground", flyoutPresenterBackground);
+                        SafeSetAppResource("FlyoutPresenterBackground", flyoutPresenterBackground);
+                        SafeSetAppResource("VolumeFlyoutPresenterBackground", volumeFlyoutBackground);
+                        SafeSetAppResource("SurfaceStrokeColorFlyoutBrush", flyoutBorderBrush);
+                        SafeSetAppResource("FlyoutBorderThemeBrush", flyoutBorderBrush);
+                        SafeSetAppResource("FlyoutPresenterBorderBrush", flyoutBorderBrush);
+                        SafeSetAppResource("MenuFlyoutPresenterBorderBrush", flyoutBorderBrush);
+                        SafeSetAppResource("VolumeFlyoutPresenterBorderBrush", volumeFlyoutBorderBrush);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            App.MainWindowInstance?.TvEpisodeQueueOverlay?.UpdateTheming();
+            FlyoutHelper.RefreshAllFlyouts();
+        }
+        catch (Exception)
+        {
         }
     }
 
@@ -1053,14 +2281,7 @@ public static class ThemeHelper
 >>>>>>> Stashed changes
     }
 
-    private readonly record struct AccentPalette(
-        Color Default,
-        Color Light1,
-        Color Light2,
-        Color Light3,
-        Color Dark1,
-        Color Dark2,
-        Color Dark3)
+    private static void HookRenderingWatcher()
     {
 <<<<<<< Updated upstream
         public static AccentPalette FromBase(Color accent) =>

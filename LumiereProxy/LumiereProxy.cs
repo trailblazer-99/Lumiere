@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -11,6 +16,7 @@ namespace Lumiere.Proxy
 {
     public class ApiProxyFunction
     {
+        private static readonly Regex SafeEndpointRegex = new(@"^[a-zA-Z0-9_\-\.\/:]+$", RegexOptions.Compiled);
         private readonly ILogger<ApiProxyFunction> _logger;
         private readonly HttpClient _httpClient;
 
@@ -29,41 +35,133 @@ namespace Lumiere.Proxy
             // 0. Version endpoint for troubleshooting deployment
             if (service.Equals("version", StringComparison.OrdinalIgnoreCase))
             {
-                return new OkObjectResult(new { Version = "2.0.2", Status = "Proxy Clean Redo Live" });
+                return new OkObjectResult(new { Version = "2.0.3", Status = "Gemini and MusicAPI Enhanced" });
             }
 
-            // 1. Verify Secret App Token (prevents scrapers from abusing your proxy)
-            if (!req.Headers.TryGetValue("X-Lumiere-App-Token", out var appToken) || 
-                appToken != Environment.GetEnvironmentVariable("APP_TOKEN"))
+            // 1. Verify Secret App Token using constant-time comparison (prevents timing attacks and unauthorized proxy abuse)
+            string? expectedToken = Environment.GetEnvironmentVariable("APP_TOKEN");
+            if (string.IsNullOrEmpty(expectedToken) ||
+                !req.Headers.TryGetValue("X-Lumiere-App-Token", out var appToken) ||
+                string.IsNullOrEmpty(appToken) ||
+                !CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(appToken.ToString()),
+                    Encoding.UTF8.GetBytes(expectedToken)))
             {
                 _logger.LogWarning("Unauthorized access attempt. Invalid or missing X-Lumiere-App-Token.");
                 return new UnauthorizedResult();
             }
 
-            var query = req.QueryString.Value ?? "";
-            string targetUrl = "";
-            HttpResponseMessage response;
+            // 2. Validate and sanitize remainder route parameter (prevents SSRF and path traversal)
+            if (string.IsNullOrWhiteSpace(remainder))
+            {
+                _logger.LogWarning("Invalid request: remainder route parameter is empty.");
+                return new BadRequestObjectResult("Invalid endpoint path.");
+            }
+
+            string unescapedRemainder;
+            try
+            {
+                unescapedRemainder = Uri.UnescapeDataString(remainder);
+            }
+            catch
+            {
+                _logger.LogWarning("Malformed URL encoding in remainder.");
+                return new BadRequestObjectResult("Invalid endpoint format.");
+            }
+
+            // Reject path traversal sequences
+            if (remainder.Contains("..") || unescapedRemainder.Contains(".."))
+            {
+                _logger.LogWarning("Path traversal attempt detected in remainder: {Remainder}", remainder);
+                return new BadRequestObjectResult("Path traversal is not permitted.");
+            }
+
+            // Reject backslashes and control characters
+            if (remainder.Contains('\\') || unescapedRemainder.Contains('\\') ||
+                remainder.Any(char.IsControl) || unescapedRemainder.Any(char.IsControl))
+            {
+                _logger.LogWarning("Invalid characters or control sequences detected in remainder.");
+                return new BadRequestObjectResult("Invalid characters in request.");
+            }
+
+            // Reject scheme and authority injection (prevent SSRF)
+            if (remainder.Contains("://") || unescapedRemainder.Contains("://") ||
+                remainder.StartsWith("//") || unescapedRemainder.StartsWith("//"))
+            {
+                _logger.LogWarning("Protocol or host specification detected in remainder: {Remainder}", remainder);
+                return new BadRequestObjectResult("Absolute URLs or protocol schemes are not allowed in endpoint path.");
+            }
+
+            // 3. Separate endpoint path and query parameters cleanly
+            string endpointPath;
+            string remainderQuery = "";
+            int questionMarkIndex = remainder.IndexOf('?');
+            if (questionMarkIndex >= 0)
+            {
+                endpointPath = remainder.Substring(0, questionMarkIndex);
+                remainderQuery = remainder.Substring(questionMarkIndex + 1);
+            }
+            else
+            {
+                endpointPath = remainder;
+            }
+
+            endpointPath = endpointPath.TrimStart('/');
+            if (string.IsNullOrWhiteSpace(endpointPath) || endpointPath.Contains("//") || !SafeEndpointRegex.IsMatch(endpointPath))
+            {
+                _logger.LogWarning("Invalid endpoint path format: {EndpointPath}", endpointPath);
+                return new BadRequestObjectResult("Invalid endpoint path format.");
+            }
+
+            // Combine query strings properly (without duplicate '?' or corrupted connectors)
+            string reqQuery = (req.QueryString.HasValue && !string.IsNullOrEmpty(req.QueryString.Value))
+                ? req.QueryString.Value.TrimStart('?')
+                : "";
+
+            string combinedQuery = "";
+            if (!string.IsNullOrEmpty(remainderQuery) && !string.IsNullOrEmpty(reqQuery))
+            {
+                combinedQuery = $"{remainderQuery}&{reqQuery}";
+            }
+            else if (!string.IsNullOrEmpty(remainderQuery))
+            {
+                combinedQuery = remainderQuery;
+            }
+            else if (!string.IsNullOrEmpty(reqQuery))
+            {
+                combinedQuery = reqQuery;
+            }
+
+            const int MaxGeminiBodyBytes = 1024 * 1024; // 1 MB cap
+            if (endpointPath.Contains("..", StringComparison.Ordinal) || endpointPath.Contains("://", StringComparison.Ordinal))
+            {
+                return new BadRequestObjectResult("Invalid upstream endpoint path.");
+            }
+
+            string targetUrl;
+            HttpResponseMessage? response = null;
 
             try
             {
-                switch (service.ToLower())
+                switch (service.ToLowerInvariant())
                 {
                     case "tmdb":
                         string tmdbKey = Environment.GetEnvironmentVariable("TMDB_API_KEY") ?? "";
-                        string connector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
-                        targetUrl = $"https://api.themoviedb.org/3/{remainder}{query}{connector}api_key={tmdbKey}";
+                        targetUrl = BuildTargetUrl("https://api.themoviedb.org/3", endpointPath, combinedQuery, "api_key", tmdbKey);
                         response = await _httpClient.GetAsync(targetUrl);
                         break;
 
                     case "watchmode":
                         string watchmodeKey = Environment.GetEnvironmentVariable("WATCHMODE_API_KEY") ?? "";
-                        string wConnector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
-                        targetUrl = $"https://api.watchmode.com/v1/{remainder}{query}{wConnector}apiKey={watchmodeKey}";
-                        response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, targetUrl));
+                        targetUrl = BuildTargetUrl("https://api.watchmode.com/v1", endpointPath, combinedQuery, "apiKey", watchmodeKey);
+                        using (var watchmodeReq = new HttpRequestMessage(HttpMethod.Get, targetUrl))
+                        {
+                            response = await _httpClient.SendAsync(watchmodeReq);
+                        }
                         break;
 
                     case "musicapi":
-                        targetUrl = $"https://api.musicapi.com/public/{remainder}{query}";
+                        targetUrl = BuildTargetUrl("https://api.musicapi.com/public", endpointPath, combinedQuery);
                         using (var musicReq = new HttpRequestMessage(HttpMethod.Get, targetUrl))
                         {
                             string devToken = GenerateMusicApiJwt();
@@ -74,16 +172,31 @@ namespace Lumiere.Proxy
 
                     case "gemini":
                         string geminiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
-                        string gConnector = (remainder.Contains("?") || query.Contains("?")) ? "&" : "?";
-                        targetUrl = $"https://generativelanguage.googleapis.com/{remainder}{query}{gConnector}key={geminiKey}";
+                        targetUrl = BuildTargetUrl("https://generativelanguage.googleapis.com", endpointPath, combinedQuery, "key", geminiKey);
                         if (req.Method.Equals("POST", StringComparison.OrdinalIgnoreCase))
                         {
-                            using (var reader = new StreamReader(req.Body))
+                            if (req.ContentLength.HasValue && req.ContentLength.Value > MaxGeminiBodyBytes)
                             {
-                                string requestBody = await reader.ReadToEndAsync();
-                                var postContent = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
-                                response = await _httpClient.PostAsync(targetUrl, postContent);
+                                return new StatusCodeResult(413);
                             }
+
+                            using var buffer = new MemoryStream();
+                            var chunk = new byte[16384];
+                            int totalRead = 0;
+                            int read;
+                            while ((read = await req.Body.ReadAsync(chunk, 0, chunk.Length)) > 0)
+                            {
+                                totalRead += read;
+                                if (totalRead > MaxGeminiBodyBytes)
+                                {
+                                    return new StatusCodeResult(413);
+                                }
+                                buffer.Write(chunk, 0, read);
+                            }
+
+                            string requestBody = Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+                            using var postContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
+                            response = await _httpClient.PostAsync(targetUrl, postContent);
                         }
                         else
                         {
@@ -92,7 +205,7 @@ namespace Lumiere.Proxy
                         break;
 
                     default:
-                        _logger.LogWarning($"Route '{service}' not recognized.");
+                        _logger.LogWarning("Route '{Service}' not recognized.", service);
                         return new NotFoundObjectResult("Service Route Not Found");
                 }
 
@@ -107,9 +220,51 @@ namespace Lumiere.Proxy
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Proxy Error: {ex.Message}");
+                _logger.LogError(ex, "Proxy Error: {ErrorMessage}", ex.Message);
                 return new BadRequestObjectResult("Proxy request failed.");
             }
+            finally
+            {
+                response?.Dispose();
+            }
+        }
+
+        private static string BuildTargetUrl(string baseEndpoint, string path, string combinedQuery, string? authParamName = null, string? authParamValue = null)
+        {
+            var urlBuilder = new StringBuilder();
+            urlBuilder.Append(baseEndpoint.TrimEnd('/'));
+            urlBuilder.Append('/');
+            urlBuilder.Append(path.TrimStart('/'));
+
+            var queryParts = new List<string>();
+            if (!string.IsNullOrEmpty(combinedQuery))
+            {
+                foreach (var pair in combinedQuery.Split('&', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int eq = pair.IndexOf('=');
+                    string keyName = eq >= 0 ? pair[..eq] : pair;
+                    if (string.Equals(keyName, "api_key", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(keyName, "apiKey", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(keyName, "key", StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(authParamName) && string.Equals(keyName, authParamName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+                    queryParts.Add(pair);
+                }
+            }
+            if (!string.IsNullOrEmpty(authParamName) && !string.IsNullOrEmpty(authParamValue))
+            {
+                queryParts.Add($"{authParamName}={Uri.EscapeDataString(authParamValue)}");
+            }
+
+            if (queryParts.Count > 0)
+            {
+                urlBuilder.Append('?');
+                urlBuilder.Append(string.Join("&", queryParts));
+            }
+
+            return urlBuilder.ToString();
         }
 
         private static string? _cachedMusicJwt;
@@ -124,49 +279,46 @@ namespace Lumiere.Proxy
                 {
                     return _cachedMusicJwt;
                 }
-            }
 
-            string clientId = Environment.GetEnvironmentVariable("MUSIC_CLIENT_ID") ?? "";
-            string keyId = Environment.GetEnvironmentVariable("MUSIC_KEY_ID") ?? "";
-            string privateKeyPem = Environment.GetEnvironmentVariable("MUSIC_PRIVATE_KEY_PEM") ?? "";
+                string clientId = Environment.GetEnvironmentVariable("MUSIC_CLIENT_ID") ?? "";
+                string keyId = Environment.GetEnvironmentVariable("MUSIC_KEY_ID") ?? "";
+                string privateKeyPem = Environment.GetEnvironmentVariable("MUSIC_PRIVATE_KEY_PEM") ?? "";
 
-            if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(keyId) || string.IsNullOrEmpty(privateKeyPem))
-            {
-                throw new InvalidOperationException("MusicAPI environment variables (MUSIC_CLIENT_ID, MUSIC_KEY_ID, MUSIC_PRIVATE_KEY_PEM) are not fully configured in the environment settings.");
-            }
+                if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(keyId) || string.IsNullOrEmpty(privateKeyPem))
+                {
+                    throw new InvalidOperationException("MusicAPI environment variables (MUSIC_CLIENT_ID, MUSIC_KEY_ID, MUSIC_PRIVATE_KEY_PEM) are not fully configured in the environment settings.");
+                }
 
-            using var ecdsa = System.Security.Cryptography.ECDsa.Create();
-            ecdsa.ImportFromPem(privateKeyPem);
+                using var ecdsa = System.Security.Cryptography.ECDsa.Create();
+                ecdsa.ImportFromPem(privateKeyPem);
 
-            var header = new { typ = "JWT", alg = "ES256", kid = keyId };
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var payload = new
-            {
-                iss = clientId,
-                iat = now,
-                exp = now + 3600 // 1 hour expiration
-            };
+                var header = new { typ = "JWT", alg = "ES256", kid = keyId };
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var payload = new
+                {
+                    iss = clientId,
+                    iat = now,
+                    exp = now + 3600 // 1 hour expiration
+                };
 
-            string headerJson = System.Text.Json.JsonSerializer.Serialize(header);
-            string payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);
+                string headerJson = System.Text.Json.JsonSerializer.Serialize(header);
+                string payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);
 
-            string headerBase64 = Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(headerJson));
-            string payloadBase64 = Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(payloadJson));
+                string headerBase64 = Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(headerJson));
+                string payloadBase64 = Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(payloadJson));
 
-            string stringToSign = $"{headerBase64}.{payloadBase64}";
-            byte[] signatureBytes = ecdsa.SignData(
-                System.Text.Encoding.UTF8.GetBytes(stringToSign), 
-                System.Security.Cryptography.HashAlgorithmName.SHA256, 
-                System.Security.Cryptography.DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
-            string signatureBase64 = Base64UrlEncode(signatureBytes);
+                string stringToSign = $"{headerBase64}.{payloadBase64}";
+                byte[] signatureBytes = ecdsa.SignData(
+                    System.Text.Encoding.UTF8.GetBytes(stringToSign),
+                    System.Security.Cryptography.HashAlgorithmName.SHA256,
+                    System.Security.Cryptography.DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+                string signatureBase64 = Base64UrlEncode(signatureBytes);
 
-            string jwt = $"{stringToSign}.{signatureBase64}";
-            lock (_jwtLock)
-            {
+                string jwt = $"{stringToSign}.{signatureBase64}";
                 _cachedMusicJwt = jwt;
                 _musicJwtExpiry = DateTimeOffset.UtcNow.AddMinutes(50); // Refresh 10 mins before expiry
+                return jwt;
             }
-            return jwt;
         }
 
         private static string Base64UrlEncode(byte[] input)

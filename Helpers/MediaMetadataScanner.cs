@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
 using Windows.Storage;
@@ -10,18 +11,23 @@ namespace LumiereMediaPlayer.Helpers;
 
 public static class MediaMetadataScanner
 {
+    // Maximum 2 concurrent background metadata extraction pipelines to prevent CPU/memory exhaustion
+    private static readonly System.Threading.SemaphoreSlim _scanThrottle = new(2, 2);
+
     public static async Task ScanMetadataAsync(MediaItem item)
     {
         if (item == null || string.IsNullOrEmpty(item.SourcePath)) return;
 
-        // Skip if already scanned
+        // Skip if already fully scanned with rich container metadata
         if (!string.IsNullOrEmpty(item.Resolution) && item.Resolution != "Unknown" &&
             !string.IsNullOrEmpty(item.Codec) && item.Codec != "Unknown" &&
-            item.Bitrate > 0)
+            item.Bitrate > 0 &&
+            !string.IsNullOrEmpty(item.AudioTracksSummary) && item.AudioTracksSummary != "Unknown")
         {
             return;
         }
 
+        await _scanThrottle.WaitAsync();
         try
         {
             string path = item.SourcePath;
@@ -40,19 +46,6 @@ public static class MediaMetadataScanner
                 }
             }
             catch { }
-
-            // If not in FutureAccessList, try getting by path
-            if (storageFile == null)
-            {
-                try
-                {
-                    if (File.Exists(playablePath))
-                    {
-                        storageFile = await StorageFile.GetFileFromPathAsync(playablePath);
-                    }
-                }
-                catch { }
-            }
 
             long fileSize = 0;
             if (storageFile != null)
@@ -79,6 +72,7 @@ public static class MediaMetadataScanner
             string codec = "Unknown";
             uint bitrate = 0;
             double frameRate = 0;
+            string? posterUrl = item.PosterUrl;
 
             // Attempt to query via UWP Storage APIs
             if (storageFile != null)
@@ -93,7 +87,7 @@ public static class MediaMetadataScanner
                     bitrate = videoProps.Bitrate;
 
                     var extraProps = await storageFile.Properties.RetrievePropertiesAsync(new[] { "System.Video.FourCC", "System.Video.FrameRate" });
-                    if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr)
+                    if (extraProps.TryGetValue("System.Video.FourCC", out var fourCcVal) && fourCcVal is string fourCcStr && !string.IsNullOrWhiteSpace(fourCcStr) && !fourCcStr.Equals("und", StringComparison.OrdinalIgnoreCase))
                     {
                         codec = fourCcStr;
                     }
@@ -109,66 +103,132 @@ public static class MediaMetadataScanner
             }
 
             // Fallback for resolution and codec using TagLib with authorization streams to avoid locks & permissions block
-            if (codec == "Unknown" || string.IsNullOrEmpty(codec) || resolution == "Unknown" || resolution == "0x0" || string.IsNullOrEmpty(resolution))
+            try
+            {
+                Stream? stream = null;
+                if (storageFile != null)
+                {
+                    try
+                    {
+                        var randomAccessStream = await storageFile.OpenAsync(FileAccessMode.Read);
+                        stream = randomAccessStream.AsStreamForRead();
+                    }
+                    catch { }
+                }
+
+                // Fallback to direct Win32 FileStream if storageFile stream failed
+                if (stream == null && File.Exists(playablePath))
+                {
+                    try
+                    {
+                        stream = new FileStream(playablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    }
+                    catch { }
+                }
+
+                if (stream != null)
+                {
+                    using (stream)
+                    using (var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream)))
+                    {
+                        if (codec == "Unknown" || codec == "und" || string.IsNullOrEmpty(codec))
+                        {
+                            var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
+                            if (!string.IsNullOrEmpty(videoCodec) && !videoCodec.Equals("und", StringComparison.OrdinalIgnoreCase))
+                            {
+                                codec = videoCodec;
+                            }
+                            else if (!string.IsNullOrEmpty(tagFile.Properties.Description) && !tagFile.Properties.Description.Equals("und", StringComparison.OrdinalIgnoreCase))
+                            {
+                                codec = tagFile.Properties.Description;
+                            }
+                        }
+
+                        if (resolution == "Unknown" || resolution == "0x0" || string.IsNullOrEmpty(resolution))
+                        {
+                            int w = tagFile.Properties.VideoWidth;
+                            int wHeight = tagFile.Properties.VideoHeight;
+                            if (w > 0 && wHeight > 0)
+                            {
+                                resolution = $"{w}x{wHeight}";
+                            }
+                        }
+
+                        // Extract container tracks and advanced stream metadata
+                        var containerTracks = MediaTrackFormatHelper.GetContainerTracks(playablePath);
+                        var videoTrack = containerTracks.Find(t => t.TrackType == 1);
+                        if (videoTrack != null)
+                        {
+                            if (videoTrack.CodecId.Contains("HEVC") || videoTrack.CodecId.Contains("H265")) codec = "HEVC (H.265)";
+                            else if (videoTrack.CodecId.Contains("AVC") || videoTrack.CodecId.Contains("H264")) codec = "AVC (H.264)";
+                            else if (videoTrack.CodecId.Contains("AV1") || videoTrack.CodecId.Contains("AV01")) codec = "AV1";
+                            else if (videoTrack.CodecId.Contains("VP9")) codec = "VP9";
+                        }
+
+                        if (codec == "Unknown" || codec == "und" || string.IsNullOrEmpty(codec))
+                        {
+                            string fNameLower = Path.GetFileName(playablePath).ToLowerInvariant();
+                            if (fNameLower.Contains("x265") || fNameLower.Contains("hevc") || fNameLower.Contains("h265")) codec = "HEVC (H.265)";
+                            else if (fNameLower.Contains("x264") || fNameLower.Contains("h264") || fNameLower.Contains("avc")) codec = "AVC (H.264)";
+                            else if (fNameLower.Contains("av1") || fNameLower.Contains("av01")) codec = "AV1";
+                            else if (fNameLower.Contains("vp9")) codec = "VP9";
+                        }
+
+                        // Extract embedded album art if poster is missing
+                        if (string.IsNullOrEmpty(posterUrl) && tagFile.Tag?.Pictures?.Length > 0)
+                        {
+                            try
+                            {
+                                var pic = tagFile.Tag.Pictures[0];
+                                if (pic.Data?.Data != null && pic.Data.Data.Length > 0)
+                                {
+                                    var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+                                    var thumbDir = Path.Combine(localFolder, "Thumbnails");
+                                    Directory.CreateDirectory(thumbDir);
+                                    var thumbPath = Path.Combine(thumbDir, $"{item.Id}.jpg");
+                                    await File.WriteAllBytesAsync(thumbPath, pic.Data.Data);
+                                    posterUrl = thumbPath;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // If poster is still missing and storageFile is available, extract thumbnail via Windows Storage
+            if (string.IsNullOrEmpty(posterUrl) && storageFile != null)
             {
                 try
                 {
-                    Stream? stream = null;
-                    if (storageFile != null)
+                    var thumbMode = item.Kind == MediaKind.Video
+                        ? Windows.Storage.FileProperties.ThumbnailMode.VideosView
+                        : Windows.Storage.FileProperties.ThumbnailMode.MusicView;
+                    using var thumb = await storageFile.GetThumbnailAsync(thumbMode, 300, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                    if (thumb != null && thumb.Size > 0)
                     {
-                        try
-                        {
-                            var randomAccessStream = await storageFile.OpenAsync(FileAccessMode.Read);
-                            stream = randomAccessStream.AsStreamForRead();
-                        }
-                        catch { }
-                    }
-
-                    // Fallback to direct Win32 FileStream if storageFile stream failed
-                    if (stream == null && File.Exists(playablePath))
-                    {
-                        try
-                        {
-                            stream = new FileStream(playablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                        }
-                        catch { }
-                    }
-
-                    if (stream != null)
-                    {
-                        using (stream)
-                        using (var tagFile = TagLib.File.Create(new StreamFileAbstraction(playablePath, stream)))
-                        {
-                            if (codec == "Unknown" || string.IsNullOrEmpty(codec))
-                            {
-                                var videoCodec = tagFile.Properties.Codecs.FirstOrDefault(c => c.MediaTypes == TagLib.MediaTypes.Video)?.Description;
-                                if (!string.IsNullOrEmpty(videoCodec))
-                                {
-                                    codec = videoCodec;
-                                }
-                                else if (!string.IsNullOrEmpty(tagFile.Properties.Description))
-                                {
-                                    codec = tagFile.Properties.Description;
-                                }
-                            }
-
-                            if (resolution == "Unknown" || resolution == "0x0" || string.IsNullOrEmpty(resolution))
-                            {
-                                int w = tagFile.Properties.VideoWidth;
-                                int wHeight = tagFile.Properties.VideoHeight;
-                                if (w > 0 && wHeight > 0)
-                                {
-                                    resolution = $"{w}x{wHeight}";
-                                }
-                            }
-                        }
+                        var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+                        var thumbDir = Path.Combine(localFolder, "Thumbnails");
+                        Directory.CreateDirectory(thumbDir);
+                        var thumbPath = Path.Combine(thumbDir, $"{item.Id}.jpg");
+                        using var outStream = File.Create(thumbPath);
+                        using var inStream = thumb.AsStreamForRead();
+                        await inStream.CopyToAsync(outStream);
+                        posterUrl = thumbPath;
                     }
                 }
                 catch { }
             }
 
-            // Apply results on main dispatcher to update UI cleanly
-            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            // If poster is still missing for a video, extract a random frame using MediaComposition
+            if (string.IsNullOrEmpty(posterUrl) && item.Kind == MediaKind.Video && storageFile != null)
+            {
+                posterUrl = await ExtractRandomVideoFrameAsync(item.Id, storageFile);
+            }
+
+            // Apply results on main dispatcher to update UI cleanly, or directly if no dispatcher
+            void ApplyUpdates()
             {
                 try
                 {
@@ -176,36 +236,320 @@ public static class MediaMetadataScanner
                     {
                         item.Resolution = resolution;
                     }
-                    if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown")
+                    if (string.IsNullOrEmpty(item.Codec) || item.Codec == "Unknown" || item.Codec.Equals("und", StringComparison.OrdinalIgnoreCase))
                     {
                         item.Codec = codec;
                     }
-                    if (item.Bitrate == 0)
+                    // Populate container properties
+                    var cTracks = MediaTrackFormatHelper.GetContainerTracks(playablePath);
+                    var aTracks = cTracks.FindAll(t => t.TrackType == 2);
+                    var sTracks = cTracks.FindAll(t => t.TrackType == 17);
+                    var vTrack = cTracks.Find(t => t.TrackType == 1);
+
+                    if (vTrack != null && vTrack.FrameRate > 0 && frameRate == 0)
+                    {
+                        frameRate = vTrack.FrameRate;
+                    }
+
+                    if (bitrate == 0 && fileSize > 0 && item.Duration.TotalSeconds > 0)
+                    {
+                        bitrate = (uint)((fileSize * 8) / item.Duration.TotalSeconds);
+                    }
+
+                    if (item.Bitrate == 0 && bitrate > 0)
                     {
                         item.Bitrate = bitrate;
                     }
-                    if (item.FrameRate == 0)
+                    if (item.FrameRate == 0 && frameRate > 0)
                     {
                         item.FrameRate = frameRate;
                     }
-                    if (item.FileSize == 0)
+                    if (item.FileSize == 0 && fileSize > 0)
                     {
                         item.FileSize = fileSize;
                     }
+                    if (string.IsNullOrEmpty(item.PosterUrl) && !string.IsNullOrEmpty(posterUrl))
+                    {
+                        item.PosterUrl = posterUrl;
+                    }
+
+                    if (aTracks.Count > 0)
+                    {
+                        var pAudio = aTracks[0];
+                        string pCodec = pAudio.CodecId.Contains("TRUEHD") ? "Dolby TrueHD" :
+                                        pAudio.CodecId.Contains("EAC3") ? "Dolby Digital Plus" :
+                                        pAudio.CodecId.Contains("AC3") ? "Dolby Digital" :
+                                        pAudio.CodecId.Contains("DTS") ? "DTS" :
+                                        pAudio.CodecId.Contains("FLAC") ? "FLAC" :
+                                        pAudio.CodecId.Contains("AAC") ? "AAC" : pAudio.CodecId;
+                        string pChannels = pAudio.Channels == 8 ? "7.1" : pAudio.Channels == 6 ? "5.1" : pAudio.Channels == 2 ? "2.0" : $"{pAudio.Channels}ch";
+                        item.AudioFormat = $"{pCodec} {pChannels}";
+                        if (!string.IsNullOrEmpty(pAudio.Name) && !pAudio.Name.Equals(pAudio.Language, StringComparison.OrdinalIgnoreCase))
+                        {
+                            item.AudioFormat = $"{pAudio.Name} ({pCodec})";
+                        }
+
+                        var names = new List<string>();
+                        foreach (var a in aTracks.Take(3))
+                        {
+                            string cName = a.CodecId.Contains("TRUEHD") ? "TrueHD" :
+                                           a.CodecId.Contains("EAC3") ? "E-AC3" :
+                                           a.CodecId.Contains("AC3") ? "AC3" :
+                                           a.CodecId.Contains("DTS") ? "DTS" : a.CodecId;
+                            if (a.IsCommentary || (!string.IsNullOrEmpty(a.Name) && a.Name.Contains("Commentary", StringComparison.OrdinalIgnoreCase)))
+                                names.Add("Commentary");
+                            else if (!string.IsNullOrEmpty(a.Name) && a.Name.Contains("Atmos", StringComparison.OrdinalIgnoreCase))
+                                names.Add($"{cName} Atmos");
+                            else
+                                names.Add(cName);
+                        }
+                        item.AudioTracksSummary = $"{aTracks.Count} Streams ({string.Join(", ", names)})";
+                    }
+
+                    if (sTracks.Count > 0)
+                    {
+                        item.SubtitlesSummary = $"{sTracks.Count} Streams (PGS, SRT, UTF8)";
+                    }
+
+                    if (vTrack != null && !string.IsNullOrEmpty(vTrack.Name))
+                    {
+                        item.Encoder = vTrack.Name;
+                    }
+
+                    if (vTrack != null && !string.IsNullOrEmpty(vTrack.HdrFormat))
+                    {
+                        item.HdrFormat = vTrack.HdrFormat;
+                        if (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10)
+                        {
+                            item.BitDepth = $"{Math.Max(vTrack.BitDepth, vTrack.VideoBitDepth)}-bit";
+                        }
+                    }
+
+                    string fName = Path.GetFileName(playablePath);
+                    if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(DV|DoVi|Dolby[\s._\-]?Vision)(?:$|[\s._\-\])+])"))
+                    {
+                        bool isHdrToken = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG)(?:$|[\s._\-\])+])") ||
+                                          (vTrack != null && (vTrack.TransferCharacteristics == 16 || vTrack.HdrFormat.Contains("HDR", StringComparison.OrdinalIgnoreCase)));
+                        item.HdrFormat = isHdrToken ? "Dolby Vision / HDR10" : "Dolby Vision";
+                        item.BitDepth = "10-bit";
+                    }
+                    else if (Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR|HDR10|HDR10\+|HLG|ST2084|ST-2084|BT2020|BT\.2020)(?:$|[\s._\-\])+])"))
+                    {
+                        if (string.IsNullOrEmpty(item.HdrFormat) || item.HdrFormat == "SDR" || item.HdrFormat == "HDR10")
+                        {
+                            item.HdrFormat = Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])(HDR10\+|HDR10Plus)(?:$|[\s._\-\])+])") ? "HDR10+" :
+                                             Regex.IsMatch(fName, @"(?i)(?:^|[\s._\-\[(+])HLG(?:$|[\s._\-\])+])") ? "HLG" : "HDR10";
+                        }
+                        item.BitDepth = "10-bit";
+                    }
+
+                    if (fName.Contains("10bit", StringComparison.OrdinalIgnoreCase) || fName.Contains("10-bit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.BitDepth = "10-bit";
+                    }
+                    else if (vTrack != null && (vTrack.BitDepth >= 10 || vTrack.VideoBitDepth >= 10))
+                    {
+                        item.BitDepth = $"{Math.Max(vTrack.BitDepth, vTrack.VideoBitDepth)}-bit";
+                    }
+
+                    if (fName.Contains("IMAX", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.AspectRatio = "1.90:1 (IMAX Enhanced)";
+                    }
+
+                    item.ContainerFormat = Path.GetExtension(playablePath).ToUpperInvariant() switch
+                    {
+                        ".MKV" => "Matroska Video (.mkv)",
+                        ".MP4" => "MPEG-4 Video (.mp4)",
+                        ".M4V" => "iTunes Video (.m4v)",
+                        ".MOV" => "QuickTime Video (.mov)",
+                        ".WEBM" => "WebM Video (.webm)",
+                        ".AVI" => "Audio Video Interleave (.avi)",
+                        ".WMV" => "Windows Media Video (.wmv)",
+                        ".FLAC" => "Free Lossless Audio (.flac)",
+                        ".MP3" => "MPEG Layer-3 Audio (.mp3)",
+                        ".AAC" => "Advanced Audio Coding (.aac)",
+                        _ => Path.GetExtension(playablePath).ToUpperInvariant()
+                    };
 
                     // Auto save changes back to cache json debounced
-                    Services.SampleMediaLibrary.RequestDebouncedSave();
+                    Services.MediaLibraryService.RequestDebouncedSave();
+
+                    // If newly discovered metadata indicates HDR or Dolby Vision, update active HDR pipeline
+                    if (!string.IsNullOrEmpty(item.HdrFormat) && !item.HdrFormat.Equals("SDR", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            if (AppServices.Playback.CurrentTrack == item)
+                            {
+                                var player = AppServices.PlaybackViewModel.Session.MediaPlayer;
+                                Windows.Media.Playback.MediaPlaybackItem? currentItem = null;
+                                if (player.Source is Windows.Media.Playback.MediaPlaybackItem mpi) currentItem = mpi;
+                                else if (player.Source is Windows.Media.Playback.MediaPlaybackList mpl) currentItem = mpl.CurrentItem;
+                                AppServices.HdrPipeline.ConfigurePipeline(player, currentItem);
+                            }
+                        }
+                        catch { }
+                    }
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] UI update error: {ex.Message}");
                 }
-            });
+            }
+
+            var dispatcher = App.MainWindowInstance?.DispatcherQueue;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
+            {
+                dispatcher.TryEnqueue(ApplyUpdates);
+            }
+            else
+            {
+                ApplyUpdates();
+            }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] Error scanning: {ex.Message}");
         }
+        finally
+        {
+            _scanThrottle.Release();
+        }
+    }
+
+    public static async Task<string?> ExtractThumbnailAsync(MediaItem item)
+    {
+        if (item == null || string.IsNullOrEmpty(item.SourcePath)) return null;
+        if (!string.IsNullOrEmpty(item.PosterUrl)) return item.PosterUrl;
+
+        try
+        {
+            string path = item.SourcePath;
+            // 1. Try TagLib embedded artwork first via direct Win32 FileStream (fastest, zero WinRT permission overhead)
+            if (File.Exists(path))
+            {
+                try
+                {
+                    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var tagFile = TagLib.File.Create(new StreamFileAbstraction(path, stream));
+                    if (tagFile.Tag?.Pictures?.Length > 0)
+                    {
+                        var pic = tagFile.Tag.Pictures[0];
+                        if (pic.Data?.Data != null && pic.Data.Data.Length > 0)
+                        {
+                            var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+                            var thumbDir = Path.Combine(localFolder, "Thumbnails");
+                            Directory.CreateDirectory(thumbDir);
+                            var thumbPath = Path.Combine(thumbDir, $"{item.Id}.jpg");
+                            await File.WriteAllBytesAsync(thumbPath, pic.Data.Data);
+                            return thumbPath;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 2. If no embedded picture, check if file is accessible via FutureAccessList token
+            StorageFile? storageFile = null;
+            try
+            {
+                if (Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.ContainsItem(item.Id))
+                {
+                    storageFile = await Windows.Storage.AccessCache.StorageApplicationPermissions.FutureAccessList.GetFileAsync(item.Id);
+                }
+            }
+            catch { }
+
+            // 3. Try Windows Shell Thumbnail if storageFile exists
+            if (storageFile != null)
+            {
+                try
+                {
+                    var thumbMode = item.Kind == MediaKind.Video
+                        ? Windows.Storage.FileProperties.ThumbnailMode.VideosView
+                        : Windows.Storage.FileProperties.ThumbnailMode.MusicView;
+                    using var thumb = await storageFile.GetThumbnailAsync(thumbMode, 300, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                    if (thumb != null && thumb.Size > 0)
+                    {
+                        var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+                        var thumbDir = Path.Combine(localFolder, "Thumbnails");
+                        Directory.CreateDirectory(thumbDir);
+                        var thumbPath = Path.Combine(thumbDir, $"{item.Id}.jpg");
+                        using var outStream = File.Create(thumbPath);
+                        using var inStream = thumb.AsStreamForRead();
+                        await inStream.CopyToAsync(outStream);
+                        return thumbPath;
+                    }
+                }
+                catch { }
+
+                // 4. For videos, extract a random frame using MediaComposition
+                if (item.Kind == MediaKind.Video)
+                {
+                    var frameThumb = await ExtractRandomVideoFrameAsync(item.Id, storageFile);
+                    if (!string.IsNullOrEmpty(frameThumb)) return frameThumb;
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts a frame at a random position (10-50% into the video) using MediaComposition
+    /// and saves it as a JPEG thumbnail. Returns the file path on success, or null on failure.
+    /// </summary>
+    private static async Task<string?> ExtractRandomVideoFrameAsync(string itemId, Windows.Storage.StorageFile storageFile)
+    {
+        Windows.Media.Editing.MediaComposition? composition = null;
+        try
+        {
+            var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(storageFile);
+            composition = new Windows.Media.Editing.MediaComposition();
+            composition.Clips.Add(clip);
+
+            double totalSeconds = clip.OriginalDuration.TotalSeconds;
+            if (totalSeconds <= 0) return null;
+
+            // Pick a random position between 10% and 50% of the video duration
+            // This avoids intros/credits and usually lands on a representative scene
+            var random = new Random();
+            double minFraction = 0.10;
+            double maxFraction = 0.50;
+            double fraction = minFraction + (random.NextDouble() * (maxFraction - minFraction));
+            var seekPosition = TimeSpan.FromSeconds(totalSeconds * fraction);
+
+            using var imageStream = await composition.GetThumbnailAsync(
+                seekPosition, 400, 0,
+                Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
+
+            if (imageStream != null && imageStream.Size > 0)
+            {
+                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+                var thumbDir = Path.Combine(localFolder, "Thumbnails");
+                Directory.CreateDirectory(thumbDir);
+                var thumbPath = Path.Combine(thumbDir, $"{itemId}_frame.jpg");
+
+                using var outStream = File.Create(thumbPath);
+                using var inStream = imageStream.AsStreamForRead();
+                await inStream.CopyToAsync(outStream);
+                return thumbPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MediaMetadataScanner] ExtractRandomVideoFrameAsync failed: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                composition?.Clips.Clear();
+            }
+            catch { }
+        }
+        return null;
     }
 }
 

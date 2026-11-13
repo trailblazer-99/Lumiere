@@ -19,12 +19,14 @@ public enum HdrMode
 /// </summary>
 public enum ToneMappingMode
 {
+    /// <summary>Display-Adaptive: Automatically calibrates tone-mapping, diffuse white, and gamut mapping specifically to the active screen hardware.</summary>
+    DisplayAdaptive,
+    /// <summary>BT.2408 reference tone mapping (ITU standard) with balanced midtones.</summary>
+    Bt2408,
+    /// <summary>ACES film-curve approximation — cinematic highlights.</summary>
+    Aces,
     /// <summary>Reinhard global operator — smooth, preserves mid-tones.</summary>
     Reinhard,
-    /// <summary>ACES film-curve approximation — cinematic, punchy highlights.</summary>
-    Aces,
-    /// <summary>BT.2408 reference tone mapping (ITU standard).</summary>
-    Bt2408,
     /// <summary>No tone mapping — clip at the display's white point.</summary>
     Clip
 }

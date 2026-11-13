@@ -17,6 +17,9 @@ public partial class NowPlayingViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] public partial string AccentColor { get; set; } = "#0078D4";
     [ObservableProperty] public partial string? PosterUrl { get; set; }
+    [ObservableProperty] public partial string? LocationRep { get; set; }
+    [ObservableProperty] public partial bool HasLocationRep { get; set; }
+    [ObservableProperty] public partial string? SourcePath { get; set; }
 
     public NowPlayingViewModel(PlaybackViewModel playback)
     {
@@ -41,6 +44,9 @@ public partial class NowPlayingViewModel : ObservableObject, IDisposable
             Album = string.Empty;
             AccentColor = "#0078D4";
             PosterUrl = null;
+            LocationRep = null;
+            HasLocationRep = false;
+            SourcePath = null;
             return;
         }
 
@@ -49,5 +55,8 @@ public partial class NowPlayingViewModel : ObservableObject, IDisposable
         Album = track.Album;
         AccentColor = track.AccentColor;
         PosterUrl = track.PosterUrl;
+        LocationRep = track.LocationRep;
+        HasLocationRep = track.HasLocationRep;
+        SourcePath = track.SourcePath;
     }
 }

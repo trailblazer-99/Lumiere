@@ -14,6 +14,9 @@ namespace LumiereMediaPlayer.Models.Streaming
     [JsonSerializable(typeof(YouTubeVideoListResponse))]
     [JsonSerializable(typeof(YouTubeChannelListResponse))]
     [JsonSerializable(typeof(YouTubeCommentThreadsResponse))]
+    [JsonSerializable(typeof(WatchmodeLiveEventsResponse))]
+    [JsonSerializable(typeof(WatchmodeLiveEventSourcesResponse))]
+    [JsonSerializable(typeof(WatchmodeLiveCoverageResponse))]
 
     [JsonSerializable(typeof(LumiereMediaPlayer.Models.AppConfig))]
     [JsonSourceGenerationOptions(

@@ -5,6 +5,8 @@ namespace LumiereMediaPlayer.Services.Streaming
 {
     public static class AntiGravityLogger
     {
+        private const long MaxLogBytes = 2 * 1024 * 1024;
+        private static readonly object _logLock = new();
         private static readonly string LogPath;
 
         static AntiGravityLogger()
@@ -20,7 +22,16 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                File.AppendAllText(LogPath, $"[{timestamp}] {message}\n");
+                lock (_logLock)
+                {
+                    if (File.Exists(LogPath) && new FileInfo(LogPath).Length >= MaxLogBytes)
+                    {
+                        var archivePath = LogPath + ".old";
+                        File.Move(LogPath, archivePath, overwrite: true);
+                    }
+
+                    File.AppendAllText(LogPath, $"[{timestamp}] {message}\n");
+                }
             }
             catch { }
         }
@@ -29,9 +40,12 @@ namespace LumiereMediaPlayer.Services.Streaming
         {
             try
             {
-                if (File.Exists(LogPath))
+                lock (_logLock)
                 {
-                    File.Delete(LogPath);
+                    if (File.Exists(LogPath))
+                    {
+                        File.Delete(LogPath);
+                    }
                 }
             }
             catch { }

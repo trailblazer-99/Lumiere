@@ -4,20 +4,29 @@ using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using Microsoft.UI.Xaml;
 
+using System;
+
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class QueueViewModel : ObservableObject
+public partial class QueueViewModel : ObservableObject, IDisposable
 {
     private readonly PlaybackViewModel _playback;
+    private readonly EventHandler _stateChangedHandler;
 
     public QueueViewModel(PlaybackViewModel playback)
     {
         _playback = playback;
-        _playback.Session.StateChanged += (_, _) => RefreshQueue();
+        _stateChangedHandler = (_, _) => RefreshQueue();
+        _playback.Session.StateChanged += _stateChangedHandler;
         RefreshQueue();
     }
 
-    public IReadOnlyList<QueueEntry> Entries { get; private set; } = [];
+    public void Dispose()
+    {
+        _playback.Session.StateChanged -= _stateChangedHandler;
+    }
+
+    public System.Collections.ObjectModel.ObservableCollection<QueueEntry> Entries { get; } = new();
 
     public bool IsEmpty => Entries.Count == 0;
 
@@ -41,9 +50,22 @@ public partial class QueueViewModel : ObservableObject
         }
     }
 
+    public void SyncOrderFromEntries()
+    {
+        var newTracks = Entries.Select(e => e.Track).ToList();
+        _playback.ReorderQueue(newTracks);
+    }
+
     private void RefreshQueue()
     {
-        Entries = _playback.Queue
+        var dispatcher = App.MainDispatcher ?? App.MainWindowInstance?.DispatcherQueue;
+        if (dispatcher != null && !dispatcher.HasThreadAccess)
+        {
+            dispatcher.TryEnqueue(RefreshQueue);
+            return;
+        }
+
+        var newEntries = _playback.Session.Queue
             .Select((track, index) => new QueueEntry
             {
                 Track = track,
@@ -52,7 +74,8 @@ public partial class QueueViewModel : ObservableObject
             })
             .ToList();
 
-        OnPropertyChanged(nameof(Entries));
+        Entries.UpdateInPlace(newEntries);
+
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyMessageVisibility));
     }

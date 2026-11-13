@@ -19,7 +19,7 @@ namespace LumiereMediaPlayer.Services.Streaming
     public class MusicApiService
     {
         private const string BaseUrl = "https://api.musicapi.com/public";
-        
+
         private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -42,38 +42,36 @@ namespace LumiereMediaPlayer.Services.Streaming
                     "playlists" => "playlist",
                     _ => "track"
                 };
-                
+
                 string servicePath = $"musicapi/search?query={encodedQuery}&limit={limit}&type={musicApiType}";
-                
+
                 string json = string.Empty;
                 var config = ConfigService.Config;
-                if (!config.UseProxy || string.IsNullOrEmpty(config.ProxyBaseUrl))
+                if (config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl))
                 {
-                    throw new InvalidOperationException("Azure Proxy is not configured or disabled. Direct calls are not permitted.");
-                }
-                
-                try
-                {
-                    string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
-                    using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                    proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
-                    
-                    using var proxyResp = await _httpClient.SendAsync(proxyReq);
-                    if (proxyResp.IsSuccessStatusCode)
+                    try
                     {
-                        json = await proxyResp.Content.ReadAsStringAsync();
+                        string proxyUrl = config.ProxyBaseUrl.TrimEnd('/') + "/" + servicePath.TrimStart('/');
+                        using var proxyReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                        proxyReq.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+
+                        using var proxyResp = await _httpClient.SendAsync(proxyReq);
+                        if (proxyResp.IsSuccessStatusCode)
+                        {
+                            json = await proxyResp.Content.ReadAsStringAsync();
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"MusicApi proxy returned status {proxyResp.StatusCode}, falling back to iTunes...");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        throw new HttpRequestException($"MusicApi proxy fetch failed with status: {proxyResp.StatusCode}");
+                        System.Diagnostics.Debug.WriteLine($"MusicApi proxy fetch failed ({ex.Message}), falling back to iTunes...");
                     }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"MusicApi proxy fetch failed: {ex.Message}");
-                }
-                
-                if (!string.IsNullOrEmpty(json))
+
+                if (!string.IsNullOrWhiteSpace(json))
                 {
                     var searchResponse = JsonSerializer.Deserialize<MusicApiSearchResponse>(json, _jsonOptions);
                     if (searchResponse?.Results != null)
@@ -121,7 +119,8 @@ namespace LumiereMediaPlayer.Services.Streaming
                     break;
             }
 
-            return itunesTracks.Select(t => {
+            return itunesTracks.Select(t =>
+            {
                 var track = MusicApiTrack.FromITunesTrack(t);
                 track.ResultType = filter;
                 return track;
@@ -146,11 +145,47 @@ namespace LumiereMediaPlayer.Services.Streaming
                     links.Add(new MusicStreamingLink { ServiceName = "Tidal", Url = track.ExternalUrls.Tidal, IconUrl = GetIconUrl("tidal") });
                 if (!string.IsNullOrEmpty(track.ExternalUrls.SoundCloud))
                     links.Add(new MusicStreamingLink { ServiceName = "SoundCloud", Url = track.ExternalUrls.SoundCloud, IconUrl = GetIconUrl("soundcloud") });
+            }
 
-                if (links.Count > 0)
+            // Ensure Spotify is always resolved with a true deep link
+            bool hasSpotify = links.Any(l => l.ServiceName.Equals("Spotify", StringComparison.OrdinalIgnoreCase));
+            if (!hasSpotify)
+            {
+                try
                 {
-                    return links;
+                    string itemType = track.ResultType?.ToLowerInvariant() switch
+                    {
+                        "artist" => "artist",
+                        "album" => "album",
+                        "playlist" => "playlist",
+                        _ => "track"
+                    };
+
+                    var (_, spotifyWebUrl) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                        track.Name,
+                        itemType,
+                        track.DisplayArtist,
+                        track.Album);
+
+                    if (!string.IsNullOrEmpty(spotifyWebUrl))
+                    {
+                        links.Insert(0, new MusicStreamingLink
+                        {
+                            ServiceName = "Spotify",
+                            Url = spotifyWebUrl,
+                            IconUrl = GetIconUrl("spotify")
+                        });
+                    }
                 }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MusicApiService] Failed to resolve Spotify link: {ex.Message}");
+                }
+            }
+
+            if (links.Count > 0)
+            {
+                return links;
             }
 
             // Fallback to Odesli via existing service if no external URLs or if iTunes fallback was used

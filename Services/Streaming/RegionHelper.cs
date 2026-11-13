@@ -23,9 +23,68 @@ namespace LumiereMediaPlayer.Services.Streaming
 
         private static string? _cachedRegion;
 
+        public static string GetDefaultDetectedRegion()
+        {
+            try
+            {
+                var saved = LumiereMediaPlayer.AppServices.Settings?.Current?.PreferredStreamingRegion;
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _cachedRegion = saved.ToUpperInvariant();
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(_cachedRegion))
+                return _cachedRegion;
+
+            try
+            {
+                var sysRegion = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName.ToUpperInvariant();
+                if (sysRegion is "IN" or "US" or "GB" or "CA" or "AU")
+                {
+                    _cachedRegion = sysRegion;
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            return "US";
+        }
+
         public static async Task<string> GetCurrentRegionAsync()
         {
-            if (!string.IsNullOrEmpty(_cachedRegion))
+            var settings = LumiereMediaPlayer.AppServices.Settings?.Current;
+            if (settings?.UseLocationForRegion == true)
+            {
+                try
+                {
+                    var locationRegion = await LocationRegionService.Instance.RequestAndDetectRegionAsync();
+                    if (!string.IsNullOrEmpty(locationRegion))
+                    {
+                        _cachedRegion = locationRegion;
+                        return _cachedRegion;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to get region from Location: {ex.Message}");
+                }
+            }
+
+            try
+            {
+                var saved = settings?.PreferredStreamingRegion;
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _cachedRegion = saved.ToUpperInvariant();
+                    return _cachedRegion;
+                }
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(_cachedRegion) && _cachedRegion != "US")
                 return _cachedRegion;
 
             string detected = "";
@@ -33,7 +92,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             {
                 var response = await HttpClient.GetStringAsync("https://ipinfo.io/json");
                 using var doc = JsonDocument.Parse(response);
-                
+
                 if (doc.RootElement.TryGetProperty("country", out var ccElement))
                 {
                     detected = ccElement.GetString()?.ToUpperInvariant() ?? "";
@@ -56,7 +115,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 }
             }
 
-            if (detected == "IN" || detected == "US" || detected == "GB")
+            if (detected is "IN" or "US" or "GB" or "CA" or "AU")
             {
                 _cachedRegion = detected;
             }
@@ -72,9 +131,11 @@ namespace LumiereMediaPlayer.Services.Streaming
         {
             return new List<RegionItem>
             {
-                new() { Code = "IN", Name = "India" },
                 new() { Code = "US", Name = "United States" },
-                new() { Code = "GB", Name = "United Kingdom" }
+                new() { Code = "GB", Name = "United Kingdom" },
+                new() { Code = "IN", Name = "India" },
+                new() { Code = "CA", Name = "Canada" },
+                new() { Code = "AU", Name = "Australia" }
             };
         }
     }

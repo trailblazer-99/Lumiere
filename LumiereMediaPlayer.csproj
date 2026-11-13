@@ -5,6 +5,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>LumiereMediaPlayer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Square44x44Logo.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
@@ -12,11 +13,19 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-    <DefaultItemExcludes>$(DefaultItemExcludes);LumiereProxy\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);LumiereProxy\**;Tests\**</DefaultItemExcludes>
     <Version>1.0.1.0</Version>
     <ApplicationVersion>1.0.1.0</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.1.0</ApplicationDisplayVersion>
+    <!-- Client Desktop RAM & Performance Optimizations -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <!-- Startup optimization -->
+    <TieredCompilation>true</TieredCompilation>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Platform)' == 'AnyCPU'">
@@ -25,21 +34,76 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="Assets\SplashScreen.png" />
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-16_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-20_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-32_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-48_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-256_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-16_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-20_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-32_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-256_altform-lightunplated.png" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Wide310x150Logo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="Assets\LumiereIcon.png" />
+    <Content Include="Assets\LumiereIcon.ico" />
+    <Content Include="Assets\Square44x44Logo.ico" />
     <Content Include="Assets\Lumiere1.png" />
     <Content Include="Assets\Lumiere2.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red.ico" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink.ico" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Blue_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Purple_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Teal_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Orange_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Red_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Dark_Pink_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Blue_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Purple_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Teal_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Orange_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Red_small.png" />
+    <Content Include="Assets\Icons\Lumiere_Light_Pink_small.png" />
   </ItemGroup>
+
+  <ItemDefinitionGroup>
+    <Content>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemDefinitionGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
@@ -55,6 +119,10 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
     <PackageReference Include="NVorbis" Version="0.10.5" />
@@ -75,12 +143,15 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun>False</PublishReadyToRun>
+    <PublishReadyToRun>True</PublishReadyToRun>
     <PublishTrimmed>False</PublishTrimmed>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">True</WindowsAppSDKSelfContained>
-    <WindowsAppSdkDeploymentManagerInitialize Condition="'$(Configuration)' != 'Debug'">False</WindowsAppSdkDeploymentManagerInitialize>
-    <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
+    <WindowsAppSdkDeploymentManagerInitialize>False</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkBootstrapInitialize>False</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkAutoInitializeNeeded>False</WindowsAppSdkAutoInitializeNeeded>
+    <WindowsAppSdkAutoInitialize>False</WindowsAppSdkAutoInitialize>
+    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
@@ -90,7 +161,7 @@
     <MsPdbCmfExeFullpath Condition="'$(MsPdbCmfExeFullpath)' == '' and '$(AppxSymbolPackageEnabled)' == 'False'">$(MSBuildProjectDirectory)\__symbols_disabled__.exe</MsPdbCmfExeFullpath>
     <AppxBundle>Never</AppxBundle>
     <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
-    <HoursBetweenUpdateChecks>24</HoursBetweenUpdateChecks>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -100,5 +171,9 @@
     <None Update="appsettings.json.example">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LumiereMediaPlayer.Tests" />
   </ItemGroup>
 </Project>

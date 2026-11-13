@@ -38,7 +38,21 @@ public sealed class LottieLogo1Visual : IAnimatedVisual
         ringGeometry.Radius = new Vector2(20, 20);
 
         _ringShape = compositor.CreateSpriteShape(ringGeometry);
-        _ringShape.StrokeBrush = compositor.CreateColorBrush(Microsoft.UI.Colors.White);
+        var strokeColor = Microsoft.UI.Colors.White;
+        try
+        {
+            if (Helpers.ThemeResourceHelper.TryGetThemeBrush("TextFillColorPrimaryBrush", out var brush) &&
+                brush is Microsoft.UI.Xaml.Media.SolidColorBrush scb)
+            {
+                strokeColor = scb.Color;
+            }
+            else if (Helpers.ThemeHelper.GetEffectiveElementTheme() == Microsoft.UI.Xaml.ElementTheme.Light)
+            {
+                strokeColor = Microsoft.UI.ColorHelper.FromArgb(255, 24, 24, 28);
+            }
+        }
+        catch { }
+        _ringShape.StrokeBrush = compositor.CreateColorBrush(strokeColor);
         _ringShape.StrokeThickness = 1.2f;
         _ringShape.CenterPoint = new Vector2(22, 22);
 

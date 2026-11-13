@@ -28,7 +28,7 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("trackViewUrl")]
         public string? TrackViewUrl { get; set; }
-        
+
         [JsonPropertyName("artistLinkUrl")]
         public string? ArtistLinkUrl { get; set; }
 

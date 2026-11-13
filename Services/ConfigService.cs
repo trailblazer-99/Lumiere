@@ -6,11 +6,17 @@ using LumiereMediaPlayer.Models.Streaming;
 
 namespace LumiereMediaPlayer.Services
 {
-    public static class ConfigService
+    public class ConfigService : IConfigService
     {
         private static readonly AppConfig _config;
 
         public static AppConfig Config => _config;
+
+        AppConfig IConfigService.Config => _config;
+
+        public ConfigService()
+        {
+        }
 
         static ConfigService()
         {
@@ -29,6 +35,13 @@ namespace LumiereMediaPlayer.Services
                         _config.UseProxy = loadedConfig.UseProxy;
                         if (!string.IsNullOrEmpty(loadedConfig.ProxyBaseUrl)) _config.ProxyBaseUrl = loadedConfig.ProxyBaseUrl;
                         if (!string.IsNullOrEmpty(loadedConfig.ProxyAppToken)) _config.ProxyAppToken = loadedConfig.ProxyAppToken;
+
+                        // Spotify API settings
+                        if (!string.IsNullOrEmpty(loadedConfig.SpotifyClientId)) _config.SpotifyClientId = loadedConfig.SpotifyClientId;
+                        if (!string.IsNullOrEmpty(loadedConfig.SpotifyClientSecret)) _config.SpotifyClientSecret = loadedConfig.SpotifyClientSecret;
+
+                        // TMDB API settings
+                        if (!string.IsNullOrEmpty(loadedConfig.TmdbApiKey)) _config.TmdbApiKey = loadedConfig.TmdbApiKey;
                     }
                 }
             }

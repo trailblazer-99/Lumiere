@@ -1,15 +1,24 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LumiereMediaPlayer.Helpers;
 using LumiereMediaPlayer.Models;
 using LumiereMediaPlayer.Services;
+using LumiereMediaPlayer.Services.Streaming;
+using Microsoft.UI.Xaml.Media;
 
 namespace LumiereMediaPlayer.ViewModels;
 
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IDisposable
 {
-    private readonly SettingsService _settingsService;
+    private readonly ISettingsService _settingsService;
+    private readonly IDisplayManager _displayManager;
     private bool _isSyncing;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer? _textScaleDebounceTimer;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer? _customAccentDebounceTimer;
+    private readonly EventHandler _settingsChangedHandler;
+    private readonly EventHandler _advancedColorChangedHandler;
+    private readonly Action _batterySaverStatusChangedHandler;
 
     // ── Playback ───────────────────────────────────────────────────
     [ObservableProperty] public partial AppThemeOption SelectedTheme { get; set; }
@@ -17,29 +26,26 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool ResumePlaybackPosition { get; set; }
     [ObservableProperty] public partial int SkipForwardInterval { get; set; }
     [ObservableProperty] public partial int SkipBackwardInterval { get; set; }
-    [ObservableProperty] public partial double DefaultPlaybackSpeed { get; set; }
     [ObservableProperty] public partial bool AutoAdvanceToNextTrack { get; set; }
     [ObservableProperty] public partial bool RememberLastPlayedTrack { get; set; }
     [ObservableProperty] public partial bool EnableSwipeNavigation { get; set; }
     [ObservableProperty] public partial bool CrossfadeEnabled { get; set; }
     [ObservableProperty] public partial int CrossfadeDuration { get; set; }
-    [ObservableProperty] public partial bool GaplessPlayback { get; set; }
 
     // ── Audio ──────────────────────────────────────────────────────
     [ObservableProperty] public partial EqualizerPreset SelectedEqualizer { get; set; }
-    [ObservableProperty] public partial bool VolumeNormalization { get; set; }
     [ObservableProperty] public partial double DefaultVolume { get; set; }
-    [ObservableProperty] public partial bool MonoAudio { get; set; }
-    [ObservableProperty] public partial int BassBoostLevel { get; set; }
-    [ObservableProperty] public partial int AudioBalance { get; set; }
+    [ObservableProperty] public partial bool EnableSoundEffects { get; set; }
 
     // ── Video ──────────────────────────────────────────────────────
     [ObservableProperty] public partial AspectRatioOption DefaultAspectRatio { get; set; }
-    [ObservableProperty] public partial string DefaultSubtitleLanguage { get; set; } = "None";
-    [ObservableProperty] public partial SubtitleFontSize SubtitleFontSize { get; set; }
-    [ObservableProperty] public partial int SubtitleBackgroundOpacity { get; set; }
-    [ObservableProperty] public partial bool HardwareAcceleration { get; set; }
-    [ObservableProperty] public partial bool AutoRotateVideo { get; set; }
+    [ObservableProperty] public partial bool EnableHoverVideoPreview { get; set; }
+    [ObservableProperty] public partial bool PreciseSeekThumbnails { get; set; }
+    [ObservableProperty] public partial GpuPreference SelectedGpuPreference { get; set; }
+    [ObservableProperty] public partial string GpuSummaryText { get; set; } = "Detecting graphics adapters...";
+    [ObservableProperty] public partial string IntegratedGpuOptionText { get; set; } = "Power saving (Integrated GPU)";
+    [ObservableProperty] public partial string DiscreteGpuOptionText { get; set; } = "High performance (Dedicated GPU)";
+    [ObservableProperty] public partial bool IsDualGpuDetected { get; set; }
 
     // ── HDR & Color Pipeline ───────────────────────────────────────
     [ObservableProperty] public partial HdrMode SelectedHdrMode { get; set; }
@@ -50,13 +56,46 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool ShowHdrBadge { get; set; }
 
     // ── Appearance ─────────────────────────────────────────────────
+    public ObservableCollection<ThemePreset> ThemePresets { get; } = [];
+    [ObservableProperty] public partial ThemePreset? SelectedThemePreset { get; set; }
+    public bool IsSelectedPresetCustom => SelectedThemePreset != null && !SelectedThemePreset.IsBuiltIn;
+
     [ObservableProperty] public partial AppThemeBackdrop SelectedBackdrop { get; set; }
-    [ObservableProperty] public partial bool ShowMediaCardGlow { get; set; }
-    [ObservableProperty] public partial bool ShowTimelinePreview { get; set; }
+    public bool IsBackdropStudioSelected => SelectedBackdrop == AppThemeBackdrop.BackdropStudio;
+
+    // ── Studio Modular Properties ──────────────────────────────────
+    [ObservableProperty] public partial AppThemeBackdrop StudioWindowBase { get; set; }
+    [ObservableProperty] public partial StudioNavRailStyle StudioNavRail { get; set; }
+    [ObservableProperty] public partial StudioCanvasStyle StudioCanvas { get; set; }
+    [ObservableProperty] public partial StudioTransportBarStyle StudioTransportBar { get; set; }
+
+    public int SelectedStudioWindowBaseIndex
+    {
+        get => (int)StudioWindowBase <= 3 ? (int)StudioWindowBase : 0;
+        set { if (value >= 0 && value <= 3 && (int)StudioWindowBase != value) StudioWindowBase = (AppThemeBackdrop)value; }
+    }
+
+    public int SelectedStudioNavRailIndex
+    {
+        get => (int)StudioNavRail;
+        set { if (value >= 0 && (int)StudioNavRail != value) StudioNavRail = (StudioNavRailStyle)value; }
+    }
+
+    public int SelectedStudioCanvasIndex
+    {
+        get => (int)StudioCanvas;
+        set { if (value >= 0 && (int)StudioCanvas != value) StudioCanvas = (StudioCanvasStyle)value; }
+    }
+
+    public int SelectedStudioTransportBarIndex
+    {
+        get => (int)StudioTransportBar;
+        set { if (value >= 0 && (int)StudioTransportBar != value) StudioTransportBar = (StudioTransportBarStyle)value; }
+    }
+
     [ObservableProperty] public partial AccentColorOption SelectedAccentColor { get; set; }
-    [ObservableProperty] public partial bool CompactDensityMode { get; set; }
-    [ObservableProperty] public partial bool ShowAlbumArtInTransportBar { get; set; }
-    [ObservableProperty] public partial bool AnimatedTransitions { get; set; }
+    [ObservableProperty] public partial Windows.UI.Color CurrentAccentColor { get; set; }
+    [ObservableProperty] public partial bool IsCustomAccentExpanded { get; set; }
     [ObservableProperty] public partial bool AlwaysShowTransportBar { get; set; }
 <<<<<<< Updated upstream
 =======
@@ -106,29 +145,36 @@ public partial class SettingsViewModel : ObservableObject
 >>>>>>> Stashed changes
 
     // ── Controls & Interface ───────────────────────────────────────
-    [ObservableProperty] public partial bool ShowShuffleButton { get; set; }
-    [ObservableProperty] public partial bool ShowRepeatButton { get; set; }
-    [ObservableProperty] public partial bool ShowSubtitlesButton { get; set; }
-    [ObservableProperty] public partial bool ShowFullscreenButton { get; set; }
-    [ObservableProperty] public partial bool ShowPipButton { get; set; }
-    [ObservableProperty] public partial bool ShowQueueInMoreMenu { get; set; }
-    [ObservableProperty] public partial bool ShowSpeedInMoreMenu { get; set; }
+    public bool IsDevelopmentDevice => UpdateService.IsDevelopmentDevice;
+
+    [ObservableProperty]
+    public partial bool AutoCheckForUpdates { get; set; }
+
+    partial void OnAutoCheckForUpdatesChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AutoCheckForUpdates = value;
+            _settingsService.Save();
+        }
+    }
+
     [ObservableProperty] public partial bool ShowOpenFilesOnHome { get; set; }
     [ObservableProperty] public partial OpenFileCorner SelectedOpenFilePositionCorner { get; set; }
 
     // ── Library ────────────────────────────────────────────────────
     [ObservableProperty] public partial bool AutomaticLibraryScan { get; set; }
-    [ObservableProperty] public partial LibrarySortOrder SelectedLibrarySortOrder { get; set; }
-    [ObservableProperty] public partial bool ShowHiddenFiles { get; set; }
-    [ObservableProperty] public partial bool AutoImportNewFiles { get; set; }
 
-    // ── Privacy ────────────────────────────────────────────────────
-    [ObservableProperty] public partial bool RememberRecentlyPlayed { get; set; }
+    // ── Privacy & Security ─────────────────────────────────────────
     [ObservableProperty] public partial bool RememberPlaybackPositionPerTrack { get; set; }
+    [ObservableProperty] public partial bool EnableAppLock { get; set; }
+    [ObservableProperty] public partial bool AppLockWhenMinimized { get; set; }
+    [ObservableProperty] public partial bool IsWindowsHelloAvailable { get; set; }
+    [ObservableProperty] public partial string WindowsHelloStatusText { get; set; } = string.Empty;
 
     // ── Accessibility ──────────────────────────────────────────────
     [ObservableProperty] public partial bool HighContrastMode { get; set; }
-    [ObservableProperty] public partial bool LargeTextMode { get; set; }
+    [ObservableProperty] public partial double TextScale { get; set; }
     [ObservableProperty] public partial bool ReduceMotion { get; set; }
     [ObservableProperty] public partial bool ScreenReaderOptimization { get; set; }
     [ObservableProperty] public partial bool CaptionsAlwaysOn { get; set; }
@@ -143,19 +189,351 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AiLyricsTranslationEnabled { get; set; }
     [ObservableProperty] public partial string AiTranslationTargetLanguage { get; set; } = "Hindi";
     [ObservableProperty] public partial bool AiSemanticSearchEnabled { get; set; }
-    [ObservableProperty] public partial string GeminiApiKey { get; set; } = "";
+    [ObservableProperty] public partial string GeminiApiKey { get; set; }
+    [ObservableProperty] public partial bool UseLocalAi { get; set; }
+    [ObservableProperty] public partial string OllamaModelName { get; set; }
     [ObservableProperty] public partial bool AiEqualizerMatcherEnabled { get; set; }
     [ObservableProperty] public partial bool VoiceClarityEnabled { get; set; }
     [ObservableProperty] public partial bool NightModeEnabled { get; set; }
+    [ObservableProperty] public partial string AiConnectionStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsTestingAi { get; set; }
+    [ObservableProperty] public partial bool? IsAiConnected { get; set; }
+
+    // ── Local AI Hardware Status ───────────────────────────────────
+    [ObservableProperty] public partial bool IsLocalAiSupported { get; set; }
+    [ObservableProperty] public partial string LocalAiHardwareSuggestion { get; set; } = string.Empty;
+
+    // ── Update Status ──────────────────────────────────────────────
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsCheckingForUpdates { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsUpdateAvailable { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    public partial bool IsInstallingUpdate { get; set; }
+
+    [ObservableProperty]
+    public partial string InstallButtonText { get; set; } = "Update";
+
+    public event Action<string?>? NoUpdatesDetected;
+
+    [ObservableProperty] public partial string UpdateStatusText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string LatestVersion { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsNoUpdatesAvailable { get; set; }
 
     // ── Folders ────────────────────────────────────────────────────
     [ObservableProperty] public partial IReadOnlyList<string> LibraryFolders { get; set; } = [];
 
-    public SettingsViewModel(SettingsService settingsService)
+    public SettingsViewModel(ISettingsService settingsService, IDisplayManager displayManager)
     {
         _settingsService = settingsService;
+        _displayManager = displayManager;
+        try
+        {
+            _textScaleDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+            _textScaleDebounceTimer.Tick += (s, e) =>
+            {
+                _textScaleDebounceTimer.Stop();
+                SaveAndApplyAccessibility();
+            };
+
+            _customAccentDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _customAccentDebounceTimer.Tick += (s, e) =>
+            {
+                _customAccentDebounceTimer.Stop();
+                _settingsService.Save();
+                AccessibilityHelper.Apply(_settingsService.Current);
+            };
+        }
+        catch
+        {
+            // Running in non-UI / unit test execution environment
+        }
+
         SyncFromSettings();
-        _settingsService.SettingsChanged += (_, _) => SyncFromSettings();
+        _settingsChangedHandler = (_, _) => SyncFromSettings();
+        _settingsService.SettingsChanged += _settingsChangedHandler;
+
+        _advancedColorChangedHandler = (_, _) =>
+        {
+            App.MainWindowInstance?.DispatcherQueue.TryEnqueue(() =>
+            {
+                OnPropertyChanged(nameof(ActiveDisplayProfileSummary));
+            });
+        };
+        _displayManager.AdvancedColorInfoChanged += _advancedColorChangedHandler;
+
+        _batterySaverStatusChangedHandler = () =>
+        {
+            App.MainDispatcher?.TryEnqueue(() =>
+            {
+                IsBatterySaverActive = ThemeHelper.IsBatterySaverActive;
+                if (App.MainWindowInstance != null)
+                {
+                    ThemeHelper.ApplyFullscreenSpecularTheming(App.MainWindowInstance.IsFullscreenVideoActive, force: true);
+                    App.MainWindowInstance.TransportBarElement?.RefreshTheme();
+                    App.MainWindowInstance.TvEpisodeQueueOverlay?.UpdateTheming();
+                }
+            });
+        };
+        ThemeHelper.BatterySaverStatusChanged += _batterySaverStatusChangedHandler;
+
+        // Analyze hardware async in background
+        _ = AnalyzeHardwareBackgroundAsync();
+        _ = CheckWindowsHelloStatusAsync();
+
+        try
+        {
+            var packageVersion = Windows.ApplicationModel.Package.Current.Id.Version;
+            UpdateStatusText = $"Current version: v{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}";
+        }
+        catch
+        {
+            UpdateStatusText = "Current version: v1.0.0 (Development build)";
+        }
+
+    }
+
+    private bool _isApplyingUpdateInfo;
+
+    public void ApplyUpdateInfo(AppUpdateInfo info)
+    {
+        if (info == null || _isApplyingUpdateInfo) return;
+        _isApplyingUpdateInfo = true;
+        try
+        {
+            if (info.IsDevelopmentDevice)
+            {
+                // On authoring machine, protect active development build
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"Authoring device build (v{info.CurrentVersion}). Latest release is v{info.LatestVersion}.";
+                return;
+            }
+
+            if (info.IsUpdateAvailable)
+            {
+                IsUpdateAvailable = true;
+                IsNoUpdatesAvailable = false;
+                InstallButtonText = "Update";
+                string version = info.LatestVersion ?? string.Empty;
+                if (!string.IsNullOrEmpty(version) && !version.StartsWith('v') && !version.StartsWith('V'))
+                {
+                    version = $"v{version}";
+                }
+                UpdateStatusText = version;
+                LatestVersion = info.LatestVersion ?? string.Empty;
+                _downloadUri = info.DownloadUri ?? string.Empty;
+                App.MainWindowInstance?.ShowUpdateNotification(info);
+            }
+            else if (info.CheckSucceeded || !string.IsNullOrEmpty(info.LatestVersion))
+            {
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+            }
+        }
+        finally
+        {
+            _isApplyingUpdateInfo = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _settingsService.SettingsChanged -= _settingsChangedHandler;
+        _displayManager.AdvancedColorInfoChanged -= _advancedColorChangedHandler;
+        ThemeHelper.BatterySaverStatusChanged -= _batterySaverStatusChangedHandler;
+        if (_textScaleDebounceTimer != null)
+        {
+            _textScaleDebounceTimer.Stop();
+        }
+        if (_customAccentDebounceTimer != null)
+        {
+            _customAccentDebounceTimer.Stop();
+        }
+    }
+
+    public SettingsViewModel(ISettingsService settingsService)
+        : this(settingsService, AppServices.DisplayManager)
+    {
+    }
+
+    public SettingsViewModel()
+        : this(AppServices.Settings, AppServices.DisplayManager)
+    {
+    }
+
+    private string _downloadUri = string.Empty;
+
+    private async System.Threading.Tasks.Task CheckWindowsHelloStatusAsync()
+    {
+        var availability = await WindowsHelloHelper.CheckAvailabilityAsync();
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            IsWindowsHelloAvailable = (availability == Windows.Security.Credentials.UI.UserConsentVerifierAvailability.Available);
+            WindowsHelloStatusText = WindowsHelloHelper.GetAvailabilityDescription(availability);
+        });
+    }
+
+    private async System.Threading.Tasks.Task AnalyzeHardwareBackgroundAsync()
+    {
+        var result = await HardwareDetectionService.AnalyzeHardwareAsync();
+        var gpuEnv = result.GpuEnvironment;
+
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            IsLocalAiSupported = result.SupportsLocalAi;
+            if (result.SupportsLocalAi)
+            {
+                LocalAiHardwareSuggestion = $"Hardware analysis: Compatible {(string.IsNullOrWhiteSpace(result.GpuName) ? "System RAM" : result.GpuName)} detected. Local AI inference is recommended for privacy and offline usage.";
+            }
+
+            IsDualGpuDetected = gpuEnv.HasDualGpu;
+            GpuSummaryText = gpuEnv.Summary;
+
+            if (gpuEnv.IntegratedGpu != null)
+            {
+                IntegratedGpuOptionText = $"Power saving (Integrated: {gpuEnv.IntegratedGpu.Name}{(gpuEnv.IntegratedGpu.DedicatedMemoryMB > 0 ? $" — {gpuEnv.IntegratedGpu.DedicatedMemoryMB} MB" : "")})";
+            }
+
+            if (gpuEnv.DiscreteGpu != null)
+            {
+                DiscreteGpuOptionText = $"High performance (Dedicated: {gpuEnv.DiscreteGpu.Name}{(gpuEnv.DiscreteGpu.DedicatedMemoryMB > 0 ? $" — {gpuEnv.DiscreteGpu.DedicatedMemoryMB} MB" : "")})";
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task CheckForUpdatesAsync()
+    {
+        if (IsCheckingForUpdates) return;
+        IsCheckingForUpdates = true;
+        IsNoUpdatesAvailable = false;
+        UpdateStatusText = "Checking for updates...";
+        IsUpdateAvailable = false;
+
+        try
+        {
+            var info = await UpdateService.CheckForUpdatesAsync();
+
+            if (info.IsDevelopmentDevice)
+            {
+                ApplyUpdateInfo(info);
+                NotifyDevelopmentDevice(info.CurrentVersion, info.LatestVersion);
+            }
+            else if (info.IsUpdateAvailable)
+            {
+                ApplyUpdateInfo(info);
+                NotifyUpdateAvailable(info);
+            }
+            else if (info.CheckSucceeded)
+            {
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+                NotifyNoUpdatesAvailable(info.CurrentVersion);
+            }
+            else if (!string.IsNullOrEmpty(info.LatestVersion))
+            {
+                IsUpdateAvailable = false;
+                IsNoUpdatesAvailable = true;
+                UpdateStatusText = $"No Updates: You're on the latest version (v{info.CurrentVersion}).";
+                NotifyNoUpdatesAvailable(info.CurrentVersion);
+            }
+            else if (!string.IsNullOrEmpty(info.CurrentVersion))
+            {
+                IsNoUpdatesAvailable = false;
+                UpdateStatusText = $"Unable to reach update server (Current version: v{info.CurrentVersion}).";
+            }
+            else
+            {
+                IsNoUpdatesAvailable = false;
+                UpdateStatusText = "Failed to check for updates. Try again later.";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsNoUpdatesAvailable = false;
+            UpdateStatusText = $"Update check failed: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    private void NotifyNoUpdatesAvailable(string? currentVersion)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            NoUpdatesDetected?.Invoke(currentVersion);
+            App.MainWindowInstance?.ShowBottomToast("No updates", string.IsNullOrEmpty(currentVersion) ? "You're on the latest version" : $"You're on the latest version (v{currentVersion})");
+        });
+    }
+
+    private void NotifyUpdateAvailable(AppUpdateInfo info)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            App.MainWindowInstance?.ShowUpdateNotification(info);
+            App.MainWindowInstance?.ShowBottomToast("Update available", $"v{info.LatestVersion} is available to install", "\uE896");
+        });
+    }
+
+    private void NotifyDevelopmentDevice(string? currentVersion, string? latestVersion)
+    {
+        App.MainDispatcher?.TryEnqueue(() =>
+        {
+            App.MainWindowInstance?.ShowBottomToast("Authoring Device", $"Local dev build active (Remote: v{latestVersion})", "\uE7BE");
+        });
+    }
+
+    public bool CanInstallUpdate => IsUpdateAvailable && !IsCheckingForUpdates && !IsInstallingUpdate;
+
+    [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
+    private async System.Threading.Tasks.Task InstallUpdateAsync()
+    {
+        if (!IsUpdateAvailable || IsCheckingForUpdates || IsInstallingUpdate) return;
+        IsInstallingUpdate = true;
+        InstallButtonText = "Downloading...";
+
+        try
+        {
+            var progress = new Progress<double>(percent =>
+            {
+                if (percent < 100.0)
+                {
+                    InstallButtonText = $"Downloading {percent:F0}%...";
+                }
+                else
+                {
+                    InstallButtonText = "Installing...";
+                }
+            });
+
+            bool launched = await UpdateService.InstallUpdateAsync(_downloadUri, progress);
+            if (launched)
+            {
+                InstallButtonText = "Installing...";
+            }
+            else
+            {
+                InstallButtonText = "Update";
+            }
+        }
+        catch (Exception)
+        {
+            InstallButtonText = "Update";
+        }
+        finally
+        {
+            IsInstallingUpdate = false;
+        }
     }
 
     // ── Index properties for ComboBox bindings ─────────────────────
@@ -163,102 +541,64 @@ public partial class SettingsViewModel : ObservableObject
     public int SelectedThemeIndex
     {
         get => (int)SelectedTheme;
-        set { if (SelectedTheme != (AppThemeOption)value) SelectedTheme = (AppThemeOption)value; }
+        set { if (value >= 0 && SelectedTheme != (AppThemeOption)value) SelectedTheme = (AppThemeOption)value; }
     }
 
     public int SelectedEqualizerIndex
     {
         get => (int)SelectedEqualizer;
-        set { if (SelectedEqualizer != (EqualizerPreset)value) SelectedEqualizer = (EqualizerPreset)value; }
+        set { if (value >= 0 && SelectedEqualizer != (EqualizerPreset)value) SelectedEqualizer = (EqualizerPreset)value; }
     }
 
     public int SelectedBackdropIndex
     {
         get => (int)SelectedBackdrop;
-        set { if (SelectedBackdrop != (AppThemeBackdrop)value) SelectedBackdrop = (AppThemeBackdrop)value; }
+        set { if (value >= 0 && SelectedBackdrop != (AppThemeBackdrop)value) SelectedBackdrop = (AppThemeBackdrop)value; }
     }
 
     public int SelectedAccentColorIndex
     {
         get => (int)SelectedAccentColor;
-        set { if (SelectedAccentColor != (AccentColorOption)value) SelectedAccentColor = (AccentColorOption)value; }
+        set { if (value >= 0 && SelectedAccentColor != (AccentColorOption)value) SelectedAccentColor = (AccentColorOption)value; }
     }
 
     public int SelectedAspectRatioIndex
     {
         get => (int)DefaultAspectRatio;
-        set { if (DefaultAspectRatio != (AspectRatioOption)value) DefaultAspectRatio = (AspectRatioOption)value; }
+        set { if (value >= 0 && DefaultAspectRatio != (AspectRatioOption)value) DefaultAspectRatio = (AspectRatioOption)value; }
+    }
+
+    public int SelectedGpuPreferenceIndex
+    {
+        get => (int)SelectedGpuPreference;
+        set { if (value >= 0 && SelectedGpuPreference != (GpuPreference)value) SelectedGpuPreference = (GpuPreference)value; }
     }
 
     public int SelectedHdrModeIndex
     {
         get => (int)SelectedHdrMode;
-        set { if (SelectedHdrMode != (HdrMode)value) SelectedHdrMode = (HdrMode)value; }
+        set { if (value >= 0 && SelectedHdrMode != (HdrMode)value) SelectedHdrMode = (HdrMode)value; }
     }
 
     public int SelectedToneMappingModeIndex
     {
         get => (int)SelectedToneMappingMode;
-        set { if (SelectedToneMappingMode != (ToneMappingMode)value) SelectedToneMappingMode = (ToneMappingMode)value; }
+        set { if (value >= 0 && SelectedToneMappingMode != (ToneMappingMode)value) SelectedToneMappingMode = (ToneMappingMode)value; }
     }
 
     public string PeakBrightnessText => $"{PeakBrightnessNits} nits";
-
-    public int SelectedSubtitleFontSizeIndex
-    {
-        get => (int)SubtitleFontSize;
-        set { if (SubtitleFontSize != (SubtitleFontSize)value) SubtitleFontSize = (SubtitleFontSize)value; }
-    }
-
-    public int SelectedSubtitleLanguageIndex
-    {
-        get => DefaultSubtitleLanguage switch
-        {
-            "None" => 0,
-            "English" => 1,
-            "Hindi" => 2,
-            "Spanish" => 3,
-            "French" => 4,
-            "German" => 5,
-            "Japanese" => 6,
-            "Korean" => 7,
-            "Chinese" => 8,
-            _ => 0,
-        };
-        set
-        {
-            DefaultSubtitleLanguage = value switch
-            {
-                0 => "None",
-                1 => "English",
-                2 => "Hindi",
-                3 => "Spanish",
-                4 => "French",
-                5 => "German",
-                6 => "Japanese",
-                7 => "Korean",
-                8 => "Chinese",
-                _ => "None",
-            };
-        }
-    }
-
-    public int SelectedLibrarySortOrderIndex
-    {
-        get => (int)SelectedLibrarySortOrder;
-        set { if (SelectedLibrarySortOrder != (LibrarySortOrder)value) SelectedLibrarySortOrder = (LibrarySortOrder)value; }
-    }
+    public string ActiveDisplayProfileSummary => _displayManager.DisplayProfileSummary;
 
     public int SelectedOpenFilePositionCornerIndex
     {
         get => (int)SelectedOpenFilePositionCorner;
-        set { if (SelectedOpenFilePositionCorner != (OpenFileCorner)value) SelectedOpenFilePositionCorner = (OpenFileCorner)value; }
+        set { if (value >= 0 && SelectedOpenFilePositionCorner != (OpenFileCorner)value) SelectedOpenFilePositionCorner = (OpenFileCorner)value; }
     }
 
     public int SelectedColorBlindModeIndex
     {
         get => (int)SelectedColorBlindMode;
-        set { if (SelectedColorBlindMode != (ColorBlindMode)value) SelectedColorBlindMode = (ColorBlindMode)value; }
+        set { if (value >= 0 && SelectedColorBlindMode != (ColorBlindMode)value) SelectedColorBlindMode = (ColorBlindMode)value; }
     }
 
     public int SelectedAiTranslationLanguageIndex
@@ -277,18 +617,21 @@ public partial class SettingsViewModel : ObservableObject
         };
         set
         {
-            AiTranslationTargetLanguage = value switch
+            if (value >= 0)
             {
-                0 => "Hindi",
-                1 => "Spanish",
-                2 => "French",
-                3 => "German",
-                4 => "Japanese",
-                5 => "Chinese",
-                6 => "Russian",
-                7 => "Italian",
-                _ => "Hindi",
-            };
+                AiTranslationTargetLanguage = value switch
+                {
+                    0 => "Hindi",
+                    1 => "Spanish",
+                    2 => "French",
+                    3 => "German",
+                    4 => "Japanese",
+                    5 => "Chinese",
+                    6 => "Russian",
+                    7 => "Italian",
+                    _ => "Hindi",
+                };
+            }
         }
     }
 
@@ -306,31 +649,7 @@ public partial class SettingsViewModel : ObservableObject
         set { if (value >= 0 && value < SkipIntervals.Length) SkipBackwardInterval = SkipIntervals[value]; }
     }
 
-    private static readonly double[] SpeedValues = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-
-    public int DefaultPlaybackSpeedIndex
-    {
-        get
-        {
-            int idx = Array.IndexOf(SpeedValues, DefaultPlaybackSpeed);
-            return idx >= 0 ? idx : 3; // default 1.0x
-        }
-        set
-        {
-            if (value >= 0 && value < SpeedValues.Length)
-                DefaultPlaybackSpeed = SpeedValues[value];
-        }
-    }
-
     public string DefaultVolumeText => $"{(int)DefaultVolume}%";
-    public string BassBoostText => $"{BassBoostLevel}%";
-    public string SubtitleOpacityText => $"{SubtitleBackgroundOpacity}%";
-    public string AudioBalanceText => AudioBalance switch
-    {
-        0 => "Center",
-        < 0 => $"L {-AudioBalance}%",
-        _ => $"R {AudioBalance}%",
-    };
     public string CrossfadeDurationText => $"{CrossfadeDuration}s";
     public string FocusIndicatorThicknessText => $"{FocusIndicatorThickness}px";
 
@@ -341,14 +660,32 @@ public partial class SettingsViewModel : ObservableObject
         if (_isSyncing) return;
         _settingsService.Current.Theme = value;
         _settingsService.Save();
-        ThemeHelper.ApplyTheme(App.MainWindowContent, value);
-        ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
-        AccessibilityHelper.Apply(_settingsService.Current);
+        if (App.MainWindowContent != null)
+        {
+            try
+            {
+                ThemeHelper.ApplyTheme(App.MainWindowContent, value);
+                ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
+                AccessibilityHelper.Apply(_settingsService.Current);
+            }
+            catch { }
+        }
+        App.MainWindowInstance?.UpdateTheme();
         OnPropertyChanged(nameof(SelectedThemeIndex));
+        UpdateActivePresetMatch();
     }
 
     partial void OnAutoplayOnLaunchChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoplayOnLaunch = value; _settingsService.Save(); } }
-    partial void OnResumePlaybackPositionChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ResumePlaybackPosition = value; _settingsService.Save(); } }
+    partial void OnResumePlaybackPositionChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.ResumePlaybackPosition = value;
+            _settingsService.Current.RememberPlaybackPositionPerTrack = value;
+            _settingsService.Save();
+            RememberPlaybackPositionPerTrack = value;
+        }
+    }
 
     partial void OnSkipForwardIntervalChanged(int value)
     {
@@ -366,14 +703,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SkipBackwardIndex));
     }
 
-    partial void OnDefaultPlaybackSpeedChanged(double value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.DefaultPlaybackSpeed = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(DefaultPlaybackSpeedIndex));
-    }
-
     partial void OnAutoAdvanceToNextTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoAdvanceToNextTrack = value; _settingsService.Save(); } }
     partial void OnRememberLastPlayedTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberLastPlayedTrack = value; _settingsService.Save(); } }
     partial void OnEnableSwipeNavigationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.EnableSwipeNavigation = value; _settingsService.Save(); } }
@@ -387,8 +716,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(CrossfadeDurationText));
     }
 
-    partial void OnGaplessPlaybackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.GaplessPlayback = value; _settingsService.Save(); } }
-
     // Audio
     partial void OnSelectedEqualizerChanged(EqualizerPreset value)
     {
@@ -398,8 +725,6 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedEqualizerIndex));
     }
 
-    partial void OnVolumeNormalizationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.VolumeNormalization = value; _settingsService.Save(); } }
-
     partial void OnDefaultVolumeChanged(double value)
     {
         if (_isSyncing) return;
@@ -408,22 +733,16 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(DefaultVolumeText));
     }
 
-    partial void OnMonoAudioChanged(bool value) { if (!_isSyncing) { _settingsService.Current.MonoAudio = value; _settingsService.Save(); } }
-
-    partial void OnBassBoostLevelChanged(int value)
+    partial void OnEnableSoundEffectsChanged(bool value)
     {
         if (_isSyncing) return;
-        _settingsService.Current.BassBoostLevel = value;
+        _settingsService.Current.EnableSoundEffects = value;
         _settingsService.Save();
-        OnPropertyChanged(nameof(BassBoostText));
-    }
-
-    partial void OnAudioBalanceChanged(int value)
-    {
-        if (_isSyncing) return;
-        _settingsService.Current.AudioBalance = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(AudioBalanceText));
+        try
+        {
+            Microsoft.UI.Xaml.ElementSoundPlayer.State = value ? Microsoft.UI.Xaml.ElementSoundPlayerState.On : Microsoft.UI.Xaml.ElementSoundPlayerState.Off;
+        }
+        catch { }
     }
 
     // Video
@@ -435,32 +754,33 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedAspectRatioIndex));
     }
 
-    partial void OnDefaultSubtitleLanguageChanged(string value)
+    partial void OnEnableHoverVideoPreviewChanged(bool value)
     {
         if (_isSyncing) return;
-        _settingsService.Current.DefaultSubtitleLanguage = value;
+        _settingsService.Current.EnableHoverVideoPreview = value;
         _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedSubtitleLanguageIndex));
     }
 
-    partial void OnSubtitleFontSizeChanged(SubtitleFontSize value)
+    partial void OnPreciseSeekThumbnailsChanged(bool value)
     {
         if (_isSyncing) return;
-        _settingsService.Current.SubtitleFontSize = value;
+        _settingsService.Current.PreciseSeekThumbnails = value;
         _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedSubtitleFontSizeIndex));
+        if (!value)
+        {
+            AppServices.Playback?.CleanupActiveComposition();
+            Helpers.MemoryTrimHelper.TrimWorkingSetAsync(delayMs: 100, deep: true);
+        }
     }
 
-    partial void OnSubtitleBackgroundOpacityChanged(int value)
+    partial void OnSelectedGpuPreferenceChanged(GpuPreference value)
     {
         if (_isSyncing) return;
-        _settingsService.Current.SubtitleBackgroundOpacity = value;
+        _settingsService.Current.PreferredGpu = value;
         _settingsService.Save();
-        OnPropertyChanged(nameof(SubtitleOpacityText));
+        HardwareDetectionService.ApplyGpuPreferenceToWindows(value);
+        OnPropertyChanged(nameof(SelectedGpuPreferenceIndex));
     }
-
-    partial void OnHardwareAccelerationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HardwareAcceleration = value; _settingsService.Save(); } }
-    partial void OnAutoRotateVideoChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoRotateVideo = value; _settingsService.Save(); } }
 
     // HDR & Color Pipeline
     partial void OnSelectedHdrModeChanged(HdrMode value)
@@ -516,6 +836,151 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     // Appearance
+    partial void OnSelectedThemePresetChanged(ThemePreset? value)
+    {
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        if (_isSyncing) return;
+
+        if (value == null)
+        {
+            _settingsService.Current.ActiveThemePresetId = null;
+            _settingsService.Save();
+            return;
+        }
+
+        _isSyncing = true;
+        try
+        {
+            _settingsService.Current.ActiveThemePresetId = value.Id;
+            ThemeHelper.ApplyThemePreset(value);
+
+            SelectedTheme = value.Theme;
+            SelectedBackdrop = value.BackdropType;
+            SelectedAccentColor = value.AccentColor;
+            _settingsService.Current.Theme = value.Theme;
+            _settingsService.Current.BackdropType = value.BackdropType;
+            _settingsService.Current.AccentColor = value.AccentColor;
+            _settingsService.Current.CustomAccentColorHex = value.CustomAccentColorHex;
+
+            if (value.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(value.CustomAccentColorHex))
+            {
+                try
+                {
+                    CurrentAccentColor = ColorHelper.FromHex(value.CustomAccentColorHex);
+                    IsCustomAccentExpanded = true;
+                }
+                catch
+                {
+                    CurrentAccentColor = ThemeHelper.GetAccentColor(value.AccentColor);
+                }
+            }
+            else
+            {
+                CurrentAccentColor = ThemeHelper.GetAccentColor(value.AccentColor);
+            }
+
+            _settingsService.Save();
+
+            OnPropertyChanged(nameof(SelectedThemeIndex));
+            OnPropertyChanged(nameof(SelectedBackdropIndex));
+            OnPropertyChanged(nameof(SelectedAccentColorIndex));
+            OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+            OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    private void UpdateActivePresetMatch()
+    {
+        if (_isSyncing) return;
+        var c = _settingsService.Current;
+        var match = ThemePresets.FirstOrDefault(p =>
+            p.Theme == c.Theme &&
+            p.BackdropType == c.BackdropType &&
+            p.AccentColor == c.AccentColor &&
+            (p.AccentColor != AccentColorOption.Custom || string.Equals(p.CustomAccentColorHex, c.CustomAccentColorHex, StringComparison.OrdinalIgnoreCase)));
+
+        c.ActiveThemePresetId = match?.Id;
+        if (SelectedThemePreset != match)
+        {
+            _isSyncing = true;
+            SelectedThemePreset = match;
+            _isSyncing = false;
+            OnPropertyChanged(nameof(IsSelectedPresetCustom));
+        }
+    }
+
+    [RelayCommand]
+    public void SavePreset(string? presetName)
+    {
+        if (!string.IsNullOrWhiteSpace(presetName))
+        {
+            SaveCurrentAsPreset(presetName);
+        }
+    }
+
+    public ThemePreset? SaveCurrentAsPreset(string presetName)
+    {
+        if (string.IsNullOrWhiteSpace(presetName))
+            return null;
+
+        var current = _settingsService.Current;
+        var newPreset = new ThemePreset
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = presetName.Trim(),
+            Theme = current.Theme,
+            BackdropType = current.BackdropType,
+            AccentColor = current.AccentColor,
+            CustomAccentColorHex = current.CustomAccentColorHex,
+            IsBuiltIn = false
+        };
+
+        current.CustomThemePresets ??= [];
+        current.CustomThemePresets.Add(newPreset);
+        current.ActiveThemePresetId = newPreset.Id;
+
+        ThemePresets.Add(newPreset);
+        SelectedThemePreset = newPreset;
+        _settingsService.Save();
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+
+        return newPreset;
+    }
+
+    [RelayCommand]
+    public void DeletePreset(ThemePreset? preset)
+    {
+        var target = preset ?? SelectedThemePreset;
+        if (target != null)
+        {
+            DeleteCustomPreset(target);
+        }
+    }
+
+    public void DeleteCustomPreset(ThemePreset preset)
+    {
+        if (preset == null || preset.IsBuiltIn)
+            return;
+
+        var current = _settingsService.Current;
+        current.CustomThemePresets?.RemoveAll(p => p.Id == preset.Id);
+        ThemePresets.Remove(preset);
+
+        if (SelectedThemePreset?.Id == preset.Id || current.ActiveThemePresetId == preset.Id)
+        {
+            var defaultPreset = ThemePresets.FirstOrDefault(p => p.IsBuiltIn)
+                             ?? ThemePreset.GetBuiltInPresets().FirstOrDefault();
+            SelectedThemePreset = defaultPreset;
+        }
+
+        _settingsService.Save();
+        OnPropertyChanged(nameof(IsSelectedPresetCustom));
+    }
+
     partial void OnSelectedBackdropChanged(AppThemeBackdrop value)
     {
         if (_isSyncing) return;
@@ -523,19 +988,104 @@ public partial class SettingsViewModel : ObservableObject
         _settingsService.Save();
         if (App.MainWindowInstance is MainWindow mainWindow) mainWindow.ApplyBackdrop(value);
         OnPropertyChanged(nameof(SelectedBackdropIndex));
+        OnPropertyChanged(nameof(IsBackdropStudioSelected));
+        OnPropertyChanged(nameof(IsAcrylicTransportBarOptionEnabled));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+        UpdateActivePresetMatch();
     }
 
-    partial void OnShowMediaCardGlowChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowMediaCardGlow = value; _settingsService.Save(); } }
-    partial void OnShowTimelinePreviewChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowTimelinePreview = value; _settingsService.Save(); } }
+    partial void OnStudioWindowBaseChanged(AppThemeBackdrop value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioWindowBaseIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioWindowBase = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.ApplyBackdrop(AppThemeBackdrop.BackdropStudio);
+            }
+        }
+    }
+
+    partial void OnStudioNavRailChanged(StudioNavRailStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioNavRailIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioNavRail = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.UpdateNavigationPaneTheming();
+            }
+        }
+    }
+
+    partial void OnStudioCanvasChanged(StudioCanvasStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioCanvasIndex));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioCanvas = value;
+            _settingsService.Save();
+            if (App.MainWindowInstance is MainWindow mainWindow && SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                mainWindow.ApplyBackdrop(AppThemeBackdrop.BackdropStudio);
+            }
+        }
+    }
+
+    partial void OnStudioTransportBarChanged(StudioTransportBarStyle value)
+    {
+        OnPropertyChanged(nameof(SelectedStudioTransportBarIndex));
+        OnPropertyChanged(nameof(AcrylicTransportBarEffective));
+        if (!_isSyncing)
+        {
+            _settingsService.Current.StudioTransportBar = value;
+            _settingsService.Save();
+            if (SelectedBackdrop == AppThemeBackdrop.BackdropStudio)
+            {
+                App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
+            }
+        }
+    }
 
     partial void OnSelectedAccentColorChanged(AccentColorOption value)
     {
         if (_isSyncing) return;
         _settingsService.Current.AccentColor = value;
+        if (value == AccentColorOption.Custom)
+        {
+            IsCustomAccentExpanded = true;
+            if (!string.IsNullOrEmpty(_settingsService.Current.CustomAccentColorHex))
+            {
+                var color = ColorHelper.FromHex(_settingsService.Current.CustomAccentColorHex);
+                _isSyncing = true;
+                CurrentAccentColor = color;
+                _isSyncing = false;
+                ThemeHelper.ApplyAccentColor(color);
+            }
+            else
+            {
+                ThemeHelper.ApplyAccentColor(CurrentAccentColor);
+            }
+        }
+        else
+        {
+            IsCustomAccentExpanded = false;
+            var color = ThemeHelper.GetAccentColor(value);
+            _isSyncing = true;
+            CurrentAccentColor = color;
+            _isSyncing = false;
+            ThemeHelper.ApplyAccentColor(value);
+        }
         _settingsService.Save();
-        ThemeHelper.ApplyAccentColor(value);
         AccessibilityHelper.Apply(_settingsService.Current);
+        App.MainWindowInstance?.TransportBarElement?.RefreshTheme();
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
+        UpdateActivePresetMatch();
     }
 
 <<<<<<< Updated upstream
@@ -623,13 +1173,6 @@ public partial class SettingsViewModel : ObservableObject
 >>>>>>> Stashed changes
 
     // Controls & Interface
-    partial void OnShowShuffleButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowShuffleButton = value; _settingsService.Save(); } }
-    partial void OnShowRepeatButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowRepeatButton = value; _settingsService.Save(); } }
-    partial void OnShowSubtitlesButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowSubtitlesButton = value; _settingsService.Save(); } }
-    partial void OnShowFullscreenButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowFullscreenButton = value; _settingsService.Save(); } }
-    partial void OnShowPipButtonChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowPipButton = value; _settingsService.Save(); } }
-    partial void OnShowQueueInMoreMenuChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowQueueInMoreMenu = value; _settingsService.Save(); } }
-    partial void OnShowSpeedInMoreMenuChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowSpeedInMoreMenu = value; _settingsService.Save(); } }
     partial void OnShowOpenFilesOnHomeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowOpenFilesOnHome = value; _settingsService.Save(); } }
 
     partial void OnSelectedOpenFilePositionCornerChanged(OpenFileCorner value)
@@ -643,24 +1186,87 @@ public partial class SettingsViewModel : ObservableObject
     // Library
     partial void OnAutomaticLibraryScanChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutomaticLibraryScan = value; _settingsService.Save(); } }
 
-    partial void OnSelectedLibrarySortOrderChanged(LibrarySortOrder value)
+    // Privacy & Security
+    partial void OnRememberPlaybackPositionPerTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberPlaybackPositionPerTrack = value; _settingsService.Save(); } }
+
+    partial void OnEnableAppLockChanged(bool value)
     {
         if (_isSyncing) return;
-        _settingsService.Current.LibrarySortOrder = value;
-        _settingsService.Save();
-        OnPropertyChanged(nameof(SelectedLibrarySortOrderIndex));
+
+        if (value)
+        {
+            // Prompt Windows Hello verification to confirm authentication before enabling
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var hwnd = App.MainWindowInstance != null ? WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance) : IntPtr.Zero;
+                    var result = await WindowsHelloHelper.RequestVerificationAsync(hwnd, "Verify your identity to enable Lumière App Lock");
+
+                    App.MainDispatcher?.TryEnqueue(() =>
+                    {
+                        if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                        {
+                            _settingsService.Current.EnableAppLock = true;
+                            _settingsService.Save();
+                            WindowsHelloStatusText = "App Lock is active. Authentication is required to unlock Lumière.";
+                        }
+                        else
+                        {
+                            // Failed or cancelled - revert toggle
+                            _isSyncing = true;
+                            EnableAppLock = false;
+                            _isSyncing = false;
+                            _settingsService.Current.EnableAppLock = false;
+                            _settingsService.Save();
+                            WindowsHelloStatusText = result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Canceled
+                                ? "Authentication canceled. App Lock remains off."
+                                : "Authentication failed. App Lock could not be enabled.";
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    App.MainDispatcher?.TryEnqueue(() =>
+                    {
+                        _isSyncing = true;
+                        EnableAppLock = false;
+                        _isSyncing = false;
+                        _settingsService.Current.EnableAppLock = false;
+                        _settingsService.Save();
+                        WindowsHelloStatusText = $"Authentication error: {ex.Message}";
+                    });
+                }
+            });
+        }
+        else
+        {
+            _settingsService.Current.EnableAppLock = false;
+            _settingsService.Save();
+            WindowsHelloStatusText = "App Lock is disabled.";
+        }
     }
 
-    partial void OnShowHiddenFilesChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ShowHiddenFiles = value; _settingsService.Save(); } }
-    partial void OnAutoImportNewFilesChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AutoImportNewFiles = value; _settingsService.Save(); } }
-
-    // Privacy
-    partial void OnRememberRecentlyPlayedChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberRecentlyPlayed = value; _settingsService.Save(); } }
-    partial void OnRememberPlaybackPositionPerTrackChanged(bool value) { if (!_isSyncing) { _settingsService.Current.RememberPlaybackPositionPerTrack = value; _settingsService.Save(); } }
+    partial void OnAppLockWhenMinimizedChanged(bool value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.AppLockWhenMinimized = value;
+            _settingsService.Save();
+        }
+    }
 
     // Accessibility
     partial void OnHighContrastModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.HighContrastMode = value; SaveAndApplyAccessibility(); } }
-    partial void OnLargeTextModeChanged(bool value) { if (!_isSyncing) { _settingsService.Current.LargeTextMode = value; SaveAndApplyAccessibility(); } }
+    partial void OnTextScaleChanged(double value)
+    {
+        if (!_isSyncing)
+        {
+            _settingsService.Current.TextScale = value;
+            _textScaleDebounceTimer?.Stop();
+            _textScaleDebounceTimer?.Start();
+        }
+    }
     partial void OnReduceMotionChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ReduceMotion = value; SaveAndApplyAccessibility(); } }
     partial void OnScreenReaderOptimizationChanged(bool value) { if (!_isSyncing) { _settingsService.Current.ScreenReaderOptimization = value; SaveAndApplyAccessibility(); } }
     partial void OnCaptionsAlwaysOnChanged(bool value) { if (!_isSyncing) { _settingsService.Current.CaptionsAlwaysOn = value; SaveAndApplyAccessibility(); } }
@@ -691,6 +1297,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAiTranslationTargetLanguageChanged(string value) { if (!_isSyncing) { _settingsService.Current.AiTranslationTargetLanguage = value; _settingsService.Save(); OnPropertyChanged(nameof(SelectedAiTranslationLanguageIndex)); } }
     partial void OnAiSemanticSearchEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiSemanticSearchEnabled = value; _settingsService.Save(); } }
     partial void OnGeminiApiKeyChanged(string value) { if (!_isSyncing) { _settingsService.Current.GeminiApiKey = value; _settingsService.Save(); } }
+    partial void OnUseLocalAiChanged(bool value) { if (!_isSyncing) { _settingsService.Current.UseLocalAi = value; _settingsService.Save(); } }
+    partial void OnOllamaModelNameChanged(string value) { if (!_isSyncing) { _settingsService.Current.OllamaModelName = value; _settingsService.Save(); } }
     partial void OnAiEqualizerMatcherEnabledChanged(bool value) { if (!_isSyncing) { _settingsService.Current.AiEqualizerMatcherEnabled = value; _settingsService.Save(); } }
     partial void OnVoiceClarityEnabledChanged(bool value)
     {
@@ -713,11 +1321,46 @@ public partial class SettingsViewModel : ObservableObject
 
     private void SaveAndApplyAccessibility()
     {
-        _settingsService.Save();
-        AccessibilityHelper.Apply(_settingsService.Current);
+        try
+        {
+            _settingsService.Save();
+            AccessibilityHelper.Apply(_settingsService.Current);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error applying accessibility: {ex.Message}");
+        }
     }
 
     // ── Commands ───────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task TestAiConnection()
+    {
+        IsTestingAi = true;
+        AiConnectionStatus = "Pinging configured AI pipeline...";
+        IsAiConnected = null;
+
+        try
+        {
+            // Ensure settings service has the latest key immediately
+            _settingsService.Current.GeminiApiKey = GeminiApiKey?.Trim() ?? "";
+            var (success, message, latency) = await Services.AiAssistantService.TestAiConnectionAsync(GeminiApiKey);
+            IsAiConnected = success;
+            AiConnectionStatus = success
+                ? $"✅ {message}"
+                : $"❌ {message}";
+        }
+        catch (Exception ex)
+        {
+            IsAiConnected = false;
+            AiConnectionStatus = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            IsTestingAi = false;
+        }
+    }
 
     [RelayCommand]
     private void RemoveFolder(string? path)
@@ -738,7 +1381,17 @@ public partial class SettingsViewModel : ObservableObject
     {
         _settingsService.ResetSettings();
         SyncFromSettings();
-        AccessibilityHelper.Apply(_settingsService.Current);
+        if (App.MainWindowContent != null)
+        {
+            try
+            {
+                ThemeHelper.ApplyTheme(App.MainWindowContent, _settingsService.Current.Theme);
+                ThemeHelper.ApplyAccentColor(_settingsService.Current.AccentColor);
+                AccessibilityHelper.Apply(_settingsService.Current);
+            }
+            catch { }
+        }
+        App.MainWindowInstance?.UpdateTheme();
     }
 
     [RelayCommand]
@@ -746,12 +1399,6 @@ public partial class SettingsViewModel : ObservableObject
     {
         await _settingsService.ResetPlaybackHistoryAndCacheAsync();
         SyncFromSettings();
-    }
-
-    [RelayCommand]
-    private async System.Threading.Tasks.Task ClearPlaybackHistory()
-    {
-        await _settingsService.ResetPlaybackHistoryAndCacheAsync();
     }
 
     [RelayCommand]
@@ -774,9 +1421,24 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearRecentFiles()
+    private async System.Threading.Tasks.Task ClearRecentFilesAsync()
     {
-        // Clears recently opened files from local settings
+        // Clears recently opened files from HistoryService and local settings
+        try
+        {
+            if (AppServices.HistoryService != null)
+            {
+                await AppServices.HistoryService.ClearHistoryAsync();
+            }
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
+
+        try
+        {
+            Windows.Storage.AccessCache.StorageApplicationPermissions.MostRecentlyUsedList.Clear();
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
+
         try
         {
             var s = Windows.Storage.ApplicationData.Current.LocalSettings;
@@ -788,6 +1450,16 @@ public partial class SettingsViewModel : ObservableObject
             }
             foreach (var key in keysToRemove)
                 s.Values.Remove(key);
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SettingsViewModel.ClearHistory] {ex.Message}"); }
+    }
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task OpenWindowsSignInSettings()
+    {
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:signinoptions"));
         }
         catch { }
     }
@@ -805,42 +1477,50 @@ public partial class SettingsViewModel : ObservableObject
         ResumePlaybackPosition = c.ResumePlaybackPosition;
         SkipForwardInterval = c.SkipForwardInterval;
         SkipBackwardInterval = c.SkipBackwardInterval;
-        DefaultPlaybackSpeed = c.DefaultPlaybackSpeed;
         AutoAdvanceToNextTrack = c.AutoAdvanceToNextTrack;
         RememberLastPlayedTrack = c.RememberLastPlayedTrack;
         CrossfadeEnabled = c.CrossfadeEnabled;
         CrossfadeDuration = c.CrossfadeDuration;
-        GaplessPlayback = c.GaplessPlayback;
         EnableSwipeNavigation = c.EnableSwipeNavigation;
 
         SelectedEqualizer = c.Equalizer;
-        VolumeNormalization = c.VolumeNormalization;
         DefaultVolume = c.DefaultVolume;
-        MonoAudio = c.MonoAudio;
-        BassBoostLevel = c.BassBoostLevel;
-        AudioBalance = c.AudioBalance;
+        EnableSoundEffects = c.EnableSoundEffects;
 
         DefaultAspectRatio = c.DefaultAspectRatio;
-        DefaultSubtitleLanguage = c.DefaultSubtitleLanguage;
-        SubtitleFontSize = c.SubtitleFontSize;
-        SubtitleBackgroundOpacity = c.SubtitleBackgroundOpacity;
-        HardwareAcceleration = c.HardwareAcceleration;
-        AutoRotateVideo = c.AutoRotateVideo;
+        EnableHoverVideoPreview = c.EnableHoverVideoPreview;
+        PreciseSeekThumbnails = c.PreciseSeekThumbnails;
+        SelectedGpuPreference = c.PreferredGpu;
+        OnPropertyChanged(nameof(SelectedGpuPreferenceIndex));
 
         SelectedHdrMode = c.HdrMode;
         AutoBoostHdrBrightness = c.AutoBoostHdrBrightness;
         SelectedToneMappingMode = c.ToneMappingMode;
         PeakBrightnessNits = c.PeakBrightnessNits;
-        HdrRealTimePlayback = c.HdrRealTimePlayback;
         ShowHdrBadge = c.ShowHdrBadge;
 
         SelectedBackdrop = c.BackdropType;
-        ShowMediaCardGlow = c.ShowMediaCardGlow;
-        ShowTimelinePreview = c.ShowTimelinePreview;
+        StudioWindowBase = c.StudioWindowBase;
+        StudioNavRail = c.StudioNavRail;
+        StudioCanvas = c.StudioCanvas;
+        StudioTransportBar = c.StudioTransportBar;
         SelectedAccentColor = c.AccentColor;
-        CompactDensityMode = c.CompactDensityMode;
-        ShowAlbumArtInTransportBar = c.ShowAlbumArtInTransportBar;
-        AnimatedTransitions = c.AnimatedTransitions;
+        if (c.AccentColor == AccentColorOption.Custom && !string.IsNullOrEmpty(c.CustomAccentColorHex))
+        {
+            try
+            {
+                CurrentAccentColor = ColorHelper.FromHex(c.CustomAccentColorHex);
+                IsCustomAccentExpanded = true;
+            }
+            catch
+            {
+                CurrentAccentColor = ThemeHelper.GetAccentColor(c.AccentColor);
+            }
+        }
+        else
+        {
+            CurrentAccentColor = ThemeHelper.GetAccentColor(c.AccentColor);
+        }
         AlwaysShowTransportBar = c.AlwaysShowTransportBar;
 <<<<<<< Updated upstream
 =======
@@ -852,26 +1532,19 @@ public partial class SettingsViewModel : ObservableObject
         CreateShellShortcuts = c.CreateShellShortcuts;
 >>>>>>> Stashed changes
 
-        ShowShuffleButton = c.ShowShuffleButton;
-        ShowRepeatButton = c.ShowRepeatButton;
-        ShowSubtitlesButton = c.ShowSubtitlesButton;
-        ShowFullscreenButton = c.ShowFullscreenButton;
-        ShowPipButton = c.ShowPipButton;
-        ShowQueueInMoreMenu = c.ShowQueueInMoreMenu;
-        ShowSpeedInMoreMenu = c.ShowSpeedInMoreMenu;
         ShowOpenFilesOnHome = c.ShowOpenFilesOnHome;
         SelectedOpenFilePositionCorner = c.OpenFilePositionCorner;
 
         AutomaticLibraryScan = c.AutomaticLibraryScan;
-        SelectedLibrarySortOrder = c.LibrarySortOrder;
-        ShowHiddenFiles = c.ShowHiddenFiles;
-        AutoImportNewFiles = c.AutoImportNewFiles;
+        AutoCheckForUpdates = c.AutoCheckForUpdates;
 
-        RememberRecentlyPlayed = c.RememberRecentlyPlayed;
+        // Privacy & Security
         RememberPlaybackPositionPerTrack = c.RememberPlaybackPositionPerTrack;
+        EnableAppLock = c.EnableAppLock;
+        AppLockWhenMinimized = c.AppLockWhenMinimized;
 
         HighContrastMode = c.HighContrastMode;
-        LargeTextMode = c.LargeTextMode;
+        TextScale = c.TextScale;
         ReduceMotion = c.ReduceMotion;
         ScreenReaderOptimization = c.ScreenReaderOptimization;
         CaptionsAlwaysOn = c.CaptionsAlwaysOn;
@@ -887,10 +1560,40 @@ public partial class SettingsViewModel : ObservableObject
         AiLyricsTranslationEnabled = c.AiLyricsTranslationEnabled;
         AiTranslationTargetLanguage = c.AiTranslationTargetLanguage;
         AiSemanticSearchEnabled = c.AiSemanticSearchEnabled;
-        GeminiApiKey = c.GeminiApiKey;
+        GeminiApiKey = c.GeminiApiKey ?? "";
+        UseLocalAi = c.UseLocalAi;
+        OllamaModelName = c.OllamaModelName ?? "llama3.2";
         AiEqualizerMatcherEnabled = c.AiEqualizerMatcherEnabled;
         VoiceClarityEnabled = c.VoiceClarityEnabled;
         NightModeEnabled = c.NightModeEnabled;
+
+        ThemePresets.Clear();
+        foreach (var preset in ThemePreset.GetBuiltInPresets())
+        {
+            ThemePresets.Add(preset);
+        }
+        if (c.CustomThemePresets != null)
+        {
+            foreach (var preset in c.CustomThemePresets)
+            {
+                ThemePresets.Add(preset);
+            }
+        }
+
+        ThemePreset? activePreset = null;
+        if (!string.IsNullOrEmpty(c.ActiveThemePresetId))
+        {
+            activePreset = ThemePresets.FirstOrDefault(p => p.Id == c.ActiveThemePresetId);
+        }
+        if (activePreset == null)
+        {
+            activePreset = ThemePresets.FirstOrDefault(p =>
+                p.Theme == c.Theme &&
+                p.BackdropType == c.BackdropType &&
+                p.AccentColor == c.AccentColor &&
+                (p.AccentColor != AccentColorOption.Custom || string.Equals(p.CustomAccentColorHex, c.CustomAccentColorHex, StringComparison.OrdinalIgnoreCase)));
+        }
+        SelectedThemePreset = activePreset;
 
         _isSyncing = false;
 
@@ -901,16 +1604,9 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(SkipForwardIndex));
         OnPropertyChanged(nameof(SkipBackwardIndex));
         OnPropertyChanged(nameof(DefaultVolumeText));
-        OnPropertyChanged(nameof(DefaultPlaybackSpeedIndex));
         OnPropertyChanged(nameof(SelectedAccentColorIndex));
         OnPropertyChanged(nameof(SelectedAspectRatioIndex));
-        OnPropertyChanged(nameof(SelectedSubtitleFontSizeIndex));
-        OnPropertyChanged(nameof(SelectedSubtitleLanguageIndex));
-        OnPropertyChanged(nameof(SelectedLibrarySortOrderIndex));
         OnPropertyChanged(nameof(SelectedOpenFilePositionCornerIndex));
-        OnPropertyChanged(nameof(BassBoostText));
-        OnPropertyChanged(nameof(AudioBalanceText));
-        OnPropertyChanged(nameof(SubtitleOpacityText));
         OnPropertyChanged(nameof(CrossfadeDurationText));
         OnPropertyChanged(nameof(SelectedColorBlindModeIndex));
         OnPropertyChanged(nameof(FocusIndicatorThicknessText));

@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Microsoft.UI.Xaml.Media;
+using LumiereMediaPlayer.Helpers;
 
 namespace LumiereMediaPlayer.Models.Streaming
 {
@@ -61,12 +63,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         public string DisplayTitle => Title ?? string.Empty;
         public string DisplayYear => Year?.ToString() ?? string.Empty;
-        
+
         public string? PosterUrl => Details?.DisplayPoster
             ?? (string.IsNullOrEmpty(JsonPosterUrl) ? null : JsonPosterUrl)
             ?? (string.IsNullOrEmpty(JsonPoster) ? null : JsonPoster)
             ?? (TmdbId.HasValue ? $"https://image.tmdb.org/t/p/w342/{TmdbId}.jpg" : null);
-        
+
         public string WatchmodeUrl => $"https://v2.watchmode.com/title/{Id}";
     }
 
@@ -92,6 +94,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("genre_names")]
         public List<string>? GenreNames { get; set; }
+
+        [JsonPropertyName("network_names")]
+        public List<string>? NetworkNames { get; set; }
+
+        [JsonPropertyName("studio_names")]
+        public List<string>? StudioNames { get; set; }
 
         [JsonPropertyName("user_rating")]
         public double? UserRating { get; set; }
@@ -134,6 +142,8 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("web_url")]
         public string? WebUrl { get; set; }
 
+        public string? LogoUrl { get; set; }
+
         [JsonPropertyName("ios_url")]
         public string? IosUrl { get; set; }
 
@@ -174,7 +184,7 @@ namespace LumiereMediaPlayer.Models.Streaming
         public int? TmdbId { get; set; }
 
         public string DisplayTitle => Name ?? string.Empty;
-        
+
         // Convert to WatchmodeTitle
         public WatchmodeTitle ToWatchmodeTitle()
         {
@@ -201,6 +211,13 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("full_name")]
         public string? FullName { get; set; }
 
+        [JsonPropertyName("name")]
+        public string? Name
+        {
+            get => FullName;
+            set { if (string.IsNullOrEmpty(FullName)) FullName = value; }
+        }
+
         [JsonPropertyName("role")]
         public string? Role { get; set; }
 
@@ -209,6 +226,58 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("order")]
         public int? Order { get; set; }
+
+        [JsonPropertyName("headshot_url")]
+        public string? HeadshotUrl { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
+
+        public string? ProfileImageUrl
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(HeadshotUrl))
+                    return HeadshotUrl;
+                if (!string.IsNullOrEmpty(ProfilePath))
+                {
+                    if (ProfilePath.StartsWith("http", System.StringComparison.OrdinalIgnoreCase))
+                        return ProfilePath;
+                    return $"https://image.tmdb.org/t/p/w185{ProfilePath}";
+                }
+                return null;
+            }
+        }
+
+        public bool HasProfileImage => !string.IsNullOrEmpty(ProfileImageUrl);
+
+        public string Initials
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(FullName)) return "?";
+                var parts = FullName.Trim().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 1) return parts[0].Substring(0, System.Math.Min(2, parts[0].Length)).ToUpperInvariant();
+                return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+            }
+        }
+
+        [JsonIgnore]
+        public ImageSource? ProfileImageSource
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(ProfileImageUrl)) return null;
+                try
+                {
+                    return ImageBindHelper.SafeImageFromUrl(ProfileImageUrl, 64);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
     }
 
     public class WatchmodeSeason
@@ -341,6 +410,9 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("order")]
         public int? Order { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
     }
 
     public class TmdbCrewMember
@@ -353,6 +425,9 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("job")]
         public string? Job { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
     }
 
     public class TmdbMovieDetails
@@ -380,6 +455,9 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("backdrop_path")]
         public string? BackdropPath { get; set; }
+
+        [JsonPropertyName("production_companies")]
+        public List<TmdbCompany>? ProductionCompanies { get; set; }
     }
 
     public class TmdbTvDetails
@@ -405,8 +483,30 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("backdrop_path")]
         public string? BackdropPath { get; set; }
 
+        [JsonPropertyName("networks")]
+        public List<TmdbNetwork>? Networks { get; set; }
+
+        [JsonPropertyName("production_companies")]
+        public List<TmdbCompany>? ProductionCompanies { get; set; }
+
         [JsonPropertyName("seasons")]
         public List<TmdbTvSeasonSummary>? Seasons { get; set; }
+    }
+
+    public class TmdbNetwork
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+    }
+
+    public class TmdbCompany
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
     }
 
     public class TmdbTvSeasonSummary
@@ -466,7 +566,9 @@ namespace LumiereMediaPlayer.Models.Streaming
                         Type = "Cast",
                         FullName = c.Name,
                         Role = c.Character,
-                        Order = c.Order
+                        Order = c.Order,
+                        ProfilePath = c.ProfilePath,
+                        HeadshotUrl = !string.IsNullOrEmpty(c.ProfilePath) ? $"https://image.tmdb.org/t/p/w185{c.ProfilePath}" : null
                     });
                 }
             }
@@ -475,14 +577,16 @@ namespace LumiereMediaPlayer.Models.Streaming
             {
                 foreach (var c in credits.Crew)
                 {
-                    if (c.Job == "Director" || c.Job == "Writer" || c.Job == "Producer")
+                    if (c.Job is "Director" or "Writer" or "Producer" or "Screenplay" or "Executive Producer" or "Creator" or "Original Music Composer")
                     {
                         results.Add(new WatchmodeCastCrew
                         {
                             PersonId = c.Id,
                             Type = "Crew",
                             FullName = c.Name,
-                            Role = c.Job
+                            Role = c.Job,
+                            ProfilePath = c.ProfilePath,
+                            HeadshotUrl = !string.IsNullOrEmpty(c.ProfilePath) ? $"https://image.tmdb.org/t/p/w185{c.ProfilePath}" : null
                         });
                     }
                 }
@@ -544,20 +648,113 @@ namespace LumiereMediaPlayer.Models.Streaming
                 foreach (var p in providers)
                 {
                     string webUrl = region.Link ?? "";
-                    if (p.ProviderName.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase))
+                    string providerName = p.ProviderName ?? "Unknown";
+                    if (providerName.Contains("crunchyroll", StringComparison.OrdinalIgnoreCase))
                     {
-                        webUrl = !string.IsNullOrEmpty(title) 
-                            ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}" 
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.crunchyroll.com/search?q={Uri.EscapeDataString(title)}"
                             : "https://www.crunchyroll.com";
                     }
+                    else if (providerName.Contains("prime", StringComparison.OrdinalIgnoreCase) || providerName.Contains("amazon", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.primevideo.com/search/ref=atv_sr_sug_?phrase={Uri.EscapeDataString(title)}"
+                            : "https://www.primevideo.com";
+                    }
+                    else if (providerName.Contains("apple", StringComparison.OrdinalIgnoreCase) || providerName.Contains("itunes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://tv.apple.com/search?term={Uri.EscapeDataString(title)}"
+                            : "https://tv.apple.com";
+                    }
+                    else if (providerName.Contains("netflix", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.netflix.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.netflix.com";
+                    }
+                    else if (providerName.Contains("disney", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (string.Equals(regionCode, "IN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            providerName = "JioHotstar";
+                            webUrl = !string.IsNullOrEmpty(title)
+                                ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(title)}"
+                                : "https://www.hotstar.com";
+                        }
+                        else
+                        {
+                            webUrl = !string.IsNullOrEmpty(title)
+                                ? $"https://www.disneyplus.com/search?q={Uri.EscapeDataString(title)}"
+                                : "https://www.disneyplus.com";
+                        }
+                    }
+                    else if (providerName.Contains("max", StringComparison.OrdinalIgnoreCase) || providerName.Contains("hbo", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://play.max.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://play.max.com";
+                    }
+                    else if (providerName.Contains("paramount", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.paramountplus.com/search/?q={Uri.EscapeDataString(title)}"
+                            : "https://www.paramountplus.com";
+                    }
+                    else if (providerName.Contains("hulu", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.hulu.com/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.hulu.com";
+                    }
+                    else if (providerName.Contains("peacock", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.peacocktv.com/watch/search?q={Uri.EscapeDataString(title)}"
+                            : "https://www.peacocktv.com";
+                    }
+                    else if (providerName.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(title)}"
+                            : "https://www.youtube.com";
+                    }
+                    else if (providerName.Contains("google play", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://play.google.com/store/search?q={Uri.EscapeDataString(title)}&c=movies"
+                            : "https://play.google.com/store/movies";
+                    }
+                    else if (providerName.Contains("hotstar", StringComparison.OrdinalIgnoreCase))
+                    {
+                        providerName = "JioHotstar";
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.hotstar.com/in/explore?search_query={Uri.EscapeDataString(title)}"
+                            : "https://www.hotstar.com";
+                    }
+                    else if (providerName.Contains("jio", StringComparison.OrdinalIgnoreCase))
+                    {
+                        webUrl = !string.IsNullOrEmpty(title)
+                            ? $"https://www.jiocinema.com/search/{Uri.EscapeDataString(title)}"
+                            : "https://www.jiocinema.com";
+                    }
+
+                    int resolvedSourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++;
+                    if (string.Equals(regionCode, "IN", StringComparison.OrdinalIgnoreCase) &&
+                        (p.ProviderId == 2336 || p.ProviderId == 122 || providerName.Contains("hotstar", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        resolvedSourceId = 447;
+                    }
+
                     results.Add(new WatchmodeSource
                     {
-                        SourceId = p.ProviderId > 0 ? p.ProviderId : idCounter++,
-                        Name = p.ProviderName,
+                        SourceId = resolvedSourceId,
+                        Name = providerName,
                         Type = type,
                         Region = regionCode.ToUpperInvariant(),
                         WebUrl = webUrl,
-                        Format = "4K"
+                        Format = "4K",
+                        LogoUrl = !string.IsNullOrEmpty(p.LogoPath) ? $"https://image.tmdb.org/t/p/original{p.LogoPath}" : null
                     });
                 }
             }
@@ -610,9 +807,15 @@ namespace LumiereMediaPlayer.Models.Streaming
             string yearStr = movie.ReleaseDate ?? "";
             int.TryParse(yearStr.Length >= 4 ? yearStr.Substring(0, 4) : "", out int year);
 
+            var studioNames = movie.ProductionCompanies?
+                .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+                .Select(c => c.Name!)
+                .ToList();
+
             return new WatchmodeDetails
             {
                 Id = movie.Id,
+                TmdbId = movie.Id,
                 Title = movie.Title ?? "Unknown Title",
                 PlotOverview = movie.Overview,
                 Type = "movie",
@@ -621,7 +824,8 @@ namespace LumiereMediaPlayer.Models.Streaming
                 UserRating = movie.VoteAverage,
                 Poster = !string.IsNullOrEmpty(movie.PosterPath) ? $"https://image.tmdb.org/t/p/w342{movie.PosterPath}" : null,
                 PosterLarge = !string.IsNullOrEmpty(movie.PosterPath) ? $"https://image.tmdb.org/t/p/w780{movie.PosterPath}" : null,
-                Backdrop = !string.IsNullOrEmpty(movie.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{movie.BackdropPath}" : null
+                Backdrop = !string.IsNullOrEmpty(movie.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{movie.BackdropPath}" : null,
+                StudioNames = studioNames
             };
         }
 
@@ -630,9 +834,20 @@ namespace LumiereMediaPlayer.Models.Streaming
             string yearStr = tv.FirstAirDate ?? "";
             int.TryParse(yearStr.Length >= 4 ? yearStr.Substring(0, 4) : "", out int year);
 
+            var networkNames = tv.Networks?
+                .Where(n => !string.IsNullOrWhiteSpace(n.Name))
+                .Select(n => n.Name!)
+                .ToList();
+
+            var studioNames = tv.ProductionCompanies?
+                .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+                .Select(c => c.Name!)
+                .ToList();
+
             return new WatchmodeDetails
             {
                 Id = tv.Id,
+                TmdbId = tv.Id,
                 Title = tv.Name ?? "Unknown TV Show",
                 PlotOverview = tv.Overview,
                 Type = "tv_series",
@@ -640,7 +855,9 @@ namespace LumiereMediaPlayer.Models.Streaming
                 UserRating = tv.VoteAverage,
                 Poster = !string.IsNullOrEmpty(tv.PosterPath) ? $"https://image.tmdb.org/t/p/w342{tv.PosterPath}" : null,
                 PosterLarge = !string.IsNullOrEmpty(tv.PosterPath) ? $"https://image.tmdb.org/t/p/w780{tv.PosterPath}" : null,
-                Backdrop = !string.IsNullOrEmpty(tv.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{tv.BackdropPath}" : null
+                Backdrop = !string.IsNullOrEmpty(tv.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{tv.BackdropPath}" : null,
+                NetworkNames = networkNames,
+                StudioNames = studioNames
             };
         }
     }
@@ -805,6 +1022,18 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("popularity")]
         public double Popularity { get; set; }
+    }
+
+    public class TmdbExternalIds
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("imdb_id")]
+        public string? ImdbId { get; set; }
+
+        [JsonPropertyName("tvdb_id")]
+        public int? TvdbId { get; set; }
     }
 }
 

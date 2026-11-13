@@ -21,6 +21,9 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("id")]
         public int Id { get; set; }
 
+        [JsonPropertyName("media_type")]
+        public string? MediaType { get; set; }
+
         [JsonPropertyName("title")]
         public string? Title { get; set; }
 
@@ -45,9 +48,12 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("first_air_date")]
         public string? FirstAirDate { get; set; }
 
+        [JsonPropertyName("genre_ids")]
+        public List<int> GenreIds { get; set; } = new();
+
         public string DisplayTitle => !string.IsNullOrEmpty(Title) ? Title : Name ?? string.Empty;
         public string DisplayDate => !string.IsNullOrEmpty(ReleaseDate) ? ReleaseDate : FirstAirDate ?? string.Empty;
-        
+
         public string DisplayYear
         {
             get
@@ -56,11 +62,66 @@ namespace LumiereMediaPlayer.Models.Streaming
                 return (!string.IsNullOrEmpty(date) && date.Length >= 4) ? date.Substring(0, 4) : string.Empty;
             }
         }
-        
+
         public string? PosterUrl => !string.IsNullOrEmpty(PosterPath) ? $"https://image.tmdb.org/t/p/w500{PosterPath}" : null;
         public string? BackdropUrl => !string.IsNullOrEmpty(BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{BackdropPath}" : null;
-        
+
         public string TmdbUrl => !string.IsNullOrEmpty(Name) ? $"https://www.themoviedb.org/tv/{Id}" : $"https://www.themoviedb.org/movie/{Id}";
+
+        public WatchmodeTitle ToWatchmodeTitle(string? forcedType = null)
+        {
+            int? parsedYear = null;
+            if (!string.IsNullOrEmpty(DisplayYear) && int.TryParse(DisplayYear, out int y)) parsedYear = y;
+
+            return new WatchmodeTitle
+            {
+                Id = this.Id,
+                Title = this.DisplayTitle,
+                Year = parsedYear,
+                TmdbId = this.Id,
+                Type = forcedType ?? (!string.IsNullOrEmpty(this.Title) ? "movie" : "tv_series"),
+                JsonPosterUrl = this.PosterUrl
+            };
+        }
+    }
+
+    public class TmdbPerson
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("known_for_department")]
+        public string? KnownForDepartment { get; set; }
+
+        [JsonPropertyName("popularity")]
+        public double Popularity { get; set; }
+
+        [JsonPropertyName("profile_path")]
+        public string? ProfilePath { get; set; }
+
+        [JsonPropertyName("known_for")]
+        public List<TmdbMedia> KnownFor { get; set; } = new();
+    }
+
+    public class TmdbPersonCreditsResponse
+    {
+        [JsonPropertyName("cast")]
+        public List<TmdbMedia> Cast { get; set; } = new();
+
+        [JsonPropertyName("crew")]
+        public List<TmdbCrewMedia> Crew { get; set; } = new();
+    }
+
+    public class TmdbCrewMedia : TmdbMedia
+    {
+        [JsonPropertyName("job")]
+        public string? Job { get; set; }
+
+        [JsonPropertyName("department")]
+        public string? Department { get; set; }
     }
 
     public class TmdbEpisode

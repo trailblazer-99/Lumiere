@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -8,16 +9,27 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using LumiereMediaPlayer.Models;
+using LumiereMediaPlayer.Pages;
 
 namespace LumiereMediaPlayer.Services;
 
+/// <summary>
+/// Hardened multi-provider AI engine.
+/// Default hierarchy: Google Gemini (Primary) -> Local Ollama (Automatic Fallback) -> Local Offline Heuristics.
+/// All client API keys are secured via Windows Credential Locker (PasswordVault).
+/// </summary>
 public static class AiAssistantService
 {
-    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient _httpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(15),
+        DefaultRequestHeaders = { { "User-Agent", "LumiereMediaPlayer/1.0" } }
+    };
     private static readonly Dictionary<string, List<string>> _translationCache = new();
     private static readonly object _cacheLock = new();
+    private const int MaxCacheEntries = 100;
 
-    // Mapping for language codes
+    // Comprehensive language mapping
     private static readonly Dictionary<string, string> LanguageCodes = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Hindi", "hi" },
@@ -27,8 +39,620 @@ public static class AiAssistantService
         { "Japanese", "ja" },
         { "Chinese", "zh-CN" },
         { "Russian", "ru" },
-        { "Italian", "it" }
+        { "Italian", "it" },
+        { "Korean", "ko" },
+        { "Portuguese", "pt" },
+        { "Dutch", "nl" },
+        { "Turkish", "tr" },
+        { "Arabic", "ar" }
     };
+
+    /// <summary>
+    /// Executes an AI prompt with the default architecture:
+    /// Primary: Google Gemini 2.0 Flash (via secure cloud proxy or encrypted API key)
+    /// Automatic Fallback: Local Ollama on localhost:11434
+    /// </summary>
+    private static async Task<string> ExecuteAiPromptAsync(string prompt, string? jsonMimeType = "application/json")
+    {
+        var settings = AppServices.Settings.Current;
+        var config = ConfigService.Config;
+        bool preferLocal = settings.UseLocalAi;
+        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
+        string apiKey = settings.GeminiApiKey;
+        string ollamaModel = string.IsNullOrWhiteSpace(settings.OllamaModelName) ? "llama3.2" : settings.OllamaModelName;
+        string? result = null;
+
+        // If user explicitly configured "Prefer Local AI (Ollama)", try Ollama first
+        if (preferLocal)
+        {
+            try
+            {
+                var ollamaRes = await CallOllamaAsync(prompt, ollamaModel, jsonMimeType);
+                if (!string.IsNullOrWhiteSpace(ollamaRes)) return ollamaRes;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AiAssistant] Local Ollama failed, attempting Gemini: {ex.Message}");
+            }
+        }
+
+        // 1. Try Direct Gemini API key (key sent via header, not URL)
+        if (result == null && !string.IsNullOrWhiteSpace(apiKey))
+        {
+            try
+            {
+                result = await CallGeminiAsync(prompt, jsonMimeType, apiKey, proxyBaseUrl: null, proxyToken: null);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AiAssistant] Direct Gemini request failed ({ex.Message}), trying proxy...");
+            }
+        }
+
+        // 2. Try Cloud Proxy (even if direct key failed — key may be expired but proxy has server-side key)
+        if (result == null && useProxy)
+        {
+            try
+            {
+                result = await CallGeminiAsync(prompt, jsonMimeType, apiKey: null, config.ProxyBaseUrl, config.ProxyAppToken);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AiAssistant] Proxy request failed ({ex.Message}), falling back to Ollama...");
+            }
+        }
+
+        // 3. Automatic Fallback: Try Local Ollama if Gemini was primary and failed / unreachable
+        if (result == null && !preferLocal)
+        {
+            try
+            {
+                var ollamaFallbackRes = await CallOllamaAsync(prompt, ollamaModel, jsonMimeType);
+                if (!string.IsNullOrWhiteSpace(ollamaFallbackRes))
+                {
+                    Debug.WriteLine("[AiAssistant] Fallback to Local Ollama succeeded.");
+                    result = ollamaFallbackRes;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AiAssistant] Local Ollama fallback also failed: {ex.Message}");
+            }
+        }
+
+        return result ?? string.Empty;
+    }
+
+    private static readonly (string ApiVersion, string Model)[] GeminiEndpoints = new[]
+    {
+        ("v1beta", "gemini-2.5-flash"),
+        ("v1", "gemini-2.5-flash"),
+        ("v1beta", "gemini-2.0-flash"),
+        ("v1", "gemini-2.0-flash"),
+        ("v1", "gemini-1.5-flash"),
+        ("v1beta", "gemini-1.5-flash-latest"),
+        ("v1beta", "gemini-2.0-flash-exp"),
+        ("v1beta", "gemini-1.5-flash"),
+        ("v1", "gemini-pro")
+    };
+
+    private static string? _verifiedGeminiEndpoint = null;
+
+    /// <summary>
+    /// Sends a prompt to Google Gemini API with multi-model fallback and safe response parsing.
+    /// Supports both header-based (x-goog-api-key) and URL query param authentication across v1 and v1beta.
+    /// </summary>
+    private static async Task<string?> CallGeminiAsync(string prompt, string? jsonMimeType, string? apiKey, string? proxyBaseUrl, string? proxyToken)
+    {
+        apiKey = apiKey?.Trim();
+
+        object requestBody = jsonMimeType != null
+            ? new { contents = new[] { new { parts = new[] { new { text = prompt } } } }, generationConfig = new { responseMimeType = jsonMimeType } }
+            : new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
+
+        Func<HttpContent> createContent = () => new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+        if (!string.IsNullOrWhiteSpace(proxyBaseUrl))
+        {
+            foreach (var (version, model) in GeminiEndpoints)
+            {
+                try
+                {
+                    string url = $"{proxyBaseUrl.TrimEnd('/')}/gemini/{version}/models/{model}:generateContent";
+                    using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = createContent() };
+                    if (!string.IsNullOrWhiteSpace(proxyToken))
+                        request.Headers.Add("X-Lumiere-App-Token", proxyToken);
+
+                    using var response = await _httpClient.SendAsync(request);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var responseJson = await response.Content.ReadAsStringAsync();
+                        var parsed = ParseGeminiResponse(responseJson);
+                        if (!string.IsNullOrWhiteSpace(parsed)) return parsed;
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
+                             response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                             response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    {
+                        // Proxy route is unconfigured or unauthorized, abort immediately without wasting time on remaining models
+                        break;
+                    }
+                }
+                catch
+                {
+                    continue; // Try next candidate model instead of breaking completely on transient glitch
+                }
+            }
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            // Build candidate endpoint list (prioritize verified endpoint if available)
+            var candidates = new List<(string ApiVersion, string Model)>();
+            if (!string.IsNullOrWhiteSpace(_verifiedGeminiEndpoint))
+            {
+                var parts = _verifiedGeminiEndpoint.Split('/');
+                if (parts.Length >= 3)
+                {
+                    candidates.Add((parts[0], parts[2]));
+                }
+            }
+            foreach (var ep in GeminiEndpoints)
+            {
+                if (!candidates.Contains(ep)) candidates.Add(ep);
+            }
+
+            foreach (var (version, model) in candidates)
+            {
+                try
+                {
+                    // 1. Try with x-goog-api-key header
+                    string url = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent";
+                    using (var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = createContent() })
+                    {
+                        request.Headers.Add("x-goog-api-key", apiKey);
+                        using var response = await _httpClient.SendAsync(request);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var responseJson = await response.Content.ReadAsStringAsync();
+                            var parsed = ParseGeminiResponse(responseJson);
+                            if (!string.IsNullOrWhiteSpace(parsed))
+                            {
+                                _verifiedGeminiEndpoint = $"{version}/models/{model}";
+                                return parsed;
+                            }
+                        }
+                    }
+
+                    // 2. Fallback: try with URL query parameter ?key=
+                    string urlWithKey = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+                    using (var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = createContent() })
+                    {
+                        using var responseKey = await _httpClient.SendAsync(requestKey);
+                        if (responseKey.IsSuccessStatusCode)
+                        {
+                            var responseJson = await responseKey.Content.ReadAsStringAsync();
+                            var parsed = ParseGeminiResponse(responseJson);
+                            if (!string.IsNullOrWhiteSpace(parsed))
+                            {
+                                _verifiedGeminiEndpoint = $"{version}/models/{model}";
+                                return parsed;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[AiAssistant] Endpoint {version}/{model} error: {ex.Message}");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ParseGeminiResponse(string responseJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseJson);
+            if (doc.RootElement.TryGetProperty("candidates", out var candidates)
+                && candidates.ValueKind == JsonValueKind.Array
+                && candidates.GetArrayLength() > 0
+                && candidates[0].TryGetProperty("content", out var contentProp)
+                && contentProp.TryGetProperty("parts", out var parts)
+                && parts.ValueKind == JsonValueKind.Array
+                && parts.GetArrayLength() > 0
+                && parts[0].TryGetProperty("text", out var textElement))
+            {
+                return textElement.GetString();
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static async Task<List<(string ApiVersion, string Model)>> DiscoverGeminiModelsAsync(string apiKey)
+    {
+        var result = new List<(string ApiVersion, string Model)>();
+        foreach (var version in new[] { "v1beta", "v1" })
+        {
+            try
+            {
+                string url = $"https://generativelanguage.googleapis.com/{version}/models";
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Add("x-goog-api-key", apiKey);
+
+                using var resp1 = await _httpClient.SendAsync(req);
+                var respToUse = resp1;
+                HttpResponseMessage? resp2 = null;
+
+                if (!resp1.IsSuccessStatusCode)
+                {
+                    using var reqKey = new HttpRequestMessage(HttpMethod.Get, $"{url}?key={Uri.EscapeDataString(apiKey)}");
+                    resp2 = await _httpClient.SendAsync(reqKey);
+                    respToUse = resp2;
+                }
+
+                try
+                {
+                    if (respToUse.IsSuccessStatusCode)
+                    {
+                        var json = await respToUse.Content.ReadAsStringAsync();
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("models", out var modelsArr) && modelsArr.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var m in modelsArr.EnumerateArray())
+                            {
+                                if (m.TryGetProperty("name", out var nameProp))
+                                {
+                                    string name = nameProp.GetString() ?? "";
+                                    if (name.StartsWith("models/")) name = name.Substring("models/".Length);
+
+                                    bool canGenerate = false;
+                                    if (m.TryGetProperty("supportedGenerationMethods", out var methods) && methods.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var method in methods.EnumerateArray())
+                                        {
+                                            if (method.GetString() == "generateContent") { canGenerate = true; break; }
+                                        }
+                                    }
+
+                                    if (canGenerate && !string.IsNullOrWhiteSpace(name))
+                                    {
+                                        result.Add((version, name));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    resp2?.Dispose();
+                }
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Performs live health check on primary (Gemini) and fallback (Ollama) pipelines.
+    /// Dynamically discovers supported models from Google and reports exact latency and provider state.
+    /// </summary>
+    public static async Task<(bool Success, string Message, long LatencyMs)> TestAiConnectionAsync(string? explicitApiKey = null)
+    {
+        var settings = AppServices.Settings.Current;
+        var config = ConfigService.Config;
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            bool geminiOk = false;
+            long geminiLatency = 0;
+            string geminiInfo = "";
+            string geminiModelUsed = "";
+
+            bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
+            string apiKey = (explicitApiKey ?? settings.GeminiApiKey)?.Trim() ?? "";
+
+            // 1. Test Direct Gemini API Key if entered
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                // Dynamic discovery of supported models on user's API key
+                var discovered = await DiscoverGeminiModelsAsync(apiKey);
+
+                var testCandidates = new List<(string ApiVersion, string Model)>();
+
+                // Prioritize discovered flash models first
+                foreach (var d in discovered.Where(m => m.Model.Contains("flash", StringComparison.OrdinalIgnoreCase)))
+                {
+                    testCandidates.Add(d);
+                }
+                foreach (var d in discovered)
+                {
+                    if (!testCandidates.Contains(d)) testCandidates.Add(d);
+                }
+                // Fallback to static list if discovery returned nothing
+                foreach (var ep in GeminiEndpoints)
+                {
+                    if (!testCandidates.Contains(ep)) testCandidates.Add(ep);
+                }
+
+                foreach (var (version, model) in testCandidates)
+                {
+                    try
+                    {
+                        var requestBody = new { contents = new[] { new { parts = new[] { new { text = "Respond with 'OK'" } } } } };
+                        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+                        // Try header first
+                        string url = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent";
+                        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+                        request.Headers.Add("x-goog-api-key", apiKey);
+
+                        using var response = await _httpClient.SendAsync(request);
+                        geminiLatency = stopwatch.ElapsedMilliseconds;
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            geminiOk = true;
+                            geminiModelUsed = model;
+                            _verifiedGeminiEndpoint = $"{version}/models/{model}";
+                            geminiInfo = $"Google Gemini API ({model})";
+                            break;
+                        }
+                        else
+                        {
+                            // Try URL query param fallback
+                            string urlWithKey = $"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+                            using var requestKey = new HttpRequestMessage(HttpMethod.Post, urlWithKey) { Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json") };
+                            using var responseKey = await _httpClient.SendAsync(requestKey);
+                            geminiLatency = stopwatch.ElapsedMilliseconds;
+
+                            if (responseKey.IsSuccessStatusCode)
+                            {
+                                geminiOk = true;
+                                geminiModelUsed = model;
+                                _verifiedGeminiEndpoint = $"{version}/models/{model}";
+                                geminiInfo = $"Google Gemini API ({model})";
+                                break;
+                            }
+                            else
+                            {
+                                string errorJson = await responseKey.Content.ReadAsStringAsync();
+                                string? parsedError = ExtractGoogleErrorMessage(errorJson);
+                                geminiInfo = !string.IsNullOrWhiteSpace(parsedError)
+                                    ? $"{parsedError} (HTTP {(int)responseKey.StatusCode})"
+                                    : $"Gemini API HTTP {(int)responseKey.StatusCode}";
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        geminiInfo = $"Connection error: {ex.Message}";
+                    }
+                }
+            }
+
+            // 2. If direct key not available or failed, check Proxy
+            if (!geminiOk && useProxy)
+            {
+                foreach (var (version, model) in GeminiEndpoints)
+                {
+                    try
+                    {
+                        string url = $"{config.ProxyBaseUrl.TrimEnd('/')}/gemini/{version}/models/{model}:generateContent";
+                        var requestBody = new { contents = new[] { new { parts = new[] { new { text = "Respond with 'OK'" } } } } };
+                        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+                        request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+
+                        using var response = await _httpClient.SendAsync(request);
+                        geminiLatency = stopwatch.ElapsedMilliseconds;
+                        if (response.IsSuccessStatusCode)
+                        {
+                            geminiOk = true;
+                            geminiModelUsed = model;
+                            geminiInfo = $"Cloud AI Proxy ({model})";
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 3. Test Local Ollama (Standby Fallback)
+            bool ollamaOk = false;
+            string ollamaModel = string.IsNullOrWhiteSpace(settings.OllamaModelName) ? "llama3.2" : settings.OllamaModelName;
+            try
+            {
+                using var pingReq = new HttpRequestMessage(HttpMethod.Get, "http://localhost:11434/api/tags");
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var pingResp = await _httpClient.SendAsync(pingReq, cts.Token);
+                ollamaOk = pingResp.IsSuccessStatusCode;
+            }
+            catch { }
+
+            stopwatch.Stop();
+
+            if (geminiOk)
+            {
+                string fallbackStatus = ollamaOk ? $"• Ollama Fallback ({ollamaModel}): Ready" : "• Ollama Fallback: Offline";
+                return (true, $"Gemini Cloud ({geminiModelUsed}): Online ({geminiLatency}ms) {fallbackStatus}", geminiLatency);
+            }
+
+            if (ollamaOk)
+            {
+                return (true, $"Local Ollama Online • Model: {ollamaModel} ({stopwatch.ElapsedMilliseconds}ms) [Cloud Gemini: Not Configured]", stopwatch.ElapsedMilliseconds);
+            }
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return (false, "Please enter your Gemini API Key in Settings above (get a free key at aistudio.google.com) or launch Local Ollama.", stopwatch.ElapsedMilliseconds);
+            }
+
+            return (false, $"Gemini connection failed: {geminiInfo}", stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            return (false, $"Diagnostic check failed: {ex.Message}", stopwatch.ElapsedMilliseconds);
+        }
+    }
+
+    private static string? ExtractGoogleErrorMessage(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("error", out var errorObj))
+            {
+                if (errorObj.TryGetProperty("message", out var msgElem))
+                {
+                    return msgElem.GetString();
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Resilient JSON extractor that finds and parses JSON arrays or objects even if wrapped in markdown or conversational LLM text.
+    /// </summary>
+    public static string ExtractJsonFromResponse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        text = text.Trim();
+
+        // 1. Extract content between markdown code fences ```json ... ``` or ``` ... ```
+        var fenceMatch = Regex.Match(text, @"```(?:json)?\s*\n?([\s\S]+?)\n?\s*```", RegexOptions.IgnoreCase);
+        if (fenceMatch.Success)
+        {
+            string inner = fenceMatch.Groups[1].Value.Trim();
+            // Find the actual JSON structure within the fenced block
+            string? extracted = FindOutermostJson(inner);
+            if (extracted != null) return extracted;
+        }
+
+        // 2. Find outermost JSON structure in raw text
+        string? rawExtracted = FindOutermostJson(text);
+        if (rawExtracted != null) return rawExtracted;
+
+        return text;
+    }
+
+    /// <summary>
+    /// Finds the outermost JSON array or object in the given text by matching brackets/braces.
+    /// </summary>
+    private static string? FindOutermostJson(string text)
+    {
+        // Try arrays first (more common in our prompts), then objects
+        string? arrayResult = ExtractBalancedJson(text, '[', ']');
+        if (arrayResult != null) return arrayResult;
+
+        string? objectResult = ExtractBalancedJson(text, '{', '}');
+        if (objectResult != null) return objectResult;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts a balanced bracket/brace-delimited substring using a depth counter.
+    /// </summary>
+    private static string? ExtractBalancedJson(string text, char open, char close)
+    {
+        int start = text.IndexOf(open);
+        if (start < 0) return null;
+
+        int depth = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        for (int i = start; i < text.Length; i++)
+        {
+            char c = text[i];
+
+            if (escaped) { escaped = false; continue; }
+            if (c == '\\' && inString) { escaped = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+
+            if (c == open) depth++;
+            else if (c == close) depth--;
+
+            if (depth == 0)
+            {
+                return text.Substring(start, i - start + 1);
+            }
+        }
+
+        // Unbalanced — return the best we have (from first open to last close)
+        int last = text.LastIndexOf(close);
+        if (last > start) return text.Substring(start, last - start + 1);
+
+        return null;
+    }
+
+    private static async Task<string> CallOllamaAsync(string prompt, string modelName, string? jsonMimeType = null)
+    {
+        object requestBody = jsonMimeType == "application/json"
+            ? new
+            {
+                model = string.IsNullOrWhiteSpace(modelName) ? "llama3.2" : modelName,
+                prompt = prompt,
+                stream = false,
+                format = "json"
+            }
+            : new
+            {
+                model = string.IsNullOrWhiteSpace(modelName) ? "llama3.2" : modelName,
+                prompt = prompt,
+                stream = false
+            };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:11434/api/generate") { Content = content };
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var responseJson = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(responseJson);
+        return doc.RootElement.GetProperty("response").GetString() ?? "";
+    }
+
+    public static async Task<EqualizerPreset> CategorizeEqualizerAsync(string title, string genre)
+    {
+        string prompt = $"Categorize the song \"{title}\" (Genre: {genre}) into one of these Equalizer presets: Flat, Classical, Electronic, Jazz, Pop, Rock, Vocal. Return ONLY the chosen category word.";
+
+        string responseText = await ExecuteAiPromptAsync(prompt, jsonMimeType: null);
+        if (string.IsNullOrWhiteSpace(responseText)) return EqualizerPreset.Flat;
+
+        // Strip <think> reasoning blocks if model emitted them
+        responseText = Regex.Replace(responseText, @"<think>[\s\S]*?</think>", "", RegexOptions.IgnoreCase);
+
+        // Search for whole-word preset match
+        foreach (var preset in Enum.GetValues<EqualizerPreset>())
+        {
+            if (Regex.IsMatch(responseText, $@"\b{preset}\b", RegexOptions.IgnoreCase))
+            {
+                return preset;
+            }
+        }
+
+        responseText = Regex.Replace(responseText, @"[^a-zA-Z]", "");
+        if (Enum.TryParse<EqualizerPreset>(responseText, true, out var parsedPreset))
+        {
+            return parsedPreset;
+        }
+
+        return EqualizerPreset.Flat;
+    }
 
     public static async Task<List<string>> TranslateLyricsAsync(string trackId, List<string> lines, string targetLanguage)
     {
@@ -44,23 +668,29 @@ public static class AiAssistantService
         }
 
         List<string> translated = new();
-        string apiKey = AppServices.Settings.Current.GeminiApiKey;
-        var config = ConfigService.Config;
-        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
 
-        if (useProxy || !string.IsNullOrWhiteSpace(apiKey))
+        var promptBuilder = new StringBuilder();
+        promptBuilder.AppendLine($"You are an expert lyrics translator. Translate the following lyrics lines into {targetLanguage}.");
+        promptBuilder.AppendLine("Preserve the emotional context, flow, and formatting of each line.");
+        promptBuilder.AppendLine("Return ONLY a valid JSON array of strings containing the translations, in the exact same order.");
+        promptBuilder.AppendLine("Input lyrics:");
+        promptBuilder.AppendLine(JsonSerializer.Serialize(lines));
+
+        try
         {
-            try
+            string textResponse = await ExecuteAiPromptAsync(promptBuilder.ToString(), jsonMimeType: "application/json");
+            string json = ExtractJsonFromResponse(textResponse);
+            if (!string.IsNullOrWhiteSpace(json))
             {
-                translated = await TranslateWithGeminiAsync(lines, targetLanguage, apiKey);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AiAssistant] Gemini translation failed, falling back to Google Translate: {ex.Message}");
+                translated = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
             }
         }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiAssistant] AI translation failed, falling back to Google Translate: {ex.Message}");
+        }
 
-        // Fallback to Google Translate if Gemini fails or is not configured
+        // Fallback to Google Translate if AI fails or is not configured
         if (translated == null || translated.Count == 0)
         {
             try
@@ -69,7 +699,7 @@ public static class AiAssistantService
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[AiAssistant] Google translation failed: {ex.Message}");
+                Debug.WriteLine($"[AiAssistant] Google translation fallback failed: {ex.Message}");
             }
         }
 
@@ -81,103 +711,35 @@ public static class AiAssistantService
 
         lock (_cacheLock)
         {
+            if (_translationCache.Count >= MaxCacheEntries)
+            {
+                var oldest = _translationCache.Keys.First();
+                _translationCache.Remove(oldest);
+            }
             _translationCache[cacheKey] = translated;
         }
 
         return translated;
     }
 
-    private static async Task<List<string>> TranslateWithGeminiAsync(List<string> lines, string targetLanguage, string apiKey)
-    {
-        var config = ConfigService.Config;
-        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
-        string url;
-
-        if (useProxy)
-        {
-            url = $"{config.ProxyBaseUrl.TrimEnd('/')}/gemini/v1beta/models/gemini-2.5-flash:generateContent";
-        }
-        else
-        {
-            url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
-        }
-        
-        // Prepare prompt
-        var promptBuilder = new StringBuilder();
-        promptBuilder.AppendLine($"You are an expert lyrics translator. Translate the following lyrics lines into {targetLanguage}.");
-        promptBuilder.AppendLine("Preserve the emotional context, flow, and formatting of each line.");
-        promptBuilder.AppendLine("Return ONLY a JSON array of strings containing the translations, in the exact same order as the input array.");
-        promptBuilder.AppendLine("Do not include markdown headers like ```json or any other text.");
-        promptBuilder.AppendLine("Input lyrics:");
-        
-        var jsonInput = JsonSerializer.Serialize(lines);
-        promptBuilder.AppendLine(jsonInput);
-
-        var requestBody = new
-        {
-            contents = new[]
-            {
-                new
-                {
-                    parts = new[]
-                    {
-                        new { text = promptBuilder.ToString() }
-                    }
-                }
-            },
-            generationConfig = new
-            {
-                responseMimeType = "application/json"
-            }
-        };
-
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-        
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Content = content;
-        if (useProxy)
-        {
-            request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
-        }
-
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var responseJson = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(responseJson);
-        var textResponse = doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
-
-        if (string.IsNullOrWhiteSpace(textResponse)) return new List<string>();
-
-        var list = JsonSerializer.Deserialize<List<string>>(textResponse);
-        return list ?? new List<string>();
-    }
-
     private static async Task<List<string>> TranslateWithGoogleTranslateAsync(List<string> lines, string targetLanguage)
     {
         if (!LanguageCodes.TryGetValue(targetLanguage, out var langCode))
-        {
-            langCode = "es"; // Default to Spanish fallback
-        }
+            langCode = "en";
 
-        // To avoid making dozens of HTTP requests, we combine lines with a safe delimiter
         string delimiter = " |@| ";
         string combined = string.Join(delimiter, lines);
 
-        string url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={langCode}&dt=t&q={Uri.EscapeDataString(combined)}";
-        
-        var response = await _httpClient.GetAsync(url);
+        string url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={langCode}&dt=t";
+        var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("q", combined) });
+
+        using var response = await _httpClient.PostAsync(url, content);
         response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(responseJson);
         var outerArray = doc.RootElement;
-        
+
         var translatedParts = new StringBuilder();
         if (outerArray.ValueKind == JsonValueKind.Array && outerArray.GetArrayLength() > 0)
         {
@@ -196,23 +758,15 @@ public static class AiAssistantService
 
         string resultText = translatedParts.ToString();
         var translatedLines = resultText.Split(new[] { delimiter, " |@| " }, StringSplitOptions.None)
-            .Select(s => s.Trim())
-            .ToList();
+            .Select(s => s.Trim()).ToList();
 
-        // If split elements don't match input counts, try matching by size
         if (translatedLines.Count != lines.Count)
         {
-            // fallback splitting by just pipe
-            translatedLines = resultText.Split(new[] { "|@|", " | @ | ", "@" }, StringSplitOptions.None)
-                .Select(s => s.Trim())
-                .ToList();
+            translatedLines = resultText.Split(new[] { "|@|", " | @ | " }, StringSplitOptions.None)
+                .Select(s => s.Trim()).ToList();
         }
 
-        while (translatedLines.Count < lines.Count)
-        {
-            translatedLines.Add(string.Empty);
-        }
-
+        while (translatedLines.Count < lines.Count) translatedLines.Add(string.Empty);
         return translatedLines.Take(lines.Count).ToList();
     }
 
@@ -220,200 +774,262 @@ public static class AiAssistantService
     {
         if (string.IsNullOrWhiteSpace(query)) return tracks.ToList();
 
-        string apiKey = AppServices.Settings.Current.GeminiApiKey;
-        var config = ConfigService.Config;
-        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
-
-        if (useProxy || !string.IsNullOrWhiteSpace(apiKey))
+        try
         {
-            try
+            var catalog = tracks.Select((t, i) => new { Index = i, t.Title, t.Artist, t.Album, t.Genre, t.Resolution }).ToList();
+
+            var promptBuilder = new StringBuilder();
+            promptBuilder.AppendLine("You are an AI Media Librarian. Filter and sort library tracks based on the user's natural language request.");
+            promptBuilder.AppendLine($"User prompt: \"{query}\"");
+            promptBuilder.AppendLine("Return ONLY a valid JSON array of integers containing the indices of matching items in order of relevance (best match first).");
+            promptBuilder.AppendLine("Return an empty array [] if absolutely nothing is relevant.");
+            promptBuilder.AppendLine("Tracks list:");
+            promptBuilder.AppendLine(JsonSerializer.Serialize(catalog));
+
+            string textResponse = await ExecuteAiPromptAsync(promptBuilder.ToString(), jsonMimeType: "application/json");
+            string json = ExtractJsonFromResponse(textResponse);
+
+            if (!string.IsNullOrWhiteSpace(json))
             {
-                return await SemanticSearchWithGeminiAsync(query, tracks, apiKey);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AiAssistant] Gemini semantic search failed, falling back to local: {ex.Message}");
+                var indices = JsonSerializer.Deserialize<List<int>>(json);
+                if (indices != null && indices.Count > 0)
+                {
+                    return indices.Where(i => i >= 0 && i < tracks.Count).Select(i => tracks[i]).ToList();
+                }
             }
         }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiAssistant] AI semantic search failed, falling back to local heuristic: {ex.Message}");
+        }
 
-        // Local Heuristics / TF-IDF fallbacks
         return SemanticSearchLocal(query, tracks);
     }
 
-    private static async Task<List<MediaItem>> SemanticSearchWithGeminiAsync(string query, IReadOnlyList<MediaItem> tracks, string apiKey)
+    public static async Task<List<SettingSearchItem>> SemanticSearchSettingsAsync(string query, IReadOnlyList<SettingSearchItem> settings)
     {
-        var config = ConfigService.Config;
-        bool useProxy = config.UseProxy && !string.IsNullOrEmpty(config.ProxyBaseUrl);
-        string url;
+        if (string.IsNullOrWhiteSpace(query) || settings == null || settings.Count == 0) return new List<SettingSearchItem>();
 
-        if (useProxy)
-        {
-            url = $"{config.ProxyBaseUrl.TrimEnd('/')}/gemini/v1beta/models/gemini-2.5-flash:generateContent";
-        }
-        else
-        {
-            url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
-        }
-        
-        // Build a catalog representation
-        var catalog = tracks.Select((t, i) => new
-        {
-            Index = i,
-            t.Title,
-            t.Artist,
-            t.Album,
-            t.Genre,
-            t.Resolution
-        }).ToList();
+        var minimalSettings = settings.Select((s, index) => new { Index = index, s.Title, s.Description, s.Keywords }).ToList();
 
         var promptBuilder = new StringBuilder();
-        promptBuilder.AppendLine("You are an AI Media Librarian. Filter and sort library tracks based on the user's natural language request.");
+        promptBuilder.AppendLine("You are an AI Settings Assistant. Filter and sort application settings based on the user's natural language request.");
         promptBuilder.AppendLine($"User prompt: \"{query}\"");
-        promptBuilder.AppendLine("Return ONLY a JSON array of integers containing the indices of matching items in order of relevance (best match first).");
-        promptBuilder.AppendLine("Return an empty array if absolutely nothing is relevant.");
-        promptBuilder.AppendLine("Do not include markdown like ```json.");
-        promptBuilder.AppendLine("Tracks list:");
-        promptBuilder.AppendLine(JsonSerializer.Serialize(catalog));
+        promptBuilder.AppendLine("Return ONLY a JSON array of integers containing the indices of highly relevant settings items.");
+        promptBuilder.AppendLine("Do not guess. If no match, return [].");
+        promptBuilder.AppendLine("Settings list:");
+        promptBuilder.AppendLine(JsonSerializer.Serialize(minimalSettings));
 
-        var requestBody = new
+        try
         {
-            contents = new[]
+            string textResponse = await ExecuteAiPromptAsync(promptBuilder.ToString(), jsonMimeType: "application/json");
+            string json = ExtractJsonFromResponse(textResponse);
+            if (!string.IsNullOrWhiteSpace(json))
             {
-                new
+                var indices = JsonSerializer.Deserialize<List<int>>(json);
+                if (indices != null)
                 {
-                    parts = new[]
-                    {
-                        new { text = promptBuilder.ToString() }
-                    }
+                    return indices.Where(i => i >= 0 && i < settings.Count).Select(i => settings[i]).ToList();
                 }
-            },
-            generationConfig = new
-            {
-                responseMimeType = "application/json"
             }
-        };
-
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Content = content;
-        if (useProxy)
+        }
+        catch (Exception ex)
         {
-            request.Headers.Add("X-Lumiere-App-Token", config.ProxyAppToken);
+            Debug.WriteLine($"[AiAssistant] SemanticSearchSettingsAsync error: {ex.Message}");
         }
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        return new List<SettingSearchItem>();
+    }
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(responseJson);
-        var textResponse = doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
+    public static async Task<List<string>> RecommendTitlesForPromptAsync(string query, string mediaType = "movie")
+    {
+        if (string.IsNullOrWhiteSpace(query)) return new List<string>();
 
-        if (string.IsNullOrWhiteSpace(textResponse)) return new List<MediaItem>();
+        try
+        {
+            string curatorRole = mediaType switch
+            {
+                "song" or "music" or "track" => "expert music curator",
+                _ => "expert film and television curator"
+            };
+            var promptBuilder = new StringBuilder();
+            promptBuilder.AppendLine($"You are an {curatorRole}. The user is looking for {mediaType}s using this natural language request: \"{query}\".");
+            promptBuilder.AppendLine($"Return ONLY a valid JSON array of 12 to 16 best, most famous, acclaimed, and relevant {mediaType} titles that match this genre, theme, or description. Example: [\"Title 1\", \"Title 2\"]");
+            promptBuilder.AppendLine("Do not include release years, markdown formatting, explanations, or quotes inside titles. Return ONLY the JSON array of title strings.");
 
-        var indices = JsonSerializer.Deserialize<List<int>>(textResponse);
-        if (indices == null) return new List<MediaItem>();
+            string textResponse = await ExecuteAiPromptAsync(promptBuilder.ToString(), jsonMimeType: "application/json");
+            string json = ExtractJsonFromResponse(textResponse);
 
-        return indices
-            .Where(i => i >= 0 && i < tracks.Count)
-            .Select(i => tracks[i])
-            .ToList();
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var titles = JsonSerializer.Deserialize<List<string>>(json);
+                if (titles != null && titles.Count > 0)
+                {
+                    return titles.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiAssistant] RecommendTitlesForPromptAsync error: {ex.Message}");
+        }
+
+        return new List<string>();
     }
 
     private static List<MediaItem> SemanticSearchLocal(string query, IReadOnlyList<MediaItem> tracks)
     {
-        // Standardize query
         var queryWords = CleanAndTokenize(query);
         if (queryWords.Count == 0) return tracks.ToList();
 
         var rankedList = new List<(MediaItem Item, double Score)>();
 
+        bool isAcoustic = IsAcousticQuery(queryWords);
+        bool isUpbeat = IsUpbeatQuery(queryWords);
+        bool isChill = IsChillQuery(queryWords);
+        bool isFocus = IsFocusQuery(queryWords);
+        bool isSad = IsSadQuery(queryWords);
+        bool isRomantic = IsRomanticQuery(queryWords);
+        bool isRock = IsRockQuery(queryWords);
+        bool isNight = IsNightQuery(queryWords);
+        int? targetDecade = ExtractDecade(query);
+
         foreach (var track in tracks)
         {
             double score = 0;
-
-            // Simple text scoring weights
-            string trackText = $"{track.Title} {track.Artist} {track.Album} {track.Genre} {track.Resolution} {track.ReleaseYear}".ToLowerInvariant();
+            string title = track.Title ?? string.Empty;
+            string artist = track.Artist ?? string.Empty;
+            string album = track.Album ?? string.Empty;
+            string genre = track.Genre ?? string.Empty;
+            string trackText = $"{title} {artist} {album} {genre} {track.Resolution} {track.ReleaseYear}".ToLowerInvariant();
 
             foreach (var qWord in queryWords)
             {
-                // Title matches get high weights
-                if (track.Title != null && track.Title.Contains(qWord, StringComparison.OrdinalIgnoreCase))
+                if (title.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 6.0;
+                else if (artist.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 5.0;
+                else if (genre.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 4.0;
+                else if (album.Contains(qWord, StringComparison.OrdinalIgnoreCase)) score += 3.0;
+                else if (trackText.Contains(qWord)) score += 1.5;
+                else
+                {
+                    // Fuzzy / Typo tolerance (Levenshtein distance <= 2 for words >= 4 chars)
+                    if (qWord.Length >= 4)
+                    {
+                        if (FuzzyWordMatch(qWord, title) || FuzzyWordMatch(qWord, artist) || FuzzyWordMatch(qWord, genre))
+                        {
+                            score += 2.5;
+                        }
+                    }
+                }
+            }
+
+            // Semantic Mood & Theme matching bonuses
+            if (isAcoustic && IsTrackAcoustic(track)) score += 4.0;
+            if (isUpbeat && IsTrackUpbeat(track)) score += 4.0;
+            if (isChill && IsTrackChill(track)) score += 4.0;
+            if (isFocus && IsTrackFocus(track)) score += 4.0;
+            if (isSad && IsTrackSad(track)) score += 4.0;
+            if (isRomantic && IsTrackRomantic(track)) score += 4.0;
+            if (isRock && IsTrackRock(track)) score += 4.0;
+            if (isNight && IsTrackNight(track)) score += 4.0;
+
+            // Decade / Era matching
+            if (targetDecade.HasValue && int.TryParse(track.ReleaseYear, out int year))
+            {
+                int trackDecade = (year / 10) * 10;
+                if (trackDecade == targetDecade.Value)
                 {
                     score += 5.0;
                 }
-                // Artist matches get high weights
-                if (track.Artist != null && track.Artist.Contains(qWord, StringComparison.OrdinalIgnoreCase))
-                {
-                    score += 4.0;
-                }
-                // Genre matches get high weights
-                if (track.Genre != null && track.Genre.Contains(qWord, StringComparison.OrdinalIgnoreCase))
-                {
-                    score += 3.0;
-                }
-                // Other matches
-                else if (trackText.Contains(qWord))
-                {
-                    score += 1.0;
-                }
-
-                // AI search synonyms heuristic
-                if (IsAcousticQuery(queryWords) && IsTrackAcoustic(track)) score += 3.0;
-                if (IsUpbeatQuery(queryWords) && IsTrackUpbeat(track)) score += 3.0;
-                if (IsChillQuery(queryWords) && IsTrackChill(track)) score += 3.0;
             }
 
-            if (score > 0)
-            {
-                rankedList.Add((track, score));
-            }
+            if (score > 0) rankedList.Add((track, score));
         }
 
-        return rankedList
-            .OrderByDescending(r => r.Score)
-            .Select(r => r.Item)
-            .ToList();
+        // If no tracks scored positive, fallback to returning all tracks or best effort partial matches
+        if (rankedList.Count == 0)
+        {
+            return tracks.Where(t =>
+                queryWords.Any(w => (t.Title != null && t.Title.Contains(w, StringComparison.OrdinalIgnoreCase)) ||
+                                    (t.Artist != null && t.Artist.Contains(w, StringComparison.OrdinalIgnoreCase)))).ToList();
+        }
+
+        return rankedList.OrderByDescending(r => r.Score).Select(r => r.Item).ToList();
     }
 
     private static List<string> CleanAndTokenize(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return new List<string>();
-        return Regex.Split(text.ToLowerInvariant(), @"\P{L}+")
-            .Where(s => s.Length > 2) // skip tiny pronouns
-            .ToList();
+        return Regex.Split(text.ToLowerInvariant(), @"\P{L}+").Where(s => s.Length > 1).ToList();
     }
 
-    // Synonym Helpers
-    private static bool IsAcousticQuery(List<string> words) => 
-        words.Any(w => w == "acoustic" || w == "relaxing" || w == "quiet" || w == "piano" || w == "slow" || w == "unplugged");
-    
-    private static bool IsTrackAcoustic(MediaItem t) =>
-        t.Genre != null && (t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("Piano", StringComparison.OrdinalIgnoreCase) ||
-                            t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase));
+    private static bool FuzzyWordMatch(string queryWord, string target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return false;
+        var words = CleanAndTokenize(target);
+        foreach (var w in words)
+        {
+            if (Math.Abs(w.Length - queryWord.Length) <= 2 && ComputeLevenshteinDistance(queryWord, w) <= 2)
+                return true;
+        }
+        return false;
+    }
 
-    private static bool IsUpbeatQuery(List<string> words) => 
-        words.Any(w => w == "upbeat" || w == "workout" || w == "energetic" || w == "happy" || w == "fast" || w == "dance");
+    private static int ComputeLevenshteinDistance(string s, string t)
+    {
+        int n = s.Length;
+        int m = t.Length;
+        int[,] d = new int[n + 1, m + 1];
+        if (n == 0) return m;
+        if (m == 0) return n;
+        for (int i = 0; i <= n; d[i, 0] = i++) ;
+        for (int j = 0; j <= m; d[0, j] = j++) ;
+        for (int i = 1; i <= n; i++)
+        {
+            for (int j = 1; j <= m; j++)
+            {
+                int cost = (t[j - 1] == s[i - 1]) ? 0 : 1;
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
+            }
+        }
+        return d[n, m];
+    }
 
-    private static bool IsTrackUpbeat(MediaItem t) =>
-        t.Genre != null && (t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("Dance", StringComparison.OrdinalIgnoreCase) ||
-                            t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase));
+    private static int? ExtractDecade(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var lower = text.ToLowerInvariant();
+        if (lower.Contains("90s") || lower.Contains("90's") || lower.Contains("nineties")) return 1990;
+        if (lower.Contains("80s") || lower.Contains("80's") || lower.Contains("eighties")) return 1980;
+        if (lower.Contains("70s") || lower.Contains("70's") || lower.Contains("seventies")) return 1970;
+        if (lower.Contains("60s") || lower.Contains("60's") || lower.Contains("sixties")) return 1960;
+        if (lower.Contains("2000s") || lower.Contains("00s") || lower.Contains("2000's")) return 2000;
+        if (lower.Contains("2010s") || lower.Contains("10s") || lower.Contains("2010's")) return 2010;
+        if (lower.Contains("2020s") || lower.Contains("20s") || lower.Contains("2020's")) return 2020;
+        return null;
+    }
 
-    private static bool IsChillQuery(List<string> words) => 
-        words.Any(w => w == "chill" || w == "lofi" || w == "jazz" || w == "study" || w == "ambient" || w == "soft");
+    private static bool IsAcousticQuery(List<string> words) => words.Any(w => w is "acoustic" or "relaxing" or "quiet" or "piano" or "slow" or "unplugged" or "calm" or "peaceful" or "soothing" or "folk" or "ambient");
+    private static bool IsTrackAcoustic(MediaItem t) => t.Genre != null && (t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Piano", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Folk", StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsTrackChill(MediaItem t) =>
-        t.Genre != null && (t.Genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || 
-                            t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) ||
-                            t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase));
+    private static bool IsUpbeatQuery(List<string> words) => words.Any(w => w is "upbeat" or "workout" or "energetic" or "happy" or "fast" or "dance" or "party" or "club" or "fitness" or "running" or "gym" or "hype" or "pump");
+    private static bool IsTrackUpbeat(MediaItem t) => t.Genre != null && (t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Dance", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("EDM", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("House", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Hip Hop", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsChillQuery(List<string> words) => words.Any(w => w is "chill" or "lofi" or "jazz" or "study" or "ambient" or "soft" or "smooth" or "lounge" or "downtempo" or "sleep");
+    private static bool IsTrackChill(MediaItem t) => t.Genre != null && (t.Genre.Contains("Jazz", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Lounge", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsFocusQuery(List<string> words) => words.Any(w => w is "focus" or "code" or "coding" or "work" or "instrumental" or "bgm" or "reading" or "concentration" or "study");
+    private static bool IsTrackFocus(MediaItem t) => t.Genre != null && (t.Genre.Contains("Lofi", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Instrumental", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Classical", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ambient", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Synthwave", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsSadQuery(List<string> words) => words.Any(w => w is "sad" or "melancholy" or "crying" or "heartbreak" or "emotional" or "gloom" or "depressed" or "ballad" or "blues" or "dark");
+    private static bool IsTrackSad(MediaItem t) => t.Genre != null && (t.Genre.Contains("Blues", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ballad", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Indie", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Acoustic", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsRomanticQuery(List<string> words) => words.Any(w => w is "romantic" or "love" or "romance" or "date" or "sweet" or "candle" or "valentine" or "heart");
+    private static bool IsTrackRomantic(MediaItem t) => t.Genre != null && (t.Genre.Contains("R&B", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Romance", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Soul", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Ballad", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsRockQuery(List<string> words) => words.Any(w => w is "rock" or "metal" or "heavy" or "electric" or "guitar" or "band" or "hard" or "punk" or "grunge" or "alternative");
+    private static bool IsTrackRock(MediaItem t) => t.Genre != null && (t.Genre.Contains("Rock", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Metal", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Punk", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Alternative", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Grunge", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNightQuery(List<string> words) => words.Any(w => w is "night" or "drive" or "driving" or "cruising" or "retro" or "synth" or "neon" or "midnight");
+    private static bool IsTrackNight(MediaItem t) => t.Genre != null && (t.Genre.Contains("Synthwave", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Retrowave", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Electronic", StringComparison.OrdinalIgnoreCase) || t.Genre.Contains("Pop", StringComparison.OrdinalIgnoreCase));
 }

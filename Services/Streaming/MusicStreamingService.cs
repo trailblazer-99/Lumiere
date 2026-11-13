@@ -26,6 +26,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 return data?.Results ?? new List<ITunesTrack>();
             }
@@ -35,7 +36,7 @@ namespace LumiereMediaPlayer.Services.Streaming
                 return new List<ITunesTrack>();
             }
         }
-        
+
         public async Task<List<ITunesTrack>> SearchTracksAsync(string query, int limit = 150)
         {
             if (string.IsNullOrWhiteSpace(query)) return new List<ITunesTrack>();
@@ -44,6 +45,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 return data?.Results ?? new List<ITunesTrack>();
             }
@@ -62,6 +64,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 var results = data?.Results ?? new List<ITunesTrack>();
                 foreach (var t in results)
@@ -86,6 +89,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 var results = data?.Results ?? new List<ITunesTrack>();
                 foreach (var t in results)
@@ -118,12 +122,12 @@ namespace LumiereMediaPlayer.Services.Streaming
                     string[] platforms = { "spotify", "youtube", "appleMusic", "soundcloud", "youtubeMusic", "amazonMusic", "tidal" };
                     foreach (var platform in platforms)
                     {
-                        if (linksByPlatform.TryGetProperty(platform, out var platformElement) && 
+                        if (linksByPlatform.TryGetProperty(platform, out var platformElement) &&
                             platformElement.TryGetProperty("url", out var urlElement))
                         {
-                            providers.Add(new OdesliProvider 
-                            { 
-                                Name = platform, 
+                            providers.Add(new OdesliProvider
+                            {
+                                Name = platform,
                                 Url = urlElement.GetString() ?? string.Empty
                             });
                         }
@@ -145,16 +149,19 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
-                var data = JsonSerializer.Deserialize<ITunesResponse>(response);
-                var results = data?.Results ?? new List<ITunesTrack>();
-                if (results.Count > 0)
+                if (!string.IsNullOrWhiteSpace(response))
                 {
-                    foreach (var t in results)
+                    var data = JsonSerializer.Deserialize<ITunesResponse>(response);
+                    var results = data?.Results ?? new List<ITunesTrack>();
+                    if (results.Count > 0)
                     {
-                        t.TrackName = string.IsNullOrEmpty(t.TrackName) ? t.CollectionName : t.TrackName;
-                        t.TrackViewUrl = string.IsNullOrEmpty(t.TrackViewUrl) ? t.CollectionViewUrl : t.TrackViewUrl;
+                        foreach (var t in results)
+                        {
+                            t.TrackName = string.IsNullOrEmpty(t.TrackName) ? t.CollectionName : t.TrackName;
+                            t.TrackViewUrl = string.IsNullOrEmpty(t.TrackViewUrl) ? t.CollectionViewUrl : t.TrackViewUrl;
+                        }
+                        return results;
                     }
-                    return results;
                 }
             }
             catch (Exception ex)
@@ -176,6 +183,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 return data?.Results ?? new List<ITunesTrack>();
             }
@@ -195,6 +203,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 return data?.Results ?? new List<ITunesTrack>();
             }
@@ -213,6 +222,7 @@ namespace LumiereMediaPlayer.Services.Streaming
             try
             {
                 var response = await HttpClient.GetStringAsync(url);
+                if (string.IsNullOrWhiteSpace(response)) return new List<ITunesTrack>();
                 var data = JsonSerializer.Deserialize<ITunesResponse>(response);
                 return data?.Results ?? new List<ITunesTrack>();
             }

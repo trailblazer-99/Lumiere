@@ -13,24 +13,41 @@ public static class AudioPipelineHelper
     private static readonly Dictionary<string, string> _transcodedCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _cacheLock = new();
 
-    static AudioPipelineHelper()
+    public static string GetSafeTempFolder()
     {
         try
         {
-            var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
-            if (Directory.Exists(tempFolder))
+            return Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+        }
+        catch
+        {
+            return Path.GetTempPath();
+        }
+    }
+
+    public static void CleanupTempTranscodedFiles()
+    {
+        string tempFolder = GetSafeTempFolder();
+        if (string.IsNullOrEmpty(tempFolder)) return;
+
+        Task.Run(() =>
+        {
+            try
             {
-                foreach (var file in Directory.GetFiles(tempFolder, "transcoded_*"))
+                if (Directory.Exists(tempFolder))
                 {
-                    try
+                    foreach (var file in Directory.GetFiles(tempFolder, "transcoded_*"))
                     {
-                        File.Delete(file);
+                        try
+                        {
+                            File.Delete(file);
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
-        }
-        catch { }
+            catch { }
+        });
     }
 
     public static async Task<string?> GetPlayableFileAsync(string sourcePath)
@@ -38,7 +55,7 @@ public static class AudioPipelineHelper
         if (string.IsNullOrEmpty(sourcePath)) return null;
 
         // If it's a web URL, return as-is
-        if (Uri.TryCreate(sourcePath, UriKind.Absolute, out var uri) && 
+        if (Uri.TryCreate(sourcePath, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
             return sourcePath;
@@ -63,15 +80,32 @@ public static class AudioPipelineHelper
 
             lock (_cacheLock)
             {
-                if (_transcodedCache.Count > 10) { _transcodedCache.Clear(); }
                 if (_transcodedCache.TryGetValue(key, out var cachedPath) && File.Exists(cachedPath))
                 {
                     return cachedPath;
                 }
+                if (_transcodedCache.Count >= 10)
+                {
+                    var oldestKey = default(string);
+                    foreach (var kvp in _transcodedCache)
+                    {
+                        if (!string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase))
+                        {
+                            oldestKey = kvp.Key;
+                            break;
+                        }
+                    }
+                    if (oldestKey != null)
+                    {
+                        var oldPath = _transcodedCache[oldestKey];
+                        _transcodedCache.Remove(oldestKey);
+                        try { if (File.Exists(oldPath)) File.Delete(oldPath); } catch { }
+                    }
+                }
             }
 
             // Create a unique temporary file path in the application's temporary folder
-            var tempFolder = Windows.Storage.ApplicationData.Current.TemporaryFolder.Path;
+            var tempFolder = GetSafeTempFolder();
             var safeName = GetSafeFilename(sourcePath);
             var tempPath = Path.Combine(tempFolder, $"transcoded_{Guid.NewGuid():N}_{safeName}.wav");
 
@@ -142,8 +176,8 @@ public static class AudioPipelineHelper
             using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
             using var writer = new BinaryWriter(fs);
 
-            // Write dummy WAV header first (44 bytes)
-            byte[] dummyHeader = new byte[44];
+            // Reserve exact WAV header size (68 bytes for >2ch extensible WAV, 44 bytes for <=2ch PCM)
+            byte[] dummyHeader = new byte[GetWavHeaderSize(channels)];
             writer.Write(dummyHeader);
 
             float[] readBuffer = new float[channels * sampleRate]; // 1 second buffer
@@ -196,8 +230,8 @@ public static class AudioPipelineHelper
             using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
             using var writer = new BinaryWriter(fs);
 
-            // Write dummy WAV header first (44 bytes)
-            byte[] dummyHeader = new byte[44];
+            // Reserve exact WAV header size (68 bytes for >2ch extensible WAV, 44 bytes for <=2ch PCM)
+            byte[] dummyHeader = new byte[GetWavHeaderSize(channels)];
             writer.Write(dummyHeader);
 
             int totalSamples = 0;
@@ -232,6 +266,8 @@ public static class AudioPipelineHelper
         }
     }
 
+    internal static int GetWavHeaderSize(int channels) => channels > 2 ? 68 : 44;
+
     private static void WriteWavHeader(Stream stream, ushort channels, ushort bitsPerSample, int sampleRate, int totalSamples)
     {
         using var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
@@ -249,7 +285,7 @@ public static class AudioPipelineHelper
         // "fmt " sub-chunk
         writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
         writer.Write(pcmChunkSize);
-        
+
         ushort formatTag = useExtensible ? (ushort)0xFFFE : (ushort)1;
         writer.Write(formatTag);
         writer.Write(channels);

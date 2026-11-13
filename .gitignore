@@ -27,8 +27,8 @@ _Package/
 
 ## Configuration / Secrets (DO NOT COMMIT to Git)
 Package.StoreAssociation.xml
-appsettings.json
 local.settings.json
+appsettings.json
 private.ec.key
 public.pem
 
@@ -52,6 +52,8 @@ __pycache__/
 
 ## One-off Migration & Generation Scripts (DO NOT COMMIT)
 Scripts/
+!scripts/
+!scripts/*
 
 ## OS Files
 Thumbs.db
@@ -63,6 +65,15 @@ deploy/
 
 ## Agent / AI Rules & Customizations
 .agents/
+.github/agents/
+*.agent.md
 AGENTS.md
 Agent.md
 AGENTS.override.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.windsurf/
+.clonerules
+.copilot/

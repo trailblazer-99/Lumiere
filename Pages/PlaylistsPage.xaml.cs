@@ -13,50 +13,62 @@ public sealed partial class PlaylistsPage : Page
     public PlaylistsPage()
     {
         InitializeComponent();
-        try
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+    }
+
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        UpdateEmptyState();
+    }
+
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlaylistsViewModel.Playlists))
         {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.Opacity = 0f;
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
         }
-        catch { }
+    }
+
+    private void UpdateEmptyState()
+    {
+        if (PlaylistEmptyState == null || PlaylistsItemsRepeater == null) return;
+        bool hasPlaylists = ViewModel.Playlists.Count > 0;
+        PlaylistsItemsRepeater.Visibility = hasPlaylists ? Visibility.Visible : Visibility.Collapsed;
+        PlaylistEmptyState.Visibility = hasPlaylists ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        UpdateEmptyState();
+        PageContent.Opacity = 1.0;
+    }
+
+    private async void OnCreatePlaylistClick(object sender, RoutedEventArgs e)
+    {
         try
         {
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                try
-                {
-                    var v = ElementCompositionPreview.GetElementVisual(PageContent);
-                    v.Opacity = 1f;
-                }
-                catch { }
-                PageContent.Opacity = 1.0;
-                return;
-            }
-
-            ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            var fadeAnimation = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnimation.InsertKeyFrame(0f, 0f);
-            fadeAnimation.InsertKeyFrame(1f, 1f);
-            fadeAnimation.Duration = TimeSpan.FromMilliseconds(400);
-            visual.StartAnimation("Opacity", fadeAnimation);
-
-            var slideAnimation = compositor.CreateVector3KeyFrameAnimation();
-            slideAnimation.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 24, 0));
-            slideAnimation.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0));
-            slideAnimation.Duration = TimeSpan.FromMilliseconds(450);
-            visual.StartAnimation("Translation", slideAnimation);
+            await Helpers.MediaFlyoutHelper.ShowNewPlaylistDialogAsync(System.Linq.Enumerable.Empty<LumiereMediaPlayer.Models.MediaItem>(), this.XamlRoot);
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to animate PlaylistsPage entrance: {ex.Message}");
-            PageContent.Opacity = 1.0;
+            System.Diagnostics.Debug.WriteLine($"[PlaylistsPage] OnCreatePlaylistClick error: {ex.Message}");
+        }
+    }
+
+    private void OnPlayPlaylistClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is LumiereMediaPlayer.Models.Playlist playlist)
+        {
+            ViewModel.PlayPlaylistCommand.Execute(playlist);
         }
     }
 }

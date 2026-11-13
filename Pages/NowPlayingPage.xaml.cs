@@ -11,6 +11,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Linq;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using LumiereMediaPlayer.Services.Streaming;
 
 namespace LumiereMediaPlayer.Pages;
@@ -24,17 +25,12 @@ public sealed partial class NowPlayingPage : Page
     public NowPlayingPage()
     {
         InitializeComponent();
-        try
-        {
-            var contentVisual = ElementCompositionPreview.GetElementVisual(ContentGrid);
-            contentVisual.Opacity = 0f;
-            var lyricsVisual = ElementCompositionPreview.GetElementVisual(LyricsCard);
-            lyricsVisual.Opacity = 0f;
-        }
-        catch { }
-        
+
         _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
         ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+
+        this.Unloaded += OnPageUnloaded;
+        this.SizeChanged += OnPageSizeChanged;
 
         ApplyAccentColor(ViewModel.AccentColor);
         SetupVisualizer();
@@ -48,6 +44,72 @@ public sealed partial class NowPlayingPage : Page
         {
             ShowNoLyrics();
         }
+        UpdateEmptyState();
+        UpdateResponsiveLayout(this.ActualWidth, this.ActualHeight);
+    }
+
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateResponsiveLayout(e.NewSize.Width, e.NewSize.Height);
+    }
+
+    private double _lastLayoutWidth;
+    private double _lastLayoutHeight;
+
+    private void UpdateResponsiveLayout(double width, double height)
+    {
+        if (width <= 0 || ContentGrid == null) return;
+        if (Math.Abs(width - _lastLayoutWidth) < 2.0 && Math.Abs(height - _lastLayoutHeight) < 2.0) return;
+        _lastLayoutWidth = width;
+        _lastLayoutHeight = height;
+
+        bool isCompact = width < 768.0;
+        double targetArtSize = isCompact ? Math.Clamp(Math.Min(width * 0.45, (height > 0 ? height : 600) * 0.40), 180.0, 280.0) : 340.0;
+
+        if (HeroArtGrid != null)
+        {
+            HeroArtGrid.Width = targetArtSize;
+            HeroArtGrid.Height = targetArtSize;
+        }
+        if (HeroAlbumArt != null)
+        {
+            HeroAlbumArt.Width = targetArtSize;
+            HeroAlbumArt.Height = targetArtSize;
+        }
+        if (MetadataOverlay != null)
+        {
+            MetadataOverlay.Width = targetArtSize;
+            MetadataOverlay.Height = targetArtSize;
+        }
+        if (AlbumArtContainer != null)
+        {
+            AlbumArtContainer.Margin = isCompact ? new Thickness(0, 0, 16, 0) : new Thickness(0, 0, 40, 0);
+        }
+        if (LyricsCard != null && height > 0)
+        {
+            LyricsCard.Height = isCompact ? Math.Clamp(height - targetArtSize - 180.0, 140.0, 240.0) : 240.0;
+        }
+        if (ContentGrid != null)
+        {
+            ContentGrid.Margin = isCompact ? new Thickness(16, 0, 16, 24) : new Thickness(32, 0, 32, 24);
+        }
+    }
+
+    private void UpdateEmptyState()
+    {
+        if (IdleEmptyState == null || ContentGrid == null) return;
+        bool isPlaying = AppServices.PlaybackViewModel.CurrentTrack != null;
+        ContentGrid.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        if (AmbientArtworkHost != null)
+        {
+            AmbientArtworkHost.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        }
+        IdleEmptyState.Visibility = isPlaying ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnIdleOpenFileClick(object sender, RoutedEventArgs e)
+    {
+        _ = App.MainWindowInstance?.OpenFilePickerAndPlay();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -58,6 +120,7 @@ public sealed partial class NowPlayingPage : Page
         }
         else if (e.PropertyName is nameof(NowPlayingViewModel.Title))
         {
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
             var currentTrack = AppServices.PlaybackViewModel.CurrentTrack;
             if (currentTrack != null)
             {
@@ -77,8 +140,67 @@ public sealed partial class NowPlayingPage : Page
         GradientStart.Color = color;
     }
 
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (_viewModelPropertyChangedHandler == null)
+        {
+            _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
+            ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+        }
+    }
+
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        CleanupResources();
+    }
+
+    private void OnPageUnloaded(object sender, RoutedEventArgs e)
+    {
+        CleanupResources();
+    }
+
+    private void CleanupResources()
+    {
+        this.SizeChanged -= OnPageSizeChanged;
+
+        if (_viewModelPropertyChangedHandler != null)
+        {
+            ViewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
+            _viewModelPropertyChangedHandler = null;
+        }
+
+        try
+        {
+            _visualizerTimer?.Stop();
+        }
+        catch { }
+
+        try
+        {
+            if (this.Resources["AmbientAnimation"] is Microsoft.UI.Xaml.Media.Animation.Storyboard ambientStory)
+            {
+                ambientStory.Stop();
+            }
+        }
+        catch { }
+    }
+
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        if (_viewModelPropertyChangedHandler == null)
+        {
+            _viewModelPropertyChangedHandler = OnViewModelPropertyChanged;
+            ViewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+        }
+
+        if (AppServices.PlaybackViewModel.IsPlaying)
+        {
+            _visualizerTimer?.Start();
+        }
+
+        UpdateEmptyState();
         PlayEntranceAnimation();
 
         try
@@ -110,15 +232,12 @@ public sealed partial class NowPlayingPage : Page
                 return;
             }
 
-            ElementCompositionPreview.SetIsTranslationEnabled(ContentGrid, true);
-            ElementCompositionPreview.SetIsTranslationEnabled(LyricsCard, true);
-
             var contentVisual = ElementCompositionPreview.GetElementVisual(ContentGrid);
             var compositor = contentVisual.Compositor;
 
             // Main content fade + slide
             var easing = compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f));
+                new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.0f, 1.0f));
 
             var fadeIn = compositor.CreateScalarKeyFrameAnimation();
             fadeIn.InsertKeyFrame(0f, 0f);
@@ -130,7 +249,7 @@ public sealed partial class NowPlayingPage : Page
             slideUp.InsertKeyFrame(0f, new System.Numerics.Vector3(0, 40, 0));
             slideUp.InsertKeyFrame(1f, System.Numerics.Vector3.Zero, easing);
             slideUp.Duration = TimeSpan.FromMilliseconds(600);
-            contentVisual.StartAnimation("Translation", slideUp);
+            contentVisual.StartAnimation("Offset", slideUp);
 
             // Album art — subtle scale-in
             try
@@ -166,7 +285,7 @@ public sealed partial class NowPlayingPage : Page
                 lyricsSlide.DelayTime = TimeSpan.FromMilliseconds(300);
 
                 lyricsVisual.StartAnimation("Opacity", lyricsFade);
-                lyricsVisual.StartAnimation("Translation", lyricsSlide);
+                lyricsVisual.StartAnimation("Offset", lyricsSlide);
             }
             catch (System.Exception ex)
             {
@@ -182,44 +301,58 @@ public sealed partial class NowPlayingPage : Page
         }
     }
 
-    public async void ToggleMetadataOverlay()
+    public async Task ToggleMetadataOverlay()
     {
-        if (MetadataOverlay.Visibility == Visibility.Visible)
+        try
         {
-            MetadataOverlay.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            MetadataOverlay.Visibility = Visibility.Visible;
-            InternetMetadataPanel.Children.Clear();
-            
-            var title = ViewModel.Title ?? "";
-            var artist = ViewModel.Artist ?? "";
-            
-            if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(artist))
+            try
             {
-                var results = await _musicService.SearchTracksAsync($"{title} {artist}");
-                if (results != null && results.Count > 0)
+                if (MetadataOverlay.Visibility == Visibility.Visible)
                 {
-                    var track = results[0];
-                    RenderProviders(track.TrackName, track.ArtistName);
+                    MetadataOverlay.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
-                    RenderProviders(title, artist);
+                    MetadataOverlay.Visibility = Visibility.Visible;
+                    InternetMetadataPanel.Children.Clear();
+
+                    var title = ViewModel.Title ?? "";
+                    var artist = ViewModel.Artist ?? "";
+
+                    if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(artist))
+                    {
+                        var results = await _musicService.SearchTracksAsync($"{title} {artist}");
+                        if (results != null && results.Count > 0)
+                        {
+                            var track = results[0];
+                            RenderProviders(track.TrackName, track.ArtistName, track.CollectionName);
+                        }
+                        else
+                        {
+                            RenderProviders(title, artist, ViewModel.Album);
+                        }
+                    }
                 }
             }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in ToggleMetadataOverlay: {ex.Message}");
         }
     }
 
-    private void RenderProviders(string trackName, string artistName)
+    private void RenderProviders(string trackName, string artistName, string? albumName = null)
     {
         InternetMetadataPanel.Children.Clear();
 
-        var header = new TextBlock 
-        { 
-            Text = "Listen on", 
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, 
+        // Warm up true Spotify deep link in background
+        _ = LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(trackName, "track", artistName, albumName);
+
+        var header = new TextBlock
+        {
+            Text = "Listen on",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             FontSize = 18,
             Margin = new Thickness(0, 0, 0, 12)
         };
@@ -249,28 +382,28 @@ public sealed partial class NowPlayingPage : Page
             {
                 Padding = new Thickness(12),
                 CornerRadius = new CornerRadius(8),
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background = ThemeResourceHelper.GetThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush = ThemeResourceHelper.GetThemeBrush("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
 
             var contentPanel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            
-            var img = new Image 
-            { 
+
+            var img = new Image
+            {
                 Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(p.Icon)) { DecodePixelWidth = 48 },
                 Width = 48,
                 Height = 48,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
             };
-            
-            var text = new TextBlock 
-            { 
-                Text = p.Name, 
-                FontSize = 12, 
-                HorizontalAlignment = HorizontalAlignment.Center 
+
+            var text = new TextBlock
+            {
+                Text = p.Name,
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
 
             contentPanel.Children.Add(img);
@@ -286,6 +419,7 @@ public sealed partial class NowPlayingPage : Page
             switch (p.Name.ToLower())
             {
                 case "spotify":
+                    // Spotify deep link is resolved dynamically on click and pre-warmed above
                     deepLinkUrl = $"spotify:search:{q}";
                     searchWebUrl = $"https://open.spotify.com/search/{q}";
                     break;
@@ -314,16 +448,31 @@ public sealed partial class NowPlayingPage : Page
                 case "pandora":
                     searchWebUrl = $"https://www.pandora.com/search/{q}/all";
                     break;
-                default: 
+                default:
                     string cleanName = p.Name.ToLower().Replace(" ", "");
-                    searchWebUrl = $"https://{cleanName}.com/search?q={q}"; 
+                    searchWebUrl = $"https://{cleanName}.com/search?q={q}";
                     break;
             }
-            
-            btn.Click += async (s, args) => 
-            { 
-                Uri? nativeUri = !string.IsNullOrEmpty(deepLinkUrl) ? new Uri(deepLinkUrl) : null;
-                await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
+
+            btn.Click += async (s, args) =>
+            {
+                try
+                {
+                    if (p.Name.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var (spotifyNative, spotifyWeb) = await LumiereMediaPlayer.Helpers.SpotifyDeepLinkHelper.ResolveSpotifyDeepLinkAsync(
+                            trackName,
+                            "track",
+                            artistName,
+                            albumName);
+                        await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(spotifyNative, spotifyWeb);
+                        return;
+                    }
+
+                    Uri? nativeUri = !string.IsNullOrEmpty(deepLinkUrl) ? new Uri(deepLinkUrl) : null;
+                    await LumiereMediaPlayer.Helpers.StreamingRouter.LaunchStreamUriAsync(nativeUri, searchWebUrl);
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
             };
 
             Grid.SetColumn(btn, col);
@@ -468,7 +617,7 @@ public sealed partial class NowPlayingPage : Page
     {
         _lyrics.Clear();
         _currentLyricIndex = -1;
-        
+
         if (LyricsListView != null)
         {
             LyricsListView.ItemsSource = null;
@@ -491,7 +640,7 @@ public sealed partial class NowPlayingPage : Page
 
             var lines = File.ReadAllLines(lrcPath);
             var tempLyrics = new List<LyricLine>();
-            
+
             // Matches [mm:ss.xx] or [mm:ss:xx] or [h:mm:ss.xx]
             var lrcRegex = new Regex(@"^\[(\d+):(\d+)(?:[.:](\d+))?\](.*)$");
 
@@ -562,59 +711,80 @@ public sealed partial class NowPlayingPage : Page
 
     private async void OnTranslateLyricsClick(object sender, RoutedEventArgs e)
     {
-        if (_lyrics == null || _lyrics.Count == 0) return;
-
-        bool hasAnyTranslation = _lyrics.Any(l => !string.IsNullOrEmpty(l.Translation));
-        if (hasAnyTranslation)
-        {
-            foreach (var line in _lyrics)
-            {
-                line.Translation = string.Empty;
-            }
-            if (LyricsListView != null)
-            {
-                LyricsListView.ItemsSource = null;
-                LyricsListView.ItemsSource = _lyrics;
-            }
-            return;
-        }
-
-        if (TranslateLyricsButton != null)
-        {
-            TranslateLyricsButton.IsEnabled = false;
-        }
-
         try
         {
-            var rawLines = _lyrics.Select(l => l.Text).ToList();
-            var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
-            var currentTrackId = AppServices.PlaybackViewModel.CurrentTrack?.Id ?? "temp";
-            
-            var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
-            if (translations != null && translations.Count == _lyrics.Count)
+            try
             {
-                for (int i = 0; i < _lyrics.Count; i++)
+                if (_lyrics == null || _lyrics.Count == 0) return;
+
+                bool hasAnyTranslation = _lyrics.Any(l => !string.IsNullOrEmpty(l.Translation));
+                if (hasAnyTranslation)
                 {
-                    _lyrics[i].Translation = translations[i];
+                    foreach (var line in _lyrics)
+                    {
+                        line.Translation = string.Empty;
+                    }
+                    if (LyricsListView != null)
+                    {
+                        LyricsListView.ItemsSource = null;
+                        LyricsListView.ItemsSource = _lyrics;
+                    }
+                    return;
+                }
+
+                if (TranslateLyricsButton != null)
+                {
+                    TranslateLyricsButton.IsEnabled = false;
+                }
+
+                try
+                {
+                    var rawLines = _lyrics.Select(l => l.Text).ToList();
+                    var targetLang = AppServices.Settings.Current.AiTranslationTargetLanguage;
+                    var currentTrack = AppServices.PlaybackViewModel.CurrentTrack;
+                    var currentTrackId = !string.IsNullOrWhiteSpace(currentTrack?.Id)
+                        ? currentTrack.Id
+                        : $"lyrics_{string.Concat(rawLines.Take(3)).GetHashCode():X8}";
+
+                    var translations = await Services.AiAssistantService.TranslateLyricsAsync(currentTrackId, rawLines, targetLang);
+
+                    // Ensure track has not changed during async translation
+                    if (AppServices.PlaybackViewModel.CurrentTrack?.Id != currentTrack?.Id || _lyrics == null)
+                    {
+                        return;
+                    }
+
+                    if (translations != null && translations.Count == _lyrics.Count)
+                    {
+                        for (int i = 0; i < _lyrics.Count; i++)
+                        {
+                            _lyrics[i].Translation = translations[i];
+                        }
+                    }
+
+                    if (LyricsListView != null)
+                    {
+                        LyricsListView.ItemsSource = null;
+                        LyricsListView.ItemsSource = _lyrics;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Translation failed: {ex.Message}");
+                }
+                finally
+                {
+                    if (TranslateLyricsButton != null)
+                    {
+                        TranslateLyricsButton.IsEnabled = true;
+                    }
                 }
             }
-
-            if (LyricsListView != null)
-            {
-                LyricsListView.ItemsSource = null;
-                LyricsListView.ItemsSource = _lyrics;
-            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}"); }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Translation failed: {ex.Message}");
-        }
-        finally
-        {
-            if (TranslateLyricsButton != null)
-            {
-                TranslateLyricsButton.IsEnabled = true;
-            }
+            System.Diagnostics.Debug.WriteLine($"Exception in OnTranslateLyricsClick: {ex.Message}");
         }
     }
 
@@ -679,14 +849,14 @@ public sealed partial class NowPlayingPage : Page
         {
             if (isActive)
             {
-                textBlock.Foreground = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                textBlock.Foreground = ThemeResourceHelper.GetThemeBrush("AccentFillColorDefaultBrush");
                 textBlock.Opacity = 1.0;
                 textBlock.FontSize = 16;
                 textBlock.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
             }
             else
             {
-                textBlock.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                textBlock.Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush");
                 textBlock.Opacity = 0.4;
                 textBlock.FontSize = 13;
                 textBlock.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
@@ -696,19 +866,24 @@ public sealed partial class NowPlayingPage : Page
 
     private static T? FindVisualChild<T>(DependencyObject obj) where T : DependencyObject
     {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
+        if (obj == null) return null;
+        try
         {
-            var child = VisualTreeHelper.GetChild(obj, i);
-            if (child is T t)
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
             {
-                return t;
-            }
-            var childOfChild = FindVisualChild<T>(child);
-            if (childOfChild != null)
-            {
-                return childOfChild;
+                var child = VisualTreeHelper.GetChild(obj, i);
+                if (child is T t)
+                {
+                    return t;
+                }
+                var childOfChild = FindVisualChild<T>(child);
+                if (childOfChild != null)
+                {
+                    return childOfChild;
+                }
             }
         }
+        catch { }
         return null;
     }
 }

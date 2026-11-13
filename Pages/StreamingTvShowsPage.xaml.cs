@@ -13,16 +13,68 @@ namespace LumiereMediaPlayer.Pages
     {
         public StreamingTvShowsViewModel ViewModel { get; } = AppServices.StreamingTvShowsViewModel;
 
+        public Visibility GetDiscoverEmptyState(bool isLoading, bool hasError) =>
+            (ViewModel.TvShows != null && ViewModel.TvShows.Count == 0 && !isLoading && !hasError) ? Visibility.Visible : Visibility.Collapsed;
+
         public StreamingTvShowsPage()
         {
             this.InitializeComponent();
+            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Disabled;
             this.DataContext = this;
-            try
+            this.Loaded += (s, e) =>
             {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-                visual.Opacity = 0f;
+                LumiereMediaPlayer.Helpers.ComboBoxHelper.ApplyBackdropToVisualTree(this);
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.SetupStackedAccordionButtons(new[]
+                {
+                    VerticalResetButton,
+                    VerticalSurpriseButton,
+                    VerticalRefreshButton
+                }, 50f, 1.08f);
+                LumiereMediaPlayer.Helpers.SpringAnimationHelper.SetupStackedAccordionButtons(new[]
+                {
+                    VerticalTopRatedButton,
+                    VerticalFreeButton
+                }, 50f, 1.08f);
+            };
+            this.Unloaded += OnUnloaded;
+            ViewModel.OnSurpriseMeRequested += OnSurpriseMePicked;
+            TrendingHeroCarousel.Loaded += (s, e) => CollapseInternalFlipViewButtons(TrendingHeroCarousel);
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            this.Unloaded -= OnUnloaded;
+            ViewModel.OnSurpriseMeRequested -= OnSurpriseMePicked;
+            try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+            _searchSuggestCts = null;
+            if (_heroTimer != null)
+            {
+                _heroTimer.Stop();
+                _heroTimer.Tick -= OnHeroTimerTick;
+                _heroTimer = null;
             }
-            catch { }
+            if (TrendingHeroCarousel != null) TrendingHeroCarousel.ItemsSource = null;
+            if (TrendingGridView != null) TrendingGridView.ItemsSource = null;
+            if (LibraryGridView != null) LibraryGridView.ItemsSource = null;
+        }
+
+        private void OnSurpriseMePicked(WatchmodeTitle tvShow)
+        {
+            if (tvShow == null) return;
+            if (tvShow.TmdbId.HasValue && (tvShow.Id == 0 || tvShow.Id == tvShow.TmdbId.Value))
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tvShow.TmdbId.Value}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+            }
+            else
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+            }
+        }
+
+        protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+        {
+            base.OnNavigatedFrom(e);
+            _heroTimer?.Stop();
         }
 
         private readonly WatchmodeService _watchmodeService = new();
@@ -32,10 +84,18 @@ namespace LumiereMediaPlayer.Pages
             try
             {
                 base.OnNavigatedTo(e);
-                
+
+                // Sweep for any orphaned Apple TV background remnants if previously closed
+                AppleTvLifecycleService.Instance.CleanupIfOrphaned();
+
                 // Refresh library items in case we are returning from Details Page where they changed
                 RefreshLibraryList();
-                
+
+                if (MainPivot?.SelectedIndex == 2)
+                {
+                    _heroTimer?.Start();
+                }
+
                 if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
                 {
                     // Preserve search results, active filters, and pivot tabs when returning from Details Page
@@ -56,41 +116,76 @@ namespace LumiereMediaPlayer.Pages
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnNavigatedTo error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Exception in OnNavigatedTo: {ex.Message}");
             }
         }
+
+        private System.Threading.CancellationTokenSource? _searchSuggestCts;
 
         private async void OnSearchBoxTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
-            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+            try
             {
-                string query = sender.Text;
-                if (query.Length >= 3)
+                if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
                 {
-                    try
+                    try { _searchSuggestCts?.Cancel(); _searchSuggestCts?.Dispose(); } catch { }
+                    string query = sender.Text ?? string.Empty;
+                    if (query.Length >= 3)
                     {
-                        var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
-                        sender.ItemsSource = suggestions;
+                        var cts = new System.Threading.CancellationTokenSource();
+                        _searchSuggestCts = cts;
+                        try
+                        {
+                            await System.Threading.Tasks.Task.Delay(250, cts.Token);
+                            var suggestions = await ViewModel.WatchmodeSearchSuggestionsAsync(query);
+                            if (!cts.IsCancellationRequested && sender.Text == query)
+                            {
+                                sender.ItemsSource = suggestions;
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] Suggestion error: {ex.Message}");
+                        }
                     }
-                    catch { }
+                    else
+                    {
+                        sender.ItemsSource = null;
+                    }
                 }
-                else
-                {
-                    sender.ItemsSource = null;
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in OnSearchBoxTextChanged: {ex.Message}");
             }
         }
 
-        private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        private void OnSearchBoxSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
         {
-            string? query = args.ChosenSuggestion != null ? args.ChosenSuggestion.ToString() : args.QueryText;
-            if (!string.IsNullOrWhiteSpace(query))
+            if (args.SelectedItem != null)
             {
-                ViewModel.PerformSearchCommand.Execute(query);
+                sender.Text = args.SelectedItem.ToString();
             }
-            else
+        }
+
+        private void OnSearchBoxQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs? args)
+        {
+            try
             {
-                ViewModel.PerformSearchCommand.Execute(string.Empty);
+                string? query = args?.ChosenSuggestion != null ? args.ChosenSuggestion.ToString() : (args?.QueryText ?? sender?.Text);
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    ViewModel.PerformSearchCommand.Execute(query);
+                }
+                else
+                {
+                    ViewModel.PerformSearchCommand.Execute(string.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StreamingTvShowsPage] OnSearchBoxQuerySubmitted error: {ex.Message}");
             }
         }
 
@@ -110,45 +205,64 @@ namespace LumiereMediaPlayer.Pages
         private void TriggerRegionReload()
         {
             if (ViewModel == null) return;
-            if (string.IsNullOrEmpty(ViewModel.ActiveSearchQuery)) _ = ViewModel.LoadTvShowsAsync();
-            else ViewModel.PerformSearchCommand.Execute(ViewModel.ActiveSearchQuery);
+            if (MainPivot?.SelectedItem is PivotItem pi && pi.Header?.ToString() == "Trending")
+            {
+                _ = LoadTrendingAsync();
+            }
+        }
+
+        private void OnAiSearchToggleChecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiCheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, true);
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                OnSearchBoxQuerySubmitted(SearchBox, null!);
+            }
+        }
+
+        private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
+        {
+            if (AiSearchIcon != null)
+                AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
+            LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
+            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            {
+                OnSearchBoxQuerySubmitted(SearchBox, null!);
+            }
+        }
+
+        private void OnResetFiltersClick(object sender, RoutedEventArgs e)
+        {
+            if (SearchBox != null)
+            {
+                SearchBox.Text = string.Empty;
+            }
         }
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(PageContent);
-            var compositor = visual.Compositor;
-
-            if (AppServices.Settings.Current.ReduceMotion)
-            {
-                visual.Opacity = 1f;
-                visual.Offset = new System.Numerics.Vector3(0, 0, 0);
-                PageContent.Opacity = 1.0;
-                return;
-            }
-
-            visual.Opacity = 0f;
-            visual.Offset = new System.Numerics.Vector3(0, 20, 0);
-
-            var fadeAnim = compositor.CreateScalarKeyFrameAnimation();
-            fadeAnim.InsertKeyFrame(1f, 1f, compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            fadeAnim.Duration = TimeSpan.FromMilliseconds(400);
-
-            var slideAnim = compositor.CreateVector3KeyFrameAnimation();
-            slideAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(0, 0, 0), compositor.CreateCubicBezierEasingFunction(
-                new System.Numerics.Vector2(0.1f, 0.9f), new System.Numerics.Vector2(0.2f, 1f)));
-            slideAnim.Duration = TimeSpan.FromMilliseconds(500);
-
-            visual.StartAnimation("Opacity", fadeAnim);
-            visual.StartAnimation("Offset", slideAnim);
+            PageContent.Opacity = 1.0;
         }
+
+        private DateTime _lastTvShowClickTime = DateTime.MinValue;
 
         private void OnTvShowClicked(object sender, ItemClickEventArgs e)
         {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
             if (e.ClickedItem is WatchmodeTitle tvShow)
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion));
+                if (tvShow.TmdbId.HasValue && (tvShow.Id == 0 || tvShow.Id == tvShow.TmdbId.Value))
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tvShow.TmdbId.Value}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                }
+                else
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), (tvShow.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                }
             }
         }
 
@@ -172,62 +286,272 @@ namespace LumiereMediaPlayer.Pages
                 }
             }
 
-            LibraryGridView.ItemsSource = System.Linq.Enumerable.ToList(allItems);
-        }
-
-        private async void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (sender != e.OriginalSource) return;
-            if (e.AddedItems.Count > 0 && e.AddedItems[0] is PivotItem pivotItem)
+            var list = System.Linq.Enumerable.ToList(allItems);
+            LibraryGridView.ItemsSource = list;
+            if (LibraryEmptyStatePanel != null)
             {
-                string header = pivotItem.Header?.ToString() ?? string.Empty;
-                if (header == "Library")
-                {
-                    RefreshLibraryList();
-                }
-                else if (header == "Catalog Changes")
-                {
-                    await LoadCatalogChangesAsync();
-                }
+                LibraryEmptyStatePanel.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
-        private async System.Threading.Tasks.Task LoadCatalogChangesAsync()
-        {
-            if (CatalogChangesListView == null) return;
 
+        private async void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
             try
             {
-                string startDate = DateTime.Today.AddDays(-5).ToString("yyyyMMdd");
-                string endDate = DateTime.Today.ToString("yyyyMMdd");
-                var changesResponse = await _watchmodeService.GetChangesAsync(startDate, endDate);
-
-                if (changesResponse?.Changes != null)
+                var selectedItem = MainPivot.SelectedItem as PivotItem;
+                string header = selectedItem?.Header?.ToString() ?? string.Empty;
+                if (header == "Library")
                 {
-                    var filteredChanges = System.Linq.Enumerable.ToList(
-                        System.Linq.Enumerable.Where(changesResponse.Changes, c => c.Type == "tv")
-                    );
-                    CatalogChangesListView.ItemsSource = filteredChanges;
+                    _heroTimer?.Stop();
+                    RefreshLibraryList();
+                }
+                else if (header == "Trending")
+                {
+                    _heroTimer?.Start();
+                    await LoadTrendingAsync();
+                }
+                else
+                {
+                    _heroTimer?.Stop();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in MainPivot_SelectionChanged: {ex.Message}");
+            }
+        }
+
+        private readonly TmdbService _tmdbService = new();
+
+        private DispatcherTimer? _heroTimer;
+
+        private async System.Threading.Tasks.Task LoadTrendingAsync()
+        {
+            try
+            {
+                int retries = 0;
+                while ((TrendingGridView == null || TrendingHeroCarousel == null) && retries < 20)
+                {
+                    await System.Threading.Tasks.Task.Delay(50);
+                    retries++;
+                }
+                if (TrendingGridView == null || TrendingHeroCarousel == null) return;
+
+                string targetRegion = ViewModel?.SelectedRegion ?? "US";
+                var popularTvShows = await _tmdbService.GetStreamablePopularTvShowsAsync(1, targetRegion);
+                if (popularTvShows == null || popularTvShows.Count == 0) return;
+
+                // Verify streaming provider availability in target region
+                var checkTasks = popularTvShows.Select(async s =>
+                {
+                    try
+                    {
+                        var prov = await _tmdbService.GetProvidersAsync(s.Id, "tv", targetRegion);
+                        if (TmdbService.HasStreamingProviders(prov)) return s;
+                    }
+                    catch { }
+                    return null;
+                });
+                var verified = (await System.Threading.Tasks.Task.WhenAll(checkTasks)).Where(s => s != null).Select(s => s!).ToList();
+                var finalTvShows = verified.Count >= 5 ? verified : popularTvShows;
+
+                var heroItems = finalTvShows.Take(5).ToList();
+                var gridItems = finalTvShows.Skip(5).ToList();
+
+                TrendingHeroCarousel.ItemsSource = heroItems;
+                TrendingGridView.ItemsSource = gridItems;
+
+                if (_heroTimer == null)
+                {
+                    _heroTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                    _heroTimer.Tick += OnHeroTimerTick;
+                }
+                _heroTimer.Start();
+                CollapseInternalFlipViewButtons(TrendingHeroCarousel);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadTrendingAsync TV shows error: {ex.Message}");
+            }
+        }
+
+        private void OnHeroTimerTick(object? sender, object e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel != null && TrendingHeroCarousel.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    TrendingHeroCarousel.SelectedIndex = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
                 }
             }
             catch { }
         }
 
-        private void OnCatalogChangeItemClick(object sender, ItemClickEventArgs e)
+        private void CollapseInternalFlipViewButtons(DependencyObject? parent)
         {
-            if (e.ClickedItem is WatchmodeChangeItem changeItem)
+            if (parent == null) return;
+            try
             {
-                Frame.Navigate(typeof(StreamingDetailsPage), (changeItem.Id, ViewModel.SelectedRegion));
+                int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < count; i++)
+                {
+                    var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+                    if (child is Button btn && (btn.Name == "PreviousButtonHorizontal" || btn.Name == "NextButtonHorizontal" || btn.Name == "PreviousButtonVertical" || btn.Name == "NextButtonVertical"))
+                    {
+                        btn.Visibility = Visibility.Collapsed;
+                        btn.Opacity = 0;
+                        btn.Width = 0;
+                        btn.Height = 0;
+                        btn.MinWidth = 0;
+                        btn.MinHeight = 0;
+                        btn.MaxWidth = 0;
+                        btn.MaxHeight = 0;
+                        btn.IsEnabled = false;
+                        btn.IsHitTestVisible = false;
+                    }
+                    else
+                    {
+                        CollapseInternalFlipViewButtons(child);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void OnCarouselPrevClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel?.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    int prev = TrendingHeroCarousel.SelectedIndex - 1;
+                    if (prev < 0) prev = list.Count - 1;
+                    TrendingHeroCarousel.SelectedIndex = prev;
+                    _heroTimer?.Stop();
+                    _heroTimer?.Start();
+                }
+            }
+            catch { }
+        }
+
+        private void OnCarouselNextClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TrendingHeroCarousel?.ItemsSource is System.Collections.IList list && list.Count > 0)
+                {
+                    int next = (TrendingHeroCarousel.SelectedIndex + 1) % list.Count;
+                    TrendingHeroCarousel.SelectedIndex = next;
+                    _heroTimer?.Stop();
+                    _heroTimer?.Start();
+                }
+            }
+            catch { }
+        }
+
+        private void OnHeroViewDetailsClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tmdbItem.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+            }
+        }
+
+        private void OnHeroPlayTrailerClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is TmdbMedia tmdbItem)
+            {
+                string title = !string.IsNullOrEmpty(tmdbItem.DisplayTitle) ? tmdbItem.DisplayTitle : "TV Show";
+                string query = $"{title} {tmdbItem.DisplayYear} tv trailer";
+                string url = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}";
+                Frame.Navigate(typeof(StreamingYouTubePage), url);
+            }
+        }
+
+        private void OnContextViewDetailsClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                if (fe.DataContext is WatchmodeTitle wm)
+                    Frame.Navigate(typeof(StreamingDetailsPage), (wm.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                else if (fe.DataContext is TmdbMedia tm)
+                    Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tm.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                else if (fe.DataContext is SavedStreamingItem saved)
+                {
+                    if (saved.Id.StartsWith("tmdb_"))
+                        Frame.Navigate(typeof(StreamingDetailsPage), (saved.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                    else if (int.TryParse(saved.Id, out int wid))
+                        Frame.Navigate(typeof(StreamingDetailsPage), (wid, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                }
+            }
+        }
+
+        private void OnContextAddWatchlistClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                if (fe.DataContext is WatchmodeTitle wm)
+                {
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = wm.Id.ToString(), Title = wm.Title ?? "", Subtitle = $"({wm.Year})", PosterUrl = wm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                }
+                else if (fe.DataContext is TmdbMedia tm)
+                {
+                    AppServices.StreamingLibrary.AddItem(new SavedStreamingItem { Id = $"tmdb_tv-{tm.Id}", Title = tm.DisplayTitle ?? "", Subtitle = $"({tm.DisplayYear})", PosterUrl = tm.PosterUrl, Type = Services.Streaming.StreamingItemType.TvShow, Watchlist = "Watchlist" });
+                }
+            }
+        }
+
+        private void OnContextPlayTrailerClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe)
+            {
+                string title = "";
+                if (fe.DataContext is WatchmodeTitle wm) title = $"{wm.Title} {wm.Year} trailer";
+                else if (fe.DataContext is TmdbMedia tm) title = $"{tm.DisplayTitle} {tm.DisplayYear} trailer";
+
+                if (!string.IsNullOrEmpty(title))
+                {
+                    string url = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(title)}";
+                    Frame.Navigate(typeof(StreamingYouTubePage), url);
+                }
+            }
+        }
+
+        private void OnContextRemoveFromLibraryClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is SavedStreamingItem saved)
+            {
+                AppServices.StreamingLibrary.RemoveItem(saved.Id, Services.Streaming.StreamingItemType.TvShow);
+                RefreshLibraryList();
+            }
+        }
+
+        private void OnTrendingItemClick(object sender, ItemClickEventArgs e)
+        {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
+            if (e.ClickedItem is TmdbMedia tmdbItem)
+            {
+                Frame.Navigate(typeof(StreamingDetailsPage), ($"tmdb_tv-{tmdbItem.Id}", ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
             }
         }
 
         private void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
+            if ((DateTime.UtcNow - _lastTvShowClickTime).TotalMilliseconds < 500) return;
+            _lastTvShowClickTime = DateTime.UtcNow;
+
             if (e.ClickedItem is SavedStreamingItem item)
             {
-                if (int.TryParse(item.Id, out int watchmodeId))
+                if (item.Id.StartsWith("tmdb_"))
                 {
-                    Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion));
+                    Frame.Navigate(typeof(StreamingDetailsPage), (item.Id, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
+                }
+                else if (int.TryParse(item.Id, out int watchmodeId))
+                {
+                    Frame.Navigate(typeof(StreamingDetailsPage), (watchmodeId, ViewModel.SelectedRegion), new DrillInNavigationTransitionInfo());
                 }
             }
         }
@@ -235,91 +559,72 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is Border border)
             {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
-                var compositor = visual.Compositor;
-                
-                if (border.Tag == null)
+                try
                 {
-                    try
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                    if (visual == null) return;
+                    var compositor = visual.Compositor;
+                    if (compositor == null) return;
+
+                    if (border.Tag is not CardShadowHolder holder)
                     {
-                        var shadowVisual = compositor.CreateSpriteVisual();
-                        var shadow = compositor.CreateDropShadow();
-                        shadow.BlurRadius = 32f;
-                        shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
-                        shadow.Opacity = 0.0f;
-                        shadow.Offset = new System.Numerics.Vector3(0, 4, 0);
-                        
-                        shadowVisual.Shadow = shadow;
-                        
-                        var bindSizeAnimation = compositor.CreateExpressionAnimation("visual.Size");
-                        bindSizeAnimation.SetReferenceParameter("visual", visual);
-                        shadowVisual.StartAnimation("Size", bindSizeAnimation);
-                        
-                        if (visual.Parent is Microsoft.UI.Composition.ContainerVisual container)
+                        try
                         {
-                            container.Children.InsertBelow(shadowVisual, visual);
+                            var shadowVisual = compositor.CreateSpriteVisual();
+                            var shadow = compositor.CreateDropShadow();
+                            shadow.BlurRadius = 32f;
+                            shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+                            shadow.Opacity = 0.0f;
+                            shadow.Offset = new System.Numerics.Vector3(0, 4, 0);
+
+                            shadowVisual.Shadow = shadow;
+
+                            var bindSizeAnimation = compositor.CreateExpressionAnimation("visual.Size");
+                            bindSizeAnimation.SetReferenceParameter("visual", visual);
+                            shadowVisual.StartAnimation("Size", bindSizeAnimation);
+
+                            if (visual.Parent is Microsoft.UI.Composition.ContainerVisual container)
+                            {
+                                container.Children.InsertBelow(shadowVisual, visual);
+                            }
+
+                            holder = new CardShadowHolder(shadowVisual, shadow);
+                            border.Tag = holder;
+                            border.Unloaded += Card_Unloaded;
                         }
-                        
-                        border.Tag = shadow;
+                        catch { }
                     }
-                    catch { }
-                }
 
-                var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
-                if (dropShadow != null)
-                {
-                    var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-                    opacityAnim.InsertKeyFrame(1.0f, 0.55f);
-                    opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
-                    dropShadow.StartAnimation("Opacity", opacityAnim);
-                    
-                    var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-                    offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 16));
-                    offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
-                    dropShadow.StartAnimation("Offset", offsetAnim);
-                }
-
-                var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.06f, 1.06f, 1.0f));
-                scaleAnim.Duration = TimeSpan.FromMilliseconds(250);
-                
-                visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
-                visual.StartAnimation("Scale", scaleAnim);
-
-                border.Translation = new System.Numerics.Vector3(0, 0, 16);
-
-                Border? overlay = null;
-                if (border.Child is Grid grid)
-                {
-                    foreach (var child in grid.Children)
+                    var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
+                    if (dropShadow != null)
                     {
-                        if (child is Border b && b.Name == "HoverOverlay")
-                        {
-                            overlay = b;
-                            break;
-                        }
+                        var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
+                        opacityAnim.InsertKeyFrame(1.0f, 0.55f);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(250);
+                        dropShadow.StartAnimation("Opacity", opacityAnim);
+
+                        var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
+                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 16));
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(250);
+                        dropShadow.StartAnimation("Offset", offsetAnim);
+                    }
+
+                    var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.05f, 1.05f, 1.0f), compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(0.0f, 0.0f), new System.Numerics.Vector2(0.0f, 1.0f)));
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(167);
+
+                    visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
+                    visual.StartAnimation("Scale", scaleAnim);
+
+                    border.Translation = new System.Numerics.Vector3(0, 0, 16);
+
+                    if (Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var accentBrush))
+                    {
+                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)accentBrush;
                     }
                 }
-
-                if (overlay != null)
-                {
-                    var anim = new DoubleAnimation
-                    {
-                        To = 1.0,
-                        Duration = TimeSpan.FromMilliseconds(250),
-                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                    };
-                    var sb = new Storyboard();
-                    Storyboard.SetTarget(anim, overlay);
-                    Storyboard.SetTargetProperty(anim, "Opacity");
-                    sb.Children.Add(anim);
-                    sb.Begin();
-                }
-
-                if (Application.Current.Resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentBrush))
-                {
-                    border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)accentBrush;
-                }
+                catch { }
             }
         }
 
@@ -327,64 +632,94 @@ namespace LumiereMediaPlayer.Pages
         {
             if (sender is Border border)
             {
-                var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
-                var compositor = visual.Compositor;
-                
-                var dropShadow = border.Tag as Microsoft.UI.Composition.DropShadow;
-                if (dropShadow != null)
+                try
                 {
-                    var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
-                    opacityAnim.InsertKeyFrame(1.0f, 0.0f);
-                    opacityAnim.Duration = TimeSpan.FromMilliseconds(200);
-                    dropShadow.StartAnimation("Opacity", opacityAnim);
-                    
-                    var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
-                    offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 6, 12));
-                    offsetAnim.Duration = TimeSpan.FromMilliseconds(200);
-                    dropShadow.StartAnimation("Offset", offsetAnim);
-                }
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                    if (visual == null) return;
+                    var compositor = visual.Compositor;
+                    if (compositor == null) return;
 
-                var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
-                scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f));
-                scaleAnim.Duration = TimeSpan.FromMilliseconds(200);
-                
-                visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
-                visual.StartAnimation("Scale", scaleAnim);
+                    var exitEase = compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(1.0f, 0.0f), new System.Numerics.Vector2(1.0f, 1.0f));
 
-                border.Translation = new System.Numerics.Vector3(0, 0, 16);
-
-                Border? overlay = null;
-                if (border.Child is Grid grid)
-                {
-                    foreach (var child in grid.Children)
+                    var dropShadow = (border.Tag as CardShadowHolder)?.Shadow;
+                    if (dropShadow != null)
                     {
-                        if (child is Border b && b.Name == "HoverOverlay")
-                        {
-                            overlay = b;
-                            break;
-                        }
+                        var opacityAnim = compositor.CreateScalarKeyFrameAnimation();
+                        opacityAnim.InsertKeyFrame(1.0f, 0.0f, exitEase);
+                        opacityAnim.Duration = TimeSpan.FromMilliseconds(83);
+                        dropShadow.StartAnimation("Opacity", opacityAnim);
+
+                        var offsetAnim = compositor.CreateVector3KeyFrameAnimation();
+                        offsetAnim.InsertKeyFrame(1.0f, new System.Numerics.Vector3(0, 8, 12), exitEase);
+                        offsetAnim.Duration = TimeSpan.FromMilliseconds(83);
+                        dropShadow.StartAnimation("Offset", offsetAnim);
+                    }
+
+                    var scaleAnim = compositor.CreateVector3KeyFrameAnimation();
+                    scaleAnim.InsertKeyFrame(1f, new System.Numerics.Vector3(1.0f, 1.0f, 1.0f), exitEase);
+                    scaleAnim.Duration = TimeSpan.FromMilliseconds(83);
+
+                    visual.CenterPoint = new System.Numerics.Vector3((float)border.RenderSize.Width / 2, (float)border.RenderSize.Height / 2, 0);
+                    visual.StartAnimation("Scale", scaleAnim);
+
+                    border.Translation = new System.Numerics.Vector3(0, 0, 8);
+
+                    if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBrush))
+                    {
+                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)defaultBrush;
                     }
                 }
+                catch { }
+            }
+        }
 
-                if (overlay != null)
+        private void Card_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is Border border)
+            {
+                border.Unloaded -= Card_Unloaded;
+                // Reset composition state to prevent recycled cards appearing in hover state
+                try
                 {
-                    var anim = new DoubleAnimation
+                    var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                    visual.Scale = new System.Numerics.Vector3(1f, 1f, 1f);
+                    border.Translation = new System.Numerics.Vector3(0, 0, 0);
+                }
+                catch { }
+                if (border.Tag is CardShadowHolder holder)
+                {
+                    try
                     {
-                        To = 0.0,
-                        Duration = TimeSpan.FromMilliseconds(200),
-                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                    };
-                    var sb = new Storyboard();
-                    Storyboard.SetTarget(anim, overlay);
-                    Storyboard.SetTargetProperty(anim, "Opacity");
-                    sb.Children.Add(anim);
-                    sb.Begin();
+                        if (holder.ShadowVisual.Parent is Microsoft.UI.Composition.ContainerVisual container)
+                        {
+                            container.Children.Remove(holder.ShadowVisual);
+                        }
+                        else
+                        {
+                            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(border);
+                            if (visual?.Parent is Microsoft.UI.Composition.ContainerVisual fallbackContainer)
+                            {
+                                fallbackContainer.Children.Remove(holder.ShadowVisual);
+                            }
+                        }
+                    }
+                    catch { }
+                    holder.ShadowVisual.Dispose();
+                    holder.Shadow.Dispose();
+                    border.Tag = null;
                 }
+            }
+        }
 
-                if (Application.Current.Resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBrush))
-                {
-                    border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)defaultBrush;
-                }
+        private sealed class CardShadowHolder
+        {
+            public Microsoft.UI.Composition.SpriteVisual ShadowVisual { get; }
+            public Microsoft.UI.Composition.DropShadow Shadow { get; }
+            public CardShadowHolder(Microsoft.UI.Composition.SpriteVisual shadowVisual, Microsoft.UI.Composition.DropShadow shadow)
+            {
+                ShadowVisual = shadowVisual;
+                Shadow = shadow;
             }
         }
     }

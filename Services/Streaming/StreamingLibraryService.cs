@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace LumiereMediaPlayer.Services.Streaming
 {
@@ -12,20 +13,32 @@ namespace LumiereMediaPlayer.Services.Streaming
         TvShow
     }
 
-    public class SavedStreamingItem
+    public partial class SavedStreamingItem : ObservableObject
     {
-        public string Id { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Subtitle { get; set; } = string.Empty; // Artist or Year
-        public string? PosterUrl { get; set; }
-        public StreamingItemType Type { get; set; }
-        public string Watchlist { get; set; } = "Watchlist";
+        [ObservableProperty] public partial string Id { get; set; } = string.Empty;
+        [ObservableProperty] public partial string Title { get; set; } = string.Empty;
+        [ObservableProperty] public partial string Subtitle { get; set; } = string.Empty; // Artist or Year
+        [ObservableProperty] public partial string? PosterUrl { get; set; }
+        [ObservableProperty] public partial StreamingItemType Type { get; set; }
+        [ObservableProperty] public partial string Watchlist { get; set; } = "Watchlist";
     }
 
-    public class StreamingLibraryService
+    public class StreamingLibraryService : IStreamingLibraryService
     {
+        private readonly object _lock = new();
         private readonly string _filePath;
-        public List<SavedStreamingItem> SavedItems { get; private set; }
+        private List<SavedStreamingItem> _savedItems = new();
+
+        public List<SavedStreamingItem> SavedItems
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return new List<SavedStreamingItem>(_savedItems);
+                }
+            }
+        }
 
         public StreamingLibraryService()
         {
@@ -33,63 +46,101 @@ namespace LumiereMediaPlayer.Services.Streaming
             var appFolder = Path.Combine(appDataPath, "LumiereMediaPlayer");
             Directory.CreateDirectory(appFolder);
             _filePath = Path.Combine(appFolder, "streaming_library.json");
-            
-            SavedItems = new List<SavedStreamingItem>();
+
             Load();
         }
 
         public void AddItem(SavedStreamingItem item)
         {
             if (item == null || string.IsNullOrEmpty(item.Id)) return;
-            if (!SavedItems.Exists(i => i.Id == item.Id && i.Type == item.Type))
+            lock (_lock)
             {
-                SavedItems.Add(item);
-                Save();
+                if (!_savedItems.Exists(i => i.Id == item.Id && i.Type == item.Type))
+                {
+                    _savedItems.Add(item);
+                    SaveInternal();
+                }
             }
         }
 
         public void RemoveItem(string id, StreamingItemType type)
         {
             if (string.IsNullOrEmpty(id)) return;
-            var item = SavedItems.Find(i => i.Id == id && i.Type == type);
-            if (item != null)
+            lock (_lock)
             {
-                SavedItems.Remove(item);
-                Save();
+                var item = _savedItems.Find(i => i.Id == id && i.Type == type);
+                if (item != null)
+                {
+                    _savedItems.Remove(item);
+                    SaveInternal();
+                }
             }
         }
 
         public void Load()
         {
-            if (File.Exists(_filePath))
+            lock (_lock)
             {
-                try
+                if (File.Exists(_filePath))
                 {
-                    var json = File.ReadAllText(_filePath);
-                    if (string.IsNullOrWhiteSpace(json))
+                    try
                     {
-                        SavedItems = new List<SavedStreamingItem>();
-                        return;
+                        var json = File.ReadAllText(_filePath);
+                        if (string.IsNullOrWhiteSpace(json))
+                        {
+                            _savedItems = new List<SavedStreamingItem>();
+                            return;
+                        }
+                        _savedItems = JsonSerializer.Deserialize<List<SavedStreamingItem>>(json) ?? new List<SavedStreamingItem>();
                     }
-                    SavedItems = JsonSerializer.Deserialize<List<SavedStreamingItem>>(json) ?? new List<SavedStreamingItem>();
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[StreamingLibraryService] Load error: {ex.Message}");
+                        _savedItems = new List<SavedStreamingItem>();
+                    }
                 }
-                catch
+                else
                 {
-                    SavedItems = new List<SavedStreamingItem>();
+                    _savedItems = new List<SavedStreamingItem>();
                 }
             }
         }
 
         public void Save()
         {
+            lock (_lock)
+            {
+                SaveInternal();
+            }
+        }
+
+        private void SaveInternal()
+        {
+            string? tempFile = null;
             try
             {
-                var json = JsonSerializer.Serialize(SavedItems, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_filePath, json);
+                var json = JsonSerializer.Serialize(_savedItems, new JsonSerializerOptions { WriteIndented = true });
+                var dir = Path.GetDirectoryName(_filePath) ?? "";
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                tempFile = Path.Combine(dir, $"{Path.GetFileName(_filePath)}.{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(tempFile, json);
+                File.Move(tempFile, _filePath, overwrite: true);
+                tempFile = null;
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore save errors
+                System.Diagnostics.Debug.WriteLine($"[StreamingLibraryService] Save error: {ex.Message}");
+            }
+            finally
+            {
+                if (tempFile != null && File.Exists(tempFile))
+                {
+                    try { File.Delete(tempFile); } catch { }
+                }
             }
         }
     }
