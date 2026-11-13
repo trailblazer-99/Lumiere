@@ -155,6 +155,9 @@ jobs:
         $utf8NoBom = New-Object System.Text.UTF8Encoding $false
         [System.IO.File]::WriteAllText("$PWD\appsettings.json", $json, $utf8NoBom)
 
+    - name: Restore NuGet Packages (Release Gate)
+      run: msbuild LumiereMediaPlayer.csproj -t:restore /p:Platform=x64 /p:Configuration=Release
+
     - name: Code Format Check (Release Gate)
       run: dotnet format LumiereMediaPlayer.csproj --verify-no-changes
 

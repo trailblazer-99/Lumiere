@@ -392,25 +392,7 @@
                     </Grid>
                 </Border>
 
-                <!-- Auto Brightness Boost -->
-                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
-                    <Grid ColumnSpacing="16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
-                            <FontIcon FontSize="16" Glyph="&#xE706;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Auto brightness boost in HDR"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Automatically boost monitor or laptop brightness to 100% when HDR playback starts, and restore when finished."/>
-                        </StackPanel>
-                        <ToggleSwitch Grid.Column="2" OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.AutoBoostHdrBrightness, Mode=TwoWay}"/>
-                    </Grid>
-                </Border>
-
-                <!-- Tone Mapping -->
-                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
@@ -444,34 +426,14 @@
                     </Grid>
                 </Border>
 
-                <!-- Real-time HDR decoding -->
-                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
+                <Border Style="{StaticResource SettingsCardMiddleStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
-                            <FontIcon FontSize="16" Glyph="&#xEA6A;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Real-time HDR decoding"/>
-                            <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Lower decode latency for HDR content. Recommended for 4K HDR playback."/>
-                        </StackPanel>
-                        <ToggleSwitch Grid.Column="2" OnContent="" OffContent="" VerticalAlignment="Center" IsOn="{x:Bind ViewModel.HdrRealTimePlayback, Mode=TwoWay}"/>
-                    </Grid>
-                </Border>
-
-                <!-- Show HDR badge -->
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <Grid ColumnSpacing="16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="36" Height="36" CornerRadius="{StaticResource SmallCornerRadius}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" VerticalAlignment="Center">
-                            <FontIcon FontSize="16" Glyph="&#xE7C1;" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                            <TextBlock FontSize="14" Text="Show HDR badge on player"/>
+                        <FontIcon Grid.Column="0" FontSize="20" Glyph="&#xE7C1;" Foreground="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Style="{StaticResource SettingsCardTitleTextStyle}" Text="Show HDR badge on player"/>
                             <TextBlock Style="{StaticResource SubtleCaptionTextStyle}" Text="Display an HDR10/HLG badge on the video player when HDR content is active."/>
                         </StackPanel>
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" IsOn="{x:Bind ViewModel.ShowHdrBadge, Mode=TwoWay}"/>
@@ -797,10 +759,6 @@
                     </Grid>
                 </Border>
 
-<<<<<<< Updated upstream
-                
-                <Border Style="{StaticResource SettingsCardStyle}" Margin="0,0,0,4">
-=======
                 <Expander x:Name="TransportBarExpander" Style="{StaticResource SettingsExpanderStyle}"
                           IsExpanded="True"
                           Visibility="{x:Bind ViewModel.AlwaysShowTransportBar, Mode=OneWay}">
@@ -980,7 +938,6 @@
                 </Border>
 
                 <Border Style="{StaticResource SettingsCardMiddleStyle}">
->>>>>>> Stashed changes
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>

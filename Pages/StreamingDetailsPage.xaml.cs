@@ -27,8 +27,6 @@ namespace LumiereMediaPlayer.Pages
         public StreamingDetailsPage()
         {
             this.InitializeComponent();
-<<<<<<< Updated upstream
-=======
             this.NavigationCacheMode = NavigationCacheMode.Disabled;
             this.Loaded += (s, e) => ComboBoxHelper.ApplyBackdropToVisualTree(this);
             this.Unloaded += OnUnloaded;
@@ -64,7 +62,6 @@ namespace LumiereMediaPlayer.Pages
             this.Unloaded -= OnUnloaded;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             CleanupResources();
->>>>>>> Stashed changes
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -119,13 +116,6 @@ namespace LumiereMediaPlayer.Pages
 
                 if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Visible;
 
-<<<<<<< Updated upstream
-                await LoadDetailsAsync();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[StreamingDetailsPage] OnNavigatedTo error: {ex.Message}");
-=======
                 try
                 {
                     await ViewModel.LoadDetailsAsync(watchmodeId, selectedRegion, fallback);
@@ -161,61 +151,11 @@ namespace LumiereMediaPlayer.Pages
                 AntiGravityLogger.Log($"[StreamingDetailsPage.OnNavigatedTo] Exception: {ex}");
                 System.Diagnostics.Debug.WriteLine($"Exception in OnNavigatedTo: {ex.Message}");
                 if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
->>>>>>> Stashed changes
             }
         }
 
         private void ApplyViewModelToUI()
         {
-<<<<<<< Updated upstream
-            // parallel fetch to optimize load time
-            var detailsTask = _watchmodeService.GetDetailsAsync(_watchmodeId);
-            var castTask = _watchmodeService.GetCastCrewAsync(_watchmodeId);
-            var seasonsTask = _watchmodeService.GetSeasonsAsync(_watchmodeId);
-            var episodesTask = _watchmodeService.GetEpisodesAsync(_watchmodeId);
-            var sourcesTask = _watchmodeService.GetSourcesAsync(_watchmodeId, _selectedRegion);
-            var similarTask = _watchmodeService.GetSimilarTitlesAsync(_watchmodeId);
-            var scoresTask = _watchmodeService.GetScoresAsync(_watchmodeId);
-            var releasesTask = _watchmodeService.GetReleasesAsync(_watchmodeId);
-
-            await Task.WhenAll(detailsTask, castTask, seasonsTask, episodesTask, sourcesTask, similarTask, scoresTask, releasesTask);
-
-            _details = await detailsTask;
-            var cast = await castTask;
-            var seasons = await seasonsTask;
-            var episodes = await episodesTask;
-            var sources = await sourcesTask;
-            var similarTitles = await similarTask;
-            var scores = await scoresTask;
-            var releases = await releasesTask;
-
-            if (_details == null)
-            {
-                TitleText.Text = ViewModel.ErrorMessage ?? "Failed to load details.";
-                return;
-            }
-
-            // Populate text fields
-            TitleText.Text = details.Title ?? "Unknown Title";
-            YearText.Text = details.Year?.ToString() ?? string.Empty;
-            RatingText.Text = details.UserRating != null ? $"⭐ {details.UserRating:F1}" : "No Rating";
-            RuntimeText.Text = details.RuntimeMinutes != null ? $"{details.RuntimeMinutes} min" : string.Empty;
-
-            TypeText.Text = details.Type switch
-            {
-                "movie" => "MOVIE",
-                "tv_series" => "TV SHOW",
-                "tv_miniseries" => "MINISERIES",
-                _ => details.Type?.ToUpperInvariant() ?? "UNKNOWN"
-            };
-
-            if (details.GenreNames != null)
-            {
-                GenresText.Text = string.Join(" • ", details.GenreNames);
-            }
-
-            // Bind multi-platform scores
-=======
             try
             {
                 AntiGravityLogger.Log("[StreamingDetailsPage] ApplyViewModelToUI started");
@@ -351,7 +291,6 @@ namespace LumiereMediaPlayer.Pages
 
         private void PopulateScores(WatchmodeScores? scores)
         {
->>>>>>> Stashed changes
             bool anyScore = false;
             if (scores != null)
             {
@@ -440,50 +379,6 @@ namespace LumiereMediaPlayer.Pages
 
         private void BuildProvidersSection()
         {
-<<<<<<< Updated upstream
-            ProvidersContainer.Children.Clear();
-
-            // Local media card
-            if (ViewModel.LocalMatch != null)
-            {
-                var card = BuildLocalMediaCard(ViewModel.LocalMatch);
-                ProvidersContainer.Children.Add(card);
-                ProvidersContainer.Children.Add(new Border { Height = 16 });
-            }
-
-            // Quality badges
-            PopulateQualityBadges();
-
-            var grouped = ViewModel.GroupedSources;
-            if (!grouped.HasAnySources)
-            {
-                ProvidersContainer.Children.Add(new TextBlock
-                {
-                    Text = "Streaming Not Available",
-                    FontStyle = Windows.UI.Text.FontStyle.Italic,
-                    FontSize = 15,
-                    Foreground = ThemeResourceHelper.GetThemeBrush("TextFillColorSecondaryBrush")
-                });
-                return;
-            }
-
-            if (grouped.SubscriptionSources.Count > 0)
-            {
-                ProvidersContainer.Children.Add(new TextBlock { Text = "Subscription Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 0, 0, 0) });
-                ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.SubscriptionSources, "Subscription"));
-            }
-
-            if (grouped.FreeSources.Count > 0)
-            {
-                ProvidersContainer.Children.Add(new TextBlock { Text = "Free Streaming", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) });
-                ProvidersContainer.Children.Add(BuildProviderWrapPanel(grouped.FreeSources, "Free"));
-            }
-
-            if (grouped.PurchaseSources.Count > 0)
-            {
-                ProvidersContainer.Children.Add(new TextBlock { Text = "Buy or Rent", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) });
-                ProvidersContainer.Children.Add(BuildProviderWrapPanel(purchaseSources, "Rent/Buy"));
-=======
             try
             {
                 ProvidersContainer.Children.Clear();
@@ -533,7 +428,6 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 AntiGravityLogger.Log($"[StreamingDetailsPage] BuildProvidersSection Exception: {ex}");
->>>>>>> Stashed changes
             }
         }
 
@@ -622,19 +516,6 @@ namespace LumiereMediaPlayer.Pages
                 };
 
                 var contentPanel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-<<<<<<< Updated upstream
-                
-                // Icon
-                var iconUrl = GetProviderIconUrl(source);
-                var logo = new Image
-                {
-                    Source = bmp,
-                    Width = 40,
-                    Height = 40,
-                    Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
-                };
-                contentPanel.Children.Add(logo);
-=======
 
                 var iconUrl = StreamingProviderHelper.GetProviderIconUrl(source);
                 if (!string.IsNullOrEmpty(iconUrl) && Uri.TryCreate(iconUrl, UriKind.Absolute, out var iconUri))
@@ -649,7 +530,6 @@ namespace LumiereMediaPlayer.Pages
                     };
                     contentPanel.Children.Add(logo);
                 }
->>>>>>> Stashed changes
 
                 var text = new TextBlock
                 {
@@ -796,17 +676,7 @@ namespace LumiereMediaPlayer.Pages
 
         private void PopulateEpisodesTree(List<WatchmodeSeason> seasons, List<WatchmodeEpisode> episodes)
         {
-<<<<<<< Updated upstream
-            EpisodesTreeView.RootNodes.Clear();
-
-            if (seasons == null || seasons.Count == 0) return;
-
-            var sortedSeasons = seasons.OrderBy(s => s.Number).ToList();
-
-            foreach (var season in sortedSeasons)
-=======
             try
->>>>>>> Stashed changes
             {
                 EpisodesTreeView.RootNodes.Clear();
 
@@ -816,24 +686,7 @@ namespace LumiereMediaPlayer.Pages
 
                 foreach (var season in sortedSeasons)
                 {
-<<<<<<< Updated upstream
-                    Title = season.Name ?? $"Season {season.Number}",
-                    Subtitle = $"{season.EpisodeCount} Episodes"
-                };
-
-                var seasonNode = new TreeViewNode { Content = seasonContent };
-
-                var seasonEpisodes = episodes
-                    .Where(e => e.SeasonNumber == season.Number || e.SeasonId == season.Id)
-                    .OrderBy(e => e.EpisodeNumber)
-                    .ToList();
-
-                foreach (var ep in seasonEpisodes)
-                {
-                    var epContent = new TreeViewItemContent
-=======
                     var seasonContent = new TreeViewItemContent
->>>>>>> Stashed changes
                     {
                         Title = season.Name ?? $"Season {season.Number}",
                         Subtitle = $"{season.EpisodeCount} Episodes"

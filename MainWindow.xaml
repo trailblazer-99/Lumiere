@@ -962,13 +962,6 @@
                 Padding="20"
                 CornerRadius="12"
                 Visibility="Collapsed"
-<<<<<<< Updated upstream
-                Background="#CC1F1F1F">
-                <Border.BackgroundTransition>
-                    <BrushTransition />
-                </Border.BackgroundTransition>
-                <StackPanel Spacing="12">
-=======
                 Background="#E610141C"
                 BorderBrush="{ThemeResource SpecularRimBorderBrush}"
                 BorderThickness="1"
@@ -991,7 +984,6 @@
                     
                     <ScrollViewer VerticalScrollMode="Auto" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                         <StackPanel Spacing="12" MaxWidth="350">
->>>>>>> Stashed changes
                     <TextBlock Text="File Information" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="White" />
                     
                     <Grid ColumnSpacing="20" RowSpacing="8">
@@ -1074,12 +1066,7 @@
                         </Grid>
 
                         <StackPanel x:Name="FullscreenInternetMetadataProvidersPanel" x:FieldModifier="public" Spacing="8" Visibility="Collapsed">
-<<<<<<< Updated upstream
-                            <TextBlock Text="Available on:" FontWeight="SemiBold" FontSize="13" Foreground="White"/>
-                            <Grid x:Name="FullscreenInternetMetadataProvidersGrid" x:FieldModifier="public" ColumnSpacing="6" RowSpacing="6"/>
-=======
                             <Button x:Name="FullscreenStreamingDetailsButton" x:FieldModifier="public" Content="Streaming" Style="{StaticResource AccentButtonStyle}" Padding="12,8" CornerRadius="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Foreground="White" FontWeight="SemiBold" Click="OnFullscreenStreamingDetailsButtonClick" />
->>>>>>> Stashed changes
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>

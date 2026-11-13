@@ -323,7 +323,8 @@
 
             <!-- Trending Tab -->
             <PivotItem Header="Trending">
-                <GridView x:Name="TrendingGridView" IsItemClickEnabled="True" ItemClick="OnTrendingItemClick" SelectionMode="None" Padding="0,0,16,32">
+                <Grid>
+                    <GridView x:Name="TrendingGridView" IsItemClickEnabled="True" ItemClick="OnTrendingItemClick" SelectionMode="None" Padding="0,0,16,32">
                     <GridView.Header>
                         <StackPanel Spacing="16" Margin="0,0,0,16">
                             <TextBlock Text="Trending TV shows currently popular across streaming platforms." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.75" />
@@ -471,7 +472,9 @@
                         </DataTemplate>
                     </GridView.ItemTemplate>
                 </GridView>
-            </PivotItem>
+                <ProgressRing x:Name="TrendingLoadingRing" IsActive="False" Visibility="Collapsed" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+        </PivotItem>
         </Pivot>
     </Grid>
 </Page>

@@ -57,6 +57,10 @@ namespace LumiereMediaPlayer.ViewModels
                 var luckyItem = TvShows[index];
                 OnSurpriseMeRequested?.Invoke(luckyItem);
             }
+            else if (!IsLoading && _initialized)
+            {
+                _ = LoadTvShowsAsync();
+            }
         }
 
         [RelayCommand]
@@ -92,14 +96,23 @@ namespace LumiereMediaPlayer.ViewModels
         [RelayCommand]
         public void ResetFilters()
         {
-            ActiveSearchQuery = string.Empty;
-            SelectedProvider = "All Services";
-            SelectedNetwork = "All Networks";
-            SelectedGenre = "All Genres";
-            SelectedAccessType = "All Access Types";
-            SelectedRating = "All Ratings";
-            SelectedSortOrder = SortOptions.Count > 0 ? SortOptions[0] : "Popularity";
-            CurrentPage = 1;
+            _suppressReload = true;
+            try
+            {
+                ActiveSearchQuery = string.Empty;
+                SelectedProvider = "All Services";
+                SelectedNetwork = "All Networks";
+                SelectedGenre = "All Genres";
+                SelectedAccessType = "All Access Types";
+                SelectedRating = "All Ratings";
+                SelectedSortOrder = SortOptions.Count > 0 ? SortOptions[0] : "Popularity";
+                CurrentPage = 1;
+            }
+            finally
+            {
+                _suppressReload = false;
+            }
+
             if (_initialized)
             {
                 _ = LoadTvShowsAsync();
@@ -645,6 +658,13 @@ namespace LumiereMediaPlayer.ViewModels
                     TvShows.UpdateInPlace(showList);
                     CanGoNext = false;
                     CanGoPrevious = false;
+
+                    if (showList.Count == 0 && IsAiSearchActive)
+                    {
+                        ErrorMessage = "AI Search could not find matches for this prompt. Check your AI settings (Gemini API key or local Ollama) or try specific keywords.";
+                        HasError = true;
+                    }
+
                     _ = LoadTvShowsDetailsBackgroundAsync(showList, requestVersion);
                 }
             }

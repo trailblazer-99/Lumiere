@@ -217,6 +217,11 @@ namespace LumiereMediaPlayer.Pages
             {
                 OnSearchBoxQuerySubmitted(SearchBox, null!);
             }
+            else if (SearchBox != null)
+            {
+                SearchBox.PlaceholderText = "Describe what to watch (e.g. 'Mind-bending sci-fi with time dilation')...";
+                SearchBox.Focus(FocusState.Programmatic);
+            }
         }
 
         private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
@@ -224,9 +229,13 @@ namespace LumiereMediaPlayer.Pages
             if (AiSearchIcon != null)
                 AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
             LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
-            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            if (SearchBox != null)
             {
-                OnSearchBoxQuerySubmitted(SearchBox, null!);
+                SearchBox.PlaceholderText = "Search movies...";
+                if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                {
+                    OnSearchBoxQuerySubmitted(SearchBox, null!);
+                }
             }
         }
 
@@ -325,6 +334,12 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task LoadTrendingAsync()
         {
+            if (TrendingLoadingRing != null)
+            {
+                TrendingLoadingRing.Visibility = Visibility.Visible;
+                TrendingLoadingRing.IsActive = true;
+            }
+
             try
             {
                 int retries = 0;
@@ -339,15 +354,21 @@ namespace LumiereMediaPlayer.Pages
                 var popularMovies = await _tmdbService.GetStreamablePopularMoviesAsync(1, targetRegion);
                 if (popularMovies == null || popularMovies.Count == 0) return;
 
-                // Verify streaming provider availability in target region
+                // Verify streaming provider availability in target region with bounded concurrency
+                using var throttler = new System.Threading.SemaphoreSlim(5);
                 var checkTasks = popularMovies.Select(async m =>
                 {
+                    await throttler.WaitAsync();
                     try
                     {
                         var prov = await _tmdbService.GetProvidersAsync(m.Id, "movie", targetRegion);
                         if (TmdbService.HasStreamingProviders(prov)) return m;
                     }
                     catch { }
+                    finally
+                    {
+                        throttler.Release();
+                    }
                     return null;
                 });
                 var verified = (await System.Threading.Tasks.Task.WhenAll(checkTasks)).Where(m => m != null).Select(m => m!).ToList();
@@ -370,6 +391,14 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"LoadTrendingAsync movies error: {ex.Message}");
+            }
+            finally
+            {
+                if (TrendingLoadingRing != null)
+                {
+                    TrendingLoadingRing.IsActive = false;
+                    TrendingLoadingRing.Visibility = Visibility.Collapsed;
+                }
             }
         }
 

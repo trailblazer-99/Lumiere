@@ -155,29 +155,6 @@
                     </Grid>
                 </StackPanel>
 
-<<<<<<< Updated upstream
-                <!-- Pivot for Cast, Crew, Episodes, Similar -->
-                <Pivot x:Name="DetailsPivot">
-                    <PivotItem x:Name="CastPivotItem" Header="Cast">
-                        <GridView x:Name="CastGridView"
-                                  SelectionMode="None"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="CastGridView_ItemClick"
-                                  Margin="0,12,0,0"
-                                  MaxHeight="700"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollMode="Enabled">
-                            <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
-                            </GridView.ItemContainerStyle>
-                            <GridView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Width="220" Padding="12" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12" ToolTipService.ToolTip="Click to view filmography">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="{Binding FullName}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding Role}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding Type}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
-=======
                 <!-- SelectorBar for Cast, Crew, Episodes, Similar, Releases -->
                 <StackPanel Spacing="16">
                     <SelectorBar x:Name="DetailsSelectorBar" SelectionChanged="OnDetailsSelectorBarSelectionChanged">
@@ -280,98 +257,12 @@
                                             <TextBlock Text="{Binding Content.Title}" FontWeight="SemiBold" FontSize="14" />
                                             <TextBlock Text="{Binding Content.Subtitle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding Content.SubtitleVisibility}" />
                                             <TextBlock Text="{Binding Content.Description}" FontSize="14" TextWrapping="Wrap" Opacity="0.8" Visibility="{Binding Content.DescriptionVisibility}" Margin="0,2,0,0" LineHeight="18" MaxWidth="700" HorizontalAlignment="Left" />
->>>>>>> Stashed changes
                                         </StackPanel>
                                     </DataTemplate>
                                 </TreeView.ItemTemplate>
                             </TreeView>
                         </Grid>
 
-<<<<<<< Updated upstream
-                    <PivotItem x:Name="CrewPivotItem" Header="Crew">
-                        <GridView x:Name="CrewGridView"
-                                  SelectionMode="None"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="CastGridView_ItemClick"
-                                  Margin="0,12,0,0"
-                                  MaxHeight="700"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollMode="Enabled">
-                            <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
-                            </GridView.ItemContainerStyle>
-                            <GridView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Width="250" MinHeight="76" Padding="12,8" Margin="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" ToolTipService.ToolTip="Click to view filmography">
-                                        <Grid.ColumnDefinitions>
-                                             <ColumnDefinition Width="Auto" />
-                                             <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Person Avatar / Photo with Initial Fallback -->
-                                        <PersonPicture Grid.Column="0"
-                                                       Width="48" Height="48"
-                                                       DisplayName="{Binding FullName}"
-                                                       ProfilePicture="{Binding ProfileImageSource}"
-                                                       VerticalAlignment="Center"
-                                                       Margin="0,0,12,0" />
-
-                                        <!-- Name & Role -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                                            <TextBlock Text="{Binding FullName}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Role}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Type}" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontStyle="Italic"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </GridView.ItemTemplate>
-                        </GridView>
-                    </PivotItem>
-
-                    <PivotItem x:Name="EpisodesPivotItem" Header="Seasons &amp; Episodes">
-                        <TreeView x:Name="EpisodesTreeView" Margin="0,12,0,0">
-                            <TreeView.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Spacing="4" Margin="0,8,0,8">
-                                        <TextBlock Text="{Binding Content.Title}" FontWeight="SemiBold" FontSize="14" />
-                                        <TextBlock Text="{Binding Content.Subtitle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding Content.SubtitleVisibility}" />
-                                        <TextBlock Text="{Binding Content.Description}" FontSize="14" TextWrapping="Wrap" Opacity="0.8" Visibility="{Binding Content.DescriptionVisibility}" Margin="0,2,0,0" LineHeight="18" MaxWidth="700" HorizontalAlignment="Left" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
-                    </PivotItem>
-
-                    <PivotItem x:Name="SimilarPivotItem" Header="You May Also Like">
-                        <GridView x:Name="SimilarTitlesGridView"
-                                  Margin="0,16,0,0"
-                                  SelectionMode="None"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="SimilarTitlesGridView_ItemClick"
-                                  MaxHeight="600"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollMode="Enabled">
-                            <GridView.ItemContainerStyle>
-                                <Style TargetType="GridViewItem" BasedOn="{StaticResource RoundedCardGridViewItemStyle}" />
-                            </GridView.ItemContainerStyle>
-                            <GridView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Width="140" Height="240" Margin="0">
-                                        <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <Grid CornerRadius="8">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-                                                <Image Stretch="UniformToFill">
-                                                    <Image.Source>
-                                                        <BitmapImage UriSource="{Binding PosterUrl}" DecodePixelWidth="140" />
-                                                    </Image.Source>
-                                                </Image>
-                                                <StackPanel Grid.Row="1" Padding="8" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-                                                    <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                                                    <TextBlock Text="{Binding DisplayYear}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-=======
                         <!-- Similar Panel -->
                         <Grid x:Name="SimilarPanel" Visibility="Collapsed">
                             <GridView x:Name="SimilarTitlesGridView"
@@ -431,7 +322,6 @@
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <FontIcon Glyph="&#xE787;" FontSize="16" />
                                                     <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" FontSize="14" />
->>>>>>> Stashed changes
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" Text="{Binding ReleaseDate}" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                                                 <Border Grid.Column="2" HorizontalAlignment="Left" CornerRadius="4" Background="{ThemeResource SystemFillColorNeutralBackgroundBrush}" Padding="8,4,8,4">
@@ -440,53 +330,12 @@
                                                 <TextBlock Grid.Column="3" Text="{Binding Platform}" FontSize="14" FontStyle="Italic" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
                                             </Grid>
                                         </Border>
-<<<<<<< Updated upstream
-                                    </Grid>
-                                </DataTemplate>
-                            </GridView.ItemTemplate>
-                        </GridView>
-                    </PivotItem>
-
-                    <PivotItem x:Name="ReleasesPivotItem" Header="Release Dates">
-                        <ListView x:Name="ReleasesListView"
-                                  Margin="0,16,0,0"
-                                  SelectionMode="None"
-                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                  ScrollViewer.VerticalScrollMode="Disabled">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,8">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="200" />
-                                                <ColumnDefinition Width="140" />
-                                                <ColumnDefinition Width="80" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <FontIcon Glyph="&#xE787;" FontSize="16" />
-                                                <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" FontSize="14" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="{Binding ReleaseDate}" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
-                                            <Border Grid.Column="2" HorizontalAlignment="Left" CornerRadius="4" Background="{ThemeResource SystemFillColorNeutralBackgroundBrush}" Padding="8,4,8,4">
-                                                <TextBlock Text="{Binding Region}" FontSize="12" FontWeight="SemiBold" />
-                                            </Border>
-                                            <TextBlock Grid.Column="3" Text="{Binding Platform}" FontSize="14" FontStyle="Italic" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </PivotItem>
-                </Pivot>
-=======
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
                             </ListView>
                         </Grid>
                     </Grid>
                 </StackPanel>
->>>>>>> Stashed changes
 
             </StackPanel>
         </ScrollViewer>

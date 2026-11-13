@@ -191,9 +191,9 @@ namespace LumiereMediaPlayer.ViewModels
                         seasonsTask = isMovie ? Task.FromResult(new List<WatchmodeSeason>()) : SafeFetchAsync(() => _watchmodeService.GetSeasonsAsync(WatchmodeId), new List<WatchmodeSeason>());
                         episodesTask = isMovie ? Task.FromResult(new List<WatchmodeEpisode>()) : SafeFetchAsync(() => _watchmodeService.GetEpisodesAsync(WatchmodeId), new List<WatchmodeEpisode>());
                         sourcesTask = SafeFetchAsync(() => _watchmodeService.GetSourcesAsync(TitleIdFallback, SelectedRegion, Details.Title ?? string.Empty), new List<WatchmodeSource>());
-                        similarTask = SafeFetchAsync(() => _watchmodeService.GetSimilarTitlesAsync(WatchmodeId), new List<WatchmodeTitle>());
-                        scoresTask = SafeFetchAsync(() => _watchmodeService.GetScoresAsync(WatchmodeId), (WatchmodeScores?)null);
-                        releasesTask = SafeFetchAsync(() => _watchmodeService.GetReleasesAsync(WatchmodeId), new List<WatchmodeRelease>());
+                        similarTask = SafeFetchAsync(() => _watchmodeService.GetSimilarTitlesAsync(WatchmodeId, effectiveTmdbId, Details.Type ?? knownMediaType), new List<WatchmodeTitle>());
+                        scoresTask = SafeFetchAsync(() => _watchmodeService.GetScoresAsync(WatchmodeId, effectiveTmdbId, Details), (WatchmodeScores?)null);
+                        releasesTask = SafeFetchAsync(() => _watchmodeService.GetReleasesAsync(WatchmodeId, effectiveTmdbId), new List<WatchmodeRelease>());
                     }
                     else
                     {
@@ -201,9 +201,9 @@ namespace LumiereMediaPlayer.ViewModels
                         castTask = SafeFetchAsync(() => _watchmodeService.GetCastCrewAsync(0, effectiveTmdbId, knownMediaType), new List<WatchmodeCastCrew>());
                         seasonsTask = Task.FromResult(new List<WatchmodeSeason>());
                         episodesTask = Task.FromResult(new List<WatchmodeEpisode>());
-                        similarTask = Task.FromResult(new List<WatchmodeTitle>());
-                        scoresTask = Task.FromResult<WatchmodeScores?>(null);
-                        releasesTask = Task.FromResult(new List<WatchmodeRelease>());
+                        similarTask = SafeFetchAsync(() => _watchmodeService.GetSimilarTitlesAsync(0, effectiveTmdbId, knownMediaType), new List<WatchmodeTitle>());
+                        scoresTask = SafeFetchAsync(() => _watchmodeService.GetScoresAsync(0, effectiveTmdbId, Details), (WatchmodeScores?)null);
+                        releasesTask = SafeFetchAsync(() => _watchmodeService.GetReleasesAsync(0, effectiveTmdbId), new List<WatchmodeRelease>());
                     }
                 }
                 else

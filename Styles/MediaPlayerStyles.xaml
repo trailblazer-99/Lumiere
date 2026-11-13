@@ -1107,6 +1107,19 @@
                                  UseSystemFocusVisuals="{TemplateBinding UseSystemFocusVisuals}"
                                  CornerRadius="{TemplateBinding CornerRadius}" />
 
+                        <Button x:Name="QueryButton"
+                                Style="{TemplateBinding QueryButtonStyle}"
+                                Content="{TemplateBinding QueryIcon}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="34"
+                                Height="32"
+                                Padding="0"
+                                Margin="0,0,2,0"
+                                Canvas.ZIndex="1"
+                                IsTabStop="False"
+                                CornerRadius="{TemplateBinding CornerRadius}" />
+
                         <Popup x:Name="SuggestionsPopup" ShouldConstrainToRootBounds="False">
                             <Border x:Name="SuggestionsContainer"
                                     RequestedTheme="{Binding ActualTheme, RelativeSource={RelativeSource Mode=TemplatedParent}}"
@@ -1505,8 +1518,6 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
-<<<<<<< Updated upstream
-=======
          ROUNDED CARD GRIDVIEW ITEM STYLE
          Eliminates default WinUI square hover/selection borders and 
          ensures smooth rounded corners matching the home page cards.
@@ -1542,7 +1553,6 @@
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
->>>>>>> Stashed changes
          ACCENT PLAY BUTTON — used on playlist cards
     ═══════════════════════════════════════════════════════════════ -->
     <Style x:Key="AccentPlayButtonStyle" TargetType="Button">

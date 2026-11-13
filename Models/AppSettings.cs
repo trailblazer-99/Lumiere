@@ -59,6 +59,8 @@ public sealed class AppSettings
     public HdrMode HdrMode { get; set; } = HdrMode.Auto;
     /// <summary>Automatically boost screen brightness to 100% when HDR playback is active.</summary>
     public bool AutoBoostHdrBrightness { get; set; } = true;
+    /// <summary>Emergency fallback brightness level to restore if app terminated during HDR override.</summary>
+    public int? EmergencyHdrBaselineBrightness { get; set; }
     /// <summary>Tone-mapping operator used for HDR→SDR conversion or highlight roll-off.</summary>
     public ToneMappingMode ToneMappingMode { get; set; } = ToneMappingMode.DisplayAdaptive;
     /// <summary>Target peak brightness in nits for tone-mapping output (100–10000).</summary>
@@ -73,12 +75,6 @@ public sealed class AppSettings
     public StudioCanvasStyle StudioCanvas { get; set; } = StudioCanvasStyle.SolidLayer;
     public StudioTransportBarStyle StudioTransportBar { get; set; } = StudioTransportBarStyle.FrostedAcrylic;
     public AccentColorOption AccentColor { get; set; } = AccentColorOption.SystemDefault;
-<<<<<<< Updated upstream
-    public bool CompactDensityMode { get; set; } = false;
-    public bool ShowAlbumArtInTransportBar { get; set; } = true;
-    public bool AnimatedTransitions { get; set; } = true;
-    public bool AlwaysShowTransportBar { get; set; } = true;
-=======
     public string? CustomAccentColorHex { get; set; }
     public string? ActiveThemePresetId { get; set; }
     public List<ThemePreset> CustomThemePresets { get; set; } = [];
@@ -92,7 +88,6 @@ public sealed class AppSettings
     public string PreferredStreamingRegion { get; set; } = "";
     /// <summary>Use Windows location services to automatically detect the streaming region.</summary>
     public bool UseLocationForRegion { get; set; } = false;
->>>>>>> Stashed changes
 
     // ── Controls & Interface ───────────────────────────────────────
     public bool EnableSwipeNavigation { get; set; } = true;

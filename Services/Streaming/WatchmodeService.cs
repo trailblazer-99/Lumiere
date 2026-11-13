@@ -814,33 +814,75 @@ namespace LumiereMediaPlayer.Services.Streaming
             return list;
         }
 
-        public async Task<List<WatchmodeTitle>> GetSimilarTitlesAsync(int watchmodeId, string? expectedType = null)
+        public async Task<List<WatchmodeTitle>> GetSimilarTitlesAsync(int watchmodeId, int? tmdbId = null, string? expectedType = null)
         {
-            var servicePath = $"watchmode/title/{watchmodeId}/similar/";
-            var url = $"{BaseUrl}/title/{watchmodeId}/similar/?apiKey={ApiKey}";
-            try
+            int? resolvedTmdbId = tmdbId;
+            string? resolvedType = expectedType;
+
+            if (!resolvedTmdbId.HasValue && watchmodeId > 0 && IdMap.TryGetValue(watchmodeId, out var ids))
             {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeTitle>();
-                var results = JsonSerializer.Deserialize<List<WatchmodeTitle>>(response, _jsonOptions);
-                if (results != null && results.Count > 0)
+                resolvedTmdbId = GetCleanTmdbId(ids.TmdbId);
+                resolvedType ??= ids.Type;
+            }
+
+            if (!resolvedTmdbId.HasValue && watchmodeId > 0 && watchmodeId < 2_000_000)
+            {
+                resolvedTmdbId = watchmodeId;
+            }
+
+            // 1. Try TMDB Similar Titles if TMDB ID is available
+            if (resolvedTmdbId.HasValue && resolvedTmdbId.Value > 0)
+            {
+                bool isTv = resolvedType is "tv" or "tv_series" or "tv_miniseries";
+                string tmdbEndpoint = $"{(isTv ? "tv" : "movie")}/{resolvedTmdbId.Value}/similar";
+                try
                 {
-                    if (!string.IsNullOrEmpty(expectedType))
+                    var tmdbResp = await QueryTmdbAsync<TmdbResponse<TmdbMedia>>(tmdbEndpoint);
+                    if (tmdbResp?.Results != null && tmdbResp.Results.Count > 0)
                     {
-                        bool wantTv = expectedType == "tv" || expectedType == "tv_series" || expectedType == "tv_miniseries";
-                        results = results.Where(t =>
-                        {
-                            if (string.IsNullOrEmpty(t.Type)) return true;
-                            bool isTv = t.Type == "tv" || t.Type == "tv_series" || t.Type == "tv_miniseries";
-                            return wantTv ? isTv : !isTv;
-                        }).ToList();
+                        return tmdbResp.Results
+                            .Where(m => !string.IsNullOrEmpty(m.DisplayTitle))
+                            .Select(m => m.ToWatchmodeTitle(isTv ? "tv_series" : "movie"))
+                            .ToList();
                     }
-                    return results;
+                }
+                catch (Exception tmdbEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TMDB GetSimilarTitles Error: {tmdbEx.Message}");
                 }
             }
-            catch (Exception ex)
+
+            // 2. Fallback to Watchmode API if watchmodeId is valid
+            if (watchmodeId > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetSimilarTitles Error: {ex.Message}");
+                var servicePath = $"watchmode/title/{watchmodeId}/similar/";
+                var url = $"{BaseUrl}/title/{watchmodeId}/similar/?apiKey={ApiKey}";
+                try
+                {
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    if (!string.IsNullOrWhiteSpace(response))
+                    {
+                        var results = JsonSerializer.Deserialize<List<WatchmodeTitle>>(response, _jsonOptions);
+                        if (results != null && results.Count > 0)
+                        {
+                            if (!string.IsNullOrEmpty(expectedType))
+                            {
+                                bool wantTv = expectedType == "tv" || expectedType == "tv_series" || expectedType == "tv_miniseries";
+                                results = results.Where(t =>
+                                {
+                                    if (string.IsNullOrEmpty(t.Type)) return true;
+                                    bool isTv = t.Type == "tv" || t.Type == "tv_series" || t.Type == "tv_miniseries";
+                                    return wantTv ? isTv : !isTv;
+                                }).ToList();
+                            }
+                            return results;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetSimilarTitles Error: {ex.Message}");
+                }
             }
 
             return new List<WatchmodeTitle>();
@@ -869,102 +911,222 @@ namespace LumiereMediaPlayer.Services.Streaming
             }
         }
 
-        public async Task<WatchmodeScores?> GetScoresAsync(int watchmodeId)
+        public async Task<WatchmodeScores?> GetScoresAsync(int watchmodeId, int? tmdbId = null, WatchmodeDetails? details = null)
         {
-            var servicePath = $"watchmode/title/{watchmodeId}/scores/";
-            var url = $"{BaseUrl}/title/{watchmodeId}/scores/?apiKey={ApiKey}";
-            try
+            WatchmodeScores? scores = null;
+
+            // 1. Try Watchmode /scores/ endpoint
+            if (watchmodeId > 0)
             {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                if (string.IsNullOrWhiteSpace(response)) return null;
-                return JsonSerializer.Deserialize<WatchmodeScores>(response, _jsonOptions);
+                var servicePath = $"watchmode/title/{watchmodeId}/scores/";
+                var url = $"{BaseUrl}/title/{watchmodeId}/scores/?apiKey={ApiKey}";
+                try
+                {
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    if (!string.IsNullOrWhiteSpace(response))
+                    {
+                        scores = JsonSerializer.Deserialize<WatchmodeScores>(response, _jsonOptions);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetScores Error: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+
+            // 2. Synthesize or complement scores from details or TMDB
+            if (scores == null || (scores.TmdbScore == null && scores.CriticScore == null))
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetScores Error: {ex.Message}");
-                return null;
+                if (details != null && (details.UserRating.HasValue || details.CriticScore.HasValue))
+                {
+                    scores ??= new WatchmodeScores();
+                    scores!.TmdbScore ??= details.UserRating;
+                    scores!.CriticScore ??= details.CriticScore;
+                }
             }
+
+            return scores;
         }
 
-        public async Task<List<WatchmodeRelease>> GetReleasesAsync(int watchmodeId)
+        public async Task<List<WatchmodeRelease>> GetReleasesAsync(int watchmodeId, int? tmdbId = null)
         {
-            var servicePath = $"watchmode/title/{watchmodeId}/releases/";
-            var url = $"{BaseUrl}/title/{watchmodeId}/releases/?apiKey={ApiKey}";
-            try
+            int? resolvedTmdbId = tmdbId;
+            if (!resolvedTmdbId.HasValue && watchmodeId > 0 && IdMap.TryGetValue(watchmodeId, out var ids))
             {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                if (string.IsNullOrWhiteSpace(response)) return new List<WatchmodeRelease>();
-                return JsonSerializer.Deserialize<List<WatchmodeRelease>>(response, _jsonOptions) ?? new List<WatchmodeRelease>();
+                resolvedTmdbId = GetCleanTmdbId(ids.TmdbId);
             }
-            catch (Exception ex)
+            if (!resolvedTmdbId.HasValue && watchmodeId > 0 && watchmodeId < 2_000_000)
             {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetReleases Error: {ex.Message}");
-                return new List<WatchmodeRelease>();
+                resolvedTmdbId = watchmodeId;
             }
+
+            // 1. Try TMDB Releases
+            if (resolvedTmdbId.HasValue && resolvedTmdbId.Value > 0)
+            {
+                try
+                {
+                    var tmdbReleases = await QueryTmdbAsync<TmdbReleaseDatesContainer>($"movie/{resolvedTmdbId.Value}/release_dates");
+                    if (tmdbReleases?.Results != null && tmdbReleases.Results.Count > 0)
+                    {
+                        var list = new List<WatchmodeRelease>();
+                        foreach (var country in tmdbReleases.Results)
+                        {
+                            foreach (var r in country.ReleaseDates)
+                            {
+                                list.Add(new WatchmodeRelease
+                                {
+                                    Region = country.Iso3166_1,
+                                    ReleaseDate = !string.IsNullOrEmpty(r.ReleaseDate) && r.ReleaseDate.Length >= 10 ? r.ReleaseDate.Substring(0, 10) : r.ReleaseDate,
+                                    Type = r.Type,
+                                    Platform = !string.IsNullOrEmpty(r.Note) ? r.Note : (!string.IsNullOrEmpty(r.Certification) ? $"Rated {r.Certification}" : null)
+                                });
+                            }
+                        }
+                        if (list.Count > 0)
+                        {
+                            return list.OrderByDescending(r => r.ReleaseDate).ToList();
+                        }
+                    }
+                }
+                catch (Exception tmdbEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TMDB GetReleases Error: {tmdbEx.Message}");
+                }
+            }
+
+            // 2. Try Watchmode Releases endpoint
+            if (watchmodeId > 0)
+            {
+                var servicePath = $"watchmode/title/{watchmodeId}/releases/";
+                var url = $"{BaseUrl}/title/{watchmodeId}/releases/?apiKey={ApiKey}";
+                try
+                {
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    if (!string.IsNullOrWhiteSpace(response))
+                    {
+                        var res = JsonSerializer.Deserialize<List<WatchmodeRelease>>(response, _jsonOptions);
+                        if (res != null && res.Count > 0) return res;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetReleases Error: {ex.Message}");
+                }
+            }
+
+            return new List<WatchmodeRelease>();
         }
 
         public async Task<WatchmodePersonDetails?> GetPersonDetailsAsync(int personId, string? fullName = null)
         {
-            var servicePath = $"watchmode/person/{personId}/";
-            var url = $"{BaseUrl}/person/{personId}/?apiKey={ApiKey}";
-            try
-            {
-                var response = await HttpHelper.GetStringAsync(servicePath, url);
-                if (!string.IsNullOrWhiteSpace(response))
-                {
-                    var raw = JsonSerializer.Deserialize<WatchmodePersonRawResponse>(response, _jsonOptions);
-                    if (raw != null)
-                    {
-                        var details = new WatchmodePersonDetails
-                        {
-                            Id = raw.Id,
-                            FullName = raw.FullName ?? fullName,
-                            HeadshotUrl = raw.HeadshotUrl
-                        };
+            WatchmodePersonRawResponse? raw = null;
 
-                        if (raw.KnownFor != null && raw.KnownFor.Count > 0)
-                        {
-                            var idsToFetch = raw.KnownFor.Take(20).ToList();
-                            var tasks = idsToFetch.Select(id => GetDetailsAsync(id));
-                            var results = await Task.WhenAll(tasks);
-                            foreach (var res in results)
-                            {
-                                if (res != null && !string.IsNullOrEmpty(res.Title))
-                                {
-                                    details.KnownFor.Add(new WatchmodeTitle
-                                    {
-                                        Id = res.Id,
-                                        Title = res.Title,
-                                        Year = res.Year,
-                                        Type = res.Type,
-                                        ImdbId = res.ImdbId,
-                                        TmdbId = res.TmdbId,
-                                        JsonPosterUrl = res.DisplayPoster
-                                    });
-                                }
-                            }
-                        }
-                        return details;
+            // 1. Try Watchmode person endpoint first
+            if (personId > 0)
+            {
+                var servicePath = $"watchmode/person/{personId}/";
+                var url = $"{BaseUrl}/person/{personId}/?apiKey={ApiKey}";
+                try
+                {
+                    var response = await HttpHelper.GetStringAsync(servicePath, url);
+                    if (!string.IsNullOrWhiteSpace(response))
+                    {
+                        raw = JsonSerializer.Deserialize<WatchmodePersonRawResponse>(response, _jsonOptions);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Watchmode GetPersonDetails Error: {ex.Message}");
-            }
-
-            // Fallback directly to TMDB person credits when Watchmode doesn't have the person
-            try
-            {
-                var tmdbCredits = await QueryTmdbAsync<TmdbCombinedCreditsResponse>($"person/{personId}/combined_credits");
-                if (tmdbCredits != null)
+                catch (Exception ex)
                 {
-                    return tmdbCredits.MapToWatchmodePersonDetails(fullName ?? "Unknown");
+                    System.Diagnostics.Debug.WriteLine($"Watchmode GetPersonDetails Error: {ex.Message}");
                 }
             }
-            catch (Exception tmdbEx)
+
+            if (raw != null)
             {
-                System.Diagnostics.Debug.WriteLine($"TMDB GetPersonDetails Fallback Error: {tmdbEx.Message}");
+                var details = new WatchmodePersonDetails
+                {
+                    Id = raw.Id,
+                    FullName = raw.FullName ?? fullName,
+                    HeadshotUrl = raw.HeadshotUrl
+                };
+
+                if (raw.KnownFor != null && raw.KnownFor.Count > 0)
+                {
+                    var idsToFetch = raw.KnownFor.Take(20).ToList();
+                    var tasks = idsToFetch.Select(id => GetDetailsAsync(id));
+                    var results = await Task.WhenAll(tasks);
+                    foreach (var res in results)
+                    {
+                        if (res != null && !string.IsNullOrEmpty(res.Title))
+                        {
+                            details.KnownFor.Add(new WatchmodeTitle
+                            {
+                                Id = res.Id,
+                                Title = res.Title,
+                                Year = res.Year,
+                                Type = res.Type,
+                                ImdbId = res.ImdbId,
+                                TmdbId = res.TmdbId,
+                                JsonPosterUrl = res.DisplayPoster
+                            });
+                        }
+                    }
+                }
+
+                // If Watchmode returned the person but has empty known_for titles, enrich via their TMDB ID
+                if (details.KnownFor.Count == 0 && raw.TmdbId.HasValue && raw.TmdbId.Value > 0)
+                {
+                    try
+                    {
+                        var tmdbCredits = await QueryTmdbAsync<TmdbCombinedCreditsResponse>($"person/{raw.TmdbId.Value}/combined_credits");
+                        if (tmdbCredits != null)
+                        {
+                            var mapped = tmdbCredits.MapToWatchmodePersonDetails(details.FullName ?? fullName ?? "Unknown");
+                            if (mapped.KnownFor.Count > 0) return mapped;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (details.KnownFor.Count > 0) return details;
+            }
+
+            // 2. Direct TMDB Query with personId (e.g. When personId is a TMDB person ID)
+            if (personId > 0)
+            {
+                try
+                {
+                    var tmdbCredits = await QueryTmdbAsync<TmdbCombinedCreditsResponse>($"person/{personId}/combined_credits");
+                    if (tmdbCredits != null && tmdbCredits.Cast != null && tmdbCredits.Cast.Count > 0)
+                    {
+                        return tmdbCredits.MapToWatchmodePersonDetails(fullName ?? "Unknown");
+                    }
+                }
+                catch (Exception tmdbEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TMDB GetPersonDetails Fallback Error: {tmdbEx.Message}");
+                }
+            }
+
+            // 3. Search TMDB by fullName to find the person's true TMDB ID
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                try
+                {
+                    var searchResp = await QueryTmdbAsync<TmdbResponse<TmdbPerson>>($"search/person?query={Uri.EscapeDataString(fullName)}");
+                    var match = searchResp?.Results?.FirstOrDefault();
+                    if (match != null && match.Id > 0)
+                    {
+                        var tmdbCredits = await QueryTmdbAsync<TmdbCombinedCreditsResponse>($"person/{match.Id}/combined_credits");
+                        if (tmdbCredits != null)
+                        {
+                            return tmdbCredits.MapToWatchmodePersonDetails(fullName);
+                        }
+                    }
+                }
+                catch (Exception searchEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TMDB Person Search Fallback Error: {searchEx.Message}");
+                }
             }
 
             return null;

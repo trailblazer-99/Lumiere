@@ -220,6 +220,11 @@ namespace LumiereMediaPlayer.Pages
             {
                 OnSearchBoxQuerySubmitted(SearchBox, null!);
             }
+            else if (SearchBox != null)
+            {
+                SearchBox.PlaceholderText = "Describe what to watch (e.g. 'Mystery thriller with unexpected plot twists')...";
+                SearchBox.Focus(FocusState.Programmatic);
+            }
         }
 
         private void OnAiSearchToggleUnchecked(object sender, RoutedEventArgs e)
@@ -227,9 +232,13 @@ namespace LumiereMediaPlayer.Pages
             if (AiSearchIcon != null)
                 AiSearchIcon.Foreground = LumiereMediaPlayer.Helpers.SpringAnimationHelper.GetAiUncheckedIconBrush();
             LumiereMediaPlayer.Helpers.SpringAnimationHelper.AnimateAiToggle(AiSearchToggle, AiSearchIcon, false);
-            if (!string.IsNullOrWhiteSpace(SearchBox?.Text))
+            if (SearchBox != null)
             {
-                OnSearchBoxQuerySubmitted(SearchBox, null!);
+                SearchBox.PlaceholderText = "Search TV shows...";
+                if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+                {
+                    OnSearchBoxQuerySubmitted(SearchBox, null!);
+                }
             }
         }
 
@@ -328,6 +337,12 @@ namespace LumiereMediaPlayer.Pages
 
         private async System.Threading.Tasks.Task LoadTrendingAsync()
         {
+            if (TrendingLoadingRing != null)
+            {
+                TrendingLoadingRing.Visibility = Visibility.Visible;
+                TrendingLoadingRing.IsActive = true;
+            }
+
             try
             {
                 int retries = 0;
@@ -342,15 +357,21 @@ namespace LumiereMediaPlayer.Pages
                 var popularTvShows = await _tmdbService.GetStreamablePopularTvShowsAsync(1, targetRegion);
                 if (popularTvShows == null || popularTvShows.Count == 0) return;
 
-                // Verify streaming provider availability in target region
+                // Verify streaming provider availability in target region with bounded concurrency
+                using var throttler = new System.Threading.SemaphoreSlim(5);
                 var checkTasks = popularTvShows.Select(async s =>
                 {
+                    await throttler.WaitAsync();
                     try
                     {
                         var prov = await _tmdbService.GetProvidersAsync(s.Id, "tv", targetRegion);
                         if (TmdbService.HasStreamingProviders(prov)) return s;
                     }
                     catch { }
+                    finally
+                    {
+                        throttler.Release();
+                    }
                     return null;
                 });
                 var verified = (await System.Threading.Tasks.Task.WhenAll(checkTasks)).Where(s => s != null).Select(s => s!).ToList();
@@ -373,6 +394,14 @@ namespace LumiereMediaPlayer.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"LoadTrendingAsync TV shows error: {ex.Message}");
+            }
+            finally
+            {
+                if (TrendingLoadingRing != null)
+                {
+                    TrendingLoadingRing.IsActive = false;
+                    TrendingLoadingRing.Visibility = Visibility.Collapsed;
+                }
             }
         }
 

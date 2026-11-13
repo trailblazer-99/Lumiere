@@ -203,4 +203,34 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         public string? LogoUrl => !string.IsNullOrEmpty(LogoPath) ? $"https://image.tmdb.org/t/p/w92{LogoPath}" : null;
     }
+
+    public class TmdbReleaseDatesContainer
+    {
+        [JsonPropertyName("results")]
+        public List<TmdbCountryReleaseDates> Results { get; set; } = new();
+    }
+
+    public class TmdbCountryReleaseDates
+    {
+        [JsonPropertyName("iso_3166_1")]
+        public string Iso3166_1 { get; set; } = string.Empty;
+
+        [JsonPropertyName("release_dates")]
+        public List<TmdbReleaseDateItem> ReleaseDates { get; set; } = new();
+    }
+
+    public class TmdbReleaseDateItem
+    {
+        [JsonPropertyName("certification")]
+        public string? Certification { get; set; }
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("type")]
+        public int Type { get; set; }
+
+        [JsonPropertyName("note")]
+        public string? Note { get; set; }
+    }
 }

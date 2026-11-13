@@ -104,6 +104,9 @@ namespace LumiereMediaPlayer.Models.Streaming
         [JsonPropertyName("user_rating")]
         public double? UserRating { get; set; }
 
+        [JsonPropertyName("critic_score")]
+        public int? CriticScore { get; set; }
+
         [JsonPropertyName("poster")]
         public string? Poster { get; set; }
 
@@ -935,6 +938,12 @@ namespace LumiereMediaPlayer.Models.Streaming
 
         [JsonPropertyName("headshot_url")]
         public string? HeadshotUrl { get; set; }
+
+        [JsonPropertyName("tmdb_id")]
+        public int? TmdbId { get; set; }
+
+        [JsonPropertyName("imdb_id")]
+        public string? ImdbId { get; set; }
 
         [JsonPropertyName("known_for")]
         public List<int>? KnownFor { get; set; }

@@ -1274,15 +1274,6 @@ public sealed partial class TransportBar : UserControl
             return;
         }
 
-<<<<<<< Updated upstream
-        bool isLight = ActualTheme == ElementTheme.Light;
-        var tintColor = isLight
-            ? Microsoft.UI.Colors.White
-            : Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32);
-        var fallbackColor = isLight
-            ? Microsoft.UI.ColorHelper.FromArgb(235, 255, 255, 255)
-            : Microsoft.UI.ColorHelper.FromArgb(230, 32, 32, 32);
-=======
         if (IsActiveFullscreenVideo)
         {
             BarGrid.Background = ThemeHelper.GetFullscreenControlsBackgroundBrush();
@@ -1321,7 +1312,6 @@ public sealed partial class TransportBar : UserControl
             BarGrid.BorderThickness = new Thickness(0, 1, 0, 0);
             BarGrid.Translation = System.Numerics.Vector3.Zero;
             try { BarGrid.Shadow = null; } catch { }
->>>>>>> Stashed changes
 
             var backdrop = AppServices.Settings.Current.BackdropType;
             bool isAcrylicEnabled = AppServices.Settings.Current.AcrylicTransportBar;
